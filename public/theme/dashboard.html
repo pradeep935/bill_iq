@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — Scout Portal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="app-wrapper">
+
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-logo">SP</div>
+      <div class="brand-text"><div class="brand-name">Scout Portal</div><div class="brand-sub">Admin Panel</div></div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <ul class="nav-list">
+        <li class="nav-item active"><a href="dashboard.html" class="nav-link"><i class="bi bi-speedometer2"></i><span class="nav-label">Dashboard</span></a></li>
+      </ul>
+      <div class="nav-section">Scouting</div>
+      <ul class="nav-list">
+        <li class="nav-item"><a href="players.html" class="nav-link"><i class="bi bi-people"></i><span class="nav-label">Players</span></a></li>
+        <li class="nav-item"><a href="staff.html" class="nav-link"><i class="bi bi-person-workspace"></i><span class="nav-label">Staff</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-bookmark-star"></i><span class="nav-label">Shortlist</span></a></li>
+      </ul>
+      <div class="nav-section">Reports</div>
+      <ul class="nav-list">
+        <li class="nav-item"><a href="reports.html" class="nav-link"><i class="bi bi-file-earmark-text"></i><span class="nav-label">Reports</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-grid-1x2"></i><span class="nav-label">Templates</span></a></li>
+      </ul>
+      <div class="nav-section">System</div>
+      <ul class="nav-list">
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-gear"></i><span class="nav-label">Settings</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-shield-check"></i><span class="nav-label">Access Control</span></a></li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">
+      <button class="collapse-btn" id="collapseBtn"><i class="bi bi-arrow-bar-left btn-icon"></i><span class="collapse-label">Collapse</span></button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main-content">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="topbar-icon-btn d-md-none" id="mobileMenuToggle"><i class="bi bi-list"></i></button>
+        <div class="topbar-breadcrumb"><span>Dashboard</span></div>
+      </div>
+      <div class="topbar-right">
+        <button class="topbar-icon-btn"><i class="bi bi-sun"></i></button>
+        <div class="notif-badge"><button class="topbar-icon-btn"><i class="bi bi-bell"></i></button><span class="dot"></span></div>
+        <div class="topbar-divider"></div>
+        <div class="dropdown">
+          <div class="user-chip" data-bs-toggle="dropdown" data-bs-offset="0,6" aria-expanded="false" style="cursor:pointer;">
+            <div class="user-avatar">AD</div>
+            <div class="d-none d-sm-block"><div class="user-name">Admin User</div><div class="user-role">Super Admin</div></div>
+            <i class="bi bi-chevron-down ms-1" style="font-size:10px;color:var(--text-muted);"></i>
+          </div>
+          <ul class="dropdown-menu dropdown-menu-end user-dropdown-menu">
+            <li>
+              <div class="user-dropdown-header">
+                <div class="user-avatar">AD</div>
+                <div>
+                  <div class="user-dropdown-info-name">Admin User</div>
+                  <div class="user-dropdown-info-email">admin@scoutportal.in</div>
+                </div>
+              </div>
+            </li>
+            <li><hr class="dropdown-divider" style="margin:0 0 6px;border-color:var(--border);"></li>
+            <li><a class="user-dropdown-item" href="#"><i class="bi bi-person"></i> My Profile</a></li>
+            <li><a class="user-dropdown-item" href="#"><i class="bi bi-key"></i> Change Password</a></li>
+            <li><hr class="dropdown-divider" style="margin:6px 0;border-color:var(--border);"></li>
+            <li><a class="user-dropdown-item danger" href="#"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
+          </ul>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-header-inner">
+        <div><div class="page-title">Dashboard</div><div class="page-subtitle">Welcome back, Admin. Here's what's happening today.</div></div>
+        <div class="page-header-actions">
+          <button class="btn btn-glass btn-sm"><i class="bi bi-download"></i> Export</button>
+          <button class="btn btn-glass btn-sm"><i class="bi bi-plus"></i> Quick Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content-wrap">
+
+      <!-- KPI Row -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3 col-6"><div class="stat-card"><div class="stat-icon blue"><i class="bi bi-people-fill"></i></div><div><div class="stat-value">248</div><div class="stat-label">Total Players</div><div class="stat-change up"><i class="bi bi-arrow-up-short"></i>12 this month</div></div></div></div>
+        <div class="col-md-3 col-6"><div class="stat-card"><div class="stat-icon green"><i class="bi bi-file-earmark-text-fill"></i></div><div><div class="stat-value">64</div><div class="stat-label">Scouting Reports</div><div class="stat-change up"><i class="bi bi-arrow-up-short"></i>8 new</div></div></div></div>
+        <div class="col-md-3 col-6"><div class="stat-card"><div class="stat-icon amber"><i class="bi bi-bookmark-star-fill"></i></div><div><div class="stat-value">19</div><div class="stat-label">Shortlisted</div><div class="stat-change down"><i class="bi bi-arrow-down-short"></i>2 removed</div></div></div></div>
+        <div class="col-md-3 col-6"><div class="stat-card"><div class="stat-icon purple"><i class="bi bi-person-workspace"></i></div><div><div class="stat-value">12</div><div class="stat-label">Active Scouts</div><div class="stat-change up"><i class="bi bi-arrow-up-short"></i>1 added</div></div></div></div>
+      </div>
+
+      <div class="row g-3">
+        <!-- Recent Players -->
+        <div class="col-lg-7">
+          <div class="table-card">
+            <div class="card-header">
+              <span class="card-title">Recently Added Players</span>
+              <a href="players.html" class="btn btn-secondary btn-sm">View All</a>
+            </div>
+            <table class="table">
+              <thead><tr><th>Player</th><th>Position</th><th>Club</th><th>Added</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td><div class="player-cell"><div class="player-avatar">SC</div><div><div class="player-name-link">Sunil Chhetri</div><div class="player-sub">AIFF-00001</div></div></div></td><td><span class="badge pos-fw">ST</span></td><td class="text-sub">Bengaluru FC</td><td class="text-muted fs-13">2 days ago</td><td><span class="badge badge-success">Active</span></td></tr>
+                <tr><td><div class="player-cell"><div class="player-avatar" style="background:linear-gradient(135deg,#0d9488,#0891b2);">GS</div><div><div class="player-name-link">Gurpreet Sandhu</div><div class="player-sub">AIFF-00023</div></div></div></td><td><span class="badge pos-gk">GK</span></td><td class="text-sub">Bengaluru FC</td><td class="text-muted fs-13">3 days ago</td><td><span class="badge badge-success">Active</span></td></tr>
+                <tr><td><div class="player-cell"><div class="player-avatar" style="background:linear-gradient(135deg,#7c3aed,#9333ea);">SJ</div><div><div class="player-name-link">Sandesh Jhingan</div><div class="player-sub">AIFF-00045</div></div></div></td><td><span class="badge pos-df">CB</span></td><td class="text-sub">Mohun Bagan SG</td><td class="text-muted fs-13">5 days ago</td><td><span class="badge badge-warning">Scouting</span></td></tr>
+                <tr><td><div class="player-cell"><div class="player-avatar" style="background:linear-gradient(135deg,#d97706,#f59e0b);">AP</div><div><div class="player-name-link">Anirudh Thapa</div><div class="player-sub">AIFF-00067</div></div></div></td><td><span class="badge pos-mf">CDM</span></td><td class="text-sub">Chennaiyin FC</td><td class="text-muted fs-13">1 week ago</td><td><span class="badge badge-primary">Shortlisted</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <div class="col-lg-5 d-flex flex-column gap-3">
+          <!-- Position distribution -->
+          <div class="card">
+            <div class="card-header"><span class="card-title">Players by Position</span></div>
+            <div class="card-body">
+              <div class="d-flex flex-column gap-3">
+                <div><div class="d-flex justify-content-between mb-1"><span class="fs-13 fw-600">Striker (FW/ST)</span><span class="fs-13 text-muted">62 players</span></div><div class="progress"><div class="progress-bar" style="width:62%;background:#c2410c;"></div></div></div>
+                <div><div class="d-flex justify-content-between mb-1"><span class="fs-13 fw-600">Midfielder (MF)</span><span class="fs-13 text-muted">74 players</span></div><div class="progress"><div class="progress-bar" style="width:74%;background:#065f46;"></div></div></div>
+                <div><div class="d-flex justify-content-between mb-1"><span class="fs-13 fw-600">Defender (DF)</span><span class="fs-13 text-muted">88 players</span></div><div class="progress"><div class="progress-bar" style="width:88%;"></div></div></div>
+                <div><div class="d-flex justify-content-between mb-1"><span class="fs-13 fw-600">Goalkeeper (GK)</span><span class="fs-13 text-muted">24 players</span></div><div class="progress"><div class="progress-bar" style="width:24%;background:#7c3aed;"></div></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Reports -->
+          <div class="card" style="flex:1">
+            <div class="card-header"><span class="card-title">Recent Reports</span><a href="reports.html" class="btn btn-secondary btn-sm">All</a></div>
+            <div class="card-body p-0">
+              <ul class="list-group list-group-flush" style="border-radius:0 0 var(--r-md) var(--r-md);">
+                <li class="list-group-item d-flex align-items-center gap-3 py-3 px-4" style="border-color:var(--border);">
+                  <div style="width:34px;height:34px;border-radius:var(--r-sm);background:#eff6ff;display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:16px;flex-shrink:0;"><i class="bi bi-file-earmark-text"></i></div>
+                  <div style="flex:1;min-width:0;"><div class="fs-13 fw-600 text-truncate">Performance Assessment — Sunil Chhetri</div><div class="fs-12 text-muted">Scout: Ramesh Kumar · 2 days ago</div></div>
+                  <span class="badge badge-success">Done</span>
+                </li>
+                <li class="list-group-item d-flex align-items-center gap-3 py-3 px-4" style="border-color:var(--border);">
+                  <div style="width:34px;height:34px;border-radius:var(--r-sm);background:#fffbeb;display:flex;align-items:center;justify-content:center;color:#d97706;font-size:16px;flex-shrink:0;"><i class="bi bi-file-earmark-text"></i></div>
+                  <div style="flex:1;min-width:0;"><div class="fs-13 fw-600 text-truncate">Scouting Report — Anirudh Thapa</div><div class="fs-12 text-muted">Scout: Priya Sharma · 5 days ago</div></div>
+                  <span class="badge badge-warning">Draft</span>
+                </li>
+                <li class="list-group-item d-flex align-items-center gap-3 py-3 px-4" style="border-color:var(--border);">
+                  <div style="width:34px;height:34px;border-radius:var(--r-sm);background:#f0fdf4;display:flex;align-items:center;justify-content:center;color:#16a34a;font-size:16px;flex-shrink:0;"><i class="bi bi-file-earmark-text"></i></div>
+                  <div style="flex:1;min-width:0;"><div class="fs-13 fw-600 text-truncate">Biannual Fitness Assessment</div><div class="fs-12 text-muted">Scout: Vinod Nair · 1 week ago</div></div>
+                  <span class="badge badge-success">Done</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /content-wrap -->
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/theme.js"></script>
+</body>
+</html>

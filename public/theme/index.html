@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Theme Guidelines — Scout Portal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="assets/theme.css" />
+  <style>
+    body { background: var(--body-bg); }
+    .guide-wrap { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+    .guide-section { margin-bottom: 56px; }
+    .guide-title { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid var(--border); }
+    .guide-hero { background: linear-gradient(125deg, var(--primary) 0%, #2a4a7f 55%, #2c5282 100%); border-radius: var(--r-xl); padding: 48px; color: #fff; margin-bottom: 40px; position: relative; overflow: hidden; }
+    .guide-hero::after { content: ''; position: absolute; right: -60px; bottom: -60px; width: 260px; height: 260px; border-radius: 50%; background: rgba(255,255,255,0.06); }
+    .guide-hero::before { content: ''; position: absolute; right: 100px; top: -40px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,0.04); }
+    .swatch-row { display: flex; flex-wrap: wrap; gap: 12px; }
+    .swatch { width: 80px; }
+    .swatch-box { height: 56px; border-radius: var(--r-sm); margin-bottom: 6px; border: 1px solid var(--border); }
+    .swatch-name { font-size: 11px; font-weight: 600; color: var(--text-sub); }
+    .swatch-val  { font-size: 10px; color: var(--text-muted); font-family: monospace; }
+    .type-row { display: grid; gap: 12px; }
+    .type-specimen { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px 20px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .type-specimen-label { font-size: 11px; color: var(--text-muted); white-space: nowrap; font-weight: 500; }
+    .component-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .demo-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); }
+  </style>
+</head>
+<body>
+<div class="guide-wrap">
+
+  <!-- Hero -->
+  <div class="guide-hero">
+    <div style="position:relative;z-index:1">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,0.55);margin-bottom:10px;">Scout Portal Design System</div>
+      <h1 style="font-size:36px;font-weight:800;margin:0 0 10px;letter-spacing:-1px;">Theme Guidelines</h1>
+      <p style="font-size:15px;color:rgba(255,255,255,0.7);max-width:520px;margin:0 0 24px;">A clean, white-surface admin theme built on Bootstrap 5 and Inter. Covers colours, typography, components, and page templates for the Scout Portal admin system.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="dashboard.html" class="btn btn-glass btn-sm">Dashboard</a>
+        <a href="players.html" class="btn btn-glass btn-sm">Players</a>
+        <a href="player-profile.html" class="btn btn-glass btn-sm">Player Profile</a>
+        <a href="staff.html" class="btn btn-glass btn-sm">Staff</a>
+        <a href="reports.html" class="btn btn-glass btn-sm">Reports</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pages index -->
+  <div class="guide-section">
+    <div class="guide-title">Page Templates</div>
+    <div class="row g-3">
+      <div class="col-md-4"><a href="dashboard.html" class="demo-card d-block p-4 text-decoration-none"><i class="bi bi-speedometer2 fs-4 text-primary d-block mb-2"></i><div class="fw-700 text-dark">Dashboard</div><div class="fs-12 text-muted mt-1">KPI cards, recent activity, quick actions</div></a></div>
+      <div class="col-md-4"><a href="players.html" class="demo-card d-block p-4 text-decoration-none"><i class="bi bi-people fs-4 text-primary d-block mb-2"></i><div class="fw-700 text-dark">Players</div><div class="fs-12 text-muted mt-1">List view, filters, table with avatars</div></a></div>
+      <div class="col-md-4"><a href="player-profile.html" class="demo-card d-block p-4 text-decoration-none"><i class="bi bi-person-badge fs-4 text-primary d-block mb-2"></i><div class="fw-700 text-dark">Player Profile</div><div class="fs-12 text-muted mt-1">Hero, stats, scouting reports, tabs</div></a></div>
+      <div class="col-md-4"><a href="staff.html" class="demo-card d-block p-4 text-decoration-none"><i class="bi bi-person-workspace fs-4 text-primary d-block mb-2"></i><div class="fw-700 text-dark">Staff</div><div class="fs-12 text-muted mt-1">Scouts, coaches, admin staff grid</div></a></div>
+      <div class="col-md-4"><a href="reports.html" class="demo-card d-block p-4 text-decoration-none"><i class="bi bi-file-earmark-text fs-4 text-primary d-block mb-2"></i><div class="fw-700 text-dark">Reports &amp; Templates</div><div class="fs-12 text-muted mt-1">Scouting reports, performance, templates</div></a></div>
+      <div class="col-md-4"><a href="forms.html" class="demo-card d-block p-4 text-decoration-none"><i class="bi bi-ui-checks fs-4 text-primary d-block mb-2"></i><div class="fw-700 text-dark">Forms &amp; Modal</div><div class="fs-12 text-muted mt-1">Add/edit player side panel form</div></a></div>
+    </div>
+  </div>
+
+  <!-- Colour Palette -->
+  <div class="guide-section">
+    <div class="guide-title">Colour Palette</div>
+    <p class="fs-13 text-sub mb-3">All colours are defined as CSS custom properties on <code>:root</code> for easy theming.</p>
+    <div class="swatch-row mb-4">
+      <div class="swatch"><div class="swatch-box" style="background:#1e3a5f;border:none;"></div><div class="swatch-name">Primary</div><div class="swatch-val">#1e3a5f</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#2563eb;border:none;"></div><div class="swatch-name">Accent</div><div class="swatch-val">#2563eb</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#eff6ff;"></div><div class="swatch-name">Primary Lt</div><div class="swatch-val">#eff6ff</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#10b981;border:none;"></div><div class="swatch-name">Success</div><div class="swatch-val">#10b981</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#f59e0b;border:none;"></div><div class="swatch-name">Warning</div><div class="swatch-val">#f59e0b</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#ef4444;border:none;"></div><div class="swatch-name">Danger</div><div class="swatch-val">#ef4444</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#06b6d4;border:none;"></div><div class="swatch-name">Info</div><div class="swatch-val">#06b6d4</div></div>
+    </div>
+    <div class="swatch-row">
+      <div class="swatch"><div class="swatch-box" style="background:#f8fafc;"></div><div class="swatch-name">Gray 50</div><div class="swatch-val">#f8fafc</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#f1f5f9;"></div><div class="swatch-name">Gray 100</div><div class="swatch-val">#f1f5f9</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#e2e8f0;"></div><div class="swatch-name">Gray 200</div><div class="swatch-val">#e2e8f0</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#94a3b8;border:none;"></div><div class="swatch-name">Gray 400</div><div class="swatch-val">#94a3b8</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#64748b;border:none;"></div><div class="swatch-name">Gray 500</div><div class="swatch-val">#64748b</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#475569;border:none;"></div><div class="swatch-name">Gray 600</div><div class="swatch-val">#475569</div></div>
+      <div class="swatch"><div class="swatch-box" style="background:#0f172a;border:none;"></div><div class="swatch-name">Gray 900</div><div class="swatch-val">#0f172a</div></div>
+    </div>
+  </div>
+
+  <!-- Typography -->
+  <div class="guide-section">
+    <div class="guide-title">Typography — Inter</div>
+    <div class="type-row">
+      <div class="type-specimen"><h1 style="margin:0;font-size:32px;">Display Heading / 32px 800</h1><span class="type-specimen-label">H1 · 32px · 800</span></div>
+      <div class="type-specimen"><h2 style="margin:0;font-size:24px;">Section Heading / 24px 700</h2><span class="type-specimen-label">H2 · 24px · 700</span></div>
+      <div class="type-specimen"><h3 style="margin:0;font-size:20px;">Card Title / 20px 700</h3><span class="type-specimen-label">H3 · 20px · 700</span></div>
+      <div class="type-specimen"><h4 style="margin:0;font-size:16px;">Panel Title / 16px 700</h4><span class="type-specimen-label">H4 · 16px · 700</span></div>
+      <div class="type-specimen"><p style="margin:0;font-size:14px;color:var(--text-sub);">Body text — used for most paragraph content, table cells, and descriptions. Inter at 14px/500.</p><span class="type-specimen-label">Body · 14px · 400</span></div>
+      <div class="type-specimen"><span style="font-size:13px;color:var(--text-sub);">UI Label — nav items, form labels, button text. 13px/600.</span><span class="type-specimen-label">Label · 13px · 600</span></div>
+      <div class="type-specimen"><span style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);">SECTION HEADER · UPPERCASE MONO</span><span class="type-specimen-label">Caps · 11px · 700</span></div>
+      <div class="type-specimen"><span style="font-size:12px;color:var(--text-muted);">Caption / helper text — used under form fields and for metadata.</span><span class="type-specimen-label">Caption · 12px · 400</span></div>
+    </div>
+  </div>
+
+  <!-- Buttons -->
+  <div class="guide-section">
+    <div class="guide-title">Buttons</div>
+    <div class="demo-card p-4 mb-3">
+      <div class="fs-12 fw-600 text-muted mb-3" style="letter-spacing:.6px;text-transform:uppercase;">Solid</div>
+      <div class="component-row mb-4">
+        <button class="btn btn-primary"><i class="bi bi-plus"></i> Primary</button>
+        <button class="btn btn-success"><i class="bi bi-check2"></i> Success</button>
+        <button class="btn btn-danger"><i class="bi bi-trash3"></i> Danger</button>
+        <button class="btn btn-warning">Warning</button>
+        <button class="btn btn-secondary">Secondary</button>
+        <button class="btn btn-primary" disabled>Disabled</button>
+      </div>
+      <div class="fs-12 fw-600 text-muted mb-3" style="letter-spacing:.6px;text-transform:uppercase;">Outline / Ghost</div>
+      <div class="component-row mb-4">
+        <button class="btn btn-ghost-primary"><i class="bi bi-pencil"></i> Edit</button>
+        <button class="btn btn-ghost-primary btn-sm">Small Ghost</button>
+        <button class="btn btn-ghost-primary btn-lg">Large Ghost</button>
+      </div>
+      <div class="fs-12 fw-600 text-muted mb-3" style="letter-spacing:.6px;text-transform:uppercase;">Sizes</div>
+      <div class="component-row align-items-center">
+        <button class="btn btn-primary btn-lg"><i class="bi bi-plus-lg"></i> Large</button>
+        <button class="btn btn-primary"><i class="bi bi-plus"></i> Regular</button>
+        <button class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Small</button>
+      </div>
+    </div>
+    <!-- Glass buttons on gradient bg -->
+    <div style="background:linear-gradient(125deg,var(--primary),#2c5282);border-radius:var(--r-md);padding:24px 20px;">
+      <div class="fs-12 fw-600 mb-3" style="letter-spacing:.6px;text-transform:uppercase;color:rgba(255,255,255,0.6);">Glass (on gradient)</div>
+      <div class="component-row">
+        <button class="btn btn-glass"><i class="bi bi-plus"></i> Add Player</button>
+        <button class="btn btn-glass btn-sm"><i class="bi bi-download"></i> Export</button>
+        <button class="btn btn-glass btn-sm"><i class="bi bi-funnel"></i> Filter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Badges -->
+  <div class="guide-section">
+    <div class="guide-title">Badges</div>
+    <div class="demo-card p-4">
+      <div class="fs-12 fw-600 text-muted mb-3" style="letter-spacing:.6px;text-transform:uppercase;">Status Badges</div>
+      <div class="component-row mb-4">
+        <span class="badge badge-primary">Primary</span>
+        <span class="badge badge-success">Active</span>
+        <span class="badge badge-warning">Pending</span>
+        <span class="badge badge-danger">Inactive</span>
+        <span class="badge badge-info">Scouted</span>
+        <span class="badge badge-gray">Unknown</span>
+        <span class="badge badge-purple">Featured</span>
+      </div>
+      <div class="fs-12 fw-600 text-muted mb-3" style="letter-spacing:.6px;text-transform:uppercase;">Player Position Badges</div>
+      <div class="component-row">
+        <span class="badge pos-fw">FW</span>
+        <span class="badge pos-fw">ST</span>
+        <span class="badge pos-fw">CF</span>
+        <span class="badge pos-mf">MF</span>
+        <span class="badge pos-mf">CAM</span>
+        <span class="badge pos-mf">CDM</span>
+        <span class="badge pos-df">DF</span>
+        <span class="badge pos-df">CB</span>
+        <span class="badge pos-df">LB</span>
+        <span class="badge pos-gk">GK</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forms -->
+  <div class="guide-section">
+    <div class="guide-title">Form Controls</div>
+    <div class="demo-card p-4">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Text Input <span class="req">*</span></label>
+          <input type="text" class="form-control" placeholder="e.g. Sunil Chhetri" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Select</label>
+          <select class="form-select">
+            <option value="">— Select Position —</option>
+            <option>Striker (ST)</option>
+            <option>Centre-back (CB)</option>
+            <option>Midfielder (MF)</option>
+            <option>Goalkeeper (GK)</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Date of Birth</label>
+          <input type="date" class="form-control" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Height (cm)</label>
+          <div class="input-group">
+            <input type="number" class="form-control" placeholder="175" />
+            <span class="input-group-text">cm</span>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Market Value</label>
+          <div class="input-group">
+            <span class="input-group-text">₹</span>
+            <input type="number" class="form-control" placeholder="0.00" />
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">AIFF Player ID</label>
+          <input type="text" class="form-control" placeholder="AIFF-XXXXX" />
+        </div>
+        <div class="col-md-12">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" rows="3" placeholder="Scouting notes, observations…"></textarea>
+        </div>
+      </div>
+      <div class="mt-3 d-flex gap-2">
+        <button class="btn btn-primary">Save Changes</button>
+        <button class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cards & Stat cards -->
+  <div class="guide-section">
+    <div class="guide-title">Stat Cards</div>
+    <div class="row g-3">
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon blue"><i class="bi bi-people-fill"></i></div><div><div class="stat-value">248</div><div class="stat-label">Total Players</div><div class="stat-change up"><i class="bi bi-arrow-up-short"></i> 12 this month</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon green"><i class="bi bi-file-earmark-text-fill"></i></div><div><div class="stat-value">64</div><div class="stat-label">Scouting Reports</div><div class="stat-change up"><i class="bi bi-arrow-up-short"></i> 8 new</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon amber"><i class="bi bi-bookmark-star-fill"></i></div><div><div class="stat-value">19</div><div class="stat-label">Shortlisted</div><div class="stat-change down"><i class="bi bi-arrow-down-short"></i> 2 removed</div></div></div></div>
+      <div class="col-md-3"><div class="stat-card"><div class="stat-icon purple"><i class="bi bi-person-workspace"></i></div><div><div class="stat-value">12</div><div class="stat-label">Active Scouts</div><div class="stat-change up"><i class="bi bi-arrow-up-short"></i> 1 added</div></div></div></div>
+    </div>
+  </div>
+
+  <!-- Tables -->
+  <div class="guide-section">
+    <div class="guide-title">Table</div>
+    <div class="table-card">
+      <div class="card-header">
+        <span class="card-title">Players Sample</span>
+        <button class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Add Player</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr>
+            <th>#</th><th>Player</th><th>AIFF ID</th><th>Position</th><th>Club</th><th>Height</th><th>Status</th><th></th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td class="text-muted fs-13">1</td>
+              <td><div class="player-cell"><div class="player-avatar">SC</div><div><div class="player-name-link">Sunil Chhetri</div><div class="player-sub">India National Team</div></div></div></td>
+              <td><code style="font-size:12px;color:var(--text-sub);">AIFF-00001</code></td>
+              <td><span class="badge pos-fw">ST</span></td>
+              <td class="text-sub">Bengaluru FC</td>
+              <td class="text-sub">173 cm</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><div class="d-flex gap-2"><button class="btn btn-ghost-primary btn-sm">Edit</button><button class="btn btn-danger btn-sm">Delete</button></div></td>
+            </tr>
+            <tr>
+              <td class="text-muted fs-13">2</td>
+              <td><div class="player-cell"><div class="player-avatar" style="background:linear-gradient(135deg,#0d9488,#0891b2);">GS</div><div><div class="player-name-link">Gurpreet Sandhu</div><div class="player-sub">India National Team</div></div></div></td>
+              <td><code style="font-size:12px;color:var(--text-sub);">AIFF-00023</code></td>
+              <td><span class="badge pos-gk">GK</span></td>
+              <td class="text-sub">Bengaluru FC</td>
+              <td class="text-sub">191 cm</td>
+              <td><span class="badge badge-success">Active</span></td>
+              <td><div class="d-flex gap-2"><button class="btn btn-ghost-primary btn-sm">Edit</button><button class="btn btn-danger btn-sm">Delete</button></div></td>
+            </tr>
+            <tr>
+              <td class="text-muted fs-13">3</td>
+              <td><div class="player-cell"><div class="player-avatar" style="background:linear-gradient(135deg,#7c3aed,#9333ea);">SB</div><div><div class="player-name-link">Sandesh Jhingan</div><div class="player-sub">Mohun Bagan</div></div></div></td>
+              <td><code style="font-size:12px;color:var(--text-sub);">AIFF-00045</code></td>
+              <td><span class="badge pos-df">CB</span></td>
+              <td class="text-sub">Mohun Bagan SG</td>
+              <td class="text-sub">184 cm</td>
+              <td><span class="badge badge-warning">Scouting</span></td>
+              <td><div class="d-flex gap-2"><button class="btn btn-ghost-primary btn-sm">Edit</button><button class="btn btn-danger btn-sm">Delete</button></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar Preview -->
+  <div class="guide-section">
+    <div class="guide-title">Sidebar Preview (Interactive)</div>
+    <div style="border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;height:480px;display:flex;box-shadow:var(--shadow-md);">
+      <nav id="previewSidebar" style="width:240px;min-width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:width .28s;">
+        <div class="sidebar-brand"><div class="brand-logo">SP</div><div class="brand-text"><div class="brand-name">Scout Portal</div><div class="brand-sub">Admin Panel</div></div></div>
+        <div style="flex:1;overflow-y:auto;padding:10px 0;">
+          <div class="nav-section">MAIN</div>
+          <ul class="nav-list"><li class="nav-item active"><a href="#" class="nav-link"><i class="bi bi-speedometer2"></i><span class="nav-label">Dashboard</span></a></li><li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-people"></i><span class="nav-label">Players</span></a></li></ul>
+          <div class="nav-section">SCOUTING</div>
+          <ul class="nav-list"><li class="nav-item nav-has-sub"><a href="#" class="nav-link"><i class="bi bi-bookmark-star"></i><span class="nav-label">Shortlist</span><i class="bi bi-chevron-right nav-arrow"></i></a><ul class="nav-sub"><li><a href="#">My Shortlist</a></li><li><a href="#">Team Shortlist</a></li></ul></li><li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-person-workspace"></i><span class="nav-label">Staff</span></a></li></ul>
+          <div class="nav-section">REPORTS</div>
+          <ul class="nav-list"><li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-file-earmark-text"></i><span class="nav-label">Reports</span></a></li><li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-grid-1x2"></i><span class="nav-label">Templates</span></a></li></ul>
+        </div>
+        <div style="padding:10px;border-top:1px solid var(--border);">
+          <button id="previewCollapse" style="display:flex;align-items:center;gap:8px;width:100%;padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--gray-50);color:var(--text-muted);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;overflow:hidden;"><i class="bi bi-arrow-bar-left" style="flex-shrink:0;transition:transform .28s;"></i><span class="collapse-label-preview">Collapse</span></button>
+        </div>
+      </nav>
+      <div style="flex:1;background:var(--body-bg);padding:20px;overflow:auto;">
+        <div style="font-size:13px;color:var(--text-muted);text-align:center;margin-top:80px;">← Click "Collapse" to see the icon-only sidebar</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /guide-wrap -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  // Preview sidebar toggle
+  const ps = document.getElementById('previewSidebar');
+  document.getElementById('previewCollapse')?.addEventListener('click', function () {
+    ps.style.width = ps.style.width === '64px' ? '240px' : '64px';
+    const icon = this.querySelector('i');
+    const lbl  = this.querySelector('.collapse-label-preview');
+    if (ps.style.width === '64px') {
+      icon.style.transform = 'rotate(180deg)';
+      lbl.style.display = 'none';
+    } else {
+      icon.style.transform = '';
+      lbl.style.display = '';
+    }
+  });
+  // Preview sub-menu
+  document.querySelectorAll('.nav-has-sub > .nav-link').forEach(l => {
+    l.addEventListener('click', e => { e.preventDefault(); l.closest('.nav-has-sub').classList.toggle('open'); });
+  });
+</script>
+</body>
+</html>

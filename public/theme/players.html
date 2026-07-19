@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Players — Scout Portal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="assets/theme.css" />
+  <style>
+    /* ── Filter Panel ── */
+    .filter-panel {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height .3s ease, opacity .25s ease;
+      opacity: 0;
+    }
+    .filter-panel.open {
+      max-height: 600px;
+      opacity: 1;
+    }
+    .filter-panel-inner {
+      padding: 16px 20px 20px;
+      border-bottom: 1px solid var(--border);
+      background: #fafafa;
+    }
+    .filter-group-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .filter-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .filter-row-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .filter-range-pair {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .filter-range-pair input {
+      min-width: 0;
+    }
+    .filter-range-sep {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .filter-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 4px;
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+    }
+
+    /* ── Active filter chips ── */
+    .filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px 3px 10px;
+      border-radius: 20px;
+      background: #eff3ff;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid #c7d2fe;
+    }
+    .filter-chip-remove {
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      color: var(--primary);
+      font-size: 13px;
+      line-height: 1;
+      opacity: .7;
+    }
+    .filter-chip-remove:hover { opacity: 1; }
+
+    /* ── Filter toggle button badge ── */
+    .filter-count-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 17px;
+      height: 17px;
+      border-radius: 50%;
+      background: #fff;
+      color: var(--primary);
+      font-size: 10px;
+      font-weight: 700;
+      margin-left: 4px;
+    }
+    /* when filter panel open — invert badge */
+    #filterToggleBtn.btn-primary .filter-count-badge {
+      background: rgba(255,255,255,0.25);
+      color: #fff;
+    }
+    .btn-ghost-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1.5px solid var(--danger);
+    }
+    .btn-ghost-danger:hover { background: var(--danger); color: #fff; }
+
+    /* ── Add Player offcanvas sections ── */
+    .oc-section { border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; margin-bottom: 12px; }
+    .oc-section:last-child { margin-bottom: 0; }
+    .oc-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 14px;
+      background: #f8f9fb;
+      cursor: pointer;
+      border: none;
+      width: 100%;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+      transition: background .15s;
+    }
+    .oc-section-header:hover { background: #f1f3f8; }
+    .oc-section-chevron {
+      font-size: 11px;
+      color: var(--text-muted);
+      transition: transform .2s;
+    }
+    .oc-section-body {
+      padding: 14px;
+      border-top: 1px solid var(--border);
+      display: none;
+    }
+    .oc-section.open .oc-section-body { display: block; }
+    .oc-section.open .oc-section-chevron { transform: rotate(180deg); }
+
+    /* avatar upload */
+    .avatar-upload {
+      width: 68px;
+      height: 68px;
+      border-radius: var(--r-md);
+      border: 2px dashed var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      gap: 4px;
+    }
+    .avatar-upload:hover { border-color: var(--primary); background: #eff3ff; color: var(--primary); }
+    .avatar-upload i { font-size: 20px; }
+
+    /* offcanvas footer */
+    .oc-footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+<div class="app-wrapper">
+
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand"><div class="brand-logo">SP</div><div class="brand-text"><div class="brand-name">Scout Portal</div><div class="brand-sub">Admin Panel</div></div></div>
+    <div class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <ul class="nav-list"><li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="bi bi-speedometer2"></i><span class="nav-label">Dashboard</span></a></li></ul>
+      <div class="nav-section">Scouting</div>
+      <ul class="nav-list">
+        <li class="nav-item active"><a href="players.html" class="nav-link"><i class="bi bi-people"></i><span class="nav-label">Players</span></a></li>
+        <li class="nav-item"><a href="staff.html" class="nav-link"><i class="bi bi-person-workspace"></i><span class="nav-label">Staff</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-bookmark-star"></i><span class="nav-label">Shortlist</span></a></li>
+      </ul>
+      <div class="nav-section">Reports</div>
+      <ul class="nav-list">
+        <li class="nav-item"><a href="reports.html" class="nav-link"><i class="bi bi-file-earmark-text"></i><span class="nav-label">Reports</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-grid-1x2"></i><span class="nav-label">Templates</span></a></li>
+      </ul>
+      <div class="nav-section">System</div>
+      <ul class="nav-list"><li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-gear"></i><span class="nav-label">Settings</span></a></li></ul>
+    </div>
+    <div class="sidebar-footer"><button class="collapse-btn" id="collapseBtn"><i class="bi bi-arrow-bar-left btn-icon"></i><span class="collapse-label">Collapse</span></button></div>
+  </nav>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="topbar-icon-btn d-md-none" id="mobileMenuToggle"><i class="bi bi-list"></i></button>
+        <div class="topbar-breadcrumb"><a href="dashboard.html" class="text-muted">Home</a><i class="bi bi-chevron-right"></i><span class="crumb-active">Players</span></div>
+      </div>
+      <div class="topbar-right">
+        <button class="topbar-icon-btn"><i class="bi bi-sun"></i></button>
+        <div class="topbar-divider"></div>
+        <div class="user-chip"><div class="user-avatar">AD</div><div class="d-none d-sm-block"><div class="user-name">Admin User</div><div class="user-role">Super Admin</div></div><i class="bi bi-chevron-down ms-1" style="font-size:10px;color:var(--text-muted);"></i></div>
+      </div>
+    </header>
+
+    <div class="page-header">
+      <div class="page-header-inner">
+        <div><div class="page-title">Players</div><div class="page-subtitle">248 players in the database</div></div>
+        <div class="page-header-actions">
+          <button class="btn btn-glass btn-sm"><i class="bi bi-download"></i> Export</button>
+          <button class="btn btn-glass btn-sm" data-bs-toggle="offcanvas" data-bs-target="#addPlayerPanel"><i class="bi bi-plus"></i> Add Player</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-wrap">
+      <div class="table-card">
+
+        <!-- ── Toolbar ── -->
+        <div class="filter-bar" style="flex-wrap:wrap;gap:8px;">
+          <!-- Search -->
+          <div class="input-group" style="max-width:220px;">
+            <span class="input-group-text"><i class="bi bi-search" style="font-size:13px;"></i></span>
+            <input type="text" class="form-control" id="searchInput" placeholder="Search name…" style="height:36px;" oninput="syncSearch(this.value)" />
+          </div>
+          <!-- Filter toggle -->
+          <button class="btn btn-secondary btn-sm" id="filterToggleBtn" onclick="toggleFilterPanel()">
+            <i class="bi bi-sliders"></i> Filters
+            <span class="filter-count-badge" id="filterBadge" style="display:none;">0</span>
+          </button>
+          <!-- Active chips -->
+          <div id="filterChips" class="d-flex flex-wrap gap-2 align-items-center" style="flex:1;min-width:0;"></div>
+          <!-- Clear all (shown when chips exist) -->
+          <button class="btn btn-ghost-danger btn-sm" id="clearAllBtn" style="display:none;" onclick="clearAllFilters()">
+            <i class="bi bi-x-circle"></i> Clear all
+          </button>
+          <!-- Add Player -->
+          <button class="btn btn-primary btn-sm ms-auto" data-bs-toggle="offcanvas" data-bs-target="#addPlayerPanel">
+            <i class="bi bi-plus-lg"></i> Add Player
+          </button>
+        </div>
+
+        <!-- ── Collapsible Filter Panel ── -->
+        <div class="filter-panel" id="filterPanel">
+          <div class="filter-panel-inner">
+
+            <div class="row g-3 mb-2">
+              <!-- Player Name -->
+              <div class="col-sm-6 col-md-4 col-lg-3">
+                <div class="filter-group-label">Name</div>
+                <input class="form-control form-control-sm" type="text" id="f_name" placeholder="Player name…" oninput="updateChips()" />
+              </div>
+              <!-- AIFF ID -->
+              <div class="col-sm-6 col-md-4 col-lg-3">
+                <div class="filter-group-label">AIFF ID</div>
+                <input class="form-control form-control-sm" type="text" id="f_aiff" placeholder="AIFF-XXXXX" oninput="updateChips()" />
+              </div>
+              <!-- Position -->
+              <div class="col-sm-6 col-md-4 col-lg-3">
+                <div class="filter-group-label">Position</div>
+                <select class="form-select form-select-sm" id="f_pos" onchange="updateChips()">
+                  <option value="">All Positions</option>
+                  <option>Striker (ST)</option>
+                  <option>Left Wing (LW)</option>
+                  <option>Right Wing (RW)</option>
+                  <option>Attacking Mid (AM)</option>
+                  <option>Central Mid (CM)</option>
+                  <option>Defensive Mid (CDM)</option>
+                  <option>Left Back (LB)</option>
+                  <option>Right Back (RB)</option>
+                  <option>Centre Back (CB)</option>
+                  <option>Goalkeeper (GK)</option>
+                </select>
+              </div>
+              <!-- Club -->
+              <div class="col-sm-6 col-md-4 col-lg-3">
+                <div class="filter-group-label">Club</div>
+                <select class="form-select form-select-sm" id="f_club" onchange="updateChips()">
+                  <option value="">All Clubs</option>
+                  <option>Bengaluru FC</option>
+                  <option>Mohun Bagan SG</option>
+                  <option>Mumbai City FC</option>
+                  <option>Chennaiyin FC</option>
+                  <option>ATK Mohun Bagan</option>
+                  <option>Kerala Blasters</option>
+                </select>
+              </div>
+              <!-- Status -->
+              <div class="col-sm-6 col-md-4 col-lg-3">
+                <div class="filter-group-label">Status</div>
+                <select class="form-select form-select-sm" id="f_status" onchange="updateChips()">
+                  <option value="">All Status</option>
+                  <option>Active</option>
+                  <option>Shortlisted</option>
+                  <option>Scouting</option>
+                  <option>Inactive</option>
+                </select>
+              </div>
+              <!-- Nationality -->
+              <div class="col-sm-6 col-md-4 col-lg-3">
+                <div class="filter-group-label">Nationality</div>
+                <select class="form-select form-select-sm" id="f_nat" onchange="updateChips()">
+                  <option value="">All</option>
+                  <option>Indian</option>
+                  <option>Brazilian</option>
+                  <option>Spanish</option>
+                  <option>Nigerian</option>
+                </select>
+              </div>
+              <!-- Gender -->
+              <div class="col-sm-6 col-md-4 col-lg-3">
+                <div class="filter-group-label">Gender</div>
+                <select class="form-select form-select-sm" id="f_gender" onchange="updateChips()">
+                  <option value="">All</option>
+                  <option>Male</option>
+                  <option>Female</option>
+                </select>
+              </div>
+              <!-- Preferred Foot -->
+              <div class="col-sm-6 col-md-4 col-lg-3">
+                <div class="filter-group-label">Preferred Foot</div>
+                <select class="form-select form-select-sm" id="f_foot" onchange="updateChips()">
+                  <option value="">Any</option>
+                  <option>Right</option>
+                  <option>Left</option>
+                  <option>Both</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Range filters -->
+            <div class="row g-3 mb-3">
+              <div class="col-sm-6 col-md-4">
+                <div class="filter-group-label">Age Range</div>
+                <div class="filter-range-pair">
+                  <input class="form-control form-control-sm" type="number" id="f_age_min" placeholder="Min" min="14" max="50" oninput="updateChips()" />
+                  <span class="filter-range-sep">–</span>
+                  <input class="form-control form-control-sm" type="number" id="f_age_max" placeholder="Max" min="14" max="50" oninput="updateChips()" />
+                  <span class="filter-range-sep ms-1">yrs</span>
+                </div>
+              </div>
+              <div class="col-sm-6 col-md-4">
+                <div class="filter-group-label">Height Range</div>
+                <div class="filter-range-pair">
+                  <input class="form-control form-control-sm" type="number" id="f_ht_min" placeholder="Min" min="140" max="220" oninput="updateChips()" />
+                  <span class="filter-range-sep">–</span>
+                  <input class="form-control form-control-sm" type="number" id="f_ht_max" placeholder="Max" min="140" max="220" oninput="updateChips()" />
+                  <span class="filter-range-sep ms-1">cm</span>
+                </div>
+              </div>
+              <div class="col-sm-6 col-md-4">
+                <div class="filter-group-label">Market Value (₹ Lakh)</div>
+                <div class="filter-range-pair">
+                  <input class="form-control form-control-sm" type="number" id="f_mv_min" placeholder="Min" min="0" oninput="updateChips()" />
+                  <span class="filter-range-sep">–</span>
+                  <input class="form-control form-control-sm" type="number" id="f_mv_max" placeholder="Max" min="0" oninput="updateChips()" />
+                  <span class="filter-range-sep ms-1">L</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="filter-actions">
+              <button class="btn btn-secondary btn-sm" onclick="clearAllFilters()"><i class="bi bi-x"></i> Clear All</button>
+              <button class="btn btn-primary btn-sm" onclick="applyFilters()"><i class="bi bi-check2"></i> Apply Filters</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Active Filter Chips row (standalone, shown only when chips exist) ── -->
+        <div id="chipsRow" style="display:none;" class="filter-chips"></div>
+
+        <!-- ── Table ── -->
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:4%">#</th>
+                <th style="width:24%">Player</th>
+                <th style="width:12%">AIFF ID</th>
+                <th style="width:10%">Position</th>
+                <th style="width:14%">Club</th>
+                <th style="width:8%">Age</th>
+                <th style="width:9%">Height</th>
+                <th style="width:11%">Market Value</th>
+                <th style="width:8%">Status</th>
+                <th style="width:10%"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-muted fs-13">1</td>
+                <td><div class="player-cell"><div class="player-avatar">SC</div><div><a href="player-profile.html" class="player-name-link">Sunil Chhetri</a><div class="player-sub">Sunil Singh Chhetri</div></div></div></td>
+                <td><code style="font-size:12px;color:var(--text-sub);">AIFF-00001</code></td>
+                <td><span class="badge pos-fw">ST</span></td>
+                <td class="text-sub fs-13">Bengaluru FC</td>
+                <td class="text-sub fs-13">39</td>
+                <td class="text-sub fs-13">173 cm</td>
+                <td class="fs-13 fw-600">₹ 1.2 Cr</td>
+                <td><span class="badge badge-success">Active</span></td>
+                <td><div class="d-flex gap-1"><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-eye"></i></button><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-pencil"></i></button><button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button></div></td>
+              </tr>
+              <tr>
+                <td class="text-muted fs-13">2</td>
+                <td><div class="player-cell"><div class="player-avatar" style="background:linear-gradient(135deg,#0d9488,#0891b2);">GS</div><div><a href="player-profile.html" class="player-name-link">Gurpreet Sandhu</a><div class="player-sub">Gurpreet Singh Sandhu</div></div></div></td>
+                <td><code style="font-size:12px;color:var(--text-sub);">AIFF-00023</code></td>
+                <td><span class="badge pos-gk">GK</span></td>
+                <td class="text-sub fs-13">Bengaluru FC</td>
+                <td class="text-sub fs-13">32</td>
+                <td class="text-sub fs-13">191 cm</td>
+                <td class="fs-13 fw-600">₹ 90 L</td>
+                <td><span class="badge badge-success">Active</span></td>
+                <td><div class="d-flex gap-1"><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-eye"></i></button><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-pencil"></i></button><button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button></div></td>
+              </tr>
+              <tr>
+                <td class="text-muted fs-13">3</td>
+                <td><div class="player-cell"><div class="player-avatar" style="background:linear-gradient(135deg,#7c3aed,#9333ea);">SJ</div><div><a href="player-profile.html" class="player-name-link">Sandesh Jhingan</a><div class="player-sub">Sandesh Singh Jhingan</div></div></div></td>
+                <td><code style="font-size:12px;color:var(--text-sub);">AIFF-00045</code></td>
+                <td><span class="badge pos-df">CB</span></td>
+                <td class="text-sub fs-13">Mohun Bagan SG</td>
+                <td class="text-sub fs-13">31</td>
+                <td class="text-sub fs-13">184 cm</td>
+                <td class="fs-13 fw-600">₹ 75 L</td>
+                <td><span class="badge badge-warning">Scouting</span></td>
+                <td><div class="d-flex gap-1"><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-eye"></i></button><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-pencil"></i></button><button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button></div></td>
+              </tr>
+              <tr>
+                <td class="text-muted fs-13">4</td>
+                <td><div class="player-cell"><div class="player-avatar" style="background:linear-gradient(135deg,#d97706,#f59e0b);">AT</div><div><a href="player-profile.html" class="player-name-link">Anirudh Thapa</a><div class="player-sub">Anirudh Thapa</div></div></div></td>
+                <td><code style="font-size:12px;color:var(--text-sub);">AIFF-00067</code></td>
+                <td><span class="badge pos-mf">CDM</span></td>
+                <td class="text-sub fs-13">Chennaiyin FC</td>
+                <td class="text-sub fs-13">26</td>
+                <td class="text-sub fs-13">175 cm</td>
+                <td class="fs-13 fw-600">₹ 60 L</td>
+                <td><span class="badge badge-primary">Shortlisted</span></td>
+                <td><div class="d-flex gap-1"><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-eye"></i></button><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-pencil"></i></button><button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button></div></td>
+              </tr>
+              <tr>
+                <td class="text-muted fs-13">5</td>
+                <td><div class="player-cell"><div class="player-avatar" style="background:linear-gradient(135deg,#be185d,#e11d48);">LC</div><div><a href="player-profile.html" class="player-name-link">Liston Colaco</a><div class="player-sub">Liston Pires Colaco</div></div></div></td>
+                <td><code style="font-size:12px;color:var(--text-sub);">AIFF-00089</code></td>
+                <td><span class="badge pos-fw">LW</span></td>
+                <td class="text-sub fs-13">Mohun Bagan SG</td>
+                <td class="text-sub fs-13">24</td>
+                <td class="text-sub fs-13">168 cm</td>
+                <td class="fs-13 fw-600">₹ 50 L</td>
+                <td><span class="badge badge-success">Active</span></td>
+                <td><div class="d-flex gap-1"><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-eye"></i></button><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-pencil"></i></button><button class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="card-footer d-flex align-items-center justify-content-between">
+          <div class="text-muted fs-13">Showing <strong>1–5</strong> of <strong>248</strong> players</div>
+          <nav><ul class="pagination mb-0">
+            <li class="page-item disabled"><a class="page-link" href="#"><i class="bi bi-chevron-left"></i></a></li>
+            <li class="page-item active"><a class="page-link" href="#">1</a></li>
+            <li class="page-item"><a class="page-link" href="#">2</a></li>
+            <li class="page-item"><a class="page-link" href="#">3</a></li>
+            <li class="page-item"><a class="page-link" href="#"><i class="bi bi-chevron-right"></i></a></li>
+          </ul></nav>
+        </div>
+
+      </div><!-- /table-card -->
+    </div><!-- /content-wrap -->
+  </div><!-- /main-content -->
+</div><!-- /app-wrapper -->
+
+<!-- ══════════════════════════════════════════
+     Add Player — Right Offcanvas
+════════════════════════════════════════════ -->
+<div class="offcanvas offcanvas-end" id="addPlayerPanel" style="width:500px;" tabindex="-1">
+
+  <!-- Header -->
+  <div class="offcanvas-header" style="background:var(--primary);padding:0 20px;height:64px;position:relative;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;">
+        <i class="bi bi-person-plus"></i>
+      </div>
+      <div>
+        <div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:-0.2px;line-height:1.2;">Add Player</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.65);font-weight:500;margin-top:1px;">Fill in the details below</div>
+      </div>
+    </div>
+    <button type="button" data-bs-dismiss="offcanvas" style="background:rgba(255,255,255,0.15);border:none;width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.25)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <!-- Body (scrollable) -->
+  <div class="offcanvas-body" style="padding:16px 20px;overflow-y:auto;">
+
+    <!-- Profile photo + AIFF ID row -->
+    <div class="d-flex align-items-center gap-3 mb-4">
+      <div class="avatar-upload" title="Upload photo">
+        <i class="bi bi-camera"></i>
+        <span>Photo</span>
+      </div>
+      <div style="flex:1;">
+        <label class="form-label">AIFF ID</label>
+        <input class="form-control" type="text" placeholder="AIFF-XXXXX" />
+        <div class="form-text">Leave blank to auto-generate</div>
+      </div>
+    </div>
+
+    <!-- Section: Personal Details (open) -->
+    <div class="oc-section open">
+      <button class="oc-section-header" onclick="toggleSection(this)">
+        <span><i class="bi bi-person me-2" style="color:var(--primary);"></i>Personal Details</span>
+        <i class="bi bi-chevron-up oc-section-chevron"></i>
+      </button>
+      <div class="oc-section-body">
+        <div class="row g-3">
+          <div class="col-6"><label class="form-label">First Name <span class="req">*</span></label><input class="form-control" type="text" placeholder="First name" /></div>
+          <div class="col-6"><label class="form-label">Last Name</label><input class="form-control" type="text" placeholder="Last name" /></div>
+          <div class="col-6"><label class="form-label">Date of Birth</label><input class="form-control" type="date" /></div>
+          <div class="col-6"><label class="form-label">Gender</label>
+            <select class="form-select"><option value="">— Select —</option><option>Male</option><option>Female</option><option>Other</option></select>
+          </div>
+          <div class="col-6"><label class="form-label">Nationality</label><input class="form-control" type="text" placeholder="e.g. Indian" /></div>
+          <div class="col-6"><label class="form-label">Religion</label><input class="form-control" type="text" placeholder="Optional" /></div>
+          <div class="col-6"><label class="form-label">Height</label>
+            <div class="input-group"><input class="form-control" type="number" placeholder="175" /><span class="input-group-text">cm</span></div>
+          </div>
+          <div class="col-6"><label class="form-label">Weight</label>
+            <div class="input-group"><input class="form-control" type="number" placeholder="70" /><span class="input-group-text">kg</span></div>
+          </div>
+          <div class="col-12"><label class="form-label">Address</label><textarea class="form-control" rows="2" placeholder="Current address…"></textarea></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Professional Details (open) -->
+    <div class="oc-section open">
+      <button class="oc-section-header" onclick="toggleSection(this)">
+        <span><i class="bi bi-briefcase me-2" style="color:#16a34a;"></i>Professional Details</span>
+        <i class="bi bi-chevron-up oc-section-chevron"></i>
+      </button>
+      <div class="oc-section-body">
+        <div class="row g-3">
+          <div class="col-6"><label class="form-label">Position <span class="req">*</span></label>
+            <select class="form-select">
+              <option value="">— Select —</option>
+              <option>Striker (ST)</option>
+              <option>Left Wing (LW)</option>
+              <option>Right Wing (RW)</option>
+              <option>Attacking Mid (AM)</option>
+              <option>Central Mid (CM)</option>
+              <option>Defensive Mid (CDM)</option>
+              <option>Left Back (LB)</option>
+              <option>Right Back (RB)</option>
+              <option>Centre Back (CB)</option>
+              <option>Goalkeeper (GK)</option>
+            </select>
+          </div>
+          <div class="col-6"><label class="form-label">Preferred Foot</label>
+            <select class="form-select"><option value="">— Select —</option><option>Right</option><option>Left</option><option>Both</option></select>
+          </div>
+          <div class="col-6"><label class="form-label">Current Club</label><input class="form-control" type="text" placeholder="Club name" /></div>
+          <div class="col-6"><label class="form-label">Jersey Number</label><input class="form-control" type="number" placeholder="10" /></div>
+          <div class="col-6"><label class="form-label">Contract Expiry</label><input class="form-control" type="date" /></div>
+          <div class="col-6"><label class="form-label">Status</label>
+            <select class="form-select"><option>Active</option><option>Scouting</option><option>Shortlisted</option><option>Inactive</option></select>
+          </div>
+          <div class="col-6"><label class="form-label">Market Value</label>
+            <div class="input-group"><span class="input-group-text">₹</span><input class="form-control" type="number" placeholder="0" /><span class="input-group-text">L</span></div>
+          </div>
+          <div class="col-6"><label class="form-label">Salary / Month</label>
+            <div class="input-group"><span class="input-group-text">₹</span><input class="form-control" type="number" placeholder="0" /></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: AIFF / Registration (collapsed) -->
+    <div class="oc-section">
+      <button class="oc-section-header" onclick="toggleSection(this)">
+        <span><i class="bi bi-patch-check me-2" style="color:#9333ea;"></i>AIFF / Registration</span>
+        <i class="bi bi-chevron-down oc-section-chevron"></i>
+      </button>
+      <div class="oc-section-body">
+        <div class="row g-3">
+          <div class="col-6"><label class="form-label">Registration Number</label><input class="form-control" type="text" placeholder="REG-XXXXX" /></div>
+          <div class="col-6"><label class="form-label">Registration Date</label><input class="form-control" type="date" /></div>
+          <div class="col-6"><label class="form-label">License Type</label>
+            <select class="form-select"><option value="">— Select —</option><option>A</option><option>B</option><option>C</option><option>D</option></select>
+          </div>
+          <div class="col-6"><label class="form-label">Biotype</label>
+            <select class="form-select"><option value="">— Select —</option><option>Ectomorph</option><option>Mesomorph</option><option>Endomorph</option></select>
+          </div>
+          <div class="col-12"><label class="form-label">Insurance ID</label><input class="form-control" type="text" placeholder="Optional" /></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Representative (collapsed) -->
+    <div class="oc-section">
+      <button class="oc-section-header" onclick="toggleSection(this)">
+        <span><i class="bi bi-person-lines-fill me-2" style="color:#d97706;"></i>Representative / Agent</span>
+        <i class="bi bi-chevron-down oc-section-chevron"></i>
+      </button>
+      <div class="oc-section-body">
+        <div class="row g-3">
+          <div class="col-6"><label class="form-label">Agent Name</label><input class="form-control" type="text" placeholder="Full name" /></div>
+          <div class="col-6"><label class="form-label">Phone</label><input class="form-control" type="tel" placeholder="+91 XXXXX XXXXX" /></div>
+          <div class="col-12"><label class="form-label">Email</label><input class="form-control" type="email" placeholder="agent@example.com" /></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Social Media (collapsed) -->
+    <div class="oc-section">
+      <button class="oc-section-header" onclick="toggleSection(this)">
+        <span><i class="bi bi-share me-2" style="color:#0891b2;"></i>Social Media</span>
+        <i class="bi bi-chevron-down oc-section-chevron"></i>
+      </button>
+      <div class="oc-section-body">
+        <div class="row g-3">
+          <div class="col-12"><label class="form-label">Instagram</label>
+            <div class="input-group"><span class="input-group-text"><i class="bi bi-instagram"></i></span><input class="form-control" type="text" placeholder="@handle" /></div>
+          </div>
+          <div class="col-12"><label class="form-label">Twitter / X</label>
+            <div class="input-group"><span class="input-group-text"><i class="bi bi-twitter-x"></i></span><input class="form-control" type="text" placeholder="@handle" /></div>
+          </div>
+          <div class="col-12"><label class="form-label">Facebook</label>
+            <div class="input-group"><span class="input-group-text"><i class="bi bi-facebook"></i></span><input class="form-control" type="text" placeholder="Profile URL" /></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Notes (collapsed) -->
+    <div class="oc-section">
+      <button class="oc-section-header" onclick="toggleSection(this)">
+        <span><i class="bi bi-journal-text me-2" style="color:var(--text-muted);"></i>Notes</span>
+        <i class="bi bi-chevron-down oc-section-chevron"></i>
+      </button>
+      <div class="oc-section-body">
+        <textarea class="form-control" rows="4" placeholder="Scout observations, additional notes…"></textarea>
+      </div>
+    </div>
+
+  </div><!-- /offcanvas-body -->
+
+  <!-- Footer -->
+  <div class="oc-footer">
+    <button class="btn btn-secondary" data-bs-dismiss="offcanvas">Cancel</button>
+    <button class="btn btn-primary"><i class="bi bi-check2"></i> Add Player</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/theme.js"></script>
+<script>
+  /* ── Filter panel toggle ── */
+  let filterOpen = false;
+  function toggleFilterPanel() {
+    filterOpen = !filterOpen;
+    document.getElementById('filterPanel').classList.toggle('open', filterOpen);
+    const btn = document.getElementById('filterToggleBtn');
+    btn.classList.toggle('btn-primary', filterOpen);
+    btn.classList.toggle('btn-secondary', !filterOpen);
+  }
+
+  /* ── Sync search box into filter ── */
+  function syncSearch(val) {
+    document.getElementById('f_name').value = val;
+    updateChips();
+  }
+
+  /* ── Active chips ── */
+  const filterDefs = [
+    { id: 'f_name',    label: 'Name' },
+    { id: 'f_aiff',    label: 'AIFF' },
+    { id: 'f_pos',     label: 'Position' },
+    { id: 'f_club',    label: 'Club' },
+    { id: 'f_status',  label: 'Status' },
+    { id: 'f_nat',     label: 'Nationality' },
+    { id: 'f_gender',  label: 'Gender' },
+    { id: 'f_foot',    label: 'Foot' },
+    { id: 'f_age_min', label: 'Age ≥' },
+    { id: 'f_age_max', label: 'Age ≤' },
+    { id: 'f_ht_min',  label: 'Height ≥' },
+    { id: 'f_ht_max',  label: 'Height ≤' },
+    { id: 'f_mv_min',  label: 'Value ≥' },
+    { id: 'f_mv_max',  label: 'Value ≤' },
+  ];
+
+  function updateChips() {
+    const chips = [];
+    filterDefs.forEach(def => {
+      const el = document.getElementById(def.id);
+      if (el && el.value.trim()) {
+        chips.push({ id: def.id, label: def.label, value: el.value.trim() });
+      }
+    });
+
+    /* render inline chips (in toolbar) */
+    const inlineChips = document.getElementById('filterChips');
+    inlineChips.innerHTML = '';
+    chips.forEach(c => {
+      const span = document.createElement('span');
+      span.className = 'filter-chip';
+      span.innerHTML = `${c.label}: <strong>${c.value}</strong> <button class="filter-chip-remove" onclick="removeChip('${c.id}')"><i class="bi bi-x"></i></button>`;
+      inlineChips.appendChild(span);
+    });
+
+    /* badge count */
+    const badge = document.getElementById('filterBadge');
+    if (chips.length > 0) {
+      badge.textContent = chips.length;
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+
+    /* clear all button */
+    document.getElementById('clearAllBtn').style.display = chips.length > 0 ? '' : 'none';
+
+    /* sync search input */
+    const nameEl = document.getElementById('f_name');
+    if (nameEl) {
+      const searchEl = document.getElementById('searchInput');
+      if (searchEl && searchEl.value !== nameEl.value) searchEl.value = nameEl.value;
+    }
+  }
+
+  function removeChip(filterId) {
+    const el = document.getElementById(filterId);
+    if (el) { el.value = ''; updateChips(); }
+  }
+
+  function clearAllFilters() {
+    filterDefs.forEach(def => {
+      const el = document.getElementById(def.id);
+      if (el) el.value = '';
+    });
+    document.getElementById('searchInput').value = '';
+    updateChips();
+  }
+
+  function applyFilters() {
+    updateChips();
+    /* close panel */
+    filterOpen = false;
+    document.getElementById('filterPanel').classList.remove('open');
+    document.getElementById('filterToggleBtn').classList.remove('btn-primary');
+    document.getElementById('filterToggleBtn').classList.add('btn-secondary');
+  }
+
+  /* ── Offcanvas section accordion ── */
+  function toggleSection(btn) {
+    const section = btn.closest('.oc-section');
+    section.classList.toggle('open');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reports &amp; Templates — Scout Portal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="app-wrapper">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand"><div class="brand-logo">SP</div><div class="brand-text"><div class="brand-name">Scout Portal</div><div class="brand-sub">Admin Panel</div></div></div>
+    <div class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <ul class="nav-list"><li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="bi bi-speedometer2"></i><span class="nav-label">Dashboard</span></a></li></ul>
+      <div class="nav-section">Scouting</div>
+      <ul class="nav-list">
+        <li class="nav-item"><a href="players.html" class="nav-link"><i class="bi bi-people"></i><span class="nav-label">Players</span></a></li>
+        <li class="nav-item"><a href="staff.html" class="nav-link"><i class="bi bi-person-workspace"></i><span class="nav-label">Staff</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-bookmark-star"></i><span class="nav-label">Shortlist</span></a></li>
+      </ul>
+      <div class="nav-section">Reports</div>
+      <ul class="nav-list">
+        <li class="nav-item active"><a href="reports.html" class="nav-link"><i class="bi bi-file-earmark-text"></i><span class="nav-label">Reports</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-grid-1x2"></i><span class="nav-label">Templates</span></a></li>
+      </ul>
+      <div class="nav-section">System</div>
+      <ul class="nav-list"><li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-gear"></i><span class="nav-label">Settings</span></a></li></ul>
+    </div>
+    <div class="sidebar-footer"><button class="collapse-btn" id="collapseBtn"><i class="bi bi-arrow-bar-left btn-icon"></i><span class="collapse-label">Collapse</span></button></div>
+  </nav>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="topbar-icon-btn d-md-none" id="mobileMenuToggle"><i class="bi bi-list"></i></button>
+        <div class="topbar-breadcrumb"><a href="dashboard.html" class="text-muted">Home</a><i class="bi bi-chevron-right"></i><span class="crumb-active">Reports</span></div>
+      </div>
+      <div class="topbar-right">
+        <button class="topbar-icon-btn"><i class="bi bi-sun"></i></button>
+        <div class="topbar-divider"></div>
+        <div class="user-chip"><div class="user-avatar">AD</div><div class="d-none d-sm-block"><div class="user-name">Admin User</div></div></div>
+      </div>
+    </header>
+
+    <div class="page-header">
+      <div class="page-header-inner">
+        <div><div class="page-title">Reports &amp; Templates</div><div class="page-subtitle">64 scouting reports · 8 templates</div></div>
+        <div class="page-header-actions">
+          <button class="btn btn-glass btn-sm"><i class="bi bi-download"></i> Export All</button>
+          <button class="btn btn-glass btn-sm"><i class="bi bi-plus"></i> New Report</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-wrap">
+      <ul class="nav nav-pills mb-4">
+        <li class="nav-item"><a class="nav-link active" href="#">All Reports</a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Scouting</a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Performance</a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Fitness</a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Templates</a></li>
+      </ul>
+
+      <!-- Templates row -->
+      <div class="section-label mb-3">Report Templates</div>
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <div class="card" style="cursor:pointer;transition:box-shadow .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--primary)';this.style.boxShadow='var(--shadow-md)';" onmouseout="this.style.borderColor='';this.style.boxShadow='';">
+            <div class="card-body">
+              <div style="width:40px;height:40px;border-radius:var(--r-sm);background:#eff6ff;display:flex;align-items:center;justify-content:center;color:var(--primary);font-size:20px;margin-bottom:12px;"><i class="bi bi-person-badge"></i></div>
+              <div class="fw-700 fs-13">Scouting Report</div>
+              <div class="text-muted fs-12 mt-1">Standard player evaluation form</div>
+              <div class="d-flex align-items-center justify-content-between mt-3"><span class="badge badge-primary">Default</span><span class="text-muted fs-12">32 fields</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card" style="cursor:pointer;transition:box-shadow .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--primary)';this.style.boxShadow='var(--shadow-md)';" onmouseout="this.style.borderColor='';this.style.boxShadow='';">
+            <div class="card-body">
+              <div style="width:40px;height:40px;border-radius:var(--r-sm);background:#f0fdf4;display:flex;align-items:center;justify-content:center;color:#16a34a;font-size:20px;margin-bottom:12px;"><i class="bi bi-activity"></i></div>
+              <div class="fw-700 fs-13">Performance Report</div>
+              <div class="text-muted fs-12 mt-1">In-match stats &amp; KPIs</div>
+              <div class="d-flex align-items-center justify-content-between mt-3"><span class="badge badge-success">Active</span><span class="text-muted fs-12">24 fields</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card" style="cursor:pointer;transition:box-shadow .15s,border-color .15s;" onmouseover="this.style.borderColor='var(--primary)';this.style.boxShadow='var(--shadow-md)';" onmouseout="this.style.borderColor='';this.style.boxShadow='';">
+            <div class="card-body">
+              <div style="width:40px;height:40px;border-radius:var(--r-sm);background:#faf5ff;display:flex;align-items:center;justify-content:center;color:#9333ea;font-size:20px;margin-bottom:12px;"><i class="bi bi-heart-pulse"></i></div>
+              <div class="fw-700 fs-13">Fitness Assessment</div>
+              <div class="text-muted fs-12 mt-1">Physical &amp; medical evaluation</div>
+              <div class="d-flex align-items-center justify-content-between mt-3"><span class="badge badge-purple">Medical</span><span class="text-muted fs-12">18 fields</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card" style="cursor:pointer;transition:box-shadow .15s,border-color .15s;border-style:dashed;" onmouseover="this.style.borderColor='var(--primary)';this.style.boxShadow='var(--shadow-md)';" onmouseout="this.style.borderColor='';this.style.boxShadow='';">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center" style="min-height:130px;gap:8px;">
+              <div style="width:36px;height:36px;border-radius:50%;border:2px dashed var(--gray-300);display:flex;align-items:center;justify-content:center;color:var(--text-muted);"><i class="bi bi-plus"></i></div>
+              <div class="text-muted fs-13 fw-600">Create Template</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reports table -->
+      <div class="section-label mb-3">All Reports</div>
+      <div class="table-card">
+        <div class="filter-bar">
+          <div class="input-group" style="max-width:220px;"><span class="input-group-text"><i class="bi bi-search" style="font-size:13px;"></i></span><input type="text" class="form-control" placeholder="Search reports…" style="height:36px;" /></div>
+          <select class="form-select" style="max-width:150px;height:36px;font-size:13px;"><option>All Types</option><option>Scouting</option><option>Performance</option><option>Fitness</option></select>
+          <select class="form-select" style="max-width:140px;height:36px;font-size:13px;"><option>All Status</option><option>Final</option><option>Draft</option></select>
+        </div>
+        <div class="table-responsive">
+          <table class="table">
+            <thead><tr><th>Report Title</th><th>Player</th><th>Type</th><th>Scout</th><th>Date</th><th>Rating</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="fs-13 fw-600">Performance Assessment — ISL 2024</td>
+                <td><div class="player-cell"><div class="player-avatar" style="width:28px;height:28px;min-width:28px;font-size:10px;border-radius:6px;">SC</div><div class="player-name-link" style="font-size:13px;">Sunil Chhetri</div></div></td>
+                <td><span class="badge badge-info">Performance</span></td>
+                <td class="text-sub fs-13">Ramesh Kumar</td>
+                <td class="text-muted fs-13">15 Jan 2024</td>
+                <td><div class="d-flex gap-1"><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot half"></div></div></td>
+                <td><span class="badge badge-success">Final</span></td>
+                <td><div class="d-flex gap-1"><button class="btn btn-secondary btn-sm"><i class="bi bi-eye"></i></button><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-pencil"></i></button></div></td>
+              </tr>
+              <tr>
+                <td class="fs-13 fw-600">Scouting Report — Anirudh Thapa (Durand)</td>
+                <td><div class="player-cell"><div class="player-avatar" style="width:28px;height:28px;min-width:28px;font-size:10px;border-radius:6px;background:linear-gradient(135deg,#d97706,#f59e0b);">AT</div><div class="player-name-link" style="font-size:13px;">Anirudh Thapa</div></div></td>
+                <td><span class="badge badge-warning">Scouting</span></td>
+                <td class="text-sub fs-13">Priya Sharma</td>
+                <td class="text-muted fs-13">5 Dec 2023</td>
+                <td><div class="d-flex gap-1"><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot"></div></div></td>
+                <td><span class="badge badge-warning">Draft</span></td>
+                <td><div class="d-flex gap-1"><button class="btn btn-secondary btn-sm"><i class="bi bi-eye"></i></button><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-pencil"></i></button></div></td>
+              </tr>
+              <tr>
+                <td class="fs-13 fw-600">Fitness Evaluation Q3 2023 — Gurpreet</td>
+                <td><div class="player-cell"><div class="player-avatar" style="width:28px;height:28px;min-width:28px;font-size:10px;border-radius:6px;background:linear-gradient(135deg,#0d9488,#0891b2);">GS</div><div class="player-name-link" style="font-size:13px;">Gurpreet Sandhu</div></div></td>
+                <td><span class="badge badge-purple">Fitness</span></td>
+                <td class="text-sub fs-13">Vinod Nair</td>
+                <td class="text-muted fs-13">12 Sep 2023</td>
+                <td><div class="d-flex gap-1"><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div></div></td>
+                <td><span class="badge badge-success">Final</span></td>
+                <td><div class="d-flex gap-1"><button class="btn btn-secondary btn-sm"><i class="bi bi-eye"></i></button><button class="btn btn-ghost-primary btn-sm"><i class="bi bi-pencil"></i></button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer d-flex align-items-center justify-content-between">
+          <div class="text-muted fs-13">Showing 1–3 of 64 reports</div>
+          <nav><ul class="pagination mb-0">
+            <li class="page-item disabled"><a class="page-link" href="#"><i class="bi bi-chevron-left"></i></a></li>
+            <li class="page-item active"><a class="page-link" href="#">1</a></li>
+            <li class="page-item"><a class="page-link" href="#">2</a></li>
+            <li class="page-item"><a class="page-link" href="#">3</a></li>
+            <li class="page-item"><a class="page-link" href="#"><i class="bi bi-chevron-right"></i></a></li>
+          </ul></nav>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/theme.js"></script>
+</body>
+</html>

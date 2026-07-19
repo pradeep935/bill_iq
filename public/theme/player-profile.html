@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Player Profile — Scout Portal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="app-wrapper">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand"><div class="brand-logo">SP</div><div class="brand-text"><div class="brand-name">Scout Portal</div><div class="brand-sub">Admin Panel</div></div></div>
+    <div class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <ul class="nav-list"><li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="bi bi-speedometer2"></i><span class="nav-label">Dashboard</span></a></li></ul>
+      <div class="nav-section">Scouting</div>
+      <ul class="nav-list">
+        <li class="nav-item active"><a href="players.html" class="nav-link"><i class="bi bi-people"></i><span class="nav-label">Players</span></a></li>
+        <li class="nav-item"><a href="staff.html" class="nav-link"><i class="bi bi-person-workspace"></i><span class="nav-label">Staff</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-bookmark-star"></i><span class="nav-label">Shortlist</span></a></li>
+      </ul>
+      <div class="nav-section">Reports</div>
+      <ul class="nav-list">
+        <li class="nav-item"><a href="reports.html" class="nav-link"><i class="bi bi-file-earmark-text"></i><span class="nav-label">Reports</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-grid-1x2"></i><span class="nav-label">Templates</span></a></li>
+      </ul>
+      <div class="nav-section">System</div>
+      <ul class="nav-list"><li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-gear"></i><span class="nav-label">Settings</span></a></li></ul>
+    </div>
+    <div class="sidebar-footer"><button class="collapse-btn" id="collapseBtn"><i class="bi bi-arrow-bar-left btn-icon"></i><span class="collapse-label">Collapse</span></button></div>
+  </nav>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="topbar-icon-btn d-md-none" id="mobileMenuToggle"><i class="bi bi-list"></i></button>
+        <div class="topbar-breadcrumb"><a href="dashboard.html" class="text-muted">Home</a><i class="bi bi-chevron-right"></i><a href="players.html" class="text-muted">Players</a><i class="bi bi-chevron-right"></i><span class="crumb-active">Sunil Chhetri</span></div>
+      </div>
+      <div class="topbar-right">
+        <button class="topbar-icon-btn"><i class="bi bi-sun"></i></button>
+        <div class="topbar-divider"></div>
+        <div class="user-chip"><div class="user-avatar">AD</div><div class="d-none d-sm-block"><div class="user-name">Admin User</div></div><i class="bi bi-chevron-down ms-1" style="font-size:10px;color:var(--text-muted);"></i></div>
+      </div>
+    </header>
+
+    <!-- No page-header here — profile hero replaces it -->
+    <div class="content-wrap">
+
+      <!-- Profile card (hero + details) -->
+      <div class="card mb-4" style="overflow:hidden;">
+        <!-- Hero banner -->
+        <div class="profile-hero">
+          <div class="profile-avatar-wrap">SC</div>
+          <div class="profile-meta">
+            <div class="profile-player-name">Sunil Chhetri</div>
+            <div class="profile-player-sub">
+              <span><i class="bi bi-geo-alt me-1"></i>Bengaluru, India</span>
+              <span class="badge pos-fw ms-1">ST</span>
+              <span class="badge badge-success ms-1">Active</span>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+              <button class="btn btn-glass btn-sm"><i class="bi bi-pencil"></i> Edit</button>
+              <button class="btn btn-glass btn-sm"><i class="bi bi-bookmark-plus"></i> Shortlist</button>
+              <button class="btn btn-glass btn-sm"><i class="bi bi-file-earmark-plus"></i> Add Report</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick stats strip -->
+        <div style="display:flex;border-bottom:1px solid var(--border);background:var(--gray-50);">
+          <div style="flex:1;text-align:center;padding:16px 12px;border-right:1px solid var(--border);">
+            <div style="font-size:20px;font-weight:800;color:var(--text);">39</div>
+            <div style="font-size:11.5px;color:var(--text-muted);font-weight:500;">Age</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:16px 12px;border-right:1px solid var(--border);">
+            <div style="font-size:20px;font-weight:800;color:var(--text);">173</div>
+            <div style="font-size:11.5px;color:var(--text-muted);font-weight:500;">Height (cm)</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:16px 12px;border-right:1px solid var(--border);">
+            <div style="font-size:20px;font-weight:800;color:var(--text);">68</div>
+            <div style="font-size:11.5px;color:var(--text-muted);font-weight:500;">Weight (kg)</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:16px 12px;border-right:1px solid var(--border);">
+            <div style="font-size:20px;font-weight:800;color:var(--text);">Right</div>
+            <div style="font-size:11.5px;color:var(--text-muted);font-weight:500;">Preferred Foot</div>
+          </div>
+          <div style="flex:1;text-align:center;padding:16px 12px;">
+            <div style="font-size:20px;font-weight:800;color:var(--text);">₹1.2Cr</div>
+            <div style="font-size:11.5px;color:var(--text-muted);font-weight:500;">Market Value</div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div style="padding:0 20px;border-bottom:1px solid var(--border);">
+          <ul class="nav nav-tabs border-0" id="profileTabs">
+            <li class="nav-item"><a class="nav-link active px-3 py-3" href="#" style="font-size:13px;font-weight:600;border:none;border-bottom:2px solid var(--primary);color:var(--primary);">Overview</a></li>
+            <li class="nav-item"><a class="nav-link px-3 py-3 text-muted" href="#" style="font-size:13px;font-weight:600;border:none;">Reports</a></li>
+            <li class="nav-item"><a class="nav-link px-3 py-3 text-muted" href="#" style="font-size:13px;font-weight:600;border:none;">AIFF</a></li>
+            <li class="nav-item"><a class="nav-link px-3 py-3 text-muted" href="#" style="font-size:13px;font-weight:600;border:none;">Media</a></li>
+            <li class="nav-item"><a class="nav-link px-3 py-3 text-muted" href="#" style="font-size:13px;font-weight:600;border:none;">History</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Tab content: Overview -->
+      <div class="row g-3">
+        <!-- Personal info -->
+        <div class="col-lg-4">
+          <div class="card mb-3">
+            <div class="card-header"><span class="card-title">Personal Information</span></div>
+            <div class="card-body">
+              <dl style="display:grid;gap:12px;">
+                <div><dt class="section-label">Full Name</dt><dd class="fs-13 fw-600 text-dark m-0">Sunil Singh Chhetri</dd></div>
+                <div><dt class="section-label">Father's Name</dt><dd class="fs-13 fw-600 text-dark m-0">K.B. Chhetri</dd></div>
+                <div><dt class="section-label">Date of Birth</dt><dd class="fs-13 fw-600 text-dark m-0">3 August 1984</dd></div>
+                <div><dt class="section-label">Nationality</dt><dd class="fs-13 fw-600 text-dark m-0">Indian</dd></div>
+                <div><dt class="section-label">Birth State</dt><dd class="fs-13 fw-600 text-dark m-0">Sikkim</dd></div>
+                <div><dt class="section-label">Contact</dt><dd class="fs-13 fw-600 text-dark m-0">+91 98XXX XXXXX</dd></div>
+              </dl>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Social Links</span></div>
+            <div class="card-body d-flex flex-column gap-2">
+              <a href="#" class="d-flex align-items-center gap-2 fs-13 text-sub"><i class="bi bi-instagram" style="color:#e1306c;"></i> @sunilchhetri</a>
+              <a href="#" class="d-flex align-items-center gap-2 fs-13 text-sub"><i class="bi bi-twitter-x"></i> @chetrisunil11</a>
+              <a href="#" class="d-flex align-items-center gap-2 fs-13 text-sub"><i class="bi bi-facebook" style="color:#1877f2;"></i> /sunilchhetri</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Professional + Skills -->
+        <div class="col-lg-4 d-flex flex-column gap-3">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Professional Details</span></div>
+            <div class="card-body">
+              <dl style="display:grid;gap:12px;">
+                <div><dt class="section-label">Current Club</dt><dd class="fs-13 fw-600 text-dark m-0">Bengaluru FC</dd></div>
+                <div><dt class="section-label">Tournament</dt><dd class="fs-13 fw-600 text-dark m-0">Indian Super League (ISL)</dd></div>
+                <div><dt class="section-label">Shirt Name</dt><dd class="fs-13 fw-600 text-dark m-0">CHHETRI</dd></div>
+                <div><dt class="section-label">Contract Expiry</dt><dd class="fs-13 fw-600 text-dark m-0">31 May 2025</dd></div>
+                <div><dt class="section-label">On Loan</dt><dd class="m-0"><span class="badge badge-gray">No</span></dd></div>
+                <div><dt class="section-label">International</dt><dd class="m-0"><span class="badge badge-success">Yes</span></dd></div>
+                <div><dt class="section-label">Annual Salary</dt><dd class="fs-13 fw-600 text-dark m-0">₹ 3.5 Cr</dd></div>
+              </dl>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Representative</span></div>
+            <div class="card-body">
+              <dl style="display:grid;gap:10px;">
+                <div><dt class="section-label">Name</dt><dd class="fs-13 fw-600 text-dark m-0">Amit Bose</dd></div>
+                <div><dt class="section-label">Mobile</dt><dd class="fs-13 fw-600 text-dark m-0">+91 98XXX XXXXX</dd></div>
+                <div><dt class="section-label">Rep. Contract Expiry</dt><dd class="fs-13 fw-600 text-dark m-0">31 Dec 2024</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scout ratings + notes -->
+        <div class="col-lg-4 d-flex flex-column gap-3">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Scout Ratings</span><span class="badge badge-success">Latest</span></div>
+            <div class="card-body d-flex flex-column gap-3">
+              <div>
+                <div class="d-flex justify-content-between mb-1"><span class="fs-13 fw-600">Pace</span><span class="fs-13 fw-600 text-primary">82</span></div>
+                <div class="progress"><div class="progress-bar" style="width:82%;"></div></div>
+              </div>
+              <div>
+                <div class="d-flex justify-content-between mb-1"><span class="fs-13 fw-600">Technical</span><span class="fs-13 fw-600 text-primary">88</span></div>
+                <div class="progress"><div class="progress-bar" style="width:88%;"></div></div>
+              </div>
+              <div>
+                <div class="d-flex justify-content-between mb-1"><span class="fs-13 fw-600">Physical</span><span class="fs-13 fw-600 text-primary">78</span></div>
+                <div class="progress"><div class="progress-bar" style="width:78%;"></div></div>
+              </div>
+              <div>
+                <div class="d-flex justify-content-between mb-1"><span class="fs-13 fw-600">Tactical</span><span class="fs-13 fw-600 text-primary">90</span></div>
+                <div class="progress"><div class="progress-bar" style="width:90%;"></div></div>
+              </div>
+              <div>
+                <div class="d-flex justify-content-between mb-1"><span class="fs-13 fw-600">Mental</span><span class="fs-13 fw-600 text-primary">94</span></div>
+                <div class="progress"><div class="progress-bar" style="width:94%;"></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="flex:1;">
+            <div class="card-header"><span class="card-title">Scout Notes</span><button class="btn btn-secondary btn-sm"><i class="bi bi-pencil"></i></button></div>
+            <div class="card-body">
+              <p class="fs-13 text-sub m-0" style="line-height:1.7;">Exceptional leader on and off the pitch. Still maintains high intensity despite age. Excellent positioning and clinical finishing. Suitable for mentoring younger forwards in the national setup. Recommended for continued national team inclusion.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reports table -->
+      <div class="table-card mt-3">
+        <div class="card-header"><span class="card-title">Scouting Reports</span><button class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> New Report</button></div>
+        <table class="table">
+          <thead><tr><th>Report</th><th>Type</th><th>Scout</th><th>Date</th><th>Rating</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="fs-13 fw-600">Performance Assessment — ISL 2024</td>
+              <td><span class="badge badge-info">Performance</span></td>
+              <td class="text-sub fs-13">Ramesh Kumar</td>
+              <td class="text-muted fs-13">15 Jan 2024</td>
+              <td><div class="d-flex gap-1"><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot half"></div></div></td>
+              <td><span class="badge badge-success">Final</span></td>
+              <td><button class="btn btn-secondary btn-sm"><i class="bi bi-eye"></i></button></td>
+            </tr>
+            <tr>
+              <td class="fs-13 fw-600">Fitness Evaluation Q3 2023</td>
+              <td><span class="badge badge-purple">Fitness</span></td>
+              <td class="text-sub fs-13">Priya Sharma</td>
+              <td class="text-muted fs-13">12 Sep 2023</td>
+              <td><div class="d-flex gap-1"><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot"></div></div></td>
+              <td><span class="badge badge-success">Final</span></td>
+              <td><button class="btn btn-secondary btn-sm"><i class="bi bi-eye"></i></button></td>
+            </tr>
+            <tr>
+              <td class="fs-13 fw-600">Scouting Report — Durand Cup 2023</td>
+              <td><span class="badge badge-warning">Scouting</span></td>
+              <td class="text-sub fs-13">Vinod Nair</td>
+              <td class="text-muted fs-13">4 Aug 2023</td>
+              <td><div class="d-flex gap-1"><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div><div class="rating-dot filled"></div></div></td>
+              <td><span class="badge badge-success">Final</span></td>
+              <td><button class="btn btn-secondary btn-sm"><i class="bi bi-eye"></i></button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div><!-- /content-wrap -->
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/theme.js"></script>
+</body>
+</html>

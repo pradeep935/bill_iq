@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
+
+$body_font : 'Poppins', sans-serif;
+$heading_font : 'Poppins', sans-serif;
+
+$theme_color: #673ab7;
+$theme_light: lighten($theme_color, 5);
+$theme_light2: lighten($theme_color, 30);
+
+$body_color: #222;
+$green: #4CAF50;
+$grey: #555;
+$light_back: #eee;
+
+$sidebar_width: 100px;
+
+body, html {
+	margin: 0;
+	height: 100%;
+	font-family: $body_font;
+	font-size: 14px;
+	color: $body_color;
+}
+
+.container {
+	padding: 15px;
+	max-width:  360px;
+	margin: 0 auto;
+}
+
+.table-div {
+	display: table;
+	> div {
+		display: table-cell;
+		vertical-align: middle;
+	}
+	&.full {
+		width: 100%;
+	}
+	&.top {
+		> div {
+			vertical-align: top;
+		}
+	}
+	> .pad {
+		padding: 0 5px;
+	    a.active {
+	    	background: $theme_color;
+	    	padding: 8px;
+		    color: #fff;
+		    border-radius: 5px;
+	    }
+	}
+}
+
+.text-right {
+	text-align: right;
+}
+
+.text-center {
+	text-align: center;
+}
+
+.activity {
+	background: #f7f7f7;
+	border-radius: 5px;
+	margin-bottom: 20px;
+	padding: 15px;
+
+	&.activity-2 {
+		background: #ffd7e4;
+	}
+
+	&.activity-3 {
+		background: #e6eaff;	
+	}
+
+	&.activity-4 {
+		background: #fff8bc;
+	}
+}
+
+.fs-12 {
+	font-size: 12px;
+}
+
+.fs-14 {
+	font-size: 14px;
+}
+
+.fs-16 {
+	font-size: 16px;
+}
+
+.fs-18 {
+	font-size: 18px;
+}
+
+.fs-20 {
+	font-size: 20px;
+}
+
+.thin {
+	font-weight: 300;
+}
+
+.bold {
+	font-weight: 600;
+}
+
+.mb-10 {
+	margin-bottom: 10px;
+}
+
+.mt-10 {
+	margin-top: 10px;
+}
+
+.mb-5 {
+	margin-bottom: 10px;
+}
+
+.mt-5 {
+	margin-top: 10px;
+}
+
+.image {
+	text-align: center;
+	img {
+		width: 100%;
+	}
+}
+.table {
+	width: 100%;
+}

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Staff — Scout Portal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="app-wrapper">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand"><div class="brand-logo">SP</div><div class="brand-text"><div class="brand-name">Scout Portal</div><div class="brand-sub">Admin Panel</div></div></div>
+    <div class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <ul class="nav-list"><li class="nav-item"><a href="dashboard.html" class="nav-link"><i class="bi bi-speedometer2"></i><span class="nav-label">Dashboard</span></a></li></ul>
+      <div class="nav-section">Scouting</div>
+      <ul class="nav-list">
+        <li class="nav-item"><a href="players.html" class="nav-link"><i class="bi bi-people"></i><span class="nav-label">Players</span></a></li>
+        <li class="nav-item active"><a href="staff.html" class="nav-link"><i class="bi bi-person-workspace"></i><span class="nav-label">Staff</span></a></li>
+        <li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-bookmark-star"></i><span class="nav-label">Shortlist</span></a></li>
+      </ul>
+      <div class="nav-section">Reports</div>
+      <ul class="nav-list"><li class="nav-item"><a href="reports.html" class="nav-link"><i class="bi bi-file-earmark-text"></i><span class="nav-label">Reports</span></a></li><li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-grid-1x2"></i><span class="nav-label">Templates</span></a></li></ul>
+      <div class="nav-section">System</div>
+      <ul class="nav-list"><li class="nav-item"><a href="#" class="nav-link"><i class="bi bi-gear"></i><span class="nav-label">Settings</span></a></li></ul>
+    </div>
+    <div class="sidebar-footer"><button class="collapse-btn" id="collapseBtn"><i class="bi bi-arrow-bar-left btn-icon"></i><span class="collapse-label">Collapse</span></button></div>
+  </nav>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="topbar-icon-btn d-md-none" id="mobileMenuToggle"><i class="bi bi-list"></i></button>
+        <div class="topbar-breadcrumb"><a href="dashboard.html" class="text-muted">Home</a><i class="bi bi-chevron-right"></i><span class="crumb-active">Staff</span></div>
+      </div>
+      <div class="topbar-right">
+        <button class="topbar-icon-btn"><i class="bi bi-sun"></i></button>
+        <div class="topbar-divider"></div>
+        <div class="user-chip"><div class="user-avatar">AD</div><div class="d-none d-sm-block"><div class="user-name">Admin User</div></div></div>
+      </div>
+    </header>
+
+    <div class="page-header">
+      <div class="page-header-inner">
+        <div><div class="page-title">Staff</div><div class="page-subtitle">Manage scouts, coaches, and admin users</div></div>
+        <div class="page-header-actions">
+          <button class="btn btn-glass btn-sm"><i class="bi bi-plus"></i> Add Staff</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-wrap">
+      <!-- Role filter tabs -->
+      <ul class="nav nav-pills mb-4">
+        <li class="nav-item"><a class="nav-link active" href="#">All Staff <span class="badge badge-gray ms-1">24</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Scouts <span class="badge badge-gray ms-1">12</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Coaches <span class="badge badge-gray ms-1">6</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Analysts <span class="badge badge-gray ms-1">4</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Admin <span class="badge badge-gray ms-1">2</span></a></li>
+      </ul>
+
+      <!-- Staff cards grid -->
+      <div class="row g-3">
+
+        <div class="col-md-4 col-lg-3">
+          <div class="card text-center" style="overflow:hidden;">
+            <div style="height:6px;background:linear-gradient(90deg,var(--primary),#2563eb);"></div>
+            <div class="card-body py-4">
+              <div class="user-avatar lg mx-auto mb-3" style="width:56px;height:56px;border-radius:var(--r-md);font-size:18px;">RK</div>
+              <div class="fw-700 fs-13">Ramesh Kumar</div>
+              <div class="text-muted fs-12 mt-1">Head Scout</div>
+              <div class="d-flex justify-content-center gap-2 mt-2">
+                <span class="badge badge-primary">Scout</span>
+                <span class="badge badge-success">Active</span>
+              </div>
+              <div class="divider"></div>
+              <div class="d-flex justify-content-around text-center">
+                <div><div class="fw-700 fs-13">42</div><div class="text-muted fs-12">Reports</div></div>
+                <div><div class="fw-700 fs-13">18</div><div class="text-muted fs-12">Players</div></div>
+                <div><div class="fw-700 fs-13">3</div><div class="text-muted fs-12">Years</div></div>
+              </div>
+            </div>
+            <div class="card-footer d-flex justify-content-center gap-2">
+              <button class="btn btn-ghost-primary btn-sm">View</button>
+              <button class="btn btn-secondary btn-sm">Edit</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4 col-lg-3">
+          <div class="card text-center" style="overflow:hidden;">
+            <div style="height:6px;background:linear-gradient(90deg,#9333ea,#7c3aed);"></div>
+            <div class="card-body py-4">
+              <div class="user-avatar lg mx-auto mb-3" style="width:56px;height:56px;border-radius:var(--r-md);font-size:18px;background:linear-gradient(135deg,#9333ea,#7c3aed);">PS</div>
+              <div class="fw-700 fs-13">Priya Sharma</div>
+              <div class="text-muted fs-12 mt-1">Senior Scout</div>
+              <div class="d-flex justify-content-center gap-2 mt-2">
+                <span class="badge badge-primary">Scout</span>
+                <span class="badge badge-success">Active</span>
+              </div>
+              <div class="divider"></div>
+              <div class="d-flex justify-content-around text-center">
+                <div><div class="fw-700 fs-13">28</div><div class="text-muted fs-12">Reports</div></div>
+                <div><div class="fw-700 fs-13">11</div><div class="text-muted fs-12">Players</div></div>
+                <div><div class="fw-700 fs-13">2</div><div class="text-muted fs-12">Years</div></div>
+              </div>
+            </div>
+            <div class="card-footer d-flex justify-content-center gap-2">
+              <button class="btn btn-ghost-primary btn-sm">View</button>
+              <button class="btn btn-secondary btn-sm">Edit</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4 col-lg-3">
+          <div class="card text-center" style="overflow:hidden;">
+            <div style="height:6px;background:linear-gradient(90deg,#0d9488,#0891b2);"></div>
+            <div class="card-body py-4">
+              <div class="user-avatar lg mx-auto mb-3" style="width:56px;height:56px;border-radius:var(--r-md);font-size:18px;background:linear-gradient(135deg,#0d9488,#0891b2);">VN</div>
+              <div class="fw-700 fs-13">Vinod Nair</div>
+              <div class="text-muted fs-12 mt-1">Performance Analyst</div>
+              <div class="d-flex justify-content-center gap-2 mt-2">
+                <span class="badge badge-info">Analyst</span>
+                <span class="badge badge-success">Active</span>
+              </div>
+              <div class="divider"></div>
+              <div class="d-flex justify-content-around text-center">
+                <div><div class="fw-700 fs-13">19</div><div class="text-muted fs-12">Reports</div></div>
+                <div><div class="fw-700 fs-13">9</div><div class="text-muted fs-12">Players</div></div>
+                <div><div class="fw-700 fs-13">1</div><div class="text-muted fs-12">Year</div></div>
+              </div>
+            </div>
+            <div class="card-footer d-flex justify-content-center gap-2">
+              <button class="btn btn-ghost-primary btn-sm">View</button>
+              <button class="btn btn-secondary btn-sm">Edit</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-4 col-lg-3">
+          <div class="card text-center" style="overflow:hidden;">
+            <div style="height:6px;background:linear-gradient(90deg,#d97706,#f59e0b);"></div>
+            <div class="card-body py-4">
+              <div class="user-avatar lg mx-auto mb-3" style="width:56px;height:56px;border-radius:var(--r-md);font-size:18px;background:linear-gradient(135deg,#d97706,#f59e0b);">AK</div>
+              <div class="fw-700 fs-13">Anand Krishnan</div>
+              <div class="text-muted fs-12 mt-1">Regional Scout (South)</div>
+              <div class="d-flex justify-content-center gap-2 mt-2">
+                <span class="badge badge-primary">Scout</span>
+                <span class="badge badge-warning">On Leave</span>
+              </div>
+              <div class="divider"></div>
+              <div class="d-flex justify-content-around text-center">
+                <div><div class="fw-700 fs-13">35</div><div class="text-muted fs-12">Reports</div></div>
+                <div><div class="fw-700 fs-13">14</div><div class="text-muted fs-12">Players</div></div>
+                <div><div class="fw-700 fs-13">4</div><div class="text-muted fs-12">Years</div></div>
+              </div>
+            </div>
+            <div class="card-footer d-flex justify-content-center gap-2">
+              <button class="btn btn-ghost-primary btn-sm">View</button>
+              <button class="btn btn-secondary btn-sm">Edit</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /row -->
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/theme.js"></script>
+</body>
+</html>

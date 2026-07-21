@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Inertia\Inertia;
+
 class SetupController extends Controller
 {
     public function branches()
@@ -11,7 +13,8 @@ class SetupController extends Controller
 
     public function employees()
     {
-        return ModuleController::render('employees', 'Employees');
+        if ($redirect = AppController::guardPage('employees')) return $redirect;
+        return Inertia::render('Payroll/Index', ['page' => 'employees', 'title' => 'Employees']);
     }
 
     public function users()

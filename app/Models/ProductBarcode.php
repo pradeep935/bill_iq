@@ -12,4 +12,9 @@ class ProductBarcode extends Model
     protected $casts = [
         'is_primary' => 'boolean',
     ];
+
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
+    }
 }

@@ -34,7 +34,7 @@ const printLabels = () => {
             <h3>Print Barcode Labels</h3>
 
             <button @click="close">
-                ✕
+                x
             </button>
 
         </div>
@@ -66,7 +66,7 @@ const printLabels = () => {
                     </div>
 
                     <strong>
-                        ₹ {{ product.selling_price }}
+                        Rs. {{ product.selling_price }}
                     </strong>
 
                 </div>

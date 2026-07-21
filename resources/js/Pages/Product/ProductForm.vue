@@ -1,6 +1,7 @@
 <script setup>
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { Form } from 'vee-validate';
+import ProductApi from './ProductApi';
 
 const props = defineProps({
     modelValue: {
@@ -17,6 +18,16 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+
+    canEditGstRate: {
+        type: Boolean,
+        default: false,
+    },
+
+    errors: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
 const emit = defineEmits([
@@ -29,14 +40,17 @@ const initialForm = () => ({
 
     name: '',
     product_type: 'goods',
+    item_type: 'stock',
+    short_name: '',
     category: '',
+    subcategory: '',
     brand: '',
     variant: '',
     unit: 'PCS',
+    description: '',
 
     sku: '',
     primary_barcode: '',
-    extra_barcodes: '',
 
     hsn_master_id: '',
     hsn_code: '',
@@ -44,21 +58,51 @@ const initialForm = () => ({
     gst_rate: '0',
     cess_rate: '0',
     reverse_charge: 'no',
+    tax_inclusive: false,
     invoice_description: '',
 
     cost_price: '',
     selling_price: '',
     mrp: '',
+    wholesale_price: '',
+    dealer_price: '',
+    online_price: '',
 
-    opening_stock: '0',
     minimum_stock: '0',
     reorder_stock: '0',
+    maximum_stock: '0',
     tracking_type: 'none',
 
+    weight: '',
+    length: '',
+    width: '',
+    height: '',
+    batch_required: false,
+    expiry_required: false,
+    serial_required: false,
     status: 'active',
 });
 
 const form = reactive(initialForm());
+const activeTab = ref('basic');
+const barcodes = ref([]);
+const images = ref([]);
+const hsnSearch = ref('');
+const hsnResults = ref([]);
+const hsnSearching = ref(false);
+const clientErrors = ref({});
+
+const productTabs = computed(() => [
+    { key: 'basic', label: 'Basic' },
+    { key: 'pricing', label: 'Pricing' },
+    { key: 'gst', label: 'GST' },
+    { key: 'inventory', label: 'Inventory' },
+    { key: 'barcodes', label: 'Barcodes' },
+    { key: 'images', label: 'Images' },
+    { key: 'advanced', label: 'Advanced' },
+].filter((tab) => {
+    return form.product_type === 'goods' || tab.key !== 'inventory';
+}));
 
 const drawerTitle = computed(() => {
     return form.id ? 'Edit Product' : 'Add New Product';
@@ -79,6 +123,11 @@ const productTypeOptions = [
         value: 'service',
         label: 'Service',
     },
+];
+
+const itemTypeOptions = [
+    { value: 'stock', label: 'Stock Item' },
+    { value: 'non_stock', label: 'Non Stock Item' },
 ];
 
 const unitOptions = [
@@ -143,14 +192,17 @@ const fillForm = (product = {}) => {
 
         name: product?.name || '',
         product_type: product?.product_type || 'goods',
+        item_type: product?.item_type || 'stock',
+        short_name: product?.short_name || '',
         category: product?.category || '',
+        subcategory: product?.subcategory || '',
         brand: product?.brand || '',
         variant: product?.variant || '',
         unit: product?.unit || 'PCS',
+        description: product?.description || '',
 
         sku: product?.sku || '',
         primary_barcode: product?.primary_barcode || '',
-        extra_barcodes: product?.extra_barcodes || '',
 
         hsn_master_id: product?.hsn_master_id || '',
         hsn_code: product?.hsn_code || '',
@@ -158,20 +210,105 @@ const fillForm = (product = {}) => {
         gst_rate: String(product?.gst_rate ?? '0'),
         cess_rate: String(product?.cess_rate ?? '0'),
         reverse_charge: product?.reverse_charge || 'no',
+        tax_inclusive: Boolean(product?.tax_inclusive),
         invoice_description:
             product?.invoice_description || '',
 
         cost_price: product?.cost_price ?? '',
         selling_price: product?.selling_price ?? '',
         mrp: product?.mrp ?? '',
+        wholesale_price: product?.wholesale_price ?? '',
+        dealer_price: product?.dealer_price ?? '',
+        online_price: product?.online_price ?? '',
 
-        opening_stock: product?.opening_stock ?? '0',
         minimum_stock: product?.minimum_stock ?? '0',
         reorder_stock: product?.reorder_stock ?? '0',
+        maximum_stock: product?.maximum_stock ?? '0',
         tracking_type: product?.tracking_type || 'none',
 
+        weight: product?.weight ?? '',
+        length: product?.length ?? '',
+        width: product?.width ?? '',
+        height: product?.height ?? '',
+        batch_required: Boolean(product?.batch_required),
+        expiry_required: Boolean(product?.expiry_required),
+        serial_required: Boolean(product?.serial_required),
         status: product?.status || 'active',
     });
+
+    barcodes.value = normalizeBarcodes(product);
+    images.value = normalizeImages(product);
+    hsnSearch.value = product?.hsn_code || '';
+    hsnResults.value = [];
+    clientErrors.value = {};
+};
+
+const normalizeBarcodes = (product = {}) => {
+    const rows = Array.isArray(product?.barcodes)
+        ? product.barcodes.map((barcode) => ({
+              barcode: barcode?.barcode || '',
+              barcode_type: barcode?.barcode_type || 'alternate',
+              is_primary: Boolean(barcode?.is_primary),
+          }))
+        : [];
+
+    if (product?.primary_barcode) {
+        const existingPrimary = rows.some(
+            (row) => row.barcode === product.primary_barcode
+        );
+
+        if (!existingPrimary) {
+            rows.unshift({
+                barcode: product.primary_barcode,
+                barcode_type: 'primary',
+                is_primary: true,
+            });
+        }
+    }
+
+    return rows.length
+        ? rows
+        : [
+              {
+                  barcode: '',
+                  barcode_type: 'primary',
+                  is_primary: true,
+              },
+          ];
+};
+
+const normalizeImages = (product = {}) => {
+    const rows = Array.isArray(product?.images)
+        ? product.images.map((image, index) => ({
+              image_path:
+                  typeof image === 'string'
+                      ? image
+                      : image?.image_path || '',
+              image_type:
+                  typeof image === 'string'
+                      ? 'gallery'
+                      : image?.image_type || 'gallery',
+              sort_order:
+                  typeof image === 'string'
+                      ? index
+                      : image?.sort_order ?? index,
+              is_primary:
+                  typeof image === 'string'
+                      ? index === 0
+                      : Boolean(image?.is_primary),
+          }))
+        : [];
+
+    return rows.length
+        ? rows
+        : [
+              {
+                  image_path: '',
+                  image_type: 'gallery',
+                  sort_order: 0,
+                  is_primary: true,
+              },
+          ];
 };
 
 watch(
@@ -190,9 +327,19 @@ watch(
     (isOpen) => {
         if (isOpen) {
             fillForm(props.product);
+            activeTab.value = 'basic';
             document.body.classList.add('product-drawer-open');
         } else {
             document.body.classList.remove('product-drawer-open');
+        }
+    }
+);
+
+watch(
+    () => form.product_type,
+    (productType) => {
+        if (productType === 'service' && activeTab.value === 'inventory') {
+            activeTab.value = 'basic';
         }
     }
 );
@@ -205,18 +352,196 @@ const closeDrawer = () => {
     emit('update:modelValue', false);
 };
 
+const fieldError = (field) => {
+    return (
+        clientErrors.value[field] ||
+        props.errors?.[field]?.[0] ||
+        ''
+    );
+};
+
+const allErrors = computed(() => {
+    return [
+        ...Object.values(clientErrors.value),
+        ...Object.values(props.errors || {})
+            .map((value) => value?.[0])
+            .filter(Boolean),
+    ];
+});
+
+const setPrimaryBarcode = (index) => {
+    barcodes.value = barcodes.value.map((barcode, barcodeIndex) => ({
+        ...barcode,
+        is_primary: barcodeIndex === index,
+        barcode_type:
+            barcodeIndex === index
+                ? 'primary'
+                : barcode.barcode_type === 'primary'
+                  ? 'alternate'
+                  : barcode.barcode_type,
+    }));
+};
+
+const addBarcode = () => {
+    barcodes.value.push({
+        barcode: '',
+        barcode_type: 'alternate',
+        is_primary: false,
+    });
+};
+
+const removeBarcode = (index) => {
+    if (barcodes.value.length === 1) {
+        barcodes.value = [
+            {
+                barcode: '',
+                barcode_type: 'primary',
+                is_primary: true,
+            },
+        ];
+
+        return;
+    }
+
+    const wasPrimary = barcodes.value[index]?.is_primary;
+    barcodes.value.splice(index, 1);
+
+    if (wasPrimary && barcodes.value.length) {
+        setPrimaryBarcode(0);
+    }
+};
+
+const addImage = () => {
+    images.value.push({
+        image_path: '',
+        image_type: 'gallery',
+        sort_order: images.value.length,
+        is_primary: false,
+    });
+};
+
+const removeImage = (index) => {
+    images.value.splice(index, 1);
+
+    if (!images.value.length) {
+        addImage();
+    }
+};
+
+const searchHsn = async () => {
+    const keyword = hsnSearch.value.trim();
+    form.hsn_code = keyword;
+    form.hsn_master_id = '';
+
+    if (keyword.length < 2) {
+        hsnResults.value = [];
+
+        return;
+    }
+
+    hsnSearching.value = true;
+
+    try {
+        hsnResults.value = await ProductApi.searchHsn(keyword);
+    } finally {
+        hsnSearching.value = false;
+    }
+};
+
+const selectHsn = (hsn) => {
+    form.hsn_master_id = hsn.id;
+    form.hsn_code = hsn.hsn_code;
+    hsnSearch.value = hsn.hsn_code;
+    form.cess_rate = String(hsn.cess_rate ?? '0');
+    form.gst_rate = String(hsn.gst_rate ?? '0');
+
+    hsnResults.value = [];
+};
+
+const validateBeforeSave = () => {
+    const errors = {};
+
+    if (
+        form.mrp !== '' &&
+        Number(form.mrp) > 0 &&
+        Number(form.selling_price || 0) > Number(form.mrp)
+    ) {
+        errors.selling_price =
+            'Selling price cannot be greater than MRP.';
+        activeTab.value = 'pricing';
+    }
+
+    if (!form.hsn_code) {
+        errors.hsn_code = 'HSN code is required.';
+        activeTab.value = 'gst';
+    }
+
+    const filledBarcodes = barcodes.value
+        .map((barcode) => barcode.barcode.trim())
+        .filter(Boolean);
+    const uniqueBarcodes = new Set(filledBarcodes);
+
+    if (filledBarcodes.length !== uniqueBarcodes.size) {
+        errors.barcodes = 'Duplicate barcodes are not allowed.';
+        activeTab.value = 'barcodes';
+    }
+
+    clientErrors.value = errors;
+
+    return !Object.keys(errors).length;
+};
+
 const saveProduct = () => {
+    if (props.processing || !validateBeforeSave()) {
+        return;
+    }
+
+    const barcodeRows = barcodes.value
+        .map((barcode) => ({
+            barcode: barcode.barcode.trim(),
+            barcode_type: barcode.barcode_type || 'alternate',
+            is_primary: Boolean(barcode.is_primary),
+        }))
+        .filter((barcode) => barcode.barcode);
+    const primaryBarcode =
+        barcodeRows.find((barcode) => barcode.is_primary)
+            ?.barcode ||
+        barcodeRows[0]?.barcode ||
+        '';
+    const imageRows = images.value
+        .map((image, index) => ({
+            image_path: image.image_path.trim(),
+            image_type: image.image_type || 'gallery',
+            sort_order: image.sort_order || index,
+            is_primary: Boolean(image.is_primary),
+        }))
+        .filter((image) => image.image_path);
+    const priceRows = [
+        { price_type: 'Retail', price: form.selling_price || 0 },
+        {
+            price_type: 'Wholesale',
+            price: form.wholesale_price || 0,
+        },
+        { price_type: 'Dealer', price: form.dealer_price || 0 },
+        { price_type: 'Online', price: form.online_price || 0 },
+    ];
+
     emit('save', {
         ...form,
 
         cost_price: form.cost_price || 0,
         selling_price: form.selling_price || 0,
         mrp: form.mrp || null,
+        wholesale_price: form.wholesale_price || 0,
+        dealer_price: form.dealer_price || 0,
+        online_price: form.online_price || 0,
 
-        opening_stock:
-            form.product_type === 'goods'
-                ? form.opening_stock || 0
-                : 0,
+        primary_barcode: primaryBarcode,
+        extra_barcodes: barcodeRows
+            .filter((barcode) => !barcode.is_primary)
+            .map((barcode) => barcode.barcode)
+            .join(','),
+        opening_stock: 0,
 
         minimum_stock:
             form.product_type === 'goods'
@@ -227,11 +552,23 @@ const saveProduct = () => {
             form.product_type === 'goods'
                 ? form.reorder_stock || 0
                 : 0,
+        maximum_stock:
+            form.product_type === 'goods'
+                ? form.maximum_stock || 0
+                : 0,
 
         tracking_type:
             form.product_type === 'goods'
                 ? form.tracking_type
                 : 'none',
+        tax_inclusive: Boolean(form.tax_inclusive),
+        batch_required: Boolean(form.batch_required),
+        expiry_required: Boolean(form.expiry_required),
+        serial_required: Boolean(form.serial_required),
+        images: imageRows,
+        barcodes: barcodeRows,
+        prices: priceRows,
+        batches: [],
     });
 };
 </script>
@@ -287,7 +624,7 @@ const saveProduct = () => {
                             cls="drawer-close-button"
                             @clickFn="closeDrawer"
                         >
-                            <span aria-hidden="true">×</span>
+                            <span aria-hidden="true">x</span>
                         </Button2>
                     </header>
 
@@ -295,10 +632,39 @@ const saveProduct = () => {
                         class="product-form"
                         @submit="saveProduct"
                     >
+                        <nav class="product-tabs">
+                            <button
+                                v-for="tab in productTabs"
+                                :key="tab.key"
+                                type="button"
+                                :class="{ active: activeTab === tab.key }"
+                                @click="activeTab = tab.key"
+                            >
+                                {{ tab.label }}
+                            </button>
+                        </nav>
+
+                        <div
+                            v-if="allErrors.length"
+                            class="form-error-summary"
+                        >
+                            <strong>Please check these fields</strong>
+
+                            <span
+                                v-for="(error, index) in allErrors"
+                                :key="index"
+                            >
+                                {{ error }}
+                            </span>
+                        </div>
+
                         <main class="product-drawer-content">
 
                             <!-- Basic details -->
-                            <section class="product-section">
+                            <section
+                                v-show="activeTab === 'basic'"
+                                class="product-section"
+                            >
                                 <div class="section-header">
                                     <div class="section-number">
                                         01
@@ -324,6 +690,14 @@ const saveProduct = () => {
                                         :req="true"
                                     />
 
+                                    <FormInput
+                                        v-model="form.short_name"
+                                        name="short_name"
+                                        label="Short Name"
+                                        placeholder="Invoice display name"
+                                        cls="product-field"
+                                    />
+
                                     <FormSelect
                                         v-model="form.product_type"
                                         name="product_type"
@@ -331,6 +705,16 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="productTypeOptions"
                                         select_name="Select product type"
+                                        :req="true"
+                                    />
+
+                                    <FormSelect
+                                        v-model="form.item_type"
+                                        name="item_type"
+                                        label="Item Type"
+                                        cls="product-field"
+                                        :options="itemTypeOptions"
+                                        select_name="Select item type"
                                         :req="true"
                                     />
 
@@ -345,10 +729,35 @@ const saveProduct = () => {
                                     />
 
                                     <FormInput
+                                        v-model="form.sku"
+                                        name="sku_basic"
+                                        label="SKU"
+                                        placeholder="Example: SG25-256-BLK"
+                                        cls="product-field"
+                                        :req="true"
+                                    />
+
+                                    <FormInput
+                                        v-model="form.primary_barcode"
+                                        name="barcode_basic"
+                                        label="Barcode"
+                                        placeholder="Scan or enter barcode"
+                                        cls="product-field"
+                                    />
+
+                                    <FormInput
                                         v-model="form.category"
                                         name="category"
                                         label="Category"
                                         placeholder="Example: Smartphones"
+                                        cls="product-field"
+                                    />
+
+                                    <FormInput
+                                        v-model="form.subcategory"
+                                        name="subcategory"
+                                        label="Sub Category"
+                                        placeholder="Example: Android Phones"
                                         cls="product-field"
                                     />
 
@@ -367,11 +776,23 @@ const saveProduct = () => {
                                         placeholder="Example: 256GB / Black"
                                         cls="product-field field-span-2"
                                     />
+
+                                    <FormText
+                                        v-model="form.description"
+                                        name="description"
+                                        label="Description"
+                                        placeholder="Internal product description"
+                                        cls="product-field field-span-2"
+                                        :rows="3"
+                                    />
                                 </div>
                             </section>
 
                             <!-- SKU and barcode -->
-                            <section class="product-section">
+                            <section
+                                v-show="activeTab === 'barcodes'"
+                                class="product-section"
+                            >
                                 <div class="section-header">
                                     <div class="section-number">
                                         02
@@ -387,47 +808,93 @@ const saveProduct = () => {
                                     </div>
                                 </div>
 
-                                <div class="form-grid">
-                                    <FormInput
-                                        v-model="form.sku"
-                                        name="sku"
-                                        label="SKU"
-                                        placeholder="Example: SG25-256-BLK"
-                                        cls="product-field"
-                                        :req="true"
-                                    />
+                                <div class="repeat-list">
+                                    <div
+                                        v-for="(barcode, index) in barcodes"
+                                        :key="index"
+                                        class="repeat-row barcode-row"
+                                    >
+                                        <label class="radio-field">
+                                            <input
+                                                type="radio"
+                                                :checked="barcode.is_primary"
+                                                @change="setPrimaryBarcode(index)"
+                                            />
 
-                                    <FormInput
-                                        v-model="form.primary_barcode"
-                                        name="primary_barcode"
-                                        label="Primary Barcode"
-                                        placeholder="Scan or enter barcode"
-                                        cls="product-field"
-                                    />
+                                            <span>Primary</span>
+                                        </label>
 
-                                    <FormText
-                                        v-model="form.extra_barcodes"
-                                        name="extra_barcodes"
-                                        label="Additional Barcodes"
-                                        placeholder="Enter additional barcodes separated by commas"
-                                        cls="product-field field-span-2"
-                                        :rows="3"
-                                    />
+                                        <input
+                                            v-model="barcode.barcode"
+                                            type="text"
+                                            class="form-control"
+                                            placeholder="Scan or enter barcode"
+                                        />
 
-                                    <div class="field-help field-span-2">
+                                        <select
+                                            v-model="barcode.barcode_type"
+                                            class="form-control"
+                                        >
+                                            <option value="primary">
+                                                Primary
+                                            </option>
+
+                                            <option value="alternate">
+                                                Alternate
+                                            </option>
+
+                                            <option value="manufacturer">
+                                                Manufacturer
+                                            </option>
+
+                                            <option value="internal">
+                                                Internal
+                                            </option>
+                                        </select>
+
+                                        <button
+                                            type="button"
+                                            class="row-remove"
+                                            :disabled="processing"
+                                            @click="removeBarcode(index)"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        class="row-add"
+                                        :disabled="processing"
+                                        @click="addBarcode"
+                                    >
+                                        Add Barcode
+                                    </button>
+
+                                    <div
+                                        v-if="fieldError('barcodes')"
+                                        class="field-error"
+                                    >
+                                        {{ fieldError('barcodes') }}
+                                    </div>
+
+                                    <div class="field-help">
                                         <span class="help-icon">i</span>
 
                                         <span>
                                             Primary barcode unique hona chahiye.
-                                            Additional barcodes comma se
-                                            separate kar sakte hain.
+                                            Additional barcode rows add/remove
+                                            kar sakte hain.
                                         </span>
                                     </div>
                                 </div>
                             </section>
 
                             <!-- GST and HSN -->
-                            <section class="product-section">
+                            <section
+                                v-show="activeTab === 'gst'"
+                                class="product-section"
+                            >
                                 <div class="section-header">
                                     <div class="section-number">
                                         03
@@ -444,14 +911,66 @@ const saveProduct = () => {
                                 </div>
 
                                 <div class="form-grid">
-                                    <FormInput
-                                        v-model="form.hsn_code"
-                                        name="hsn_code"
-                                        label="HSN / SAC Code"
-                                        placeholder="Search or enter HSN code"
-                                        cls="product-field"
-                                        :req="true"
-                                    />
+                                    <div class="product-field hsn-search-field">
+                                        <label>
+                                            HSN / SAC Code
+                                            <span class="text-danger">*</span>
+                                        </label>
+
+                                        <div class="hsn-input-row">
+                                            <input
+                                                v-model="hsnSearch"
+                                                type="text"
+                                                class="form-control"
+                                                placeholder="Search HSN by code or description"
+                                                @input="searchHsn"
+                                            />
+
+                                            <span
+                                                v-if="hsnSearching"
+                                                class="inline-loader"
+                                            ></span>
+                                        </div>
+
+                                        <div
+                                            v-if="hsnResults.length"
+                                            class="hsn-results"
+                                        >
+                                            <button
+                                                v-for="hsn in hsnResults"
+                                                :key="hsn.id"
+                                                type="button"
+                                                @click="selectHsn(hsn)"
+                                            >
+                                                <strong>
+                                                    {{ hsn.hsn_code }}
+                                                </strong>
+
+                                                <span>
+                                                    {{ hsn.description }}
+                                                </span>
+
+                                                <small>
+                                                    {{ Number(hsn.gst_rate || 0) }}%
+                                                    GST
+                                                </small>
+                                            </button>
+                                        </div>
+
+                                        <input
+                                            v-model="form.hsn_code"
+                                            type="text"
+                                            class="form-control selected-hsn"
+                                            placeholder="Selected HSN code"
+                                        />
+
+                                        <span
+                                            v-if="fieldError('hsn_code')"
+                                            class="field-error"
+                                        >
+                                            {{ fieldError('hsn_code') }}
+                                        </span>
+                                    </div>
 
                                     <FormSelect
                                         v-model="form.taxability"
@@ -470,8 +989,21 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="gstRateOptions"
                                         select_name="Select GST rate"
+                                        :disabled="!canEditGstRate"
                                         :req="true"
                                     />
+
+                                    <div
+                                        v-if="!canEditGstRate"
+                                        class="field-help"
+                                    >
+                                        <span class="help-icon">i</span>
+
+                                        <span>
+                                            GST rate HSN Master se auto-fill
+                                            hota hai.
+                                        </span>
+                                    </div>
 
                                     <FormInput
                                         v-model="form.cess_rate"
@@ -492,6 +1024,17 @@ const saveProduct = () => {
                                         select_name="Select option"
                                         :req="true"
                                     />
+
+                                    <label class="toggle-field">
+                                        <input
+                                            v-model="form.tax_inclusive"
+                                            type="checkbox"
+                                        />
+
+                                        <span>
+                                            Tax Inclusive Pricing
+                                        </span>
+                                    </label>
 
                                     <div class="product-field tax-summary">
                                         <span>Tax Preview</span>
@@ -521,7 +1064,10 @@ const saveProduct = () => {
                             </section>
 
                             <!-- Pricing -->
-                            <section class="product-section">
+                            <section
+                                v-show="activeTab === 'pricing'"
+                                class="product-section"
+                            >
                                 <div class="section-header">
                                     <div class="section-number">
                                         04
@@ -545,7 +1091,7 @@ const saveProduct = () => {
                                         label="Cost Price"
                                         placeholder="0.00"
                                         cls="product-field"
-                                        left_box_text="₹"
+                                        left_box_text="Rs."
                                     />
 
                                     <FormInput
@@ -555,9 +1101,16 @@ const saveProduct = () => {
                                         label="Selling Price"
                                         placeholder="0.00"
                                         cls="product-field"
-                                        left_box_text="₹"
+                                        left_box_text="Rs."
                                         :req="true"
                                     />
+
+                                    <div
+                                        v-if="fieldError('selling_price')"
+                                        class="field-error"
+                                    >
+                                        {{ fieldError('selling_price') }}
+                                    </div>
 
                                     <FormInput
                                         v-model="form.mrp"
@@ -566,7 +1119,37 @@ const saveProduct = () => {
                                         label="MRP"
                                         placeholder="0.00"
                                         cls="product-field"
-                                        left_box_text="₹"
+                                        left_box_text="Rs."
+                                    />
+
+                                    <FormInput
+                                        v-model="form.wholesale_price"
+                                        name="wholesale_price"
+                                        type="number"
+                                        label="Wholesale Price"
+                                        placeholder="0.00"
+                                        cls="product-field"
+                                        left_box_text="Rs."
+                                    />
+
+                                    <FormInput
+                                        v-model="form.dealer_price"
+                                        name="dealer_price"
+                                        type="number"
+                                        label="Dealer Price"
+                                        placeholder="0.00"
+                                        cls="product-field"
+                                        left_box_text="Rs."
+                                    />
+
+                                    <FormInput
+                                        v-model="form.online_price"
+                                        name="online_price"
+                                        type="number"
+                                        label="Online Price"
+                                        placeholder="0.00"
+                                        cls="product-field"
+                                        left_box_text="Rs."
                                     />
 
                                     <div class="pricing-rule">
@@ -588,7 +1171,10 @@ const saveProduct = () => {
 
                             <!-- Inventory -->
                             <section
-                                v-if="form.product_type === 'goods'"
+                                v-show="
+                                    activeTab === 'inventory' &&
+                                    form.product_type === 'goods'
+                                "
                                 class="product-section"
                             >
                                 <div class="section-header">
@@ -600,22 +1186,13 @@ const saveProduct = () => {
                                         <h3>Inventory Settings</h3>
 
                                         <p>
-                                            Opening quantity, stock alerts and
-                                            product tracking.
+                                            Stock alerts and product tracking
+                                            settings.
                                         </p>
                                     </div>
                                 </div>
 
                                 <div class="form-grid">
-                                    <FormInput
-                                        v-model="form.opening_stock"
-                                        name="opening_stock"
-                                        type="number"
-                                        label="Opening Stock"
-                                        placeholder="0"
-                                        cls="product-field"
-                                    />
-
                                     <FormInput
                                         v-model="form.minimum_stock"
                                         name="minimum_stock"
@@ -634,6 +1211,15 @@ const saveProduct = () => {
                                         cls="product-field"
                                     />
 
+                                    <FormInput
+                                        v-model="form.maximum_stock"
+                                        name="maximum_stock"
+                                        type="number"
+                                        label="Maximum Stock"
+                                        placeholder="0"
+                                        cls="product-field"
+                                    />
+
                                     <FormSelect
                                         v-model="form.tracking_type"
                                         name="tracking_type"
@@ -645,6 +1231,17 @@ const saveProduct = () => {
                                     />
 
                                     <div class="inventory-explanation field-span-2">
+                                        <div>
+                                            <strong>Opening Stock</strong>
+
+                                            <span>
+                                                Opening stock Product Master
+                                                se edit nahi hota; opening
+                                                stock transaction se maintain
+                                                karein.
+                                            </span>
+                                        </div>
+
                                         <div>
                                             <strong>Minimum Stock</strong>
 
@@ -667,8 +1264,91 @@ const saveProduct = () => {
                                 </div>
                             </section>
 
+                            <!-- Images -->
+                            <section
+                                v-show="activeTab === 'images'"
+                                class="product-section"
+                            >
+                                <div class="section-header">
+                                    <div class="section-number">
+                                        07
+                                    </div>
+
+                                    <div>
+                                        <h3>Images</h3>
+
+                                        <p>
+                                            Store primary and additional image
+                                            paths for catalog and POS.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="repeat-list">
+                                    <div
+                                        v-for="(image, index) in images"
+                                        :key="index"
+                                        class="repeat-row image-row"
+                                    >
+                                        <label class="radio-field">
+                                            <input
+                                                v-model="image.is_primary"
+                                                type="checkbox"
+                                            />
+
+                                            <span>Primary</span>
+                                        </label>
+
+                                        <input
+                                            v-model="image.image_path"
+                                            type="text"
+                                            class="form-control"
+                                            placeholder="/uploads/product.jpg"
+                                        />
+
+                                        <select
+                                            v-model="image.image_type"
+                                            class="form-control"
+                                        >
+                                            <option value="gallery">
+                                                Gallery
+                                            </option>
+
+                                            <option value="thumbnail">
+                                                Thumbnail
+                                            </option>
+
+                                            <option value="catalog">
+                                                Catalog
+                                            </option>
+                                        </select>
+
+                                        <button
+                                            type="button"
+                                            class="row-remove"
+                                            :disabled="processing"
+                                            @click="removeImage(index)"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        class="row-add"
+                                        :disabled="processing"
+                                        @click="addImage"
+                                    >
+                                        Add Image
+                                    </button>
+                                </div>
+                            </section>
+
                             <!-- Status -->
-                            <section class="product-section">
+                            <section
+                                v-show="activeTab === 'advanced'"
+                                class="product-section"
+                            >
                                 <div class="section-header">
                                     <div class="section-number">
                                         {{
@@ -689,6 +1369,69 @@ const saveProduct = () => {
                                 </div>
 
                                 <div class="form-grid">
+                                    <FormInput
+                                        v-model="form.weight"
+                                        name="weight"
+                                        type="number"
+                                        label="Weight"
+                                        placeholder="0.000"
+                                        cls="product-field"
+                                    />
+
+                                    <FormInput
+                                        v-model="form.length"
+                                        name="length"
+                                        type="number"
+                                        label="Length"
+                                        placeholder="0.000"
+                                        cls="product-field"
+                                    />
+
+                                    <FormInput
+                                        v-model="form.width"
+                                        name="width"
+                                        type="number"
+                                        label="Width"
+                                        placeholder="0.000"
+                                        cls="product-field"
+                                    />
+
+                                    <FormInput
+                                        v-model="form.height"
+                                        name="height"
+                                        type="number"
+                                        label="Height"
+                                        placeholder="0.000"
+                                        cls="product-field"
+                                    />
+
+                                    <label class="toggle-field">
+                                        <input
+                                            v-model="form.batch_required"
+                                            type="checkbox"
+                                        />
+
+                                        <span>Batch Required</span>
+                                    </label>
+
+                                    <label class="toggle-field">
+                                        <input
+                                            v-model="form.expiry_required"
+                                            type="checkbox"
+                                        />
+
+                                        <span>Expiry Required</span>
+                                    </label>
+
+                                    <label class="toggle-field">
+                                        <input
+                                            v-model="form.serial_required"
+                                            type="checkbox"
+                                        />
+
+                                        <span>Serial Number Required</span>
+                                    </label>
+
                                     <FormSelect
                                         v-model="form.status"
                                         name="status"
@@ -896,6 +1639,51 @@ const saveProduct = () => {
     flex-direction: column;
 }
 
+.product-tabs {
+    display: flex;
+    gap: 7px;
+    padding: 12px 28px;
+    overflow-x: auto;
+    background: #ffffff;
+    border-bottom: 1px solid #e3e9f2;
+}
+
+.product-tabs button {
+    min-height: 34px;
+    flex-shrink: 0;
+    padding: 7px 13px;
+    color: #5e6a7f;
+    background: #f6f8fb;
+    border: 1px solid #dfe6ef;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.product-tabs button.active {
+    color: #ffffff;
+    background: #2457d6;
+    border-color: #2457d6;
+}
+
+.form-error-summary {
+    display: grid;
+    gap: 4px;
+    margin: 12px 28px 0;
+    padding: 11px 13px;
+    color: #96333a;
+    background: #fff3f4;
+    border: 1px solid #ffd4d8;
+    border-radius: 9px;
+    font-size: 11px;
+}
+
+.form-error-summary strong {
+    color: #7d2730;
+    font-size: 12px;
+}
+
 .product-drawer-content {
     min-height: 0;
     flex: 1;
@@ -1058,6 +1846,174 @@ const saveProduct = () => {
     border-radius: 9px;
     font-size: 11px;
     line-height: 1.5;
+}
+
+.field-error {
+    color: #d83946;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.repeat-list {
+    display: grid;
+    gap: 10px;
+}
+
+.repeat-row {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr) 150px 86px;
+    gap: 9px;
+    align-items: center;
+    padding: 10px;
+    background: #f8fafc;
+    border: 1px solid #e1e7ef;
+    border-radius: 10px;
+}
+
+.repeat-row.image-row {
+    grid-template-columns: 96px minmax(0, 1fr) 140px 86px;
+}
+
+.repeat-row .form-control,
+.hsn-search-field .form-control {
+    width: 100%;
+    min-height: 40px;
+    padding: 9px 11px;
+    color: #17233b;
+    background: #ffffff;
+    border: 1px solid #d8e0eb;
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.radio-field {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: #465269;
+    font-size: 11px;
+    font-weight: 750;
+}
+
+.radio-field input {
+    width: 15px;
+    height: 15px;
+}
+
+.row-add,
+.row-remove {
+    min-height: 36px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.row-add {
+    justify-self: start;
+    color: #2457d6;
+    background: #edf2ff;
+    border: 1px solid #ccd9ff;
+}
+
+.row-remove {
+    color: #d23b45;
+    background: #fff1f2;
+    border: 1px solid #ffd2d6;
+}
+
+.row-add:disabled,
+.row-remove:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+.hsn-search-field {
+    position: relative;
+}
+
+.hsn-input-row {
+    position: relative;
+}
+
+.inline-loader {
+    position: absolute;
+    top: 11px;
+    right: 11px;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #d9e2f3;
+    border-top-color: #2457d6;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+}
+
+.hsn-results {
+    position: absolute;
+    top: 68px;
+    right: 0;
+    left: 0;
+    z-index: 20;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #ffffff;
+    border: 1px solid #dce4ef;
+    border-radius: 9px;
+    box-shadow: 0 12px 30px rgba(15, 34, 66, 0.12);
+}
+
+.hsn-results button {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) 58px;
+    gap: 8px;
+    padding: 10px 12px;
+    color: #26344d;
+    background: #ffffff;
+    border: 0;
+    border-bottom: 1px solid #eef2f6;
+    text-align: left;
+    cursor: pointer;
+}
+
+.hsn-results button:hover {
+    background: #f6f8fc;
+}
+
+.hsn-results strong {
+    font-size: 12px;
+}
+
+.hsn-results span,
+.hsn-results small {
+    color: #6f7c91;
+    font-size: 11px;
+}
+
+.selected-hsn {
+    margin-top: 8px;
+}
+
+.toggle-field {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 11px 13px;
+    color: #344159;
+    background: #f7f9fc;
+    border: 1px solid #dfe6ef;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.toggle-field input {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
 }
 
 .help-icon {
@@ -1343,6 +2299,12 @@ const saveProduct = () => {
     }
 
     .inventory-explanation {
+        grid-template-columns: 1fr;
+    }
+
+    .repeat-row,
+    .repeat-row.image-row,
+    .hsn-results button {
         grid-template-columns: 1fr;
     }
 

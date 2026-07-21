@@ -34,7 +34,7 @@ const printBarcode = () => {
             <h3>Barcode</h3>
 
             <button @click="close">
-                ✕
+                x
             </button>
 
         </div>

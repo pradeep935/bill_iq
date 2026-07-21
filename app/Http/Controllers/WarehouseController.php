@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use Inertia\Inertia;
+
 class WarehouseController extends Controller
 {
     public function warehouses()
@@ -21,7 +23,8 @@ class WarehouseController extends Controller
 
     public function transfer()
     {
-        return ModuleController::render('inventory-transfer', 'Stock Transfer');
+        if ($redirect = AppController::guardPage('inventory-transfer')) return $redirect;
+        return Inertia::render('Inventory/Control', ['page' => 'inventory-transfer', 'title' => 'Stock Transfer', 'initial_tab' => 'transfers']);
     }
 
     public function transferRequests()
@@ -31,12 +34,14 @@ class WarehouseController extends Controller
 
     public function adjustment()
     {
-        return ModuleController::render('inventory-adjustment', 'Stock Adjustment');
+        if ($redirect = AppController::guardPage('inventory-adjustment')) return $redirect;
+        return Inertia::render('Inventory/Control', ['page' => 'inventory-adjustment', 'title' => 'Stock Adjustment', 'initial_tab' => 'adjustments']);
     }
 
     public function audit()
     {
-        return ModuleController::render('inventory-audit', 'Physical Audit');
+        if ($redirect = AppController::guardPage('inventory-audit')) return $redirect;
+        return Inertia::render('Inventory/Control', ['page' => 'inventory-audit', 'title' => 'Physical Stock Count', 'initial_tab' => 'counts']);
     }
 
     public function allocation()

@@ -27,8 +27,10 @@ class ProductInventoryService
             return (int) (session('business_id') ?: session('company_id') ?: session('tenant_id'));
         }
 
-        if (Auth::user()?->tenant_id) {
-            return (int) Auth::user()->tenant_id;
+        $user = Auth::user();
+
+        if ($user && $user->tenant_id) {
+            return (int) $user->tenant_id;
         }
 
         if (Schema::hasTable('companies')) {
@@ -76,7 +78,7 @@ class ProductInventoryService
                 'required',
                 'string',
                 'max:80',
-                Rule::unique('products', 'sku')->ignore($product?->id)->where(fn ($query) => $query->where(Schema::hasColumn('products', 'business_id') ? 'business_id' : 'tenant_id', $businessId)),
+                Rule::unique('products', 'sku')->ignore($product ? $product->id : null)->where(fn ($query) => $query->where(Schema::hasColumn('products', 'business_id') ? 'business_id' : 'tenant_id', $businessId)),
             ],
             'description' => ['nullable', 'string'],
             'category_name' => ['nullable', 'string', 'max:120'],
@@ -154,8 +156,8 @@ class ProductInventoryService
                 'short_name' => $data['short_name'] ?? null,
                 'sku' => $data['sku'],
                 'description' => $data['description'] ?? null,
-                'category_id' => $category?->id,
-                'brand_id' => $brand?->id,
+                'category_id' => $category ? $category->id : null,
+                'brand_id' => $brand ? $brand->id : null,
                 'unit_id' => $unit->id,
                 'hsn' => $hsn->hsn_code,
                 'hsn_id' => $hsn->id,
@@ -208,15 +210,15 @@ class ProductInventoryService
             'name' => $product->name,
             'invoiceName' => $product->short_name ?: $product->name,
             'type' => ucfirst($product->product_type ?: 'goods'),
-            'category' => $product->category?->name,
-            'brand' => $product->brand?->name,
+            'category' => optional($product->category)->name,
+            'brand' => optional($product->brand)->name,
             'sku' => $product->sku,
             'hsn' => $product->hsn,
             'taxability' => ((float) $product->gst_rate > 0) ? 'Taxable' : 'Nil Rated',
             'gstRate' => (float) $product->gst_rate,
-            'cessRate' => (float) ($product->hsn?->cess_rate ?? 0),
+            'cessRate' => (float) (optional($product->hsn)->cess_rate ?? 0),
             'reverseCharge' => 'No',
-            'unit' => $product->unit?->code ?: 'PCS',
+            'unit' => optional($product->unit)->code ?: 'PCS',
             'variant' => $product->short_name,
             'mrp' => (float) $product->mrp,
             'salePrice' => (float) ($product->default_selling_price ?: $product->sale_price),
@@ -377,8 +379,6 @@ class ProductInventoryService
             'remarks' => 'Opening stock approved',
         ]);
 
-        $product->increment('current_stock', $quantity);
-        $product->update(['opening_stock' => $quantity]);
         $this->audit('opening_stock', $entry->id, 'approved', 'Opening stock posted');
     }
 
@@ -391,14 +391,14 @@ class ProductInventoryService
                 'record_id' => (string) $recordId,
                 'action_type' => $action,
                 'changed_by_user_id' => Auth::id(),
-                'changed_by_name' => Auth::user()?->name,
-                'user_role' => (string) (Auth::user()?->role_id ?? ''),
+                'changed_by_name' => Auth::user() ? Auth::user()->name : null,
+                'user_role' => (string) (Auth::user() ? Auth::user()->role_id : ''),
                 'ip_address' => request()->ip(),
                 'summary' => $summary,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
-        } catch (\Throwable) {
+        } catch (\Throwable $exception) {
             report(new \RuntimeException("Audit log skipped for {$module}:{$recordId}:{$action}"));
         }
     }

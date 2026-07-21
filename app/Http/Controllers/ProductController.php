@@ -2,18 +2,29 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Support\Facades\Auth;
+use App\Http\Requests\ProductBulkStatusRequest;
+use App\Http\Requests\ProductMasterRequest;
 use App\Models\HsnMaster;
-use App\Models\Product;
+use App\Services\ProductMasterService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class ProductController extends Controller
 {
-    public function index(){
+    private ProductMasterService $products;
+
+    public function __construct(ProductMasterService $products)
+    {
+        $this->products = $products;
+    }
+
+    public function index()
+    {
+        if ($redirect = AppController::guardPage('products')) {
+            return $redirect;
+        }
+
         return Inertia::render('Product/Index', [
             'page' => 'products',
             'title' => 'Products & Barcode',
@@ -21,180 +32,163 @@ class ProductController extends Controller
         ]);
     }
 
-    public function products()
-{
-    $businessId = AppController::businessId();
-
-    $products = Product::where('business_id', $businessId)
-        ->orderBy('id', 'desc')
-        ->get();
-
-    return response()->json([
-        'products' => $products,
-    ]);
-}
-
-    public function save(Request $request)
+    public function products(Request $request)
     {
-        $businessId = AppController::businessId();
+        $this->authorizeProductView();
 
-        $productId = (int) $request->input('id', 0);
-
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'product_type' => 'required|in:goods,service',
-            'category' => 'nullable|string|max:150',
-            'brand' => 'nullable|string|max:150',
-            'variant' => 'nullable|string|max:150',
-            'unit' => 'required|string|max:30',
-
-            'hsn_master_id' => 'nullable|integer|exists:hsn_masters,id',
-            'hsn_code' => 'required|string|max:20',
-            'taxability' => 'required|in:taxable,exempt,nil_rated,non_gst',
-            'gst_rate' => 'required|numeric|min:0|max:100',
-            'cess_rate' => 'nullable|numeric|min:0|max:100',
-            'reverse_charge' => 'required|in:yes,no',
-            'invoice_description' => 'nullable|string|max:500',
-
-            'selling_price' => 'required|numeric|min:0',
-            'cost_price' => 'nullable|numeric|min:0',
-            'mrp' => 'nullable|numeric|min:0',
-            'opening_stock' => 'nullable|numeric|min:0',
-            'minimum_stock' => 'nullable|numeric|min:0',
-            'reorder_stock' => 'nullable|numeric|min:0',
-
-            'tracking_type' => 'required|in:none,batch,batch_expiry,serial,imei',
-
-            'sku' => [
-                'required',
-                'string',
-                'max:100',
-                Rule::unique('products', 'sku')
-                ->where('business_id', $businessId)
-                ->ignore($productId),
-            ],
-
-            'primary_barcode' => [
-                'nullable',
-                'string',
-                'max:100',
-                Rule::unique('products', 'primary_barcode')
-                ->where('business_id', $businessId)
-                ->ignore($productId),
-            ],
-
-            'extra_barcodes' => 'nullable|string',
-            'status' => 'required|in:active,inactive',
-        ]);
-
-        if (
-            $request->filled('mrp') &&
-            (float) $request->selling_price > (float) $request->mrp
-        ) {
-            return response()->json([
-                'message' => 'Selling price cannot be greater than MRP.',
-                'errors' => [
-                    'selling_price' => [
-                        'Selling price cannot be greater than MRP.',
-                    ],
-                ],
-            ], 422);
-        }
-
-        if ($productId > 0) {
-            $product = Product::where('business_id', $businessId)
-            ->where('id', $productId)
-            ->firstOrFail();
-
-            $message = 'Product updated successfully.';
-        } else {
-            $product = new Product();
-            $product->business_id = $businessId;
-
-            $message = 'Product saved successfully.';
-        }
-
-        $product->name = $request->name;
-        $product->product_type = $request->product_type;
-        $product->category = $request->category;
-        $product->brand = $request->brand;
-        $product->variant = $request->variant;
-        $product->unit = $request->unit;
-
-        $product->hsn_master_id = $request->hsn_master_id;
-        $product->hsn_code = $request->hsn_code;
-        $product->taxability = $request->taxability;
-        $product->gst_rate = $request->gst_rate;
-        $product->cess_rate = $request->cess_rate ?: 0;
-        $product->reverse_charge = $request->reverse_charge;
-        $product->invoice_description = $request->invoice_description;
-
-        $product->selling_price = $request->selling_price;
-        $product->cost_price = $request->cost_price ?: 0;
-        $product->mrp = $request->mrp;
-        $product->opening_stock = $request->opening_stock ?: 0;
-        $product->minimum_stock = $request->minimum_stock ?: 0;
-        $product->reorder_stock = $request->reorder_stock ?: 0;
-
-        $product->tracking_type = $request->tracking_type;
-        $product->sku = $request->sku;
-        $product->primary_barcode = $request->primary_barcode;
-        $product->extra_barcodes = $request->extra_barcodes;
-        $product->status = $request->status;
-
-        $product->save();
-
-        return response()->json([
-            'message' => $message,
-            'product' => $product,
-        ], $productId > 0 ? 200 : 201);
+        return response()->json(
+            $this->products->presentPaginator(
+                $this->products->list($request->all())
+            )
+        );
     }
 
-    public function destroy(Product $product)
+    public function show(int $product)
     {
-        $businessId = AppController::businessId();
+        $this->authorizeProductView();
 
-        abort_unless(
-            (int) $product->business_id === (int) $businessId,
-            403
-        );
+        return response()->json([
+            'product' => $this->products->present(
+                $this->products->find($product, true)
+            ),
+        ]);
+    }
 
-        $product->delete();
+    public function store(ProductMasterRequest $request)
+    {
+        $product = $this->products->create($request->validated());
+
+        return response()->json([
+            'message' => 'Product saved successfully.',
+            'product' => $this->products->present($product),
+        ], 201);
+    }
+
+    public function update(ProductMasterRequest $request, int $product)
+    {
+        $productModel = $this->products->find($product);
+        $updatedProduct = $this->products->update($productModel, $request->validated());
+
+        return response()->json([
+            'message' => 'Product updated successfully.',
+            'product' => $this->products->present($updatedProduct),
+        ]);
+    }
+
+    public function save(ProductMasterRequest $request)
+    {
+        $productId = (int) $request->input('id', 0);
+
+        if ($productId > 0) {
+            return $this->update($request, $productId);
+        }
+
+        return $this->store($request);
+    }
+
+    public function destroy(int $product)
+    {
+        $this->authorizeProductManage();
+
+        $productModel = $this->products->find($product);
+        $this->products->softDelete($productModel);
 
         return response()->json([
             'message' => 'Product deleted successfully.',
         ]);
     }
 
+    public function restore(int $product)
+    {
+        $this->authorizeProductManage();
+
+        $productModel = $this->products->find($product, true);
+        $restoredProduct = $this->products->restore($productModel);
+
+        return response()->json([
+            'message' => 'Product restored successfully.',
+            'product' => $this->products->present($restoredProduct),
+        ]);
+    }
+
+    public function forceDelete(int $product)
+    {
+        $user = Auth::user();
+
+        abort_unless($user && $user->isSuperAdmin(), 403);
+
+        $productModel = $this->products->find($product, true);
+        $this->products->forceDelete($productModel);
+
+        return response()->json([
+            'message' => 'Product permanently deleted successfully.',
+        ]);
+    }
+
+    public function duplicate(int $product)
+    {
+        $this->authorizeProductManage();
+
+        $productModel = $this->products->find($product);
+        $duplicatedProduct = $this->products->duplicate($productModel);
+
+        return response()->json([
+            'message' => 'Product duplicated successfully.',
+            'product' => $this->products->present($duplicatedProduct),
+        ], 201);
+    }
+
+    public function bulkStatus(ProductBulkStatusRequest $request)
+    {
+        $data = $request->validated();
+
+        $updatedCount = $this->products->bulkStatus($data['ids'], $data['status']);
+
+        return response()->json([
+            'message' => 'Product status updated successfully.',
+            'updated_count' => $updatedCount,
+        ]);
+    }
+
     public function hsnSearch(Request $request)
     {
+        $this->authorizeProductView();
+
         $search = trim((string) $request->query('q'));
 
         $hsnMaster = HsnMaster::where('status', 'active')
-        ->when($search !== '', function ($query) use ($search) {
-            $query->where(function ($innerQuery) use ($search) {
-                $innerQuery
-                ->where('hsn_code', 'like', $search . '%')
-                ->orWhere(
-                    'description',
-                    'like',
-                    '%' . $search . '%'
-                );
-            });
-        })
-        ->orderBy('hsn_code')
-        ->limit(20)
-        ->get([
-            'id',
-            'hsn_code',
-            'description',
-            'gst_rate',
-            'cess_rate',
-            'effective_from',
-            'notification_number',
-            'source_reference',
-        ]);
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($innerQuery) use ($search) {
+                    $innerQuery
+                        ->where('hsn_code', 'like', $search . '%')
+                        ->orWhere('description', 'like', '%' . $search . '%');
+                });
+            })
+            ->orderBy('hsn_code')
+            ->limit(20)
+            ->get([
+                'id',
+                'hsn_code',
+                'description',
+                'gst_rate',
+                'cess_rate',
+                'effective_from',
+                'notification_number',
+                'source_reference',
+            ]);
 
         return response()->json($hsnMaster);
+    }
+
+    private function authorizeProductView(): void
+    {
+        abort_unless(AppController::canOpen('products'), 403);
+    }
+
+    private function authorizeProductManage(): void
+    {
+        $user = Auth::user();
+
+        abort_unless($user && ($user->isSuperAdmin() || $user->isAdmin()), 403);
     }
 }

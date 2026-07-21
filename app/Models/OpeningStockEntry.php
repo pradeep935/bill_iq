@@ -18,4 +18,14 @@ class OpeningStockEntry extends Model
     {
         return $this->hasMany(OpeningStockItem::class);
     }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
 }

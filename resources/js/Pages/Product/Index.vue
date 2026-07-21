@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 
 import ProductApi from './ProductApi';
@@ -25,16 +25,37 @@ const props = defineProps({
 });
 
 const products = ref([]);
+const pagination = ref({
+    current_page: 1,
+    last_page: 1,
+    per_page: 15,
+    total: 0,
+    from: 0,
+    to: 0,
+});
+
 const loading = ref(false);
 const saving = ref(false);
 const deletingId = ref(null);
+const duplicatingId = ref(null);
+const statusUpdatingId = ref(null);
+const bulkProcessing = ref(false);
+const exportProcessing = ref(false);
+const serverErrors = ref({});
 
 const search = ref('');
 const productTypeFilter = ref('');
+const itemTypeFilter = ref('');
 const statusFilter = ref('');
+const categoryFilter = ref('');
+const brandFilter = ref('');
+const unitFilter = ref('');
+const gstRateFilter = ref('');
+const perPage = ref(15);
 
 const showForm = ref(false);
 const selectedProduct = ref({});
+const viewProduct = ref(null);
 
 const showBarcodeModal = ref(false);
 const barcodeProduct = ref({});
@@ -42,71 +63,90 @@ const barcodeProduct = ref({});
 const showLabelModal = ref(false);
 const labelProducts = ref([]);
 
-const filteredProducts = computed(() => {
-    const keyword = search.value.trim().toLowerCase();
+const selectedIds = ref([]);
+let searchTimer = null;
 
-    return products.value.filter((product) => {
-        const matchesSearch =
-            !keyword ||
-            String(product.name || '')
-                .toLowerCase()
-                .includes(keyword) ||
-            String(product.sku || '')
-                .toLowerCase()
-                .includes(keyword) ||
-            String(product.primary_barcode || '')
-                .toLowerCase()
-                .includes(keyword) ||
-            String(product.hsn_code || '')
-                .toLowerCase()
-                .includes(keyword) ||
-            String(product.category || '')
-                .toLowerCase()
-                .includes(keyword) ||
-            String(product.brand || '')
-                .toLowerCase()
-                .includes(keyword);
+const rows = computed(() => products.value);
 
-        const matchesType =
-            !productTypeFilter.value ||
-            product.product_type === productTypeFilter.value;
-
-        const matchesStatus =
-            !statusFilter.value ||
-            product.status === statusFilter.value;
-
-        return matchesSearch && matchesType && matchesStatus;
-    });
-});
+const pageTotal = computed(() => pagination.value.total || products.value.length);
 
 const activeProductsCount = computed(() => {
-    return products.value.filter(
-        (product) => product.status === 'active'
-    ).length;
+    return products.value.filter((product) => product.status === 'active').length;
 });
 
-const lowStockCount = computed(() => {
-    return products.value.filter((product) => {
-        if (product.product_type !== 'goods') {
-            return false;
-        }
-
-        const currentStock = Number(product.opening_stock || 0);
-        const minimumStock = Number(product.minimum_stock || 0);
-
-        return minimumStock > 0 && currentStock <= minimumStock;
-    }).length;
+const inactiveProductsCount = computed(() => {
+    return products.value.filter((product) => product.status === 'inactive').length;
 });
 
-const loadProducts = async () => {
+const allRowsSelected = computed(() => {
+    return rows.value.length > 0 &&
+        rows.value.every((product) => selectedIds.value.includes(product.id));
+});
+
+const visiblePages = computed(() => {
+    const current = pagination.value.current_page || 1;
+    const last = pagination.value.last_page || 1;
+    const start = Math.max(1, current - 2);
+    const end = Math.min(last, current + 2);
+    const pages = [];
+
+    for (let page = start; page <= end; page++) {
+        pages.push(page);
+    }
+
+    return pages;
+});
+
+const hasFilters = computed(() => {
+    return Boolean(
+        search.value ||
+        productTypeFilter.value ||
+        itemTypeFilter.value ||
+        statusFilter.value ||
+        categoryFilter.value ||
+        brandFilter.value ||
+        unitFilter.value ||
+        gstRateFilter.value
+    );
+});
+
+const requestParams = (page = 1) => {
+    return {
+        page,
+        per_page: perPage.value,
+        search: search.value || undefined,
+        product_type: productTypeFilter.value || undefined,
+        item_type: itemTypeFilter.value || undefined,
+        status: statusFilter.value || undefined,
+        category: categoryFilter.value || undefined,
+        brand: brandFilter.value || undefined,
+        unit: unitFilter.value || undefined,
+        gst_rate: gstRateFilter.value || undefined,
+    };
+};
+
+const loadProducts = async (page = 1) => {
     loading.value = true;
 
     try {
-        const response = await ProductApi.getProducts();
+        const response = await ProductApi.getProducts(requestParams(page));
 
         products.value = Array.isArray(response)
             ? response
             : response.products || [];
+
+        pagination.value = response.pagination || {
+            current_page: 1,
+            last_page: 1,
+            per_page: perPage.value,
+            total: products.value.length,
+            from: products.value.length ? 1 : 0,
+            to: products.value.length,
+        };
+
+        selectedIds.value = selectedIds.value.filter((id) =>
+            products.value.some((product) => product.id === id)
+        );
     } catch (error) {
         console.error(error);
 
@@ -117,40 +157,54 @@ const loadProducts = async () => {
 };
 
 const addProduct = () => {
+    serverErrors.value = {};
     selectedProduct.value = {};
+    showForm.value = true;
+};
+
+const editProduct = async (product) => {
+    serverErrors.value = {};
+
+    try {
+        const response = await ProductApi.getProduct(product.id);
+        selectedProduct.value = response.product || product;
+    } catch (error) {
+        selectedProduct.value = { ...product };
+    }
 
     showForm.value = true;
 };
 
-const editProduct = (product) => {
-    selectedProduct.value = {
-        ...product,
-    };
+const openView = async (product) => {
+    viewProduct.value = product;
 
-    showForm.value = true;
+    try {
+        const response = await ProductApi.getProduct(product.id);
+        viewProduct.value = response.product || product;
+    } catch (error) {
+        console.error(error);
+    }
 };
 
 const saveProduct = async (form) => {
     saving.value = true;
+    serverErrors.value = {};
 
     try {
         const response = await ProductApi.saveProduct(form);
 
         showForm.value = false;
+        serverErrors.value = {};
 
-        await loadProducts();
+        await loadProducts(pagination.value.current_page || 1);
 
-        alert(
-            response.message ||
-            'Product successfully saved.'
-        );
+        alert(response.message || 'Product successfully saved.');
     } catch (error) {
         if (error.response?.status === 422) {
-            const errors =
-                error.response.data.errors || {};
+            const errors = error.response.data.errors || {};
+            serverErrors.value = errors;
 
-            const firstError =
-                Object.values(errors)?.[0]?.[0];
+            const firstError = Object.values(errors)?.[0]?.[0];
 
             alert(
                 firstError ||
@@ -162,17 +216,73 @@ const saveProduct = async (form) => {
         }
 
         console.error(error);
-
         alert('Product save nahi ho saka.');
     } finally {
         saving.value = false;
     }
 };
 
+const duplicateProduct = async (product) => {
+    const confirmed = window.confirm(`"${product.name}" duplicate karna hai?`);
+
+    if (!confirmed) {
+        return;
+    }
+
+    duplicatingId.value = product.id;
+
+    try {
+        const response = await ProductApi.duplicateProduct(product.id);
+        await loadProducts(1);
+        alert(response.message || 'Product duplicated successfully.');
+    } catch (error) {
+        console.error(error);
+        alert(error.response?.data?.message || 'Product duplicate nahi ho saka.');
+    } finally {
+        duplicatingId.value = null;
+    }
+};
+
+const updateProductStatus = async (product) => {
+    const status = product.status === 'active' ? 'inactive' : 'active';
+
+    statusUpdatingId.value = product.id;
+
+    try {
+        const response = await ProductApi.bulkStatus([product.id], status);
+        await loadProducts(pagination.value.current_page || 1);
+        alert(response.message || 'Product status updated successfully.');
+    } catch (error) {
+        console.error(error);
+        alert(error.response?.data?.message || 'Status update nahi ho saka.');
+    } finally {
+        statusUpdatingId.value = null;
+    }
+};
+
+const bulkStatusUpdate = async (status) => {
+    if (!selectedIds.value.length) {
+        alert('Pehle products select karein.');
+        return;
+    }
+
+    bulkProcessing.value = true;
+
+    try {
+        const response = await ProductApi.bulkStatus(selectedIds.value, status);
+        selectedIds.value = [];
+        await loadProducts(pagination.value.current_page || 1);
+        alert(response.message || 'Product status updated successfully.');
+    } catch (error) {
+        console.error(error);
+        alert(error.response?.data?.message || 'Bulk status update nahi ho saka.');
+    } finally {
+        bulkProcessing.value = false;
+    }
+};
+
 const deleteProduct = async (product) => {
-    const confirmed = window.confirm(
-        `"${product.name}" product delete karna hai?`
-    );
+    const confirmed = window.confirm(`"${product.name}" product delete karna hai?`);
 
     if (!confirmed) {
         return;
@@ -181,65 +291,180 @@ const deleteProduct = async (product) => {
     deletingId.value = product.id;
 
     try {
-        const response =
-            await ProductApi.deleteProduct(product.id);
-
-        await loadProducts();
-
-        alert(
-            response.message ||
-            'Product deleted successfully.'
-        );
+        const response = await ProductApi.deleteProduct(product.id);
+        await loadProducts(pagination.value.current_page || 1);
+        alert(response.message || 'Product deleted successfully.');
     } catch (error) {
         console.error(error);
 
-        alert(
-            error.response?.data?.message ||
-            'Product delete nahi ho saka.'
-        );
+        alert(error.response?.data?.message || 'Product delete nahi ho saka.');
     } finally {
         deletingId.value = null;
     }
 };
 
 const openBarcode = (product) => {
-    barcodeProduct.value = {
-        ...product,
-    };
-
+    barcodeProduct.value = { ...product };
     showBarcodeModal.value = true;
 };
 
 const openSingleLabel = (product) => {
-    labelProducts.value = [
-        {
-            ...product,
-        },
-    ];
-
+    labelProducts.value = [{ ...product }];
     showLabelModal.value = true;
 };
 
 const openAllLabels = () => {
-    if (!filteredProducts.value.length) {
+    if (!rows.value.length) {
         alert('Print karne ke liye product available nahi hai.');
-
         return;
     }
 
-    labelProducts.value = filteredProducts.value.map(
-        (product) => ({
-            ...product,
-        })
-    );
-
+    labelProducts.value = rows.value.map((product) => ({ ...product }));
     showLabelModal.value = true;
 };
 
 const clearFilters = () => {
     search.value = '';
     productTypeFilter.value = '';
+    itemTypeFilter.value = '';
     statusFilter.value = '';
+    categoryFilter.value = '';
+    brandFilter.value = '';
+    unitFilter.value = '';
+    gstRateFilter.value = '';
+};
+
+const toggleSelectAll = () => {
+    if (allRowsSelected.value) {
+        selectedIds.value = [];
+        return;
+    }
+
+    selectedIds.value = rows.value.map((product) => product.id);
+};
+
+const toggleSelection = (id) => {
+    if (selectedIds.value.includes(id)) {
+        selectedIds.value = selectedIds.value.filter((selectedId) => selectedId !== id);
+        return;
+    }
+
+    selectedIds.value = [...selectedIds.value, id];
+};
+
+const buildCsv = (exportRows) => {
+    const headings = [
+        'Product Name',
+        'SKU',
+        'Barcode',
+        'Category',
+        'Brand',
+        'Unit',
+        'Selling Price',
+        'MRP',
+        'GST',
+        'Status',
+    ];
+
+    const csvRows = exportRows.map((product) => [
+        product.name,
+        product.sku,
+        primaryBarcode(product),
+        product.category,
+        product.brand,
+        product.unit,
+        product.selling_price,
+        product.mrp,
+        product.gst_rate,
+        product.status,
+    ]);
+
+    const csv = [headings, ...csvRows]
+        .map((row) =>
+            row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')
+        )
+        .join('\n');
+};
+
+const exportProducts = async () => {
+    exportProcessing.value = true;
+
+    try {
+        const firstResponse = await ProductApi.getProducts({
+            ...requestParams(1),
+            per_page: 100,
+        });
+
+        const exportRows = [...(firstResponse.products || [])];
+        const lastPage = firstResponse.pagination?.last_page || 1;
+
+        for (let page = 2; page <= lastPage; page++) {
+            const response = await ProductApi.getProducts({
+                ...requestParams(page),
+                per_page: 100,
+            });
+
+            exportRows.push(...(response.products || []));
+        }
+
+        if (!exportRows.length) {
+            alert('Export karne ke liye products available nahi hain.');
+            return;
+        }
+
+        const csv = buildCsv(exportRows);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'products-export.csv';
+        link.click();
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error(error);
+
+        alert('Product export nahi ho saka.');
+    } finally {
+        exportProcessing.value = false;
+    }
+};
+
+const changePage = (page) => {
+    if (
+        page < 1 ||
+        page > pagination.value.last_page ||
+        page === pagination.value.current_page ||
+        loading.value
+    ) {
+        return;
+    }
+
+    loadProducts(page);
+};
+
+const primaryBarcode = (product) => {
+    if (product.primary_barcode) {
+        return product.primary_barcode;
+    }
+
+    const primary = (product.barcodes || []).find((barcode) => barcode.is_primary);
+
+    return primary?.barcode || product.barcodes?.[0]?.barcode || '-';
+};
+
+const productImage = (product) => {
+    const primary = (product.images || []).find((image) => image.is_primary);
+    const path = primary?.image_path || product.images?.[0]?.image_path;
+
+    if (!path) {
+        return null;
+    }
+
+    if (String(path).startsWith('http') || String(path).startsWith('/')) {
+        return path;
+    }
+
+    return `/storage/${path}`;
 };
 
 const formatPrice = (value) => {
@@ -249,39 +474,23 @@ const formatPrice = (value) => {
     });
 };
 
-const stockStatus = (product) => {
-    if (product.product_type === 'service') {
-        return {
-            label: 'Service',
-            className: 'service',
-        };
+watch(
+    [
+        search,
+        productTypeFilter,
+        itemTypeFilter,
+        statusFilter,
+        categoryFilter,
+        brandFilter,
+        unitFilter,
+        gstRateFilter,
+        perPage,
+    ],
+    () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => loadProducts(1), 350);
     }
-
-    const currentStock = Number(product.opening_stock || 0);
-    const minimumStock = Number(product.minimum_stock || 0);
-
-    if (currentStock <= 0) {
-        return {
-            label: 'Out of Stock',
-            className: 'out',
-        };
-    }
-
-    if (
-        minimumStock > 0 &&
-        currentStock <= minimumStock
-    ) {
-        return {
-            label: 'Low Stock',
-            className: 'low',
-        };
-    }
-
-    return {
-        label: 'In Stock',
-        className: 'available',
-    };
-};
+);
 
 onMounted(() => {
     loadProducts();
@@ -294,47 +503,28 @@ onMounted(() => {
         :title="title"
     >
         <div class="product-page">
-
-            <!-- Page heading -->
             <div class="page-heading">
                 <div>
-                    <span class="page-eyebrow">
-                        INVENTORY MANAGEMENT
-                    </span>
-
+                    <span class="page-eyebrow">INVENTORY MANAGEMENT</span>
                     <h1>Products & Barcode</h1>
-
-                    <p>
-                        Manage products, GST, HSN, pricing,
-                        stock and barcode settings.
-                    </p>
+                    <p>Manage product images, pricing, GST, HSN and barcode details.</p>
                 </div>
 
                 <div class="page-actions">
                     <button
                         type="button"
                         class="secondary-action"
+                        :disabled="exportProcessing"
+                        @click="exportProducts"
+                    >
+                        {{ exportProcessing ? 'Exporting...' : 'Export' }}
+                    </button>
+
+                    <button
+                        type="button"
+                        class="secondary-action"
                         @click="openAllLabels"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                        >
-                            <path
-                                d="M6 9V4h12v5M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            />
-
-                            <path
-                                d="M6 14h12v7H6z"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                            />
-                        </svg>
-
                         Print Labels
                     </button>
 
@@ -344,92 +534,28 @@ onMounted(() => {
                         @click="addProduct"
                     >
                         <span class="plus-icon">+</span>
-
                         Add Product
                     </button>
                 </div>
             </div>
 
-            <!-- Summary cards -->
             <div class="summary-grid">
                 <div class="summary-card">
-                    <div class="summary-icon blue">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                        >
-                            <path
-                                d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                            />
-
-                            <path
-                                d="m4.5 7.5 7.5 4.3 7.5-4.3M12 12v8.5"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                            />
-                        </svg>
-                    </div>
-
-                    <div>
-                        <span>Total Products</span>
-                        <strong>{{ products.length }}</strong>
-                    </div>
+                    <span>Total Products</span>
+                    <strong>{{ pageTotal }}</strong>
                 </div>
 
                 <div class="summary-card">
-                    <div class="summary-icon green">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                        >
-                            <path
-                                d="m5 12 4 4L19 6"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            />
-                        </svg>
-                    </div>
-
-                    <div>
-                        <span>Active Products</span>
-                        <strong>{{ activeProductsCount }}</strong>
-                    </div>
+                    <span>Active on Page</span>
+                    <strong>{{ activeProductsCount }}</strong>
                 </div>
 
                 <div class="summary-card">
-                    <div class="summary-icon amber">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                        >
-                            <path
-                                d="M12 4 3.5 19h17L12 4Z"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                                stroke-linejoin="round"
-                            />
-
-                            <path
-                                d="M12 9v4M12 16.5v.1"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                                stroke-linecap="round"
-                            />
-                        </svg>
-                    </div>
-
-                    <div>
-                        <span>Low Stock</span>
-                        <strong>{{ lowStockCount }}</strong>
-                    </div>
+                    <span>Inactive on Page</span>
+                    <strong>{{ inactiveProductsCount }}</strong>
                 </div>
             </div>
 
-            <!-- Listing card -->
             <section class="listing-card">
                 <div class="listing-toolbar">
                     <div class="search-box">
@@ -444,7 +570,6 @@ onMounted(() => {
                                 stroke="currentColor"
                                 stroke-width="1.8"
                             />
-
                             <path
                                 d="m20 20-4-4"
                                 stroke="currentColor"
@@ -456,45 +581,58 @@ onMounted(() => {
                         <input
                             v-model="search"
                             type="text"
-                            placeholder="Search by product, SKU, barcode, HSN..."
+                            placeholder="Search product, SKU, barcode, HSN..."
                         />
                     </div>
 
                     <div class="filter-group">
                         <select v-model="productTypeFilter">
-                            <option value="">
-                                All Types
-                            </option>
+                            <option value="">All Types</option>
+                            <option value="goods">Goods</option>
+                            <option value="service">Service</option>
+                        </select>
 
-                            <option value="goods">
-                                Goods
-                            </option>
-
-                            <option value="service">
-                                Services
-                            </option>
+                        <select v-model="itemTypeFilter">
+                            <option value="">All Items</option>
+                            <option value="stock">Stock Item</option>
+                            <option value="non_stock">Non-stock</option>
                         </select>
 
                         <select v-model="statusFilter">
-                            <option value="">
-                                All Status
-                            </option>
-
-                            <option value="active">
-                                Active
-                            </option>
-
-                            <option value="inactive">
-                                Inactive
-                            </option>
+                            <option value="">All Status</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="deleted">Deleted</option>
                         </select>
 
+                        <input
+                            v-model="categoryFilter"
+                            type="text"
+                            placeholder="Category"
+                        />
+
+                        <input
+                            v-model="brandFilter"
+                            type="text"
+                            placeholder="Brand"
+                        />
+
+                        <input
+                            v-model="unitFilter"
+                            type="text"
+                            placeholder="Unit"
+                        />
+
+                        <input
+                            v-model="gstRateFilter"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="GST %"
+                        />
+
                         <button
-                            v-if="
-                                search ||
-                                productTypeFilter ||
-                                statusFilter
-                            "
+                            v-if="hasFilters"
                             type="button"
                             class="clear-filter"
                             @click="clearFilters"
@@ -504,41 +642,59 @@ onMounted(() => {
                     </div>
                 </div>
 
+                <div class="bulk-bar">
+                    <div>
+                        <strong>{{ selectedIds.length }}</strong>
+                        selected
+                    </div>
+
+                    <div class="bulk-actions">
+                        <button
+                            type="button"
+                            :disabled="!selectedIds.length || bulkProcessing"
+                            @click="bulkStatusUpdate('active')"
+                        >
+                            Activate
+                        </button>
+
+                        <button
+                            type="button"
+                            :disabled="!selectedIds.length || bulkProcessing"
+                            @click="bulkStatusUpdate('inactive')"
+                        >
+                            Deactivate
+                        </button>
+
+                        <select v-model="perPage">
+                            <option :value="10">10 / page</option>
+                            <option :value="15">15 / page</option>
+                            <option :value="25">25 / page</option>
+                            <option :value="50">50 / page</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="listing-information">
                     <div>
-                        <strong>
-                            Product Master
-                        </strong>
-
+                        <strong>Product Master</strong>
                         <span>
-                            Showing
-                            {{ filteredProducts.length }}
-                            of
-                            {{ products.length }}
-                            products
+                            Showing {{ pagination.from || 0 }} to {{ pagination.to || 0 }}
+                            of {{ pagination.total || 0 }} products
                         </span>
                     </div>
                 </div>
 
-                <!-- Loading -->
                 <div
                     v-if="loading"
                     class="loading-state"
                 >
                     <div class="loader"></div>
-
-                    <strong>
-                        Loading products...
-                    </strong>
-
-                    <span>
-                        Please wait while product data is loaded.
-                    </span>
+                    <strong>Loading products...</strong>
+                    <span>Please wait while product data is loaded.</span>
                 </div>
 
-                <!-- Empty state -->
                 <div
-                    v-else-if="!filteredProducts.length"
+                    v-else-if="!rows.length"
                     class="empty-state"
                 >
                     <div class="empty-icon">
@@ -551,7 +707,6 @@ onMounted(() => {
                                 stroke="currentColor"
                                 stroke-width="1.7"
                             />
-
                             <path
                                 d="m4.5 7.5 7.5 4.3 7.5-4.3M12 12v8.5"
                                 stroke="currentColor"
@@ -560,35 +715,20 @@ onMounted(() => {
                         </svg>
                     </div>
 
-                    <h3>
-                        {{
-                            products.length
-                                ? 'No matching products'
-                                : 'No products added yet'
-                        }}
-                    </h3>
-
-                    <p>
-                        {{
-                            products.length
-                                ? 'Search ya filters change karke dobara try karein.'
-                                : 'Apna first product add karke inventory setup start karein.'
-                        }}
-                    </p>
+                    <h3>{{ hasFilters ? 'No matching products' : 'No products added yet' }}</h3>
+                    <p>{{ hasFilters ? 'Search ya filters change karke dobara try karein.' : 'Apna first product add karke inventory setup start karein.' }}</p>
 
                     <button
-                        v-if="!products.length"
+                        v-if="!hasFilters"
                         type="button"
                         class="primary-action"
                         @click="addProduct"
                     >
                         <span class="plus-icon">+</span>
-
                         Add First Product
                     </button>
                 </div>
 
-                <!-- Table -->
                 <div
                     v-else
                     class="table-wrapper"
@@ -596,153 +736,80 @@ onMounted(() => {
                     <table class="product-table">
                         <thead>
                             <tr>
-                                <th>Product</th>
-                                <th>SKU / Barcode</th>
-                                <th>HSN & GST</th>
-                                <th>Pricing</th>
-                                <th>Stock</th>
-                                <th>Status</th>
-                                <th class="action-column">
-                                    Actions
+                                <th class="select-column">
+                                    <input
+                                        type="checkbox"
+                                        :checked="allRowsSelected"
+                                        @change="toggleSelectAll"
+                                    />
                                 </th>
+                                <th>Image</th>
+                                <th>Product Name</th>
+                                <th>SKU</th>
+                                <th>Barcode</th>
+                                <th>Category</th>
+                                <th>Brand</th>
+                                <th>Unit</th>
+                                <th>Selling Price</th>
+                                <th>MRP</th>
+                                <th>GST</th>
+                                <th>Status</th>
+                                <th class="action-column">Actions</th>
                             </tr>
                         </thead>
 
                         <tbody>
                             <tr
-                                v-for="product in filteredProducts"
+                                v-for="product in rows"
                                 :key="product.id"
                             >
+                                <td class="select-column">
+                                    <input
+                                        type="checkbox"
+                                        :checked="selectedIds.includes(product.id)"
+                                        @change="toggleSelection(product.id)"
+                                    />
+                                </td>
+
+                                <td>
+                                    <div class="product-image">
+                                        <img
+                                            v-if="productImage(product)"
+                                            :src="productImage(product)"
+                                            :alt="product.name"
+                                        />
+                                        <span v-else>
+                                            {{ String(product.name || 'P').charAt(0).toUpperCase() }}
+                                        </span>
+                                    </div>
+                                </td>
+
                                 <td>
                                     <div class="product-information">
-                                        <div class="product-avatar">
-                                            {{
-                                                String(
-                                                    product.name || 'P'
-                                                )
-                                                    .charAt(0)
-                                                    .toUpperCase()
-                                            }}
-                                        </div>
-
-                                        <div>
-                                            <strong>
-                                                {{ product.name }}
-                                            </strong>
-
-                                            <span>
-                                                {{
-                                                    product.brand ||
-                                                    product.category ||
-                                                    'Uncategorized'
-                                                }}
-                                            </span>
-
-                                            <small>
-                                                {{
-                                                    product.product_type ===
-                                                    'service'
-                                                        ? 'Service'
-                                                        : product.unit ||
-                                                          'PCS'
-                                                }}
-                                            </small>
-                                        </div>
+                                        <strong>{{ product.name }}</strong>
+                                        <span>{{ product.product_type === 'service' ? 'Service' : 'Goods' }}</span>
                                     </div>
                                 </td>
 
+                                <td>{{ product.sku || '-' }}</td>
+                                <td>{{ primaryBarcode(product) }}</td>
+                                <td>{{ product.category || '-' }}</td>
+                                <td>{{ product.brand || '-' }}</td>
+                                <td>{{ product.unit || '-' }}</td>
+                                <td>Rs. {{ formatPrice(product.selling_price) }}</td>
+                                <td>{{ product.mrp ? `Rs. ${formatPrice(product.mrp)}` : '-' }}</td>
                                 <td>
-                                    <div class="code-information">
-                                        <strong>
-                                            {{ product.sku || '—' }}
-                                        </strong>
-
-                                        <span>
-                                            {{
-                                                product.primary_barcode ||
-                                                'No barcode'
-                                            }}
-                                        </span>
-                                    </div>
+                                    <span class="gst-badge">
+                                        {{ Number(product.gst_rate || 0) }}%
+                                    </span>
                                 </td>
-
-                                <td>
-                                    <div class="tax-information">
-                                        <strong>
-                                            {{ product.hsn_code || '—' }}
-                                        </strong>
-
-                                        <span class="gst-badge">
-                                            {{
-                                                Number(
-                                                    product.gst_rate || 0
-                                                )
-                                            }}%
-                                            GST
-                                        </span>
-                                    </div>
-                                </td>
-
-                                <td>
-                                    <div class="price-information">
-                                        <strong>
-                                            ₹
-                                            {{
-                                                formatPrice(
-                                                    product.selling_price
-                                                )
-                                            }}
-                                        </strong>
-
-                                        <span v-if="product.mrp">
-                                            MRP ₹
-                                            {{
-                                                formatPrice(product.mrp)
-                                            }}
-                                        </span>
-                                    </div>
-                                </td>
-
-                                <td>
-                                    <div class="stock-information">
-                                        <strong>
-                                            {{
-                                                product.product_type ===
-                                                'service'
-                                                    ? '—'
-                                                    : product.opening_stock ||
-                                                      0
-                                            }}
-                                        </strong>
-
-                                        <span
-                                            class="stock-badge"
-                                            :class="
-                                                stockStatus(product)
-                                                    .className
-                                            "
-                                        >
-                                            {{
-                                                stockStatus(product)
-                                                    .label
-                                            }}
-                                        </span>
-                                    </div>
-                                </td>
-
                                 <td>
                                     <span
                                         class="status-badge"
                                         :class="product.status"
                                     >
                                         <span></span>
-
-                                        {{
-                                            product.status ===
-                                            'active'
-                                                ? 'Active'
-                                                : 'Inactive'
-                                        }}
+                                        {{ product.status === 'active' ? 'Active' : 'Inactive' }}
                                     </span>
                                 </td>
 
@@ -751,116 +818,104 @@ onMounted(() => {
                                         <button
                                             type="button"
                                             class="icon-action"
-                                            title="Edit product"
-                                            @click="
-                                                editProduct(product)
-                                            "
+                                            title="View product"
+                                            @click="openView(product)"
                                         >
-                                            <svg
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                            >
-                                                <path
-                                                    d="M4 20h4l11-11-4-4L4 16v4Z"
-                                                    stroke="currentColor"
-                                                    stroke-width="1.8"
-                                                    stroke-linejoin="round"
-                                                />
+                                            View
+                                        </button>
 
-                                                <path
-                                                    d="m13.5 6.5 4 4"
-                                                    stroke="currentColor"
-                                                    stroke-width="1.8"
-                                                />
-                                            </svg>
+                                        <button
+                                            type="button"
+                                            class="icon-action"
+                                            title="Edit product"
+                                            @click="editProduct(product)"
+                                        >
+                                            Edit
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            class="icon-action"
+                                            title="Duplicate product"
+                                            :disabled="duplicatingId === product.id"
+                                            @click="duplicateProduct(product)"
+                                        >
+                                            {{ duplicatingId === product.id ? '...' : 'Copy' }}
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            class="icon-action"
+                                            title="Activate or deactivate"
+                                            :disabled="statusUpdatingId === product.id"
+                                            @click="updateProductStatus(product)"
+                                        >
+                                            {{ product.status === 'active' ? 'Off' : 'On' }}
                                         </button>
 
                                         <button
                                             type="button"
                                             class="icon-action"
                                             title="View barcode"
-                                            @click="
-                                                openBarcode(product)
-                                            "
+                                            @click="openBarcode(product)"
                                         >
-                                            <svg
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                            >
-                                                <path
-                                                    d="M4 5v14M7 5v14M11 5v14M14 5v14M18 5v14M20 5v14"
-                                                    stroke="currentColor"
-                                                    stroke-width="1.6"
-                                                />
-                                            </svg>
+                                            Code
                                         </button>
 
                                         <button
                                             type="button"
                                             class="icon-action"
                                             title="Print label"
-                                            @click="
-                                                openSingleLabel(product)
-                                            "
+                                            @click="openSingleLabel(product)"
                                         >
-                                            <svg
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                            >
-                                                <path
-                                                    d="M6 9V4h12v5M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
-                                                    stroke="currentColor"
-                                                    stroke-width="1.7"
-                                                    stroke-linecap="round"
-                                                />
-
-                                                <path
-                                                    d="M6 14h12v7H6z"
-                                                    stroke="currentColor"
-                                                    stroke-width="1.7"
-                                                />
-                                            </svg>
+                                            Print
                                         </button>
 
                                         <button
                                             type="button"
                                             class="icon-action danger"
                                             title="Delete product"
-                                            :disabled="
-                                                deletingId ===
-                                                product.id
-                                            "
-                                            @click="
-                                                deleteProduct(product)
-                                            "
+                                            :disabled="deletingId === product.id"
+                                            @click="deleteProduct(product)"
                                         >
-                                            <span
-                                                v-if="
-                                                    deletingId ===
-                                                    product.id
-                                                "
-                                                class="mini-loader"
-                                            ></span>
-
-                                            <svg
-                                                v-else
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                            >
-                                                <path
-                                                    d="M4 7h16M9 7V4h6v3M8 10v7M12 10v7M16 10v7M6 7l1 14h10l1-14"
-                                                    stroke="currentColor"
-                                                    stroke-width="1.7"
-                                                    stroke-linecap="round"
-                                                    stroke-linejoin="round"
-                                                />
-                                            </svg>
+                                            {{ deletingId === product.id ? '...' : 'Del' }}
                                         </button>
                                     </div>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <div
+                    v-if="pagination.last_page > 1"
+                    class="pagination-bar"
+                >
+                    <button
+                        type="button"
+                        :disabled="pagination.current_page <= 1 || loading"
+                        @click="changePage(pagination.current_page - 1)"
+                    >
+                        Previous
+                    </button>
+
+                    <button
+                        v-for="pageNumber in visiblePages"
+                        :key="pageNumber"
+                        type="button"
+                        :class="{ active: pageNumber === pagination.current_page }"
+                        @click="changePage(pageNumber)"
+                    >
+                        {{ pageNumber }}
+                    </button>
+
+                    <button
+                        type="button"
+                        :disabled="pagination.current_page >= pagination.last_page || loading"
+                        @click="changePage(pagination.current_page + 1)"
+                    >
+                        Next
+                    </button>
                 </div>
             </section>
         </div>
@@ -869,6 +924,8 @@ onMounted(() => {
             v-model="showForm"
             :product="selectedProduct"
             :processing="saving"
+            :errors="serverErrors"
+            :can-edit-gst-rate="[1, 2].includes(Number(role_id))"
             @save="saveProduct"
         />
 
@@ -881,6 +938,63 @@ onMounted(() => {
             v-model="showLabelModal"
             :products="labelProducts"
         />
+
+        <div
+            v-if="viewProduct"
+            class="view-overlay"
+            @click.self="viewProduct = null"
+        >
+            <aside class="view-drawer">
+                <div class="view-header">
+                    <div>
+                        <span>Product Details</span>
+                        <h2>{{ viewProduct.name }}</h2>
+                    </div>
+
+                    <button
+                        type="button"
+                        @click="viewProduct = null"
+                    >
+                        x
+                    </button>
+                </div>
+
+                <div class="view-grid">
+                    <div>
+                        <label>SKU</label>
+                        <strong>{{ viewProduct.sku || '-' }}</strong>
+                    </div>
+                    <div>
+                        <label>Barcode</label>
+                        <strong>{{ primaryBarcode(viewProduct) }}</strong>
+                    </div>
+                    <div>
+                        <label>Category</label>
+                        <strong>{{ viewProduct.category || '-' }}</strong>
+                    </div>
+                    <div>
+                        <label>Brand</label>
+                        <strong>{{ viewProduct.brand || '-' }}</strong>
+                    </div>
+                    <div>
+                        <label>Unit</label>
+                        <strong>{{ viewProduct.unit || '-' }}</strong>
+                    </div>
+                    <div>
+                        <label>GST</label>
+                        <strong>{{ Number(viewProduct.gst_rate || 0) }}%</strong>
+                    </div>
+                    <div>
+                        <label>Selling Price</label>
+                        <strong>Rs. {{ formatPrice(viewProduct.selling_price) }}</strong>
+                    </div>
+                    <div>
+                        <label>MRP</label>
+                        <strong>{{ viewProduct.mrp ? `Rs. ${formatPrice(viewProduct.mrp)}` : '-' }}</strong>
+                    </div>
+                </div>
+            </aside>
+        </div>
     </Layout>
 </template>
 
@@ -919,10 +1033,14 @@ onMounted(() => {
     font-size: 13px;
 }
 
-.page-actions {
+.page-actions,
+.filter-group,
+.bulk-actions,
+.row-actions,
+.pagination-bar {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
 }
 
 .primary-action,
@@ -943,28 +1061,12 @@ onMounted(() => {
     color: #ffffff;
     background: #2457d6;
     border: 1px solid #2457d6;
-    box-shadow: 0 6px 15px rgba(36, 87, 214, 0.2);
-}
-
-.primary-action:hover {
-    background: #1d49bb;
-    border-color: #1d49bb;
 }
 
 .secondary-action {
     color: #35435b;
     background: #ffffff;
     border: 1px solid #d9e0ea;
-}
-
-.secondary-action:hover {
-    background: #f5f7fa;
-}
-
-.primary-action svg,
-.secondary-action svg {
-    width: 17px;
-    height: 17px;
 }
 
 .plus-icon {
@@ -981,43 +1083,11 @@ onMounted(() => {
 }
 
 .summary-card {
-    display: flex;
-    align-items: center;
-    gap: 13px;
     padding: 17px;
     background: #ffffff;
     border: 1px solid #e1e7f0;
     border-radius: 13px;
     box-shadow: 0 5px 18px rgba(25, 49, 83, 0.04);
-}
-
-.summary-icon {
-    width: 42px;
-    height: 42px;
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-    border-radius: 11px;
-}
-
-.summary-icon svg {
-    width: 21px;
-    height: 21px;
-}
-
-.summary-icon.blue {
-    color: #2457d6;
-    background: #eaf0ff;
-}
-
-.summary-icon.green {
-    color: #168757;
-    background: #e9f8f0;
-}
-
-.summary-icon.amber {
-    color: #a87512;
-    background: #fff6dc;
 }
 
 .summary-card span,
@@ -1046,16 +1116,14 @@ onMounted(() => {
 }
 
 .listing-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
+    display: grid;
+    grid-template-columns: minmax(260px, 420px) 1fr;
+    gap: 14px;
     padding: 18px 20px;
     border-bottom: 1px solid #e8edf3;
 }
 
 .search-box {
-    width: min(440px, 100%);
     min-height: 42px;
     display: flex;
     align-items: center;
@@ -1073,31 +1141,11 @@ onMounted(() => {
     color: #7a869a;
 }
 
-.search-box input {
-    width: 100%;
-    min-width: 0;
-    padding: 10px 0;
-    color: #1b2840;
-    background: transparent;
-    border: 0;
-    outline: none;
-    font-size: 12px;
-}
-
-.search-box input::placeholder {
-    color: #9aa4b4;
-}
-
-.filter-group {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-}
-
-.filter-group select {
-    min-width: 130px;
+.search-box input,
+.filter-group input,
+.filter-group select,
+.bulk-actions select {
     min-height: 42px;
-    padding: 9px 11px;
     color: #344159;
     background: #ffffff;
     border: 1px solid #dce3ec;
@@ -1106,23 +1154,66 @@ onMounted(() => {
     font-size: 12px;
 }
 
-.clear-filter {
-    min-height: 42px;
+.search-box input {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 0;
+    background: transparent;
+    border: 0;
+}
+
+.filter-group {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.filter-group input,
+.filter-group select {
+    width: 118px;
+    padding: 9px 10px;
+}
+
+.clear-filter,
+.bulk-actions button,
+.pagination-bar button {
+    min-height: 38px;
     padding: 8px 12px;
-    color: #d03b45;
-    background: #fff4f5;
-    border: 1px solid #ffd7da;
+    color: #35435b;
+    background: #ffffff;
+    border: 1px solid #dce3ec;
     border-radius: 9px;
     font-size: 11px;
     font-weight: 700;
+    cursor: pointer;
 }
 
-.listing-information {
+.clear-filter {
+    color: #d03b45;
+    background: #fff4f5;
+    border-color: #ffd7da;
+}
+
+.bulk-bar,
+.listing-information,
+.pagination-bar {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    padding: 14px 20px;
+    padding: 12px 20px;
     background: #fbfcfe;
     border-bottom: 1px solid #edf1f5;
+    color: #69758a;
+    font-size: 11px;
+}
+
+.bulk-bar strong {
+    color: #17233b;
+}
+
+.bulk-actions button:disabled,
+.pagination-bar button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
 }
 
 .listing-information strong,
@@ -1136,11 +1227,6 @@ onMounted(() => {
     font-size: 12px;
 }
 
-.listing-information span {
-    color: #8490a2;
-    font-size: 10px;
-}
-
 .table-wrapper {
     overflow-x: auto;
 }
@@ -1151,7 +1237,7 @@ onMounted(() => {
 }
 
 .product-table th {
-    padding: 13px 16px;
+    padding: 13px 12px;
     color: #69758a;
     background: #f8fafc;
     border-bottom: 1px solid #e7ecf2;
@@ -1164,10 +1250,11 @@ onMounted(() => {
 }
 
 .product-table td {
-    padding: 15px 16px;
+    padding: 14px 12px;
     color: #27344c;
     border-bottom: 1px solid #edf1f5;
     vertical-align: middle;
+    white-space: nowrap;
     font-size: 12px;
 }
 
@@ -1175,38 +1262,36 @@ onMounted(() => {
     background: #fbfcff;
 }
 
-.product-table tbody tr:last-child td {
-    border-bottom: 0;
-}
-
-.product-information {
-    min-width: 220px;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-}
-
-.product-avatar {
+.select-column {
     width: 38px;
-    height: 38px;
+    text-align: center !important;
+}
+
+.product-image {
+    width: 42px;
+    height: 42px;
     display: grid;
     place-items: center;
-    flex-shrink: 0;
+    overflow: hidden;
     color: #2457d6;
     background: #eaf0ff;
-    border-radius: 10px;
+    border-radius: 9px;
     font-size: 13px;
     font-weight: 800;
 }
 
+.product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.product-information {
+    min-width: 180px;
+}
+
 .product-information strong,
-.product-information span,
-.product-information small,
-.code-information strong,
-.code-information span,
-.tax-information strong,
-.price-information strong,
-.price-information span {
+.product-information span {
     display: block;
 }
 
@@ -1218,114 +1303,28 @@ onMounted(() => {
 }
 
 .product-information span {
-    margin-bottom: 2px;
     color: #748097;
     font-size: 10px;
 }
 
-.product-information small {
-    color: #9aa4b3;
-    font-size: 9px;
-}
-
-.code-information {
-    min-width: 140px;
-}
-
-.code-information strong {
-    margin-bottom: 4px;
-    color: #2b3850;
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.code-information span {
-    color: #8590a2;
-    font-size: 10px;
-}
-
-.tax-information {
-    min-width: 115px;
-}
-
-.tax-information strong {
-    margin-bottom: 5px;
-    color: #2a3750;
-    font-size: 11px;
-}
-
-.gst-badge {
-    display: inline-flex;
-    padding: 4px 7px;
-    color: #2457d6;
-    background: #edf2ff;
-    border-radius: 6px;
-    font-size: 9px;
-    font-weight: 750;
-}
-
-.price-information {
-    min-width: 110px;
-}
-
-.price-information strong {
-    margin-bottom: 4px;
-    color: #17243d;
-    font-size: 12px;
-}
-
-.price-information span {
-    color: #8994a6;
-    font-size: 9px;
-}
-
-.stock-information {
-    min-width: 100px;
-}
-
-.stock-information strong {
-    display: block;
-    margin-bottom: 5px;
-    color: #253149;
-    font-size: 12px;
-}
-
-.stock-badge {
-    display: inline-flex;
-    padding: 4px 7px;
-    border-radius: 6px;
-    font-size: 9px;
-    font-weight: 750;
-}
-
-.stock-badge.available {
-    color: #168757;
-    background: #eaf8f1;
-}
-
-.stock-badge.low {
-    color: #9b6a0c;
-    background: #fff4d4;
-}
-
-.stock-badge.out {
-    color: #ce3d48;
-    background: #fff0f1;
-}
-
-.stock-badge.service {
-    color: #5f6b80;
-    background: #f0f2f6;
-}
-
+.gst-badge,
 .status-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 8px;
     border-radius: 7px;
     font-size: 9px;
     font-weight: 750;
+}
+
+.gst-badge {
+    padding: 4px 7px;
+    color: #2457d6;
+    background: #edf2ff;
+}
+
+.status-badge {
+    gap: 6px;
+    padding: 5px 8px;
 }
 
 .status-badge span {
@@ -1357,23 +1356,24 @@ onMounted(() => {
 }
 
 .row-actions {
-    display: inline-flex;
-    align-items: center;
     justify-content: flex-end;
-    gap: 6px;
+    flex-wrap: nowrap;
 }
 
 .icon-action {
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    padding: 0;
+    min-width: 38px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
     color: #536179;
     background: #ffffff;
     border: 1px solid #dce3ec;
     border-radius: 8px;
     cursor: pointer;
+    font-size: 10px;
+    font-weight: 750;
 }
 
 .icon-action:hover {
@@ -1391,11 +1391,6 @@ onMounted(() => {
 .icon-action:disabled {
     cursor: not-allowed;
     opacity: 0.65;
-}
-
-.icon-action svg {
-    width: 16px;
-    height: 16px;
 }
 
 .loading-state,
@@ -1419,15 +1414,6 @@ onMounted(() => {
     animation: spin 0.75s linear infinite;
 }
 
-.mini-loader {
-    width: 14px;
-    height: 14px;
-    border: 2px solid #f2bfc3;
-    border-top-color: #d23f49;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-}
-
 @keyframes spin {
     to {
         transform: rotate(360deg);
@@ -1445,7 +1431,8 @@ onMounted(() => {
     font-size: 13px;
 }
 
-.loading-state span {
+.loading-state span,
+.empty-state p {
     color: #8490a2;
     font-size: 11px;
 }
@@ -1476,28 +1463,108 @@ onMounted(() => {
 .empty-state p {
     max-width: 390px;
     margin: 0 0 18px;
-    color: #7f8b9e;
-    font-size: 11px;
     line-height: 1.6;
+}
+
+.pagination-bar {
+    justify-content: flex-end;
+    border-top: 1px solid #edf1f5;
+    border-bottom: 0;
+}
+
+.pagination-bar button.active {
+    color: #ffffff;
+    background: #2457d6;
+    border-color: #2457d6;
+}
+
+.view-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    justify-content: flex-end;
+    background: rgba(16, 28, 52, 0.35);
+}
+
+.view-drawer {
+    width: min(480px, 100%);
+    height: 100%;
+    overflow-y: auto;
+    background: #ffffff;
+    box-shadow: -18px 0 34px rgba(18, 36, 66, 0.16);
+}
+
+.view-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px;
+    border-bottom: 1px solid #e8edf3;
+}
+
+.view-header span,
+.view-grid label {
+    display: block;
+    color: #7a869a;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+}
+
+.view-header h2 {
+    margin: 5px 0 0;
+    color: #142139;
+    font-size: 20px;
+    font-weight: 800;
+}
+
+.view-header button {
+    width: 34px;
+    height: 34px;
+    color: #536179;
+    background: #ffffff;
+    border: 1px solid #dce3ec;
+    border-radius: 9px;
+    cursor: pointer;
+}
+
+.view-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    padding: 22px;
+}
+
+.view-grid div {
+    padding: 14px;
+    background: #f8fafc;
+    border: 1px solid #e4eaf2;
+    border-radius: 10px;
+}
+
+.view-grid strong {
+    display: block;
+    margin-top: 6px;
+    color: #1f2d45;
+    font-size: 13px;
 }
 
 @media (max-width: 1100px) {
     .listing-toolbar {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    .search-box {
-        width: 100%;
+        grid-template-columns: 1fr;
     }
 
     .filter-group {
-        flex-wrap: wrap;
+        justify-content: flex-start;
     }
 }
 
 @media (max-width: 767px) {
-    .page-heading {
+    .page-heading,
+    .bulk-bar {
         align-items: stretch;
         flex-direction: column;
     }
@@ -1508,6 +1575,7 @@ onMounted(() => {
 
     .page-actions {
         width: 100%;
+        flex-wrap: wrap;
     }
 
     .primary-action,
@@ -1515,25 +1583,29 @@ onMounted(() => {
         flex: 1;
     }
 
-    .summary-grid {
+    .summary-grid,
+    .view-grid {
         grid-template-columns: 1fr;
     }
 
     .listing-toolbar,
-    .listing-information {
+    .bulk-bar,
+    .listing-information,
+    .pagination-bar {
         padding-left: 14px;
         padding-right: 14px;
     }
 
+    .filter-group input,
     .filter-group select {
         flex: 1;
+        width: auto;
         min-width: 120px;
     }
 
-    .product-table th,
-    .product-table td {
-        padding-left: 12px;
-        padding-right: 12px;
+    .pagination-bar {
+        justify-content: center;
+        flex-wrap: wrap;
     }
 }
 </style>

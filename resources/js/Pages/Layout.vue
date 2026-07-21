@@ -108,12 +108,21 @@ const sections = [
     ],
   },
   {
+    key: 'crm',
+    label: 'CRM',
+    icon: 'users',
+    items: [
+      { label: 'Leads & Pipeline', page: 'crm', href: '/app/crm', icon: 'users' },
+    ],
+  },
+  {
     key: 'sales',
     label: 'SALES',
     icon: 'receipt',
     items: [
       { label: 'POS Billing', page: 'pos', href: '/app/sales/pos', icon: 'scan-barcode' },
       { label: 'Sales Invoices', page: 'sales', href: '/app/sales/invoices', icon: 'receipt' },
+      { label: 'Sales Returns', page: 'sales-returns', href: '/app/sales/returns', icon: 'rotate-cw' },
       { label: 'Customers', page: 'customers', href: '/app/sales/customers', icon: 'users' },
       { label: 'Stock Outward', page: 'inventory-outward', href: '/app/sales/stock-outward', icon: 'package-minus' },
       { label: 'Reserved Stock', page: 'inventory-reserved', href: '/app/sales/reserved-stock', icon: 'bookmark-check' },
@@ -125,6 +134,7 @@ const sections = [
     icon: 'shopping-bag',
     items: [
       { label: 'Purchases', page: 'purchases', href: '/app/purchase/bills', icon: 'shopping-bag' },
+      { label: 'Purchase Returns', page: 'purchase-returns', href: '/app/purchase/returns', icon: 'rotate-cw' },
       { label: 'Suppliers', page: 'suppliers', href: '/app/purchase/suppliers', icon: 'truck' },
       { label: 'Stock Inward / GRN', page: 'inventory-inward', href: '/app/purchase/grn', icon: 'package-plus' },
       { label: 'Reorder Suggestions', page: 'inventory-reorder', href: '/app/purchase/reorder', icon: 'rotate-cw' },
@@ -138,8 +148,8 @@ const sections = [
     items: [
       { label: 'Inventory Dashboard', page: 'inventory', href: '/app/inventory', icon: 'boxes' },
       { label: 'Add Product Master', page: 'products', href: '/app/inventory/products', icon: 'tag' },
-      { label: 'Add Inventory', page: 'inventory-add', href: '/app/inventory/add', icon: 'package-plus' },
-      { label: 'Current Stock', page: 'inventory-current-stock', href: '/app/inventory/current-stock', icon: 'warehouse' },
+      { label: 'Opening Stock', page: 'opening-stock', href: '/app/inventory/add', icon: 'package-plus' },
+      { label: 'Current Stock', page: 'stock-summary', href: '/app/inventory/current-stock', icon: 'warehouse' },
       { label: 'Inventory Vouchers', page: 'inventory-vouchers', href: '/app/inventory/vouchers', icon: 'file-stack' },
       { label: 'Batch & Expiry', page: 'inventory-batches', href: '/app/inventory/batches', icon: 'calendar-clock' },
       { label: 'Serial Numbers', page: 'inventory-serials', href: '/app/inventory/serials', icon: 'list-ordered' },
@@ -171,6 +181,8 @@ const sections = [
       { label: 'Vouchers', page: 'vouchers', href: '/app/accounting/vouchers', icon: 'file-plus' },
       { label: 'Ledgers', page: 'ledgers', href: '/app/accounting/ledgers', icon: 'book-open' },
       { label: 'Expenses', page: 'expenses', href: '/app/accounting/expenses', icon: 'wallet' },
+      { label: 'Fixed Assets', page: 'fixed-assets', href: '/app/fixed-assets', icon: 'boxes' },
+      { label: 'Payroll', page: 'payroll', href: '/app/payroll', icon: 'id-card' },
       { label: 'GST', page: 'gst', href: '/app/accounting/gst', icon: 'percent' },
       { label: 'GST Returns', page: 'inventory-gst-returns', href: '/app/accounting/gst-returns', icon: 'file-check' },
     ],

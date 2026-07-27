@@ -14,6 +14,7 @@ use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class PurchaseService
@@ -418,23 +419,26 @@ class PurchaseService
             return null;
         }
 
+        $identity = ['product_id' => $item->product_id, 'batch_no' => $item->batch_number];
+        if (Schema::hasColumn('product_batches', 'business_id')) $identity['business_id'] = $voucher->business_id;
+        if (Schema::hasColumn('product_batches', 'tenant_id')) $identity['tenant_id'] = $voucher->business_id;
+
+        $payload = [
+            'batch_number' => $item->batch_number,
+            'manufacturing_date' => $item->manufacturing_date,
+            'mfg_date' => $item->manufacturing_date,
+            'expiry_date' => $item->expiry_date,
+            'purchase_price' => $item->purchase_rate,
+            'cost_price' => $item->purchase_rate,
+            'selling_price' => $item->selling_price ?: 0,
+            'mrp' => $item->mrp,
+            'quantity' => 0,
+            'status' => 'active',
+        ];
+
         $batch = ProductBatch::query()->firstOrCreate(
-            [
-                'business_id' => $voucher->business_id,
-                'product_id' => $item->product_id,
-                'batch_no' => $item->batch_number,
-            ],
-            [
-                'batch_number' => $item->batch_number,
-                'manufacturing_date' => $item->manufacturing_date,
-                'expiry_date' => $item->expiry_date,
-                'purchase_price' => $item->purchase_rate,
-                'cost_price' => $item->purchase_rate,
-                'selling_price' => $item->selling_price ?: 0,
-                'mrp' => $item->mrp,
-                'quantity' => 0,
-                'status' => 'active',
-            ]
+            array_filter($identity, fn ($value, $key) => Schema::hasColumn('product_batches', $key), ARRAY_FILTER_USE_BOTH),
+            array_filter($payload, fn ($value, $key) => Schema::hasColumn('product_batches', $key), ARRAY_FILTER_USE_BOTH)
         );
 
         $item->update(['batch_id' => $batch->id]);

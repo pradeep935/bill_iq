@@ -121,11 +121,11 @@ onMounted(load);
 
 <template>
     <Layout :page="page" :title="title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>ORDER MANAGEMENT</span><h1>{{ title }}</h1><p>Quotation to order to dispatch, and requisition to PO to goods receipt.</p></div>
+        </template>
         <div class="orders-page">
-            <div class="page-heading">
-                <div><span>ORDER MANAGEMENT</span><h1>{{ title }}</h1><p>Quotation to order to dispatch, and requisition to PO to goods receipt.</p></div>
-                <button :disabled="loading" @click="load">Refresh</button>
-            </div>
+            <div class="page-toolbar"><button :disabled="loading" @click="load">Refresh</button></div>
             <div class="tabs"><button v-for="t in visibleTabs" :key="t" :class="{ active: tab === t }" @click="tab = t">{{ t }}</button></div>
             <div v-if="errors.form" class="alert">{{ errors.form[0] }}</div>
             <div v-if="Object.keys(errors).length && !errors.form" class="alert">{{ Object.values(errors)[0]?.[0] }}</div>

@@ -32,6 +32,7 @@ class HandleInertiaRequests extends Middleware
             'app' => [
                 'name' => config('app.name', 'Bill IQ'),
                 'url' => $request->getSchemeAndHttpHost(),
+                'base_url' => $request->getBaseUrl(),
                 'financial_year' => '2026-27',
             ],
             'flash' => [

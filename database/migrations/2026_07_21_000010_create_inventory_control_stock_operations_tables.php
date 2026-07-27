@@ -43,8 +43,8 @@ return new class extends Migration
                 $table->boolean('negative_stock_allowed')->default(false);
                 $table->unsignedInteger('near_expiry_days')->default(30);
                 $table->foreignId('transit_warehouse_id')->nullable()->constrained('warehouses')->nullOnDelete();
-                $table->foreignId('stock_adjustment_loss_account_id')->nullable()->constrained('accounts')->nullOnDelete();
-                $table->foreignId('stock_adjustment_gain_account_id')->nullable()->constrained('accounts')->nullOnDelete();
+                $table->unsignedBigInteger('stock_adjustment_loss_account_id')->nullable();
+                $table->unsignedBigInteger('stock_adjustment_gain_account_id')->nullable();
                 $table->timestamps();
                 $table->unique('business_id');
             });

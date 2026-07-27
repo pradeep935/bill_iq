@@ -65,7 +65,7 @@ return new class extends Migration
                 'payment_gateway_charges_account_id', 'payment_gateway_clearing_account_id',
             ] as $column) {
                 if (!Schema::hasColumn('business_account_settings', $column)) {
-                    $table->foreignId($column)->nullable()->constrained('accounts')->nullOnDelete();
+                    $table->unsignedBigInteger($column)->nullable();
                 }
             }
         });
@@ -246,7 +246,7 @@ return new class extends Migration
             $table->text('narration')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-            $table->index(['business_id', 'next_run_date', 'status']);
+            $table->index(['business_id', 'next_run_date', 'status'], 'rec_exp_tpl_run_status_idx');
         });
 
         Schema::create('recurring_expense_runs', function (Blueprint $table) {
@@ -328,7 +328,7 @@ return new class extends Migration
                 $table->timestamp('matched_at')->nullable();
                 $table->foreignId('matched_by')->nullable()->constrained('users')->nullOnDelete();
                 $table->timestamps();
-                $table->index(['business_id', 'bank_account_id', 'transaction_date']);
+                $table->index(['business_id', 'bank_account_id', 'transaction_date'], 'bank_stmt_lines_acct_date_idx');
                 $table->unique(['business_id', 'bank_account_id', 'transaction_date', 'reference_number', 'external_transaction_id'], 'bank_statement_duplicate_index');
             });
         }

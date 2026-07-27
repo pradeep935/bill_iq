@@ -90,11 +90,11 @@ onMounted(() => loadCustomers());
 
 <template>
     <Layout :page="page" :title="title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>SALES MANAGEMENT</span><h1>Customer Master</h1><p>Maintain customer GST, credit and ledger-ready billing details.</p></div>
+        </template>
         <div class="sales-page">
-            <div class="page-heading">
-                <div><span>SALES MANAGEMENT</span><h1>Customer Master</h1><p>Maintain customer GST, credit and ledger-ready billing details.</p></div>
-                <button type="button" @click="reset">New Customer</button>
-            </div>
+            <div class="page-toolbar"><button type="button" @click="reset">New Customer</button></div>
 
             <section class="panel">
                 <div class="form-grid">

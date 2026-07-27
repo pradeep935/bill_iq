@@ -47,7 +47,7 @@ return new class extends Migration
                 'reimbursement_payable_account_id', 'bonus_expense_account_id', 'gratuity_expense_account_id',
             ] as $column) {
                 if (!Schema::hasColumn('business_account_settings', $column)) {
-                    $table->unsignedBigInteger($column)->nullable()->index();
+                    $table->unsignedBigInteger($column)->nullable();
                 }
             }
         });
@@ -74,7 +74,7 @@ return new class extends Migration
                     'default_salary_payable_account_id', 'default_employee_advance_account_id', 'default_employee_loan_account_id',
                     'default_reimbursement_payable_account_id', 'default_round_off_account_id',
                     'default_payroll_expense_account_id', 'default_payment_account_id',
-                ] as $column) $table->unsignedBigInteger($column)->nullable()->index();
+                ] as $column) $table->unsignedBigInteger($column)->nullable();
                 $table->string('payslip_number_prefix', 20)->nullable();
                 $table->string('status', 20)->default('active')->index();
                 $table->timestamps();
@@ -162,7 +162,7 @@ return new class extends Migration
                 $table->date('effective_from'); $table->date('effective_to')->nullable(); $table->decimal('annual_ctc', 15, 2)->nullable(); $table->decimal('monthly_gross', 15, 2)->nullable();
                 $table->text('description')->nullable(); $table->string('status', 30)->default('draft')->index(); $table->unsignedInteger('version_number')->default(1);
                 $table->unsignedBigInteger('created_by')->nullable()->index(); $table->unsignedBigInteger('approved_by')->nullable()->index(); $table->timestamp('approved_at')->nullable();
-                $table->timestamps(); $table->softDeletes(); $table->unique(['business_id', 'structure_code', 'version_number']);
+                $table->timestamps(); $table->softDeletes(); $table->unique(['business_id', 'structure_code', 'version_number'], 'salary_struct_business_code_ver_unique');
             });
         }
 
@@ -180,7 +180,7 @@ return new class extends Migration
                 $table->id(); $table->unsignedBigInteger('business_id')->index(); $table->unsignedBigInteger('employee_id')->index(); $table->unsignedBigInteger('salary_structure_id')->index();
                 $table->date('effective_from'); $table->date('effective_to')->nullable(); $table->decimal('annual_ctc', 15, 2); $table->decimal('monthly_gross', 15, 2); $table->decimal('monthly_net_estimate', 15, 2)->nullable();
                 $table->text('reason')->nullable(); $table->string('status', 30)->default('active')->index(); $table->unsignedBigInteger('created_by')->nullable()->index(); $table->unsignedBigInteger('approved_by')->nullable()->index(); $table->timestamp('approved_at')->nullable();
-                $table->timestamps(); $table->index(['employee_id', 'effective_from', 'effective_to']);
+                $table->timestamps(); $table->index(['employee_id', 'effective_from', 'effective_to'], 'emp_salary_assign_effective_idx');
             });
         }
 
@@ -216,7 +216,7 @@ return new class extends Migration
             Schema::create('employee_shift_assignments', function (Blueprint $table) {
                 $table->id(); $table->unsignedBigInteger('business_id')->index(); $table->unsignedBigInteger('employee_id')->index(); $table->unsignedBigInteger('shift_id')->index();
                 $table->date('effective_from'); $table->date('effective_to')->nullable(); $table->string('status', 20)->default('active'); $table->unsignedBigInteger('assigned_by')->nullable()->index(); $table->timestamps();
-                $table->index(['employee_id', 'effective_from', 'effective_to']);
+                $table->index(['employee_id', 'effective_from', 'effective_to'], 'emp_shift_assign_effective_idx');
             });
         }
         if (!Schema::hasTable('attendance_policies')) {
@@ -277,7 +277,7 @@ return new class extends Migration
             Schema::create('employee_leave_balances', function (Blueprint $table) {
                 $table->id(); $table->unsignedBigInteger('business_id')->index(); $table->unsignedBigInteger('employee_id')->index(); $table->unsignedBigInteger('leave_type_id')->index(); $table->string('financial_year', 20)->index();
                 foreach (['opening_balance', 'accrued', 'used', 'adjusted', 'encashed', 'lapsed', 'closing_balance'] as $column) $table->decimal($column, 8, 2)->default(0);
-                $table->timestamps(); $table->unique(['employee_id', 'leave_type_id', 'financial_year']);
+                $table->timestamps(); $table->unique(['employee_id', 'leave_type_id', 'financial_year'], 'emp_leave_balances_type_year_unique');
             });
         }
         if (!Schema::hasTable('leave_requests')) {
@@ -286,7 +286,7 @@ return new class extends Migration
                 $table->date('from_date')->index(); $table->date('to_date')->index(); $table->string('from_session', 20)->nullable(); $table->string('to_session', 20)->nullable(); $table->decimal('total_days', 8, 2);
                 $table->text('reason')->nullable(); $table->string('contact_during_leave')->nullable(); $table->string('attachment_path')->nullable(); $table->text('handover_notes')->nullable();
                 $table->string('status', 30)->default('draft')->index(); $table->timestamp('applied_at')->nullable(); $table->unsignedBigInteger('approved_by')->nullable()->index(); $table->timestamp('approved_at')->nullable(); $table->unsignedBigInteger('rejected_by')->nullable()->index(); $table->timestamp('rejected_at')->nullable(); $table->text('rejection_reason')->nullable(); $table->unsignedBigInteger('cancelled_by')->nullable()->index(); $table->timestamp('cancelled_at')->nullable(); $table->timestamps();
-                $table->index(['employee_id', 'from_date', 'to_date']);
+                $table->index(['employee_id', 'from_date', 'to_date'], 'leave_requests_employee_dates_idx');
             });
         }
         if (!Schema::hasTable('overtime_requests')) {
@@ -303,7 +303,7 @@ return new class extends Migration
         if (!Schema::hasTable('payroll_periods')) {
             Schema::create('payroll_periods', function (Blueprint $table) {
                 $table->id(); $table->unsignedBigInteger('business_id')->index(); $table->string('period_code', 50); $table->date('period_start'); $table->date('period_end'); $table->date('payment_date')->nullable();
-                $table->string('period_type', 30)->default('regular'); $table->string('status', 30)->default('open')->index(); $table->timestamps(); $table->unique(['business_id', 'period_code']); $table->index(['business_id', 'period_start', 'period_end']);
+                $table->string('period_type', 30)->default('regular'); $table->string('status', 30)->default('open')->index(); $table->timestamps(); $table->unique(['business_id', 'period_code']); $table->index(['business_id', 'period_start', 'period_end'], 'payroll_periods_business_dates_idx');
             });
         }
         if (!Schema::hasTable('payroll_runs')) {
@@ -312,7 +312,7 @@ return new class extends Migration
                 $table->string('run_number', 50); $table->string('run_type', 30)->default('regular'); $table->date('period_start'); $table->date('period_end'); $table->date('payment_date')->nullable(); $table->string('financial_year', 20)->nullable();
                 $table->unsignedInteger('employee_count')->default(0); $table->decimal('gross_earnings', 15, 2)->default(0); $table->decimal('total_deductions', 15, 2)->default(0); $table->decimal('employer_contributions', 15, 2)->default(0); $table->decimal('reimbursements', 15, 2)->default(0); $table->decimal('net_pay', 15, 2)->default(0);
                 $table->string('status', 30)->default('draft')->index(); $table->unsignedBigInteger('journal_voucher_id')->nullable()->index(); $table->unsignedBigInteger('created_by')->nullable()->index(); $table->unsignedBigInteger('approved_by')->nullable()->index(); $table->timestamp('approved_at')->nullable(); $table->timestamps();
-                $table->unique(['business_id', 'run_number']); $table->index(['business_id', 'period_start', 'period_end', 'status']);
+                $table->unique(['business_id', 'run_number']); $table->index(['business_id', 'period_start', 'period_end', 'status'], 'payroll_runs_business_period_status_idx');
             });
         }
         if (!Schema::hasTable('employee_payrolls')) {

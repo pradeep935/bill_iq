@@ -1,6 +1,3 @@
-@php
-    Illuminate\Support\Facades\URL::forceRootUrl(request()->getSchemeAndHttpHost());
-@endphp
 <!DOCTYPE html>
 <html lang="en">
 <head>

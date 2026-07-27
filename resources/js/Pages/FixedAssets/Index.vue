@@ -85,8 +85,11 @@ onMounted(load);
 
 <template>
     <Layout page="fixed-assets" title="Fixed Assets">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>FIXED ASSETS</span><h1>Asset Register & Depreciation</h1><p>Asset lifecycle, depreciation, maintenance, verification and accounting reconciliation.</p></div>
+        </template>
         <div class="asset-page">
-            <div class="page-heading"><div><span>FIXED ASSETS</span><h1>Asset Register & Depreciation</h1><p>Asset lifecycle, depreciation, maintenance, verification and accounting reconciliation.</p></div><button :disabled="loading" @click="load">Refresh</button></div>
+            <div class="page-toolbar"><button :disabled="loading" @click="load">Refresh</button></div>
             <div class="filters"><input v-model="filters.search" placeholder="Search asset, tag, serial" @keyup.enter="load" /><select v-model="filters.branch_id" @change="load"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="filters.asset_category_id" @change="load"><option value="">Category</option><option v-for="c in refs.categories" :key="c.id" :value="c.id">{{ c.category_name }}</option></select><select v-model="filters.asset_status" @change="load"><option value="">Status</option><option>draft</option><option>active</option><option>under_maintenance</option><option>impaired</option><option>disposed</option><option>sold</option><option>written_off</option></select></div>
             <div class="tabs"><button v-for="t in tabs" :key="t" :class="{active: tab === t}" @click="tab = t">{{ t }}</button></div>
             <div v-if="firstError" class="alert">{{ firstError }}</div>

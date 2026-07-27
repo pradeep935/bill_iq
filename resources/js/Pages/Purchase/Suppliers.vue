@@ -121,15 +121,11 @@ onMounted(() => loadSuppliers());
 
 <template>
     <Layout :page="page" :title="title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>PURCHASE MANAGEMENT</span><h1>Supplier Master</h1><p>Maintain GST, credit and payable-ready supplier information.</p></div>
+        </template>
         <div class="purchase-page">
-            <div class="page-heading">
-                <div>
-                    <span>PURCHASE MANAGEMENT</span>
-                    <h1>Supplier Master</h1>
-                    <p>Maintain GST, credit and payable-ready supplier information.</p>
-                </div>
-                <button type="button" @click="reset">New Supplier</button>
-            </div>
+            <div class="page-toolbar"><button type="button" @click="reset">New Supplier</button></div>
 
             <section class="panel">
                 <div class="form-grid">

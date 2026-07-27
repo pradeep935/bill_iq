@@ -8,7 +8,13 @@ class WarehouseController extends Controller
 {
     public function warehouses()
     {
-        return ModuleController::render('inventory-warehouses', 'Warehouses / Bins');
+        if ($redirect = AppController::guardPage('masters')) return $redirect;
+
+        return Inertia::render('Setup/Masters', [
+            'page' => 'masters',
+            'title' => 'Masters',
+            'initial_tab' => 'warehouse',
+        ]);
     }
 
     public function bins()

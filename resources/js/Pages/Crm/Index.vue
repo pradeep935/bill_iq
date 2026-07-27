@@ -87,11 +87,11 @@ onMounted(load);
 
 <template>
     <Layout :page="props.page" :title="props.title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>CRM</span><h1>Leads, Pipeline & Follow-ups</h1><p>Pre-sales relationship layer connected to customers, quotations, sales orders and invoices.</p></div>
+        </template>
         <div class="crm-page">
-            <div class="page-heading">
-                <div><span>CRM</span><h1>Leads, Pipeline & Follow-ups</h1><p>Pre-sales relationship layer connected to customers, quotations, sales orders and invoices.</p></div>
-                <button :disabled="loading" @click="load">Refresh</button>
-            </div>
+            <div class="page-toolbar"><button :disabled="loading" @click="load">Refresh</button></div>
             <div class="filters"><input v-model="filters.search" placeholder="Search leads, mobile, company, opportunity" @keyup.enter="load" /><select v-model="filters.assigned_to" @change="load"><option value="">Owner</option><option v-for="u in refs.users" :key="u.id" :value="u.id">{{ u.name }}</option></select><select v-model="filters.lead_source_id" @change="load"><option value="">Source</option><option v-for="s in refs.sources" :key="s.id" :value="s.id">{{ s.source_name }}</option></select><button @click="load">Apply</button></div>
             <div class="tabs"><button v-for="t in tabs" :key="t" :class="{ active: tab === t }" @click="tab = t">{{ t }}</button></div>
             <div v-if="firstError" class="alert">{{ firstError }}</div>

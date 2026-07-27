@@ -1,12 +1,14 @@
 <template>
   <Layout page="dashboard" title="Business Control Room">
-    <section class="bill-hero bill-hero-dark">
-      <div>
-        <span class="bill-eyebrow">Live workspace</span>
-        <h2>Sales, stock, GST and cashflow in one workspace.</h2>
+    <template #topbar-title>
+      <div class="bill-page-title">
+        <span>Live workspace</span>
+        <h1>Sales, stock, GST and cashflow in one workspace.</h1>
         <p>A single control room for retail billing, inventory posting, tax summaries and accounts closing.</p>
       </div>
-      <a class="bill-primary" href="/app/sales/pos">New Sale</a>
+    </template>
+    <section class="page-toolbar">
+      <a class="bill-primary" :href="appUrl('/app/sales/pos')">New Sale</a>
     </section>
 
     <section class="bill-grid bill-grid-4">
@@ -29,7 +31,7 @@
       <article class="bill-card">
         <div class="bill-card-head">
           <h3>Recent Sales</h3>
-          <a href="/app/sales/invoices">View all</a>
+          <a :href="appUrl('/app/sales/invoices')">View all</a>
         </div>
         <table class="bill-table">
           <tbody>
@@ -60,6 +62,8 @@
 
 <script setup>
 import Layout from './Layout.vue';
+import { computed } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 
 defineProps({
   stats: { type: Array, default: () => [] },
@@ -72,4 +76,13 @@ const workflow = [
   { step: '03', label: 'Inventory', hint: 'Batch, stock ledger, transfers and valuation' },
   { step: '04', label: 'Accounts', hint: 'Vouchers, ledgers, GST and reports' },
 ];
+
+const inertiaPage = usePage();
+const baseUrl = computed(() => String(inertiaPage.props.app?.base_url || '').replace(/\/$/, ''));
+
+const appUrl = (path) => {
+  const normalizedPath = `/${String(path || '').replace(/^\/+/, '')}`;
+
+  return `${baseUrl.value}${normalizedPath}`;
+};
 </script>

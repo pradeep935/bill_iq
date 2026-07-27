@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { Form } from 'vee-validate';
 import ProductApi from './ProductApi';
 
@@ -28,6 +28,14 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+
+    references: {
+        type: Object,
+        default: () => ({
+            categories: [],
+            sub_categories: [],
+        }),
+    },
 });
 
 const emit = defineEmits([
@@ -44,6 +52,7 @@ const initialForm = () => ({
     short_name: '',
     category: '',
     subcategory: '',
+    brand_id: '',
     brand: '',
     variant: '',
     unit: 'PCS',
@@ -62,7 +71,7 @@ const initialForm = () => ({
     invoice_description: '',
 
     cost_price: '',
-    selling_price: '',
+    selling_price: '0',
     mrp: '',
     wholesale_price: '',
     dealer_price: '',
@@ -91,6 +100,8 @@ const hsnSearch = ref('');
 const hsnResults = ref([]);
 const hsnSearching = ref(false);
 const clientErrors = ref({});
+const fillingForm = ref(false);
+const imageUploads = ref({});
 
 const productTabs = computed(() => [
     { key: 'basic', label: 'Basic' },
@@ -113,6 +124,220 @@ const drawerDescription = computed(() => {
         ? 'Update product, taxation, pricing and inventory details.'
         : 'Create a new product with GST, barcode and stock settings.';
 });
+
+const normalizedProductName = computed(() => form.name.trim().replace(/\s+/g, ' '));
+
+const titleCase = (value = '') => value
+    .toLowerCase()
+    .replace(/\b[a-z0-9]/g, (char) => char.toUpperCase());
+
+const compactToken = (value = '') => String(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim();
+
+const initials = (value = '', fallback = 'PRD') => {
+    const words = compactToken(value).split(' ').filter(Boolean);
+
+    if (!words.length) {
+        return fallback;
+    }
+
+    const code = words
+        .slice(0, 4)
+        .map((word) => word.slice(0, word.length <= 3 ? 3 : 2))
+        .join('');
+
+    return code.slice(0, 12) || fallback;
+};
+
+const extractVariant = (name = '') => {
+    const parts = [];
+    const storage = name.match(/\b\d+\s?(GB|TB|ML|L|KG|GM|PCS|W|V|A)\b/i);
+    const pack = name.match(/\b(Pack of \d+|\d+\s?(pcs|piece|set|pair|pack|box))\b/i);
+    const color = name.match(/\b(black|white|blue|red|green|yellow|silver|gold|grey|gray|pink|purple|brown|orange)\b/i);
+    const size = name.match(/\b(XS|S|M|L|XL|XXL|XXXL)\b/i);
+
+    [storage, pack, color, size].forEach((match) => {
+        if (match?.[0] && !parts.includes(titleCase(match[0]))) {
+            parts.push(titleCase(match[0]));
+        }
+    });
+
+    return parts.join(' / ');
+};
+
+const suggestedSku = computed(() => {
+    const nameCode = compactToken(normalizedProductName.value)
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 3)
+        .map((word) => word.slice(0, 8))
+        .join('-');
+    const brandCode = form.brand ? initials(form.brand, '').slice(0, 4) : '';
+    const variantCode = form.variant || extractVariant(normalizedProductName.value);
+    const variantSuffix = initials(variantCode, '').slice(0, 6);
+    const parts = [brandCode, nameCode, variantSuffix].filter(Boolean);
+
+    return (parts.join('-').replace(/-+/g, '-').slice(0, 32) || 'PRD');
+});
+
+const suggestedBarcode = computed(() => {
+    const seed = compactToken(`${form.brand} ${normalizedProductName.value} ${form.variant}`).replace(/\s/g, '');
+    let hash = 0;
+
+    for (let index = 0; index < seed.length; index++) {
+        hash = (hash * 31 + seed.charCodeAt(index)) % 1000000000;
+    }
+
+    return `89${String(hash || Date.now()).padStart(10, '0').slice(0, 10)}`;
+});
+
+const suggestedShortName = computed(() => normalizedProductName.value
+    ? normalizedProductName.value.slice(0, 48)
+    : '');
+
+const suggestedVariant = computed(() => extractVariant(normalizedProductName.value));
+const hsnSacLabel = computed(() => form.product_type === 'service' ? 'SAC Code' : 'HSN Code');
+const isTaxable = computed(() => !['exempt', 'non_gst', 'nil_rated'].includes(form.taxability));
+const canEditCurrentGstRate = computed(() => props.canEditGstRate && isTaxable.value);
+const profitAmount = computed(() => Number(form.selling_price || 0) - Number(form.cost_price || 0));
+const profitPercent = computed(() => {
+    const cost = Number(form.cost_price || 0);
+    return cost > 0 ? (profitAmount.value / cost) * 100 : 0;
+});
+const marginPercent = computed(() => {
+    const selling = Number(form.selling_price || 0);
+    return selling > 0 ? (profitAmount.value / selling) * 100 : 0;
+});
+
+const displayNameWithBrand = computed(() => {
+    const name = normalizedProductName.value;
+    const brand = String(form.brand || '').trim();
+
+    if (!brand || name.toLowerCase().includes(brand.toLowerCase())) {
+        return name;
+    }
+
+    return `${brand} ${name}`;
+});
+
+const categoryLabel = computed(() => {
+    const selectedCategory = categoryOptions.value.find((category) => {
+        return String(category.value ?? category.id ?? category.name) === String(form.category);
+    });
+
+    return selectedCategory?.label || selectedCategory?.name || form.category || '';
+});
+
+const unitDescription = computed(() => {
+    const unit = String(form.unit || '').toUpperCase();
+    const map = {
+        PCS: 'per piece',
+        NOS: 'per number',
+        BOX: 'per box',
+        PKT: 'per packet',
+        SET: 'per set',
+        PAIR: 'per pair',
+        KG: 'by kilogram',
+        GM: 'by gram',
+        LTR: 'by litre',
+        ML: 'by millilitre',
+        MTR: 'by meter',
+        HRS: 'by hour',
+    };
+
+    return map[unit] || (unit ? `in ${unit}` : '');
+});
+
+const suggestedDescription = computed(() => {
+    if (!normalizedProductName.value) {
+        return '';
+    }
+
+    const categoryText = categoryLabel.value
+        ? `${String(categoryLabel.value).toLowerCase()} item`
+        : form.product_type === 'service'
+            ? 'service item'
+            : 'product';
+    const sentences = [
+        `${displayNameWithBrand.value} is a ${categoryText}${unitDescription.value ? ` sold ${unitDescription.value}` : ''}.`,
+    ];
+
+    if (form.variant || suggestedVariant.value) {
+        sentences.push(`Variant: ${form.variant || suggestedVariant.value}.`);
+    }
+
+    return sentences.join(' ');
+});
+
+const canSmartFill = computed(() => Boolean(normalizedProductName.value));
+
+const optionText = (option = {}) => String(option.label || option.name || option.value || '').trim();
+
+const findMatchingOption = (options = [], source = '') => {
+    const sourceText = String(source || '').toLowerCase();
+
+    if (!sourceText) {
+        return null;
+    }
+
+    return options.find((option) => {
+        const label = optionText(option).toLowerCase();
+
+        return label && sourceText.includes(label);
+    }) || null;
+};
+
+const syncPrimaryBarcode = () => {
+    if (!form.primary_barcode) {
+        return;
+    }
+
+    if (!barcodes.value.length) {
+        barcodes.value.push({
+            barcode: form.primary_barcode,
+            barcode_type: 'primary',
+            is_primary: true,
+        });
+
+        return;
+    }
+
+    barcodes.value[0] = {
+        ...barcodes.value[0],
+        barcode: form.primary_barcode,
+        barcode_type: 'primary',
+        is_primary: true,
+    };
+};
+
+const fillSmartFields = (force = false) => {
+    if (!canSmartFill.value) {
+        return;
+    }
+
+    if (force || !form.short_name) form.short_name = suggestedShortName.value;
+    if (force || !form.sku) form.sku = suggestedSku.value;
+    if (force || !form.brand_id) {
+        const matchingBrand = findMatchingOption(brandOptions.value, normalizedProductName.value);
+
+        if (matchingBrand) {
+            form.brand_id = String(matchingBrand.value);
+            form.brand = matchingBrand.name || matchingBrand.label || '';
+        }
+    }
+    if (force || !form.category) {
+        const matchingCategory = findMatchingOption(categoryOptions.value, normalizedProductName.value);
+
+        if (matchingCategory) {
+            form.category = String(matchingCategory.value ?? matchingCategory.id ?? matchingCategory.label);
+        }
+    }
+    if ((force || !form.variant) && suggestedVariant.value) form.variant = suggestedVariant.value;
+    if (force || !form.description) form.description = suggestedDescription.value;
+    if (force || !form.invoice_description) form.invoice_description = form.short_name || normalizedProductName.value;
+};
 
 const productTypeOptions = [
     {
@@ -145,11 +370,27 @@ const unitOptions = [
     { value: 'HRS', label: 'Hours' },
 ];
 
+const categoryOptions = computed(() => props.references?.categories || []);
+const subCategoryOptions = computed(() => props.references?.sub_categories || []);
+const brandOptions = computed(() => {
+    const options = [...(props.references?.brands || [])];
+
+    if (form.brand && !options.some((brand) => brand.name === form.brand || brand.label === form.brand)) {
+        options.push({
+            value: `legacy:${form.brand}`,
+            label: form.brand,
+            name: form.brand,
+        });
+    }
+
+    return options;
+});
+
 const taxabilityOptions = [
     { value: 'taxable', label: 'Taxable' },
     { value: 'exempt', label: 'Exempt' },
     { value: 'nil_rated', label: 'Nil Rated' },
-    { value: 'non_gst', label: 'Non-GST Supply' },
+    { value: 'non_gst', label: 'Non-Taxable' },
 ];
 
 const gstRateOptions = [
@@ -184,9 +425,12 @@ const trackingOptions = [
 const statusOptions = [
     { value: 'active', label: 'Active' },
     { value: 'inactive', label: 'Inactive' },
+    { value: 'discontinued', label: 'Discontinued' },
 ];
 
 const fillForm = (product = {}) => {
+    fillingForm.value = true;
+
     Object.assign(form, initialForm(), {
         id: product?.id || '',
 
@@ -196,6 +440,7 @@ const fillForm = (product = {}) => {
         short_name: product?.short_name || '',
         category: product?.category || '',
         subcategory: product?.subcategory || '',
+        brand_id: product?.brand_id || (product?.brand ? `legacy:${product.brand}` : ''),
         brand: product?.brand || '',
         variant: product?.variant || '',
         unit: product?.unit || 'PCS',
@@ -241,6 +486,10 @@ const fillForm = (product = {}) => {
     hsnSearch.value = product?.hsn_code || '';
     hsnResults.value = [];
     clientErrors.value = {};
+
+    nextTick(() => {
+        fillingForm.value = false;
+    });
 };
 
 const normalizeBarcodes = (product = {}) => {
@@ -284,6 +533,10 @@ const normalizeImages = (product = {}) => {
                   typeof image === 'string'
                       ? image
                       : image?.image_path || '',
+              preview_url:
+                  typeof image === 'string'
+                      ? ''
+                      : image?.preview_url || '',
               image_type:
                   typeof image === 'string'
                       ? 'gallery'
@@ -304,6 +557,7 @@ const normalizeImages = (product = {}) => {
         : [
               {
                   image_path: '',
+                  preview_url: '',
                   image_type: 'gallery',
                   sort_order: 0,
                   is_primary: true,
@@ -340,6 +594,47 @@ watch(
     (productType) => {
         if (productType === 'service' && activeTab.value === 'inventory') {
             activeTab.value = 'basic';
+        }
+    }
+);
+
+watch(
+    () => form.category,
+    () => {
+        if (fillingForm.value) {
+            return;
+        }
+
+        form.subcategory = '';
+    }
+);
+
+watch(
+    () => form.taxability,
+    () => {
+        if (!isTaxable.value) {
+            form.gst_rate = '0';
+        }
+    },
+    { immediate: true }
+);
+
+watch(
+    normalizedProductName,
+    () => {
+        fillSmartFields(false);
+    }
+);
+
+watch(
+    () => form.brand_id,
+    (brandId) => {
+        const selectedBrand = brandOptions.value.find((brand) => String(brand.value) === String(brandId));
+
+        if (selectedBrand) {
+            form.brand = selectedBrand.name || selectedBrand.label;
+        } else if (!brandId) {
+            form.brand = '';
         }
     }
 );
@@ -385,8 +680,8 @@ const setPrimaryBarcode = (index) => {
 const addBarcode = () => {
     barcodes.value.push({
         barcode: '',
-        barcode_type: 'alternate',
-        is_primary: false,
+        barcode_type: barcodes.value.length ? 'alternate' : 'primary',
+        is_primary: !barcodes.value.length,
     });
 };
 
@@ -414,18 +709,127 @@ const removeBarcode = (index) => {
 const addImage = () => {
     images.value.push({
         image_path: '',
-        image_type: 'gallery',
+        preview_url: '',
+        image_type: images.value.length ? 'gallery' : 'main',
         sort_order: images.value.length,
-        is_primary: false,
+        is_primary: !images.value.length,
     });
 };
 
 const removeImage = (index) => {
+    const wasPrimary = images.value[index]?.is_primary;
     images.value.splice(index, 1);
 
     if (!images.value.length) {
         addImage();
+        return;
     }
+
+    if (wasPrimary) {
+        images.value[0].is_primary = true;
+        images.value[0].image_type = 'main';
+    }
+};
+
+const setPrimaryImage = (index) => {
+    images.value = images.value.map((image, imageIndex) => ({
+        ...image,
+        is_primary: imageIndex === index,
+        image_type: imageIndex === index ? 'main' : (image.image_type === 'main' ? 'gallery' : image.image_type),
+    }));
+};
+
+const imagePreviewUrl = (image = {}) => {
+    const path = image.preview_url || image.image_path || '';
+
+    if (!path) {
+        return '';
+    }
+
+    if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('/storage/')) {
+        return path;
+    }
+
+    const appBasePath = window.location.pathname.split('/app')[0] || '';
+
+    return `${appBasePath}/storage/${path}`;
+};
+
+const uploadImage = async (event, index) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+        return;
+    }
+
+    if (images.value[index].preview_url?.startsWith('blob:')) {
+        URL.revokeObjectURL(images.value[index].preview_url);
+    }
+
+    images.value[index].preview_url = URL.createObjectURL(file);
+
+    imageUploads.value = {
+        ...imageUploads.value,
+        [index]: {
+            uploading: true,
+            error: '',
+        },
+    };
+
+    try {
+        const response = await ProductApi.uploadImage(file);
+        images.value[index].image_path = response.path || '';
+        images.value[index].preview_url = response.url || images.value[index].preview_url;
+
+        if (!images.value.some((image) => image.is_primary)) {
+            setPrimaryImage(index);
+        }
+    } catch (error) {
+        imageUploads.value = {
+            ...imageUploads.value,
+            [index]: {
+                uploading: false,
+                error: error.response?.data?.message || 'Image upload failed.',
+            },
+        };
+
+        return;
+    }
+
+    imageUploads.value = {
+        ...imageUploads.value,
+        [index]: {
+            uploading: false,
+            error: '',
+        },
+    };
+    event.target.value = '';
+};
+
+const clearImage = (index) => {
+    if (images.value[index].preview_url?.startsWith('blob:')) {
+        URL.revokeObjectURL(images.value[index].preview_url);
+    }
+
+    images.value[index].image_path = '';
+    images.value[index].preview_url = '';
+    imageUploads.value = {
+        ...imageUploads.value,
+        [index]: {
+            uploading: false,
+            error: '',
+        },
+    };
+};
+
+const openImage = (image = {}) => {
+    const url = imagePreviewUrl(image);
+
+    if (!url) {
+        return;
+    }
+
+    window.open(url, '_blank', 'noopener');
 };
 
 const searchHsn = async () => {
@@ -453,27 +857,55 @@ const selectHsn = (hsn) => {
     form.hsn_code = hsn.hsn_code;
     hsnSearch.value = hsn.hsn_code;
     form.cess_rate = String(hsn.cess_rate ?? '0');
-    form.gst_rate = String(hsn.gst_rate ?? '0');
+    if (isTaxable.value) {
+        form.gst_rate = String(hsn.gst_rate ?? '0');
+    }
 
     hsnResults.value = [];
 };
 
 const validateBeforeSave = () => {
     const errors = {};
+    let firstErrorTab = '';
+    const requiredChecks = [
+        ['name', 'Product name is required.', 'basic'],
+        ['product_type', 'Product type is required.', 'basic'],
+        ['item_type', 'Item type is required.', 'basic'],
+        ['unit', 'Unit is required.', 'basic'],
+        ['sku', 'SKU is required.', 'basic'],
+        ['selling_price', 'Selling price is required.', 'pricing'],
+        ['status', 'Status is required.', 'advanced'],
+    ];
 
-    if (
-        form.mrp !== '' &&
-        Number(form.mrp) > 0 &&
-        Number(form.selling_price || 0) > Number(form.mrp)
-    ) {
-        errors.selling_price =
-            'Selling price cannot be greater than MRP.';
-        activeTab.value = 'pricing';
+    requiredChecks.forEach(([field, message, tab]) => {
+        if (form[field] === '' || form[field] === null || form[field] === undefined) {
+            errors[field] = message;
+            firstErrorTab ||= tab;
+        }
+    });
+
+    if (isTaxable.value && !form.hsn_code) {
+        errors.hsn_code = `${hsnSacLabel.value} is required for taxable products.`;
+        firstErrorTab ||= 'gst';
     }
 
-    if (!form.hsn_code) {
-        errors.hsn_code = 'HSN code is required.';
-        activeTab.value = 'gst';
+    if (isTaxable.value && form.gst_rate === '') {
+        errors.gst_rate = 'GST rate is required for taxable products.';
+        firstErrorTab ||= 'gst';
+    }
+
+    if (form.mrp !== '' && Number(form.mrp) > 0) {
+        [
+            ['selling_price', 'Selling price'],
+            ['wholesale_price', 'Wholesale price'],
+            ['dealer_price', 'Dealer price'],
+            ['online_price', 'Online price'],
+        ].forEach(([field, label]) => {
+            if (form[field] !== '' && Number(form[field] || 0) > Number(form.mrp)) {
+                errors[field] = `${label} cannot be greater than MRP.`;
+                firstErrorTab ||= 'pricing';
+            }
+        });
     }
 
     const filledBarcodes = barcodes.value
@@ -483,15 +915,20 @@ const validateBeforeSave = () => {
 
     if (filledBarcodes.length !== uniqueBarcodes.size) {
         errors.barcodes = 'Duplicate barcodes are not allowed.';
-        activeTab.value = 'barcodes';
+        firstErrorTab ||= 'barcodes';
     }
 
     clientErrors.value = errors;
+    if (firstErrorTab) {
+        activeTab.value = firstErrorTab;
+    }
 
     return !Object.keys(errors).length;
 };
 
 const saveProduct = () => {
+    fillSmartFields(false);
+
     if (props.processing || !validateBeforeSave()) {
         return;
     }
@@ -529,6 +966,7 @@ const saveProduct = () => {
     emit('save', {
         ...form,
 
+        brand_id: /^\d+$/.test(String(form.brand_id || '')) ? form.brand_id : null,
         cost_price: form.cost_price || 0,
         selling_price: form.selling_price || 0,
         mrp: form.mrp || null,
@@ -680,6 +1118,71 @@ const saveProduct = () => {
                                     </div>
                                 </div>
 
+                                <div class="field-help tab-purpose-help">
+                                    <span class="help-icon">i</span>
+
+                                    <span>
+                                        Use this tab to define the product identity used across bills, stock reports and searches. Enter the product name, SKU, unit, category, brand and short description here.
+                                    </span>
+                                </div>
+
+                                <div class="smart-fill-box">
+                                    <div>
+                                        <strong>Smart Fill</strong>
+                                        <span>
+                                            Suggests short name, SKU, brand,
+                                            category, variant and description
+                                            from the product name.
+                                        </span>
+                                    </div>
+
+                                    <div class="smart-fill-actions">
+                                        <button
+                                            type="button"
+                                            :disabled="!canSmartFill"
+                                            @click="fillSmartFields(false)"
+                                        >
+                                            Fill Empty
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            :disabled="!canSmartFill"
+                                            @click="fillSmartFields(true)"
+                                        >
+                                            Regenerate
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div
+                                    v-if="canSmartFill"
+                                    class="suggestion-chips"
+                                >
+                                    <button
+                                        v-if="suggestedSku"
+                                        type="button"
+                                        @click="form.sku = suggestedSku"
+                                    >
+                                        SKU: {{ suggestedSku }}
+                                    </button>
+
+                                    <button
+                                        v-if="suggestedVariant"
+                                        type="button"
+                                        @click="form.variant = suggestedVariant"
+                                    >
+                                        Variant: {{ suggestedVariant }}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        @click="form.description = suggestedDescription"
+                                    >
+                                        Description
+                                    </button>
+                                </div>
+
                                 <div class="form-grid">
                                     <FormInput
                                         v-model="form.name"
@@ -730,43 +1233,45 @@ const saveProduct = () => {
 
                                     <FormInput
                                         v-model="form.sku"
-                                        name="sku_basic"
+                                        name="sku"
                                         label="SKU"
                                         placeholder="Example: SG25-256-BLK"
                                         cls="product-field"
                                         :req="true"
                                     />
 
-                                    <FormInput
-                                        v-model="form.primary_barcode"
-                                        name="barcode_basic"
-                                        label="Barcode"
-                                        placeholder="Scan or enter barcode"
-                                        cls="product-field"
-                                    />
+                                    <span
+                                        v-if="fieldError('sku')"
+                                        class="field-error product-field"
+                                    >
+                                        {{ fieldError('sku') }}
+                                    </span>
 
-                                    <FormInput
+                                    <FormSelect
                                         v-model="form.category"
                                         name="category"
                                         label="Category"
-                                        placeholder="Example: Smartphones"
                                         cls="product-field"
+                                        :options="categoryOptions"
+                                        select_name="Select category"
                                     />
 
-                                    <FormInput
+                                    <FormSelect
                                         v-model="form.subcategory"
                                         name="subcategory"
                                         label="Sub Category"
-                                        placeholder="Example: Android Phones"
                                         cls="product-field"
+                                        :options="subCategoryOptions"
+                                        select_name="Select sub category"
                                     />
 
-                                    <FormInput
-                                        v-model="form.brand"
-                                        name="brand"
+                                    <FormSelect
+                                        v-model="form.brand_id"
+                                        name="brand_id"
                                         label="Brand"
-                                        placeholder="Example: Samsung"
                                         cls="product-field"
+                                        :options="brandOptions"
+                                        select_name="Select brand"
                                     />
 
                                     <FormInput
@@ -788,24 +1293,32 @@ const saveProduct = () => {
                                 </div>
                             </section>
 
-                            <!-- SKU and barcode -->
+                            <!-- Barcodes -->
                             <section
                                 v-show="activeTab === 'barcodes'"
                                 class="product-section"
                             >
                                 <div class="section-header">
                                     <div class="section-number">
-                                        02
+                                        05
                                     </div>
 
                                     <div>
-                                        <h3>SKU & Barcode</h3>
+                                        <h3>Barcodes</h3>
 
                                         <p>
-                                            Add internal SKU and scanner-ready
+                                            Add primary and alternate scanner-ready
                                             barcode details.
                                         </p>
                                     </div>
+                                </div>
+
+                                <div class="field-help tab-purpose-help">
+                                    <span class="help-icon">i</span>
+
+                                    <span>
+                                        Use this tab to manage scanner barcodes for the product. The primary barcode is used first during billing, stock entry and barcode label printing.
+                                    </span>
                                 </div>
 
                                 <div class="repeat-list">
@@ -882,9 +1395,9 @@ const saveProduct = () => {
                                         <span class="help-icon">i</span>
 
                                         <span>
-                                            Primary barcode unique hona chahiye.
-                                            Additional barcode rows add/remove
-                                            kar sakte hain.
+                                            The first barcode is treated as the
+                                            primary barcode. Additional barcodes
+                                            can be added when needed.
                                         </span>
                                     </div>
                                 </div>
@@ -901,7 +1414,7 @@ const saveProduct = () => {
                                     </div>
 
                                     <div>
-                                        <h3>GST & HSN Details</h3>
+                                        <h3>GST & {{ hsnSacLabel }} Details</h3>
 
                                         <p>
                                             Product tax classification and
@@ -910,20 +1423,31 @@ const saveProduct = () => {
                                     </div>
                                 </div>
 
+                                <div class="field-help tab-purpose-help">
+                                    <span class="help-icon">i</span>
+
+                                    <span>
+                                        Use this tab to set tax classification for invoices and reports. Goods use HSN Code, services use SAC Code, and GST rate is applied during billing.
+                                    </span>
+                                </div>
+
                                 <div class="form-grid">
                                     <div class="product-field hsn-search-field">
                                         <label>
-                                            HSN / SAC Code
-                                            <span class="text-danger">*</span>
+                                            {{ hsnSacLabel }}
+                                            <span
+                                                v-if="isTaxable"
+                                                class="required-mark"
+                                            >*</span>
                                         </label>
 
                                         <div class="hsn-input-row">
                                             <input
-                                                v-model="hsnSearch"
-                                                type="text"
-                                                class="form-control"
-                                                placeholder="Search HSN by code or description"
-                                                @input="searchHsn"
+                                            v-model="hsnSearch"
+                                            type="text"
+                                            :class="['form-control', { 'is-invalid': fieldError('hsn_code') }]"
+                                            :placeholder="`Search ${hsnSacLabel} by code or description`"
+                                            @input="searchHsn"
                                             />
 
                                             <span
@@ -960,8 +1484,8 @@ const saveProduct = () => {
                                         <input
                                             v-model="form.hsn_code"
                                             type="text"
-                                            class="form-control selected-hsn"
-                                            placeholder="Selected HSN code"
+                                            :class="['form-control selected-hsn', { 'is-invalid': fieldError('hsn_code') }]"
+                                            :placeholder="`Selected ${hsnSacLabel}`"
                                         />
 
                                         <span
@@ -989,19 +1513,19 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="gstRateOptions"
                                         select_name="Select GST rate"
-                                        :disabled="!canEditGstRate"
-                                        :req="true"
+                                        :disabled="!canEditCurrentGstRate"
+                                        :req="isTaxable"
                                     />
 
                                     <div
-                                        v-if="!canEditGstRate"
+                                        v-if="!canEditCurrentGstRate"
                                         class="field-help"
                                     >
                                         <span class="help-icon">i</span>
 
                                         <span>
-                                            GST rate HSN Master se auto-fill
-                                            hota hai.
+                                            GST rate is auto-filled from the
+                                            {{ hsnSacLabel }} master.
                                         </span>
                                     </div>
 
@@ -1070,7 +1594,7 @@ const saveProduct = () => {
                             >
                                 <div class="section-header">
                                     <div class="section-number">
-                                        04
+                                        02
                                     </div>
 
                                     <div>
@@ -1081,6 +1605,14 @@ const saveProduct = () => {
                                             price and printed MRP.
                                         </p>
                                     </div>
+                                </div>
+
+                                <div class="field-help tab-purpose-help">
+                                    <span class="help-icon">i</span>
+
+                                    <span>
+                                        Use this tab to maintain cost, selling price, MRP and customer price levels. Profit and margin values are calculated automatically for review.
+                                    </span>
                                 </div>
 
                                 <div class="form-grid pricing-grid">
@@ -1132,6 +1664,13 @@ const saveProduct = () => {
                                         left_box_text="Rs."
                                     />
 
+                                    <div
+                                        v-if="fieldError('wholesale_price')"
+                                        class="field-error"
+                                    >
+                                        {{ fieldError('wholesale_price') }}
+                                    </div>
+
                                     <FormInput
                                         v-model="form.dealer_price"
                                         name="dealer_price"
@@ -1141,6 +1680,13 @@ const saveProduct = () => {
                                         cls="product-field"
                                         left_box_text="Rs."
                                     />
+
+                                    <div
+                                        v-if="fieldError('dealer_price')"
+                                        class="field-error"
+                                    >
+                                        {{ fieldError('dealer_price') }}
+                                    </div>
 
                                     <FormInput
                                         v-model="form.online_price"
@@ -1152,6 +1698,37 @@ const saveProduct = () => {
                                         left_box_text="Rs."
                                     />
 
+                                    <div
+                                        v-if="fieldError('online_price')"
+                                        class="field-error"
+                                    >
+                                        {{ fieldError('online_price') }}
+                                    </div>
+
+                                    <div class="pricing-rule">
+                                        <div>
+                                            <strong>Profit Amount</strong>
+
+                                            <span>Rs. {{ profitAmount.toFixed(2) }}</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="pricing-rule">
+                                        <div>
+                                            <strong>Profit %</strong>
+
+                                            <span>{{ profitPercent.toFixed(2) }}%</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="pricing-rule">
+                                        <div>
+                                            <strong>Margin %</strong>
+
+                                            <span>{{ marginPercent.toFixed(2) }}%</span>
+                                        </div>
+                                    </div>
+
                                     <div class="pricing-rule">
                                         <div class="pricing-rule-icon">
                                             !
@@ -1161,8 +1738,8 @@ const saveProduct = () => {
                                             <strong>MRP validation</strong>
 
                                             <span>
-                                                Selling price MRP se zyada
-                                                nahi honi chahiye.
+                                                Selling price cannot be higher
+                                                than MRP.
                                             </span>
                                         </div>
                                     </div>
@@ -1179,7 +1756,7 @@ const saveProduct = () => {
                             >
                                 <div class="section-header">
                                     <div class="section-number">
-                                        05
+                                        04
                                     </div>
 
                                     <div>
@@ -1190,6 +1767,14 @@ const saveProduct = () => {
                                             settings.
                                         </p>
                                     </div>
+                                </div>
+
+                                <div class="field-help tab-purpose-help">
+                                    <span class="help-icon">i</span>
+
+                                    <span>
+                                        Use this tab to configure stock alerts and tracking rules. Opening Stock is handled through Opening Stock Entry or Stock Transactions, not from Product Master.
+                                    </span>
                                 </div>
 
                                 <div class="form-grid">
@@ -1235,10 +1820,11 @@ const saveProduct = () => {
                                             <strong>Opening Stock</strong>
 
                                             <span>
-                                                Opening stock Product Master
-                                                se edit nahi hota; opening
-                                                stock transaction se maintain
-                                                karein.
+                                                Opening Stock is managed through
+                                                Opening Stock Entry or Stock
+                                                Transactions. Current stock
+                                                should never be edited directly
+                                                from Product Master.
                                             </span>
                                         </div>
 
@@ -1246,8 +1832,7 @@ const saveProduct = () => {
                                             <strong>Minimum Stock</strong>
 
                                             <span>
-                                                Stock is level se neeche jaane
-                                                par low-stock alert milega.
+                                                Low stock warning level.
                                             </span>
                                         </div>
 
@@ -1255,9 +1840,18 @@ const saveProduct = () => {
                                             <strong>Reorder Stock</strong>
 
                                             <span>
-                                                Recommended quantity jo stock
-                                                replenish karte waqt order
-                                                karni hai.
+                                                Recommended quantity to purchase
+                                                when stock reaches the minimum
+                                                level.
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <strong>Maximum Stock</strong>
+
+                                            <span>
+                                                Recommended maximum inventory
+                                                quantity.
                                             </span>
                                         </div>
                                     </div>
@@ -1271,17 +1865,25 @@ const saveProduct = () => {
                             >
                                 <div class="section-header">
                                     <div class="section-number">
-                                        07
+                                        06
                                     </div>
 
                                     <div>
                                         <h3>Images</h3>
 
                                         <p>
-                                            Store primary and additional image
-                                            paths for catalog and POS.
+                                            Store the main product image and
+                                            multiple gallery images.
                                         </p>
                                     </div>
+                                </div>
+
+                                <div class="field-help tab-purpose-help">
+                                    <span class="help-icon">i</span>
+
+                                    <span>
+                                        Use this tab to upload the main product image and gallery images. Images appear in the product list and can be opened for quick verification.
+                                    </span>
                                 </div>
 
                                 <div class="repeat-list">
@@ -1292,36 +1894,83 @@ const saveProduct = () => {
                                     >
                                         <label class="radio-field">
                                             <input
-                                                v-model="image.is_primary"
+                                                :checked="image.is_primary"
                                                 type="checkbox"
+                                                @change="setPrimaryImage(index)"
                                             />
 
-                                            <span>Primary</span>
+                                            <span>{{ index === 0 ? 'Main Product Image' : 'Gallery Image' }}</span>
                                         </label>
 
-                                        <input
-                                            v-model="image.image_path"
-                                            type="text"
-                                            class="form-control"
-                                            placeholder="/uploads/product.jpg"
-                                        />
+                                        <div class="image-upload-field">
+                                            <button
+                                                type="button"
+                                                class="image-preview"
+                                                :class="{ empty: !imagePreviewUrl(image) }"
+                                                :disabled="!imagePreviewUrl(image)"
+                                                @click="openImage(image)"
+                                            >
+                                                <img
+                                                    v-if="imagePreviewUrl(image)"
+                                                    :src="imagePreviewUrl(image)"
+                                                    alt=""
+                                                />
 
-                                        <select
-                                            v-model="image.image_type"
-                                            class="form-control"
-                                        >
-                                            <option value="gallery">
-                                                Gallery
-                                            </option>
+                                                <span v-else>No Image</span>
+                                            </button>
 
-                                            <option value="thumbnail">
-                                                Thumbnail
-                                            </option>
+                                            <div class="image-path-wrap">
+                                                <div class="image-actions">
+                                                    <label class="image-upload-button">
+                                                        <input
+                                                            class="image-file-input"
+                                                            type="file"
+                                                            accept="image/*"
+                                                            :disabled="imageUploads[index]?.uploading"
+                                                            @change="uploadImage($event, index)"
+                                                        />
 
-                                            <option value="catalog">
-                                                Catalog
-                                            </option>
-                                        </select>
+                                                        <span>
+                                                            {{ imageUploads[index]?.uploading ? 'Uploading...' : image.image_path ? 'Replace Image' : 'Upload Image' }}
+                                                        </span>
+                                                    </label>
+
+                                                    <button
+                                                        v-if="imagePreviewUrl(image)"
+                                                        type="button"
+                                                        class="image-open-button"
+                                                        :disabled="imageUploads[index]?.uploading"
+                                                        @click="openImage(image)"
+                                                    >
+                                                        Open Image
+                                                    </button>
+
+                                                    <button
+                                                        v-if="imagePreviewUrl(image)"
+                                                        type="button"
+                                                        class="image-clear-button"
+                                                        :disabled="imageUploads[index]?.uploading"
+                                                        @click="clearImage(index)"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                </div>
+
+                                                <span
+                                                    v-if="imageUploads[index]?.uploading"
+                                                    class="image-upload-note"
+                                                >
+                                                    Uploading...
+                                                </span>
+
+                                                <span
+                                                    v-if="imageUploads[index]?.error"
+                                                    class="field-error"
+                                                >
+                                                    {{ imageUploads[index].error }}
+                                                </span>
+                                            </div>
+                                        </div>
 
                                         <button
                                             type="button"
@@ -1351,21 +2000,25 @@ const saveProduct = () => {
                             >
                                 <div class="section-header">
                                     <div class="section-number">
-                                        {{
-                                            form.product_type === 'goods'
-                                                ? '06'
-                                                : '05'
-                                        }}
+                                        07
                                     </div>
 
                                     <div>
-                                        <h3>Product Status</h3>
+                                        <h3>Advanced Product Settings</h3>
 
                                         <p>
-                                            Control whether this product is
-                                            available for billing.
+                                            Additional tracking and product
+                                            configuration.
                                         </p>
                                     </div>
+                                </div>
+
+                                <div class="field-help tab-purpose-help">
+                                    <span class="help-icon">i</span>
+
+                                    <span>
+                                        Use this tab for additional product configuration such as dimensions, batch or serial tracking requirements and product availability status.
+                                    </span>
                                 </div>
 
                                 <div class="form-grid">
@@ -1446,7 +2099,7 @@ const saveProduct = () => {
                                         class="status-preview"
                                         :class="{
                                             inactive:
-                                                form.status === 'inactive',
+                                                form.status !== 'active',
                                         }"
                                     >
                                         <span class="status-dot"></span>
@@ -1456,7 +2109,9 @@ const saveProduct = () => {
                                                 {{
                                                     form.status === 'active'
                                                         ? 'Active Product'
-                                                        : 'Inactive Product'
+                                                        : form.status === 'discontinued'
+                                                            ? 'Discontinued Product'
+                                                            : 'Inactive Product'
                                                 }}
                                             </strong>
 
@@ -1464,7 +2119,9 @@ const saveProduct = () => {
                                                 {{
                                                     form.status === 'active'
                                                         ? 'Product can be selected during billing.'
-                                                        : 'Product will not be available for new bills.'
+                                                        : form.status === 'discontinued'
+                                                            ? 'Product is discontinued and unavailable for new bills.'
+                                                            : 'Product will not be available for new bills.'
                                                 }}
                                             </small>
                                         </div>
@@ -1734,6 +2391,77 @@ const saveProduct = () => {
     font-size: 12px;
 }
 
+.smart-fill-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin: -3px 0 18px;
+    padding: 13px 14px;
+    background: #f7faff;
+    border: 1px solid #dbe6fb;
+    border-radius: 12px;
+}
+
+.smart-fill-box strong,
+.smart-fill-box span {
+    display: block;
+}
+
+.smart-fill-box strong {
+    color: #17233b;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.smart-fill-box span {
+    margin-top: 3px;
+    color: #69758a;
+    font-size: 11px;
+}
+
+.smart-fill-actions,
+.suggestion-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.smart-fill-actions button,
+.suggestion-chips button {
+    min-height: 34px;
+    padding: 7px 11px;
+    color: #2457d6;
+    background: #ffffff;
+    border: 1px solid #cfdcff;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.smart-fill-actions button:first-child {
+    color: #ffffff;
+    background: #2457d6;
+    border-color: #2457d6;
+}
+
+.smart-fill-actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.suggestion-chips {
+    margin: -8px 0 18px;
+}
+
+.suggestion-chips button {
+    color: #344159;
+    background: #ffffff;
+    border-color: #dce3ec;
+}
+
 .form-grid {
     display: grid;
     grid-template-columns:
@@ -1785,6 +2513,28 @@ const saveProduct = () => {
     box-shadow: 0 0 0 3px rgba(36, 87, 214, 0.1);
 }
 
+:deep(.product-field .required-mark),
+.required-mark {
+    display: inline;
+    margin-left: 3px;
+    color: #dc2626;
+    font-weight: 900;
+}
+
+:deep(.product-field .form-control.is-invalid),
+.hsn-search-field .form-control.is-invalid {
+    color: #7f1d1d;
+    background: #fffafa;
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+:deep(.product-field .form-control.is-invalid:focus),
+.hsn-search-field .form-control.is-invalid:focus {
+    border-color: #b91c1c;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.16);
+}
+
 :deep(.product-field select.form-control) {
     appearance: auto;
     cursor: pointer;
@@ -1829,10 +2579,13 @@ const saveProduct = () => {
     border-radius: 0 9px 9px 0;
 }
 
-:deep(.product-field .text-danger) {
+:deep(.product-field .field-error),
+.field-error {
     display: block;
-    margin-top: 4px;
+    margin-top: 6px;
+    color: #dc2626;
     font-size: 11px !important;
+    font-weight: 700;
 }
 
 .field-help {
@@ -1846,6 +2599,10 @@ const saveProduct = () => {
     border-radius: 9px;
     font-size: 11px;
     line-height: 1.5;
+}
+
+.tab-purpose-help {
+    margin: -3px 0 18px;
 }
 
 .field-error {
@@ -1871,7 +2628,93 @@ const saveProduct = () => {
 }
 
 .repeat-row.image-row {
-    grid-template-columns: 96px minmax(0, 1fr) 140px 86px;
+    grid-template-columns: 96px minmax(0, 1fr) 86px;
+}
+
+.image-upload-field {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+}
+
+.image-preview {
+    width: 72px;
+    height: 58px;
+    overflow: hidden;
+    background: #eef4ff;
+    border: 1px solid #d8e0eb;
+    border-radius: 8px;
+    cursor: pointer;
+    padding: 0;
+}
+
+.image-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.image-preview.empty {
+    display: grid;
+    place-items: center;
+    color: #8b98ad;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: default;
+}
+
+.image-path-wrap {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.image-actions {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+
+.image-upload-button,
+.image-open-button,
+.image-clear-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    width: max-content;
+    padding: 7px 11px;
+    color: #2457d6;
+    background: #ffffff;
+    border: 1px solid #cfdcff;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.image-open-button {
+    color: #344159;
+    border-color: #d8e0eb;
+}
+
+.image-clear-button {
+    color: #d83946;
+    border-color: #ffd2d2;
+}
+
+.image-file-input {
+    display: none;
+}
+
+.image-upload-note {
+    color: #66738a;
+    font-size: 11px;
+    font-weight: 700;
 }
 
 .repeat-row .form-control,
@@ -2287,6 +3130,15 @@ const saveProduct = () => {
     .product-section {
         padding: 17px 15px;
         border-radius: 12px;
+    }
+
+    .smart-fill-box {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .smart-fill-actions button {
+        flex: 1;
     }
 
     .form-grid {

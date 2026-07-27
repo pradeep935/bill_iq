@@ -10,6 +10,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FixedAssetController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\OpeningStockController;
 use App\Http\Controllers\OrderManagementController;
 use App\Http\Controllers\PayrollController;
@@ -194,6 +195,11 @@ Route::middleware('auth')->group(function () {
             [ProductController::class, 'products']
         )->name('products.list');
 
+        Route::get(
+            '/products/references',
+            [ProductController::class, 'references']
+        )->name('products.references');
+
         Route::post(
             '/products/save',
             [ProductController::class, 'save']
@@ -279,6 +285,11 @@ Route::middleware('auth')->group(function () {
             [OpeningStockController::class, 'update']
         )->name('opening-stock.update');
 
+        Route::delete(
+            '/opening-stock/{voucher}',
+            [OpeningStockController::class, 'destroy']
+        )->name('opening-stock.destroy');
+
         Route::post(
             '/opening-stock/{voucher}/approve',
             [OpeningStockController::class, 'approve']
@@ -303,6 +314,11 @@ Route::middleware('auth')->group(function () {
             '/current-stock/references',
             [StockSummaryController::class, 'references']
         )->name('current-stock.references');
+
+        Route::get(
+            '/current-stock/products/{product}',
+            [StockSummaryController::class, 'show']
+        )->name('current-stock.products.show');
 
         Route::get(
             '/vouchers',
@@ -336,11 +352,25 @@ Route::middleware('auth')->group(function () {
         Route::get('/location-transfers/list', [InventoryController::class, 'locationTransfers'])->name('location-transfers.list');
         Route::post('/location-transfers', [InventoryController::class, 'saveLocationTransfer'])->name('location-transfers.store');
         Route::put('/location-transfers/{movement}', [InventoryController::class, 'saveLocationTransfer'])->name('location-transfers.update');
+        Route::get('/warehouse-locations/list', [InventoryController::class, 'warehouseLocations'])->name('warehouse-locations.list');
+        Route::post('/warehouse-locations', [InventoryController::class, 'saveWarehouseLocation'])->name('warehouse-locations.store');
+        Route::put('/warehouse-locations/{location}', [InventoryController::class, 'saveWarehouseLocation'])->name('warehouse-locations.update');
 
         Route::get(
             '/batches',
             [InventoryController::class, 'batches']
         )->name('batches');
+
+        Route::get('/batches/references', [InventoryController::class, 'batchReferences'])->name('batches.references');
+        Route::get('/batches/list', [InventoryController::class, 'batchList'])->name('batches.list');
+        Route::get('/batches/reports', [InventoryController::class, 'batchReports'])->name('batches.reports');
+        Route::get('/batches/fefo', [InventoryController::class, 'batchFefo'])->name('batches.fefo');
+        Route::get('/batches/{batch}', [InventoryController::class, 'batchShow'])->name('batches.show');
+        Route::get('/batches/{batch}/ledger', [InventoryController::class, 'batchLedger'])->name('batches.ledger');
+        Route::post('/batches/{batch}/status', [InventoryController::class, 'batchStatus'])->name('batches.status');
+        Route::post('/batches/{batch}/transfer', [InventoryController::class, 'batchTransfer'])->name('batches.transfer');
+        Route::post('/batches/{batch}/split', [InventoryController::class, 'batchSplit'])->name('batches.split');
+        Route::post('/batches/{batch}/merge', [InventoryController::class, 'batchMerge'])->name('batches.merge');
 
         Route::get(
             '/serials',
@@ -520,6 +550,12 @@ Route::middleware('auth')->group(function () {
         });
 
         Route::prefix('setup')->name('setup.')->group(function () {
+            Route::get('/masters', [MasterDataController::class, 'index'])->name('masters');
+            Route::get('/masters/references', [MasterDataController::class, 'references'])->name('masters.references');
+            Route::get('/masters/{type}/list', [MasterDataController::class, 'list'])->name('masters.list');
+            Route::post('/masters/{type}', [MasterDataController::class, 'store'])->name('masters.store');
+            Route::put('/masters/{type}/{id}', [MasterDataController::class, 'update'])->name('masters.update');
+            Route::delete('/masters/{type}/{id}', [MasterDataController::class, 'destroy'])->name('masters.destroy');
             Route::get('/branches', [SetupController::class, 'branches'])->name('branches');
             Route::get('/employees', [SetupController::class, 'employees'])->name('employees');
             Route::get('/users', [SetupController::class, 'users'])->name('users');

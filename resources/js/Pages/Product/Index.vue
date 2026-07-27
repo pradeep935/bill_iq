@@ -6,6 +6,7 @@ import ProductApi from './ProductApi';
 import ProductForm from './ProductForm.vue';
 import BarcodeModal from './BarcodeModal.vue';
 import LabelModal from './LabelModal.vue';
+import CrudTable from '../../Components/Common/CrudTable.vue';
 
 const props = defineProps({
     page: {
@@ -42,6 +43,10 @@ const statusUpdatingId = ref(null);
 const bulkProcessing = ref(false);
 const exportProcessing = ref(false);
 const serverErrors = ref({});
+const references = ref({
+    categories: [],
+    sub_categories: [],
+});
 
 const search = ref('');
 const productTypeFilter = ref('');
@@ -64,9 +69,90 @@ const showLabelModal = ref(false);
 const labelProducts = ref([]);
 
 const selectedIds = ref([]);
+const openActionMenuId = ref(null);
+const toast = ref({
+    show: false,
+    title: '',
+    message: '',
+    type: 'info',
+});
+const confirmModal = ref({
+    show: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    danger: false,
+    resolve: null,
+});
 let searchTimer = null;
+let toastTimer = null;
+
+const showMessage = (title, message, type = 'info') => {
+    if (toastTimer) {
+        clearTimeout(toastTimer);
+    }
+
+    toast.value = {
+        show: true,
+        title,
+        message,
+        type,
+    };
+
+    toastTimer = setTimeout(() => {
+        toast.value.show = false;
+        toastTimer = null;
+    }, type === 'error' ? 5200 : 3200);
+};
+
+const requestConfirmation = ({ title, message, confirmText = 'Confirm', danger = false }) => {
+    return new Promise((resolve) => {
+        confirmModal.value = {
+            show: true,
+            title,
+            message,
+            confirmText,
+            danger,
+            resolve,
+        };
+    });
+};
+
+const resolveConfirmation = (confirmed) => {
+    const resolver = confirmModal.value.resolve;
+    confirmModal.value.show = false;
+    confirmModal.value.resolve = null;
+
+    if (resolver) {
+        resolver(confirmed);
+    }
+};
 
 const rows = computed(() => products.value);
+
+const productColumns = [
+    { key: 'image', label: 'Image' },
+    { key: 'name', label: 'Product Name' },
+    { key: 'sku', label: 'SKU' },
+    { key: 'barcode', label: 'Barcode' },
+    { key: 'category', label: 'Category' },
+    { key: 'brand', label: 'Brand' },
+    { key: 'unit', label: 'Unit' },
+    { key: 'selling_price', label: 'Selling Price' },
+    { key: 'mrp', label: 'MRP' },
+    { key: 'gst_rate', label: 'GST' },
+];
+
+const productValueFor = (product, column) => {
+    const values = {
+        barcode: primaryBarcode(product),
+        selling_price: `Rs. ${formatPrice(product.selling_price)}`,
+        mrp: product.mrp ? `Rs. ${formatPrice(product.mrp)}` : '-',
+        gst_rate: `${Number(product.gst_rate || 0)}%`,
+    };
+
+    return values[column.key] ?? product[column.key] ?? '-';
+};
 
 const pageTotal = computed(() => pagination.value.total || products.value.length);
 
@@ -150,9 +236,21 @@ const loadProducts = async (page = 1) => {
     } catch (error) {
         console.error(error);
 
-        alert('Products load nahi ho sake.');
+        showMessage('Unable to Load Products', 'Please refresh the page and try again.', 'error');
     } finally {
         loading.value = false;
+    }
+};
+
+const loadReferences = async () => {
+    try {
+        references.value = await ProductApi.getReferences();
+    } catch (error) {
+        console.error(error);
+        references.value = {
+            categories: [],
+            sub_categories: [],
+        };
     }
 };
 
@@ -163,6 +261,7 @@ const addProduct = () => {
 };
 
 const editProduct = async (product) => {
+    openActionMenuId.value = null;
     serverErrors.value = {};
 
     try {
@@ -176,6 +275,7 @@ const editProduct = async (product) => {
 };
 
 const openView = async (product) => {
+    openActionMenuId.value = null;
     viewProduct.value = product;
 
     try {
@@ -198,7 +298,7 @@ const saveProduct = async (form) => {
 
         await loadProducts(pagination.value.current_page || 1);
 
-        alert(response.message || 'Product successfully saved.');
+        showMessage('Product Saved', response.message || 'The product was saved successfully.', 'success');
     } catch (error) {
         if (error.response?.status === 422) {
             const errors = error.response.data.errors || {};
@@ -206,38 +306,45 @@ const saveProduct = async (form) => {
 
             const firstError = Object.values(errors)?.[0]?.[0];
 
-            alert(
+            showMessage(
+                'Please Review the Form',
                 firstError ||
                 error.response.data.message ||
-                'Please check the form fields.'
+                'Please check the highlighted fields.',
+                'error'
             );
 
             return;
         }
 
         console.error(error);
-        alert('Product save nahi ho saka.');
+        showMessage('Unable to Save Product', 'Something went wrong while saving the product.', 'error');
     } finally {
         saving.value = false;
     }
 };
 
 const duplicateProduct = async (product) => {
-    const confirmed = window.confirm(`"${product.name}" duplicate karna hai?`);
+    const confirmed = await requestConfirmation({
+        title: 'Duplicate Product',
+        message: `Create a copy of "${product.name}"?`,
+        confirmText: 'Duplicate',
+    });
 
     if (!confirmed) {
         return;
     }
 
+    openActionMenuId.value = null;
     duplicatingId.value = product.id;
 
     try {
         const response = await ProductApi.duplicateProduct(product.id);
         await loadProducts(1);
-        alert(response.message || 'Product duplicated successfully.');
+        showMessage('Product Duplicated', response.message || 'A product copy was created successfully.', 'success');
     } catch (error) {
         console.error(error);
-        alert(error.response?.data?.message || 'Product duplicate nahi ho saka.');
+        showMessage('Unable to Duplicate Product', error.response?.data?.message || 'The product could not be duplicated.', 'error');
     } finally {
         duplicatingId.value = null;
     }
@@ -246,15 +353,16 @@ const duplicateProduct = async (product) => {
 const updateProductStatus = async (product) => {
     const status = product.status === 'active' ? 'inactive' : 'active';
 
+    openActionMenuId.value = null;
     statusUpdatingId.value = product.id;
 
     try {
         const response = await ProductApi.bulkStatus([product.id], status);
         await loadProducts(pagination.value.current_page || 1);
-        alert(response.message || 'Product status updated successfully.');
+        showMessage('Status Updated', response.message || 'The product status was updated successfully.', 'success');
     } catch (error) {
         console.error(error);
-        alert(error.response?.data?.message || 'Status update nahi ho saka.');
+        showMessage('Unable to Update Status', error.response?.data?.message || 'The product status could not be updated.', 'error');
     } finally {
         statusUpdatingId.value = null;
     }
@@ -262,7 +370,7 @@ const updateProductStatus = async (product) => {
 
 const bulkStatusUpdate = async (status) => {
     if (!selectedIds.value.length) {
-        alert('Pehle products select karein.');
+        showMessage('No Products Selected', 'Select one or more products before applying a bulk action.', 'warning');
         return;
     }
 
@@ -272,50 +380,62 @@ const bulkStatusUpdate = async (status) => {
         const response = await ProductApi.bulkStatus(selectedIds.value, status);
         selectedIds.value = [];
         await loadProducts(pagination.value.current_page || 1);
-        alert(response.message || 'Product status updated successfully.');
+        showMessage('Status Updated', response.message || 'The selected product status was updated successfully.', 'success');
     } catch (error) {
         console.error(error);
-        alert(error.response?.data?.message || 'Bulk status update nahi ho saka.');
+        showMessage('Unable to Update Products', error.response?.data?.message || 'The selected products could not be updated.', 'error');
     } finally {
         bulkProcessing.value = false;
     }
 };
 
 const deleteProduct = async (product) => {
-    const confirmed = window.confirm(`"${product.name}" product delete karna hai?`);
+    const confirmed = await requestConfirmation({
+        title: 'Delete Product',
+        message: `Delete "${product.name}"? This action can be restored only if soft delete is enabled.`,
+        confirmText: 'Delete',
+        danger: true,
+    });
 
     if (!confirmed) {
         return;
     }
 
+    openActionMenuId.value = null;
     deletingId.value = product.id;
 
     try {
         const response = await ProductApi.deleteProduct(product.id);
         await loadProducts(pagination.value.current_page || 1);
-        alert(response.message || 'Product deleted successfully.');
+        showMessage('Product Deleted', response.message || 'The product was deleted successfully.', 'success');
     } catch (error) {
         console.error(error);
 
-        alert(error.response?.data?.message || 'Product delete nahi ho saka.');
+        showMessage('Unable to Delete Product', error.response?.data?.message || 'The product could not be deleted.', 'error');
     } finally {
         deletingId.value = null;
     }
 };
 
 const openBarcode = (product) => {
+    openActionMenuId.value = null;
     barcodeProduct.value = { ...product };
     showBarcodeModal.value = true;
 };
 
 const openSingleLabel = (product) => {
+    openActionMenuId.value = null;
     labelProducts.value = [{ ...product }];
     showLabelModal.value = true;
 };
 
+const toggleActionMenu = (productId) => {
+    openActionMenuId.value = openActionMenuId.value === productId ? null : productId;
+};
+
 const openAllLabels = () => {
     if (!rows.value.length) {
-        alert('Print karne ke liye product available nahi hai.');
+        showMessage('No Products Available', 'There are no products available to print.', 'warning');
         return;
     }
 
@@ -408,7 +528,7 @@ const exportProducts = async () => {
         }
 
         if (!exportRows.length) {
-            alert('Export karne ke liye products available nahi hain.');
+            showMessage('No Products Available', 'There are no products available to export.', 'warning');
             return;
         }
 
@@ -423,7 +543,7 @@ const exportProducts = async () => {
     } catch (error) {
         console.error(error);
 
-        alert('Product export nahi ho saka.');
+        showMessage('Unable to Export Products', 'The product export could not be completed.', 'error');
     } finally {
         exportProcessing.value = false;
     }
@@ -460,11 +580,24 @@ const productImage = (product) => {
         return null;
     }
 
-    if (String(path).startsWith('http') || String(path).startsWith('/')) {
+    if (String(path).startsWith('http')) {
         return path;
     }
 
-    return `/storage/${path}`;
+    const appBasePath = window.location.pathname.split('/app')[0] || '';
+    const cleanPath = String(path).replace(/^\/storage\//, '');
+
+    return `${appBasePath}/storage/${cleanPath}`;
+};
+
+const openProductImage = (product) => {
+    const url = productImage(product);
+
+    if (!url) {
+        return;
+    }
+
+    window.open(url, '_blank', 'noopener');
 };
 
 const formatPrice = (value) => {
@@ -493,6 +626,7 @@ watch(
 );
 
 onMounted(() => {
+    loadReferences();
     loadProducts();
 });
 </script>
@@ -502,15 +636,15 @@ onMounted(() => {
         :page="page"
         :title="title"
     >
+        <template #topbar-title>
+            <div class="bill-page-title">
+                <span>INVENTORY MANAGEMENT</span>
+                <h1>Products & Barcode</h1>
+                <p>Manage product images, pricing, GST, HSN and barcode details.</p>
+            </div>
+        </template>
         <div class="product-page">
-            <div class="page-heading">
-                <div>
-                    <span class="page-eyebrow">INVENTORY MANAGEMENT</span>
-                    <h1>Products & Barcode</h1>
-                    <p>Manage product images, pricing, GST, HSN and barcode details.</p>
-                </div>
-
-                <div class="page-actions">
+            <div class="page-actions">
                     <button
                         type="button"
                         class="secondary-action"
@@ -536,7 +670,6 @@ onMounted(() => {
                         <span class="plus-icon">+</span>
                         Add Product
                     </button>
-                </div>
             </div>
 
             <div class="summary-grid">
@@ -716,7 +849,7 @@ onMounted(() => {
                     </div>
 
                     <h3>{{ hasFilters ? 'No matching products' : 'No products added yet' }}</h3>
-                    <p>{{ hasFilters ? 'Search ya filters change karke dobara try karein.' : 'Apna first product add karke inventory setup start karein.' }}</p>
+                    <p>{{ hasFilters ? 'Adjust your search or filters and try again.' : 'Add your first product to start setting up inventory.' }}</p>
 
                     <button
                         v-if="!hasFilters"
@@ -729,163 +862,67 @@ onMounted(() => {
                     </button>
                 </div>
 
-                <div
+                <CrudTable
                     v-else
-                    class="table-wrapper"
+                    :columns="productColumns"
+                    :rows="rows"
+                    :loading="loading"
+                    :value-for="productValueFor"
+                    selectable
+                    :selected-ids="selectedIds"
+                    @toggle-select-all="toggleSelectAll"
+                    @toggle-row="toggleSelection"
                 >
-                    <table class="product-table">
-                        <thead>
-                            <tr>
-                                <th class="select-column">
-                                    <input
-                                        type="checkbox"
-                                        :checked="allRowsSelected"
-                                        @change="toggleSelectAll"
-                                    />
-                                </th>
-                                <th>Image</th>
-                                <th>Product Name</th>
-                                <th>SKU</th>
-                                <th>Barcode</th>
-                                <th>Category</th>
-                                <th>Brand</th>
-                                <th>Unit</th>
-                                <th>Selling Price</th>
-                                <th>MRP</th>
-                                <th>GST</th>
-                                <th>Status</th>
-                                <th class="action-column">Actions</th>
-                            </tr>
-                        </thead>
+                    <template #cell-image="{ row: product }">
+                        <button
+                            v-if="productImage(product)"
+                            type="button"
+                            class="product-image product-image-button"
+                            :title="`Open ${product.name} image`"
+                            @click="openProductImage(product)"
+                        >
+                            <img :src="productImage(product)" :alt="product.name" />
+                        </button>
 
-                        <tbody>
-                            <tr
-                                v-for="product in rows"
-                                :key="product.id"
-                            >
-                                <td class="select-column">
-                                    <input
-                                        type="checkbox"
-                                        :checked="selectedIds.includes(product.id)"
-                                        @change="toggleSelection(product.id)"
-                                    />
-                                </td>
+                        <div v-else class="product-image">
+                            <span>{{ String(product.name || 'P').charAt(0).toUpperCase() }}</span>
+                        </div>
+                    </template>
 
-                                <td>
-                                    <div class="product-image">
-                                        <img
-                                            v-if="productImage(product)"
-                                            :src="productImage(product)"
-                                            :alt="product.name"
-                                        />
-                                        <span v-else>
-                                            {{ String(product.name || 'P').charAt(0).toUpperCase() }}
-                                        </span>
-                                    </div>
-                                </td>
+                    <template #cell-name="{ row: product }">
+                        <div class="product-information">
+                            <strong>{{ product.name }}</strong>
+                            <span>{{ product.product_type === 'service' ? 'Service' : 'Goods' }}</span>
+                        </div>
+                    </template>
 
-                                <td>
-                                    <div class="product-information">
-                                        <strong>{{ product.name }}</strong>
-                                        <span>{{ product.product_type === 'service' ? 'Service' : 'Goods' }}</span>
-                                    </div>
-                                </td>
+                    <template #cell-gst_rate="{ row: product }">
+                        <span class="gst-badge">{{ Number(product.gst_rate || 0) }}%</span>
+                    </template>
 
-                                <td>{{ product.sku || '-' }}</td>
-                                <td>{{ primaryBarcode(product) }}</td>
-                                <td>{{ product.category || '-' }}</td>
-                                <td>{{ product.brand || '-' }}</td>
-                                <td>{{ product.unit || '-' }}</td>
-                                <td>Rs. {{ formatPrice(product.selling_price) }}</td>
-                                <td>{{ product.mrp ? `Rs. ${formatPrice(product.mrp)}` : '-' }}</td>
-                                <td>
-                                    <span class="gst-badge">
-                                        {{ Number(product.gst_rate || 0) }}%
-                                    </span>
-                                </td>
-                                <td>
-                                    <span
-                                        class="status-badge"
-                                        :class="product.status"
-                                    >
-                                        <span></span>
-                                        {{ product.status === 'active' ? 'Active' : 'Inactive' }}
-                                    </span>
-                                </td>
+                    <template #actions="{ row: product }">
+                        <button type="button" class="crud-action" title="Edit product" @click="editProduct(product)">Edit</button>
 
-                                <td class="action-column">
-                                    <div class="row-actions">
-                                        <button
-                                            type="button"
-                                            class="icon-action"
-                                            title="View product"
-                                            @click="openView(product)"
-                                        >
-                                            View
-                                        </button>
+                        <div class="action-menu-wrap">
+                            <button type="button" class="crud-action more-action" title="More actions" @click="toggleActionMenu(product.id)">More</button>
 
-                                        <button
-                                            type="button"
-                                            class="icon-action"
-                                            title="Edit product"
-                                            @click="editProduct(product)"
-                                        >
-                                            Edit
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            class="icon-action"
-                                            title="Duplicate product"
-                                            :disabled="duplicatingId === product.id"
-                                            @click="duplicateProduct(product)"
-                                        >
-                                            {{ duplicatingId === product.id ? '...' : 'Copy' }}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            class="icon-action"
-                                            title="Activate or deactivate"
-                                            :disabled="statusUpdatingId === product.id"
-                                            @click="updateProductStatus(product)"
-                                        >
-                                            {{ product.status === 'active' ? 'Off' : 'On' }}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            class="icon-action"
-                                            title="View barcode"
-                                            @click="openBarcode(product)"
-                                        >
-                                            Code
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            class="icon-action"
-                                            title="Print label"
-                                            @click="openSingleLabel(product)"
-                                        >
-                                            Print
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            class="icon-action danger"
-                                            title="Delete product"
-                                            :disabled="deletingId === product.id"
-                                            @click="deleteProduct(product)"
-                                        >
-                                            {{ deletingId === product.id ? '...' : 'Del' }}
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                            <div v-if="openActionMenuId === product.id" class="action-menu">
+                                <button type="button" @click="openView(product)">View</button>
+                                <button type="button" :disabled="duplicatingId === product.id" @click="duplicateProduct(product)">
+                                    {{ duplicatingId === product.id ? 'Copying...' : 'Duplicate' }}
+                                </button>
+                                <button type="button" :disabled="statusUpdatingId === product.id" @click="updateProductStatus(product)">
+                                    {{ product.status === 'active' ? 'Deactivate' : 'Activate' }}
+                                </button>
+                                <button type="button" @click="openBarcode(product)">Barcode</button>
+                                <button type="button" @click="openSingleLabel(product)">Print Label</button>
+                                <button type="button" class="danger" :disabled="deletingId === product.id" @click="deleteProduct(product)">
+                                    {{ deletingId === product.id ? 'Deleting...' : 'Delete' }}
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </CrudTable>
 
                 <div
                     v-if="pagination.last_page > 1"
@@ -925,6 +962,7 @@ onMounted(() => {
             :product="selectedProduct"
             :processing="saving"
             :errors="serverErrors"
+            :references="references"
             :can-edit-gst-rate="[1, 2].includes(Number(role_id))"
             @save="saveProduct"
         />
@@ -995,42 +1033,63 @@ onMounted(() => {
                 </div>
             </aside>
         </div>
+
+        <Transition name="toast-slide">
+            <div
+                v-if="toast.show"
+                class="toast-message"
+                :class="toast.type"
+            >
+                <span class="toast-icon"></span>
+
+                <div>
+                    <strong>{{ toast.title }}</strong>
+                    <p>{{ toast.message }}</p>
+                </div>
+            </div>
+        </Transition>
+
+        <div
+            v-if="confirmModal.show"
+            class="feedback-overlay"
+            @click.self="resolveConfirmation(false)"
+        >
+            <section
+                class="feedback-modal"
+                :class="{ danger: confirmModal.danger }"
+            >
+                <header>
+                    <span class="feedback-icon"></span>
+                    <h3>{{ confirmModal.title }}</h3>
+                </header>
+
+                <p>{{ confirmModal.message }}</p>
+
+                <footer>
+                    <button
+                        type="button"
+                        class="secondary-action"
+                        @click="resolveConfirmation(false)"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="button"
+                        :class="confirmModal.danger ? 'danger-action' : 'primary-action'"
+                        @click="resolveConfirmation(true)"
+                    >
+                        {{ confirmModal.confirmText }}
+                    </button>
+                </footer>
+            </section>
+        </div>
     </Layout>
 </template>
 
 <style scoped>
 .product-page {
-    padding: 4px 0 28px;
-}
-
-.page-heading {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 24px;
-    margin-bottom: 22px;
-}
-
-.page-eyebrow {
-    display: block;
-    margin-bottom: 5px;
-    color: #2457d6;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 1.4px;
-}
-
-.page-heading h1 {
-    margin: 0;
-    color: #101c34;
-    font-size: 28px;
-    font-weight: 800;
-}
-
-.page-heading p {
-    margin: 7px 0 0;
-    color: #758197;
-    font-size: 13px;
+    padding: 0 0 28px;
 }
 
 .page-actions,
@@ -1041,6 +1100,12 @@ onMounted(() => {
     display: flex;
     align-items: center;
     gap: 9px;
+}
+
+.page-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    margin: -8px 0 14px;
 }
 
 .primary-action,
@@ -1067,6 +1132,21 @@ onMounted(() => {
     color: #35435b;
     background: #ffffff;
     border: 1px solid #d9e0ea;
+}
+
+.danger-action {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 9px 16px;
+    color: #ffffff;
+    background: #d23f49;
+    border: 1px solid #d23f49;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 750;
 }
 
 .plus-icon {
@@ -1108,7 +1188,7 @@ onMounted(() => {
 }
 
 .listing-card {
-    overflow: hidden;
+    overflow: visible;
     background: #ffffff;
     border: 1px solid #dfe6ef;
     border-radius: 15px;
@@ -1117,9 +1197,9 @@ onMounted(() => {
 
 .listing-toolbar {
     display: grid;
-    grid-template-columns: minmax(260px, 420px) 1fr;
+    grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
     gap: 14px;
-    padding: 18px 20px;
+    padding: 16px 20px;
     border-bottom: 1px solid #e8edf3;
 }
 
@@ -1229,6 +1309,9 @@ onMounted(() => {
 
 .table-wrapper {
     overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: 170px;
+    margin-bottom: -170px;
 }
 
 .product-table {
@@ -1278,6 +1361,17 @@ onMounted(() => {
     border-radius: 9px;
     font-size: 13px;
     font-weight: 800;
+}
+
+.product-image-button {
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+}
+
+.product-image-button:focus {
+    outline: 2px solid #2457d6;
+    outline-offset: 2px;
 }
 
 .product-image img {
@@ -1353,15 +1447,17 @@ onMounted(() => {
 
 .action-column {
     text-align: right !important;
+    width: 172px;
 }
 
 .row-actions {
     justify-content: flex-end;
     flex-wrap: nowrap;
+    position: relative;
 }
 
 .icon-action {
-    min-width: 38px;
+    min-width: 46px;
     height: 30px;
     display: inline-flex;
     align-items: center;
@@ -1374,6 +1470,16 @@ onMounted(() => {
     cursor: pointer;
     font-size: 10px;
     font-weight: 750;
+}
+
+.icon-action.primary {
+    color: #2457d6;
+    background: #edf2ff;
+    border-color: #ccdaff;
+}
+
+.more-action {
+    min-width: 56px;
 }
 
 .icon-action:hover {
@@ -1391,6 +1497,58 @@ onMounted(() => {
 .icon-action:disabled {
     cursor: not-allowed;
     opacity: 0.65;
+}
+
+.action-menu-wrap {
+    position: relative;
+}
+
+.action-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 7px);
+    z-index: 25;
+    min-width: 150px;
+    padding: 6px;
+    display: grid;
+    gap: 3px;
+    background: #ffffff;
+    border: 1px solid #dce3ec;
+    border-radius: 8px;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+}
+
+.action-menu button {
+    width: 100%;
+    min-height: 32px;
+    padding: 0 10px;
+    color: #344158;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 750;
+    text-align: left;
+}
+
+.action-menu button:hover {
+    color: #2457d6;
+    background: #edf2ff;
+}
+
+.action-menu button.danger {
+    color: #b4232f;
+}
+
+.action-menu button.danger:hover {
+    color: #b4232f;
+    background: #fff1f2;
+}
+
+.action-menu button:disabled {
+    cursor: not-allowed;
+    opacity: 0.62;
 }
 
 .loading-state,
@@ -1552,6 +1710,145 @@ onMounted(() => {
     font-size: 13px;
 }
 
+.toast-message {
+    position: fixed;
+    top: 18px;
+    right: 22px;
+    z-index: 13000;
+    width: min(360px, calc(100vw - 32px));
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 15px;
+    background: #ffffff;
+    border: 1px solid #dfe6ef;
+    border-left: 4px solid #2457d6;
+    border-radius: 10px;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+}
+
+.toast-message strong {
+    display: block;
+    color: #142038;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.toast-message p {
+    margin: 4px 0 0;
+    color: #536179;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.toast-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    border-radius: 7px;
+    background: #edf2ff;
+    border: 1px solid #ccdaff;
+}
+
+.toast-message.success {
+    border-left-color: #20a464;
+}
+
+.toast-message.success .toast-icon {
+    background: #eaf8f1;
+    border-color: #bfead5;
+}
+
+.toast-message.error {
+    border-left-color: #d23f49;
+}
+
+.toast-message.error .toast-icon {
+    background: #fff1f2;
+    border-color: #ffd5d8;
+}
+
+.toast-message.warning {
+    border-left-color: #d79a20;
+}
+
+.toast-message.warning .toast-icon {
+    background: #fff8e6;
+    border-color: #ffe0a3;
+}
+
+.toast-slide-enter-active,
+.toast-slide-leave-active {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-slide-enter-from,
+.toast-slide-leave-to {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+
+.feedback-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 12000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.feedback-modal {
+    width: min(440px, 94vw);
+    padding: 22px;
+    background: #ffffff;
+    border: 1px solid #dfe6ef;
+    border-radius: 12px;
+    box-shadow: 0 26px 70px rgba(15, 23, 42, 0.26);
+}
+
+.feedback-modal header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.feedback-modal h3 {
+    margin: 0;
+    color: #142038;
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.feedback-modal p {
+    margin: 14px 0 20px;
+    color: #536179;
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.feedback-modal footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.feedback-icon {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    flex-shrink: 0;
+    border-radius: 9px;
+    background: #edf2ff;
+    border: 1px solid #ccdaff;
+}
+
+.feedback-modal.danger .feedback-icon {
+    background: #fff1f2;
+    border-color: #ffd5d8;
+}
+
 @media (max-width: 1100px) {
     .listing-toolbar {
         grid-template-columns: 1fr;
@@ -1563,19 +1860,15 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-    .page-heading,
     .bulk-bar {
         align-items: stretch;
         flex-direction: column;
     }
 
-    .page-heading h1 {
-        font-size: 23px;
-    }
-
     .page-actions {
         width: 100%;
         flex-wrap: wrap;
+        margin-top: 0;
     }
 
     .primary-action,

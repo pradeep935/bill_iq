@@ -57,8 +57,11 @@ onMounted(async () => { await loadRefs(); await load(); });
 
 <template>
     <Layout :page="page" :title="title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>FINANCIAL REPORTS</span><h1>Reports and Statements</h1><p>Posted journal based statements, schedules, exceptions, snapshots and closing controls.</p></div>
+        </template>
         <div class="financial-page">
-            <div class="page-heading"><div><span>FINANCIAL REPORTS</span><h1>Reports and Statements</h1><p>Posted journal based statements, schedules, exceptions, snapshots and closing controls.</p></div><div class="actions"><button @click="printReport">Print</button><button @click="exportCsv">Export</button></div></div>
+            <div class="page-toolbar"><button @click="printReport">Print</button><button @click="exportCsv">Export</button></div>
             <section class="tabs"><button v-for="t in tabs" :key="t" :class="{active:tab===t}" @click="switchTab(t)">{{ t }}</button></section>
             <section class="panel filters"><select v-model="filters.branch_id"><option value="">All Branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="filters.account_id"><option value="">Account</option><option v-for="a in refs.accounts" :key="a.id" :value="a.id">{{ a.account_name }}</option></select><select v-model="filters.section"><option value="">Schedule Section</option><option v-for="g in refs.groups" :key="g.id" :value="g.financial_statement_section">{{ g.financial_statement_section || g.group_name }}</option></select><input v-model="filters.date_from" type="date" /><input v-model="filters.date_to" type="date" /><label><input v-model="filters.include_zero" type="checkbox" /> Zero rows</label><button :disabled="loading" @click="load">Apply</button></section>
             <div v-if="errors.form" class="alert">{{ errors.form[0] }}</div>

@@ -24,7 +24,7 @@ const processedReq = computed(() => {
     let obj = yup.string();
 
     if(req){
-        obj = obj.required();
+        obj = obj.required('This field is required.');
     }
 
     if(validate == "email"){
@@ -48,16 +48,16 @@ const { value, errorMessage } = useField(() => name, processedReq, {
 
 <template>
     <div :class="`form-group ${cls}`">
-        <label v-if="label" >{{label}} <span class="text-danger" v-if="req">*</span></label>
+        <label v-if="label">{{ label }} <span class="required-mark" v-if="req">*</span></label>
         <div v-if="left_box_text || right_box_text" class="input-group">
             <div v-if="left_box_text" class="input-group-text">
                 <span v-if="box_type=='text'">{{ left_box_text }}</span>
                 <i :class="left_box_text" v-else></i>
             </div>
 
-                <input step="0.001" v-model="value" :type="type" class="form-control" v-if="type != 'date'" :disabled="disabled"  :placeholder="placeholder" />
+                <input step="0.001" v-model="value" :type="type" :class="['form-control', { 'is-invalid': errorMessage }]" v-if="type != 'date'" :disabled="disabled"  :placeholder="placeholder" />
         
-                <VueDatePicker v-model="value" :format="format" :enable-time-picker="false" auto-apply :placeholder="placeholder" :hide-input-icon="true" v-if="type == 'date'" :teleport="true" :disabled="disabled"></VueDatePicker>
+                <VueDatePicker v-model="value" :class="{ 'is-invalid': errorMessage }" :format="format" :enable-time-picker="false" auto-apply :placeholder="placeholder" :hide-input-icon="true" v-if="type == 'date'" :teleport="true" :disabled="disabled"></VueDatePicker>
 
             <div v-if="right_box_text" class="input-group-text">
                 <span v-if="box_type=='text'">{{ right_box_text }}</span>
@@ -65,10 +65,10 @@ const { value, errorMessage } = useField(() => name, processedReq, {
             </div>
         </div>
         <div v-else>
-            <input step="0.001" v-model="value" :type="type" class="form-control" v-if="type != 'date'" :disabled="disabled"  :placeholder="placeholder" />
+            <input step="0.001" v-model="value" :type="type" :class="['form-control', { 'is-invalid': errorMessage }]" v-if="type != 'date'" :disabled="disabled"  :placeholder="placeholder" />
     
-            <VueDatePicker v-model="value" :format="format" :enable-time-picker="false" auto-apply :placeholder="placeholder" :hide-input-icon="true" v-if="type == 'date'" :teleport="true" :disabled="disabled"></VueDatePicker>
+            <VueDatePicker v-model="value" :class="{ 'is-invalid': errorMessage }" :format="format" :enable-time-picker="false" auto-apply :placeholder="placeholder" :hide-input-icon="true" v-if="type == 'date'" :teleport="true" :disabled="disabled"></VueDatePicker>
         </div>
-        <span class="text-danger" style="font-size: 11px">{{ errorMessage }}</span>
+        <span v-if="errorMessage" class="field-error">{{ errorMessage }}</span>
     </div>
 </template>

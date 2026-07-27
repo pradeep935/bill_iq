@@ -20,10 +20,35 @@ const ProductApi = {
         return response.data;
     },
 
+    async getReferences() {
+        const response = await axios.get(
+            '/app/inventory/products/references'
+        );
+
+        return response.data;
+    },
+
     async saveProduct(payload) {
         const response = await axios.post(
             '/app/inventory/products/save',
             payload
+        );
+
+        return response.data;
+    },
+
+    async uploadImage(file) {
+        const payload = new FormData();
+        payload.append('photo', file);
+
+        const response = await axios.post(
+            '/upload/photo',
+            payload,
+            {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            }
         );
 
         return response.data;

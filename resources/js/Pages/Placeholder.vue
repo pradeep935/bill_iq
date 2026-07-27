@@ -1,12 +1,12 @@
 <template>
   <Layout :page="page" :title="title">
-    <section class="bill-hero">
-      <div>
-        <span class="bill-eyebrow">Inertia Page</span>
-        <h2>{{ title }}</h2>
+    <template #topbar-title>
+      <div class="bill-page-title">
+        <span>Inertia Page</span>
+        <h1>{{ title }}</h1>
         <p>This module is ready for a dedicated Laravel, Vue and Inertia implementation.</p>
       </div>
-    </section>
+    </template>
 
     <section class="bill-grid bill-grid-4">
       <article v-for="item in cards" :key="item.label" class="bill-card">

@@ -13,6 +13,8 @@ class OpeningStockVoucher extends Model
     protected $casts = [
         'opening_date' => 'date',
         'approved_at' => 'datetime',
+        'posted_at' => 'datetime',
+        'cancelled_at' => 'datetime',
     ];
 
     public function branch()
@@ -38,5 +40,10 @@ class OpeningStockVoucher extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function poster()
+    {
+        return $this->belongsTo(User::class, 'posted_by');
     }
 }

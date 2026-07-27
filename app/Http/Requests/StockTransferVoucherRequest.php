@@ -27,6 +27,8 @@ class StockTransferVoucherRequest extends FormRequest
             'items.*.product_variant_id' => ['nullable', 'integer'],
             'items.*.source_batch_id' => ['nullable', 'integer'],
             'items.*.destination_batch_id' => ['nullable', 'integer'],
+            'items.*.source_serial_id' => ['nullable', 'integer'],
+            'items.*.destination_serial_id' => ['nullable', 'integer'],
             'items.*.unit_id' => ['nullable', 'integer'],
             'items.*.requested_quantity' => ['required', 'numeric', 'min:0.001'],
             'items.*.approved_quantity' => ['nullable', 'numeric', 'min:0'],

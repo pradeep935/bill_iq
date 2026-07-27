@@ -15,7 +15,7 @@ class StockAdjustmentVoucherRequest extends FormRequest
             'adjustment_date' => ['required', 'date'],
             'adjustment_reason_id' => ['nullable', 'integer'],
             'adjustment_type' => ['required', 'in:increase,decrease,mixed'],
-            'source' => ['required', 'in:manual,physical_count,damage,expiry,loss,theft,quality_rejection,opening_correction,system_correction'],
+            'source' => ['required', 'in:manual,physical_count,stock_count,damage,breakage,expiry,expired_stock,loss,theft,sample,quality_rejection,production_consumption,production_output,opening_correction,system_correction'],
             'status' => ['required', 'in:draft,submitted,approved,posted'],
             'remarks' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],

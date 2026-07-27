@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductBarcode;
 use App\Models\ProductVariantItem;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class ProductMasterRequest extends FormRequest
@@ -21,6 +22,12 @@ class ProductMasterRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        if (in_array($this->input('taxability'), ['exempt', 'non_gst', 'nil_rated'], true)) {
+            $this->merge([
+                'gst_rate' => 0,
+            ]);
+        }
+
         if ($this->input('product_type') !== 'service') {
             return;
         }
@@ -42,6 +49,7 @@ class ProductMasterRequest extends FormRequest
     {
         $businessId = AppController::businessId();
         $productId = (int) ($this->input('id') ?: $this->route('product') ?: 0);
+        $isTaxable = !in_array($this->input('taxability'), ['exempt', 'non_gst', 'nil_rated'], true);
 
         return [
             'id' => ['nullable', 'integer'],
@@ -86,20 +94,18 @@ class ProductMasterRequest extends FormRequest
                 'max:100',
                 Rule::unique('products', 'sku')
                     ->where('business_id', $businessId)
+                    ->whereNull('deleted_at')
                     ->ignore($productId),
             ],
             'primary_barcode' => [
                 'nullable',
                 'string',
                 'max:100',
-                Rule::unique('products', 'primary_barcode')
-                    ->where('business_id', $businessId)
-                    ->ignore($productId),
             ],
             'extra_barcodes' => ['nullable', 'string'],
-            'hsn_code' => ['required', 'string', 'max:20'],
+            'hsn_code' => [$isTaxable ? 'required' : 'nullable', 'string', 'max:20'],
             'taxability' => ['required', Rule::in(['taxable', 'exempt', 'nil_rated', 'non_gst'])],
-            'gst_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'gst_rate' => [$isTaxable ? 'required' : 'nullable', 'numeric', 'min:0', 'max:100'],
             'cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'reverse_charge' => ['required', Rule::in(['yes', 'no'])],
             'tax_inclusive' => ['nullable', 'boolean'],
@@ -122,7 +128,7 @@ class ProductMasterRequest extends FormRequest
             'expiry_required' => ['nullable', 'boolean'],
             'batch_required' => ['nullable', 'boolean'],
             'serial_required' => ['nullable', 'boolean'],
-            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'status' => ['required', Rule::in(['active', 'inactive', 'discontinued'])],
 
             'barcodes' => ['nullable', 'array'],
             'barcodes.*.barcode' => ['required_with:barcodes', 'string', 'max:100', 'distinct'],
@@ -168,9 +174,25 @@ class ProductMasterRequest extends FormRequest
 
             if (
                 $this->filled('mrp') &&
+                (float) $this->input('mrp') > 0 &&
                 (float) $this->input('selling_price') > (float) $this->input('mrp')
             ) {
                 $validator->errors()->add('selling_price', 'Selling price cannot be greater than MRP.');
+            }
+
+            foreach ([
+                'wholesale_price' => 'Wholesale price',
+                'dealer_price' => 'Dealer price',
+                'online_price' => 'Online price',
+            ] as $field => $label) {
+                if (
+                    $this->filled('mrp') &&
+                    (float) $this->input('mrp') > 0 &&
+                    $this->filled($field) &&
+                    (float) $this->input($field) > (float) $this->input('mrp')
+                ) {
+                    $validator->errors()->add($field, "{$label} cannot be greater than MRP.");
+                }
             }
 
             foreach ((array) $this->input('variant_items', []) as $index => $item) {
@@ -256,22 +278,18 @@ class ProductMasterRequest extends FormRequest
 
     private function skuExistsInBusiness(string $sku, int $businessId, int $productId): bool
     {
-        return Product::withTrashed()
+        return Product::query()
             ->where('sku', $sku)
             ->where('id', '!=', $productId)
-            ->where(function ($query) use ($businessId) {
-                $query->where('business_id', $businessId)->orWhere('company_id', $businessId);
-            })
+            ->where(fn ($query) => $this->whereProductBusiness($query, $businessId))
             ->exists();
     }
 
     private function barcodeExistsInBusiness(string $barcode, int $businessId, int $productId): bool
     {
-        $productBarcodeExists = Product::withTrashed()
+        $productBarcodeExists = Product::query()
             ->where('id', '!=', $productId)
-            ->where(function ($query) use ($businessId) {
-                $query->where('business_id', $businessId)->orWhere('company_id', $businessId);
-            })
+            ->where(fn ($query) => $this->whereProductBusiness($query, $businessId))
             ->where(function ($query) use ($barcode) {
                 $query
                     ->where('primary_barcode', $barcode)
@@ -289,6 +307,24 @@ class ProductMasterRequest extends FormRequest
             ->where('product_id', '!=', $productId)
             ->where('business_id', $businessId)
             ->exists();
+    }
+
+    private function whereProductBusiness($query, int $businessId): void
+    {
+        $columns = array_values(array_filter(
+            ['business_id', 'company_id', 'tenant_id'],
+            fn ($column) => Schema::hasColumn('products', $column)
+        ));
+
+        if (!$columns) {
+            return;
+        }
+
+        $query->where($columns[0], $businessId);
+
+        foreach (array_slice($columns, 1) as $column) {
+            $query->orWhere($column, $businessId);
+        }
     }
 
     private function variantSkuExistsInBusiness(string $sku, int $businessId, int $productId): bool

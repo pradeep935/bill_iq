@@ -181,11 +181,11 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
 
 <template>
     <Layout :page="page" :title="title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>PURCHASE MANAGEMENT</span><h1>Purchase Returns</h1><p>Return stock against purchases or create authorized direct supplier returns.</p></div>
+        </template>
         <div class="purchase-page">
-            <div class="page-heading">
-                <div><span>PURCHASE MANAGEMENT</span><h1>Purchase Returns</h1><p>Return stock against purchases or create authorized direct supplier returns.</p></div>
-                <button type="button" @click="reset">New Return</button>
-            </div>
+            <div class="page-toolbar"><button type="button" @click="reset">New Return</button></div>
 
             <section class="panel">
                 <div class="form-grid">

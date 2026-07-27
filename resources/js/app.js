@@ -1,6 +1,7 @@
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
+import axios from 'axios';
 
 import Header from '@/Components/Common/Header.vue';
 import Portlet from '@/Components/Common/Portlet.vue';
@@ -34,6 +35,9 @@ import LengthZero from '@/Components/NewComponents/LengthZero.vue';
 import PhotoUpload from '@/Components/Common/PhotoUpload.vue';
 import VideoUpload from '@/Components/Common/VideoUpload.vue';
 import MediaDisplay from '@/Components/Common/MediaDisplay.vue';
+
+const appBasePath = window.location.pathname.split('/app')[0] || '';
+axios.defaults.baseURL = `${window.location.origin}${appBasePath}`;
 
 createInertiaApp({
   title: (title) => (title ? `${title} - Bill IQ` : 'Bill IQ'),

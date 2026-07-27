@@ -263,7 +263,7 @@ class SalesService
         $priceType = $scope['price_type'] ?? 'retail';
 
         return Product::query()
-            ->with(['barcodes', 'variantItems', 'batches' => fn ($q) => $q->where('status', 'active')->orderBy('expiry_date')])
+            ->with(['barcodes', 'variantItems', 'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderBy('expiry_date')])
             ->where(function (Builder $q) use ($businessId) {
                 $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
             })
@@ -544,6 +544,9 @@ class SalesService
 
             if (!empty($item['batch_id'])) {
                 $batch = ProductBatch::query()->where('business_id', $businessId)->where('product_id', $product->id)->where('id', $item['batch_id'])->firstOrFail();
+                if (in_array($batch->status, ['blocked', 'quarantined'], true)) {
+                    throw ValidationException::withMessages(["items.$index.batch_id" => 'Blocked or quarantined batch cannot be sold.']);
+                }
                 if ($batch->expiry_date && $batch->expiry_date->isPast()) {
                     throw ValidationException::withMessages(["items.$index.batch_id" => 'Expired batch cannot be sold.']);
                 }

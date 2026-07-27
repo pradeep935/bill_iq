@@ -43,6 +43,13 @@ class ProductController extends Controller
         );
     }
 
+    public function references()
+    {
+        $this->authorizeProductView();
+
+        return response()->json($this->products->references());
+    }
+
     public function show(int $product)
     {
         $this->authorizeProductView();

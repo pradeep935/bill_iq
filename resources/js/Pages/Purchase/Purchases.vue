@@ -155,11 +155,11 @@ onMounted(async () => { await loadReferences(); await loadPurchases(); });
 
 <template>
     <Layout :page="page" :title="title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>PURCHASE MANAGEMENT</span><h1>Purchase Vouchers</h1><p>Draft purchases and post confirmed stock into the stock ledger.</p></div>
+        </template>
         <div class="purchase-page">
-            <div class="page-heading">
-                <div><span>PURCHASE MANAGEMENT</span><h1>Purchase Vouchers</h1><p>Draft purchases and post confirmed stock into the stock ledger.</p></div>
-                <button type="button" @click="reset">New Purchase</button>
-            </div>
+            <div class="page-toolbar"><button type="button" @click="reset">New Purchase</button></div>
 
             <section class="panel">
                 <div class="form-grid">

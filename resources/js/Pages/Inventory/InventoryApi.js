@@ -13,9 +13,9 @@ const InventoryApi = {
         return response.data;
     },
 
-    async searchOpeningStockProducts(q = '') {
+    async searchOpeningStockProducts(q = '', scope = {}) {
         const response = await axios.get('/app/inventory/opening-stock/products/search', {
-            params: { q },
+            params: { q, ...scope },
         });
 
         return response.data;
@@ -31,6 +31,12 @@ const InventoryApi = {
 
     async approveOpeningStock(id) {
         const response = await axios.post(`/app/inventory/opening-stock/${id}/approve`);
+
+        return response.data;
+    },
+
+    async deleteOpeningStock(id) {
+        const response = await axios.delete(`/app/inventory/opening-stock/${id}`);
 
         return response.data;
     },
@@ -55,6 +61,12 @@ const InventoryApi = {
         return response.data;
     },
 
+    async stockProductDetail(productId, params = {}) {
+        const response = await axios.get(`/app/inventory/current-stock/products/${productId}`, { params });
+
+        return response.data;
+    },
+
     async controlReferences() {
         const response = await axios.get('/app/inventory/control/references');
         return response.data;
@@ -72,6 +84,11 @@ const InventoryApi = {
 
     async inventoryReports(params = {}) {
         const response = await axios.get('/app/inventory/control/reports', { params });
+        return response.data;
+    },
+
+    async inventoryValuation(params = {}) {
+        const response = await axios.get('/app/inventory/control/valuation', { params });
         return response.data;
     },
 
@@ -152,6 +169,66 @@ const InventoryApi = {
 
     async saveLocationTransfer(payload, id = null) {
         const response = id ? await axios.put(`/app/inventory/location-transfers/${id}`, payload) : await axios.post('/app/inventory/location-transfers', payload);
+        return response.data;
+    },
+
+    async warehouseLocations(params = {}) {
+        const response = await axios.get('/app/inventory/warehouse-locations/list', { params });
+        return response.data;
+    },
+
+    async saveWarehouseLocation(payload, id = null) {
+        const response = id ? await axios.put(`/app/inventory/warehouse-locations/${id}`, payload) : await axios.post('/app/inventory/warehouse-locations', payload);
+        return response.data;
+    },
+
+    async batchReferences() {
+        const response = await axios.get('/app/inventory/batches/references');
+        return response.data;
+    },
+
+    async batchList(params = {}) {
+        const response = await axios.get('/app/inventory/batches/list', { params });
+        return response.data;
+    },
+
+    async batchDetail(batch, params = {}) {
+        const response = await axios.get(`/app/inventory/batches/${batch}`, { params });
+        return response.data;
+    },
+
+    async batchLedger(batch, params = {}) {
+        const response = await axios.get(`/app/inventory/batches/${batch}/ledger`, { params });
+        return response.data;
+    },
+
+    async batchReports(params = {}) {
+        const response = await axios.get('/app/inventory/batches/reports', { params });
+        return response.data;
+    },
+
+    async batchFefo(params = {}) {
+        const response = await axios.get('/app/inventory/batches/fefo', { params });
+        return response.data;
+    },
+
+    async updateBatchStatus(batch, payload) {
+        const response = await axios.post(`/app/inventory/batches/${batch}/status`, payload);
+        return response.data;
+    },
+
+    async transferBatch(batch, payload) {
+        const response = await axios.post(`/app/inventory/batches/${batch}/transfer`, payload);
+        return response.data;
+    },
+
+    async splitBatch(batch, payload) {
+        const response = await axios.post(`/app/inventory/batches/${batch}/split`, payload);
+        return response.data;
+    },
+
+    async mergeBatch(batch, payload) {
+        const response = await axios.post(`/app/inventory/batches/${batch}/merge`, payload);
         return response.data;
     },
 };

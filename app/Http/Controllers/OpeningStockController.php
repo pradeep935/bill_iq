@@ -62,7 +62,10 @@ class OpeningStockController extends Controller
         $this->authorizeView();
 
         return response()->json(
-            $this->openingStock->searchProducts(trim((string) $request->query('q')))
+            $this->openingStock->searchProducts(
+                trim((string) $request->query('q')),
+                $request->only(['branch_id', 'warehouse_id'])
+            )
         );
     }
 
@@ -91,11 +94,22 @@ class OpeningStockController extends Controller
     {
         $this->authorizeManage();
 
-        $voucherModel = $this->openingStock->post($this->voucher($voucher), 'approved');
+        $voucherModel = $this->openingStock->post($this->voucher($voucher));
 
         return response()->json([
             'message' => 'Opening stock posted successfully.',
             'voucher' => $this->present($voucherModel),
+        ]);
+    }
+
+    public function destroy(int $voucher)
+    {
+        $this->authorizeManage();
+
+        $this->openingStock->deleteDraft($this->voucher($voucher));
+
+        return response()->json([
+            'message' => 'Opening stock draft deleted successfully.',
         ]);
     }
 
@@ -116,7 +130,7 @@ class OpeningStockController extends Controller
     {
         return OpeningStockVoucher::query()
             ->where('business_id', AppController::businessId())
-            ->with(['branch', 'warehouse', 'items.product', 'items.variant', 'items.batch'])
+            ->with(['branch', 'warehouse', 'creator', 'poster', 'approver', 'items.product', 'items.variant', 'items.batch'])
             ->where('id', $id)
             ->firstOrFail();
     }
@@ -133,26 +147,39 @@ class OpeningStockController extends Controller
             'warehouse' => optional($voucher->warehouse)->name,
             'remarks' => $voucher->remarks,
             'status' => $voucher->status,
-            'approved_at' => optional($voucher->approved_at)->toDateTimeString(),
+            'posted_at' => optional($voucher->posted_at ?: $voucher->approved_at)->toDateTimeString(),
+            'cancelled_at' => optional($voucher->cancelled_at)->toDateTimeString(),
+            'cancellation_reason' => $voucher->cancellation_reason,
+            'created_by' => optional($voucher->creator)->name,
+            'posted_by' => optional($voucher->poster ?: $voucher->approver)->name,
             'items_count' => $voucher->items->count(),
             'total_quantity' => (float) $voucher->items->sum('quantity'),
+            'total_value' => (float) $voucher->items->sum('stock_value'),
             'items' => $voucher->items->map(fn ($item) => [
                 'id' => $item->id,
                 'product_id' => $item->product_id,
                 'product' => optional($item->product)->name,
                 'sku' => optional($item->product)->sku,
+                'unit' => optional($item->product)->unit ?: 'PCS',
+                'tracking_type' => optional($item->product)->tracking_type ?: 'none',
+                'batch_required' => (bool) optional($item->product)->batch_required,
+                'expiry_required' => (bool) optional($item->product)->expiry_required,
+                'serial_required' => (bool) optional($item->product)->serial_required,
                 'product_variant_id' => $item->product_variant_id,
                 'variant' => optional($item->variant)->sku,
                 'batch_id' => $item->batch_id,
                 'batch_no' => $item->batch_no ?: optional($item->batch)->batch_no,
+                'serial_number_id' => $item->serial_number_id,
                 'quantity' => (float) $item->quantity,
                 'purchase_cost' => (float) $item->purchase_cost,
+                'stock_value' => (float) $item->stock_value,
                 'selling_price' => (float) $item->selling_price,
                 'mrp' => $item->mrp !== null ? (float) $item->mrp : null,
                 'warehouse_location' => $item->warehouse_location,
                 'manufacturing_date' => optional($item->manufacturing_date)->format('Y-m-d'),
                 'expiry_date' => optional($item->expiry_date)->format('Y-m-d'),
                 'remarks' => $item->remarks,
+                'current_stock' => $this->openingStock->currentStockForItem($voucher, $item),
             ])->values(),
         ];
     }

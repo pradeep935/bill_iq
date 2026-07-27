@@ -129,8 +129,11 @@ onMounted(async () => { await loadReferences(); await loadSales(); await loadRep
 
 <template>
     <Layout :page="page" :title="title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>SALES MANAGEMENT</span><h1>Sales Invoices</h1><p>Draft, hold and post GST invoices with stock ledger integration.</p></div>
+        </template>
         <div class="sales-page">
-            <div class="page-heading"><div><span>SALES MANAGEMENT</span><h1>Sales Invoices</h1><p>Draft, hold and post GST invoices with stock ledger integration.</p></div><button @click="reset">New Sale</button></div>
+            <div class="page-toolbar"><button @click="reset">New Sale</button></div>
             <section class="metrics"><div><span>Outstanding</span><strong>Rs. {{ formatMoney(reports.outstanding) }}</strong></div><div><span>Cancelled</span><strong>{{ reports.cancelled || 0 }}</strong></div><div><span>Today Total</span><strong>Rs. {{ formatMoney((reports.daily_sales || [])[0]?.total) }}</strong></div></section>
             <section class="panel">
                 <div class="form-grid">

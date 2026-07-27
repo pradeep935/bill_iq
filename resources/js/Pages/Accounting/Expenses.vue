@@ -82,8 +82,11 @@ onMounted(loadAll);
 
 <template>
     <Layout :page="page" :title="title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>ACCOUNTING</span><h1>Expenses, Other Income and Bank</h1></div>
+        </template>
         <div class="expense-page">
-            <div class="page-heading"><div><span>ACCOUNTING</span><h1>Expenses, Other Income and Bank</h1></div><button :disabled="loading" @click="loadAll">Refresh</button></div>
+            <div class="page-toolbar"><button :disabled="loading" @click="loadAll">Refresh</button></div>
             <div class="tabs"><button v-for="tab in tabs" :key="tab" :class="{active: activeTab === tab}" @click="activeTab = tab">{{ tab }}</button></div>
             <div v-if="errors.form" class="alert">{{ errors.form[0] }}</div>
 

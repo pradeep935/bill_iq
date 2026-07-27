@@ -101,6 +101,13 @@ onMounted(async () => { await loadReferences(); scanInput.value?.focus(); });
 
 <template>
     <Layout page="pos" title="POS Billing">
+        <template #topbar-title>
+            <div class="bill-page-title">
+                <span>SALES MANAGEMENT</span>
+                <h1>POS Billing</h1>
+                <p>Scan items, manage cart, collect payments and post stock instantly.</p>
+            </div>
+        </template>
         <div class="pos-page">
             <section class="pos-bar"><select v-model="form.branch_id"><option v-for="b in references.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="form.warehouse_id"><option v-for="w in filteredWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select><select v-model="form.customer_id"><option v-for="c in references.customers" :key="c.id" :value="c.id">{{ c.customer_name }}</option></select><button @click="hold">Hold</button></section>
             <section class="pos-grid">

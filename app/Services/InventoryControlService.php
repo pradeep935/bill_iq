@@ -10,6 +10,8 @@ use App\Models\InventoryStockStatus;
 use App\Models\JournalVoucher;
 use App\Models\LocationTransferVoucher;
 use App\Models\Product;
+use App\Models\ProductBatch;
+use App\Models\ProductSerialNumber;
 use App\Models\StockAdjustmentReason;
 use App\Models\StockAdjustmentVoucher;
 use App\Models\StockCountSession;
@@ -17,9 +19,11 @@ use App\Models\StockLedger;
 use App\Models\StockReservation;
 use App\Models\StockTransferVoucher;
 use App\Models\Warehouse;
+use App\Models\WarehouseLocation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class InventoryControlService
@@ -36,16 +40,16 @@ class InventoryControlService
     public function references(): array
     {
         $businessId = AppController::businessId();
-        return [
-            'branches' => Branch::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
-            'warehouses' => Warehouse::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'branch_id', 'name', 'code']),
+        $masterReferences = app(MasterDataService::class)->references(['branches', 'warehouses', 'categories', 'sub_categories', 'brands', 'units', 'hsn_codes']);
+
+        return array_merge($masterReferences, [
             'reasons' => StockAdjustmentReason::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('reason_name')->get(),
             'statuses' => InventoryStockStatus::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(),
             'products' => Product::query()->where(function (Builder $q) use ($businessId) {
                 $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
-            })->where('status', 'active')->orderBy('name')->limit(200)->get(['id', 'name', 'sku', 'primary_barcode', 'barcode', 'unit_id', 'batch_tracking', 'serial_tracking']),
+            })->where('status', 'active')->orderBy('name')->limit(200)->get($this->productReferenceColumns()),
             'settings' => BusinessInventorySetting::query()->where('business_id', $businessId)->first(),
-        ];
+        ]);
     }
 
     public function searchProducts(string $q)
@@ -56,7 +60,7 @@ class InventoryControlService
         })->where(function (Builder $query) use ($q) {
             $query->where('name', 'like', '%' . $q . '%')->orWhere('sku', 'like', '%' . $q . '%')->orWhere('primary_barcode', $q)->orWhere('barcode', $q)
                 ->orWhereHas('barcodes', fn (Builder $b) => $b->where('barcode', $q));
-        })->where('status', 'active')->limit(20)->get(['id', 'name', 'sku', 'primary_barcode', 'barcode', 'unit_id', 'batch_tracking', 'serial_tracking']);
+        })->where('status', 'active')->limit(20)->get($this->productReferenceColumns());
     }
 
     public function reasons(array $filters)
@@ -85,9 +89,24 @@ class InventoryControlService
 
     public function adjustments(array $filters)
     {
-        return StockAdjustmentVoucher::query()->with(['branch', 'warehouse', 'reason'])->where('business_id', AppController::businessId())
+        return StockAdjustmentVoucher::query()->with(['branch', 'warehouse', 'reason', 'items.product', 'items.batch'])->where('business_id', AppController::businessId())
             ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(!empty($filters['source']), fn (Builder $q) => $q->where('source', $filters['source']))
+            ->when(!empty($filters['voucher_type']), fn (Builder $q) => $q->where('source', $filters['voucher_type']))
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
+            ->when(!empty($filters['reason']), fn (Builder $q) => $q->whereHas('reason', fn (Builder $r) => $r->where('reason_name', 'like', '%' . $filters['reason'] . '%')))
+            ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('adjustment_date', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('adjustment_date', '<=', $filters['date_to']))
+            ->when(!empty($filters['search']), function (Builder $q) use ($filters) {
+                $search = '%' . $filters['search'] . '%';
+                $q->where(function (Builder $query) use ($search) {
+                    $query->where('voucher_number', 'like', $search)
+                        ->orWhere('remarks', 'like', $search)
+                        ->orWhereHas('reason', fn (Builder $reason) => $reason->where('reason_name', 'like', $search))
+                        ->orWhereHas('items.product', fn (Builder $product) => $product->where('name', 'like', $search)->orWhere('sku', 'like', $search));
+                });
+            })
             ->latest('id')->paginate(20);
     }
 
@@ -98,6 +117,7 @@ class InventoryControlService
             $this->assertWarehouse($data['warehouse_id'], $data['branch_id'] ?? null);
             if (!empty($data['adjustment_reason_id'])) $this->assertReason($data['adjustment_reason_id']);
             $items = $this->prepareAdjustmentItems($data);
+            $this->validateAdjustmentVoucher($data, $items);
             unset($data['items']);
             $voucher = $id ? StockAdjustmentVoucher::query()->where('business_id', $businessId)->with('items')->findOrFail($id) : new StockAdjustmentVoucher(['business_id' => $businessId, 'voucher_number' => $this->nextNumber('ADJ', StockAdjustmentVoucher::class, 'voucher_number'), 'created_by' => Auth::id()]);
             if (in_array($voucher->status, ['posted', 'reversed', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Posted stock adjustments cannot be edited.']);
@@ -115,6 +135,7 @@ class InventoryControlService
         return DB::transaction(function () use ($id) {
             $voucher = StockAdjustmentVoucher::query()->where('business_id', AppController::businessId())->with('items')->findOrFail($id);
             if ($this->stockAlreadyPosted(StockAdjustmentVoucher::class, $voucher->id)) return $voucher;
+            $this->validateAdjustmentVoucher($voucher->toArray(), $voucher->items->map(fn ($item) => $item->toArray())->all(), true);
             foreach ($voucher->items as $item) {
                 $payload = $this->stockPayload($voucher, $item, [
                     'transaction_type' => $item->direction === 'in' ? 'stock_adjustment_in' : $this->outTypeForCondition($item->condition_status),
@@ -148,7 +169,7 @@ class InventoryControlService
 
     public function countSessions(array $filters)
     {
-        return StockCountSession::query()->with(['branch', 'warehouse'])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
+        return StockCountSession::query()->with(['branch', 'warehouse', 'items.product'])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
     }
 
     public function saveCountSession(array $data, ?int $id = null): StockCountSession
@@ -214,7 +235,21 @@ class InventoryControlService
 
     public function transfers(array $filters)
     {
-        return StockTransferVoucher::query()->with(['sourceWarehouse', 'destinationWarehouse', 'items.product'])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
+        return StockTransferVoucher::query()->with(['sourceWarehouse', 'destinationWarehouse', 'sourceBranch', 'destinationBranch', 'items.product', 'items.sourceBatch', 'items.destinationBatch', 'items.sourceSerial', 'items.destinationSerial'])->where('business_id', AppController::businessId())
+            ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where(fn (Builder $query) => $query->where('source_branch_id', $filters['branch_id'])->orWhere('destination_branch_id', $filters['branch_id'])))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where(fn (Builder $query) => $query->where('source_warehouse_id', $filters['warehouse_id'])->orWhere('destination_warehouse_id', $filters['warehouse_id'])))
+            ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('transfer_date', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('transfer_date', '<=', $filters['date_to']))
+            ->when(!empty($filters['search']), function (Builder $q) use ($filters) {
+                $search = '%' . $filters['search'] . '%';
+                $q->where(function (Builder $query) use ($search) {
+                    $query->where('voucher_number', 'like', $search)
+                        ->orWhere('remarks', 'like', $search)
+                        ->orWhereHas('items.product', fn (Builder $product) => $product->where('name', 'like', $search)->orWhere('sku', 'like', $search));
+                });
+            })
+            ->latest('id')->paginate(20);
     }
 
     public function saveTransfer(array $data, ?int $id = null): StockTransferVoucher
@@ -245,8 +280,8 @@ class InventoryControlService
             if ($this->stockAlreadyPosted(StockTransferVoucher::class, $voucher->id)) return $voucher;
             foreach ($voucher->items as $item) {
                 $qty = (float) ($item->approved_quantity ?: $item->requested_quantity);
-                $this->stock->decreaseStock($this->transferPayload($voucher, $item, $qty, $voucher->source_branch_id, $voucher->source_warehouse_id, 'stock_transfer_out', $item->source_location));
-                $this->stock->increaseStock($this->transferPayload($voucher, $item, $qty, $voucher->destination_branch_id, $voucher->destination_warehouse_id, 'stock_transfer_in', $item->destination_location));
+                $this->stock->decreaseStock($this->transferPayload($voucher, $item, $qty, $voucher->source_branch_id, $voucher->source_warehouse_id, 'stock_transfer_out', $item->source_location, $item->source_batch_id, $item->source_serial_id));
+                $this->stock->increaseStock($this->transferPayload($voucher, $item, $qty, $voucher->destination_branch_id, $voucher->destination_warehouse_id, 'stock_transfer_in', $item->destination_location, $item->destination_batch_id ?: $item->source_batch_id, $item->destination_serial_id ?: $item->source_serial_id));
                 $item->update(['dispatched_quantity' => $qty, 'received_quantity' => $qty]);
             }
             $voucher->update(['status' => 'received', 'approved_by' => Auth::id(), 'approved_at' => now(), 'dispatched_by' => Auth::id(), 'dispatched_at' => now(), 'received_by' => Auth::id(), 'received_at' => now()]);
@@ -261,7 +296,7 @@ class InventoryControlService
             if (StockLedger::query()->where('business_id', $voucher->business_id)->where('reference_type', StockTransferVoucher::class)->where('reference_id', $voucher->id)->where('transaction_type', 'stock_transfer_out')->exists()) return $voucher;
             foreach ($voucher->items as $item) {
                 $qty = (float) ($item->approved_quantity ?: $item->requested_quantity);
-                $this->stock->decreaseStock($this->transferPayload($voucher, $item, $qty, $voucher->source_branch_id, $voucher->source_warehouse_id, 'stock_transfer_out', $item->source_location));
+                $this->stock->decreaseStock($this->transferPayload($voucher, $item, $qty, $voucher->source_branch_id, $voucher->source_warehouse_id, 'stock_transfer_out', $item->source_location, $item->source_batch_id, $item->source_serial_id));
                 $item->update(['dispatched_quantity' => $qty]);
             }
             $voucher->update(['status' => 'dispatched', 'dispatched_by' => Auth::id(), 'dispatched_at' => now()]);
@@ -280,7 +315,7 @@ class InventoryControlService
                 $qty = (float) $row['received_quantity'];
                 $rejected = (float) ($row['rejected_quantity'] ?? 0);
                 if ($qty + $already > (float) $item->dispatched_quantity) throw ValidationException::withMessages(['received_quantity' => 'Received quantity cannot exceed dispatched quantity.']);
-                if ($qty > 0) $this->stock->increaseStock($this->transferPayload($voucher, $item, $qty, $voucher->destination_branch_id, $voucher->destination_warehouse_id, 'stock_transfer_in', $row['destination_location'] ?? $item->destination_location));
+                if ($qty > 0) $this->stock->increaseStock($this->transferPayload($voucher, $item, $qty, $voucher->destination_branch_id, $voucher->destination_warehouse_id, 'stock_transfer_in', $row['destination_location'] ?? $item->destination_location, $item->destination_batch_id ?: $item->source_batch_id, $item->destination_serial_id ?: $item->source_serial_id));
                 $item->update(['received_quantity' => $already + $qty, 'rejected_quantity' => (float) $item->rejected_quantity + $rejected]);
             }
             $allReceived = $voucher->items()->get()->every(fn ($i) => (float) $i->received_quantity >= (float) $i->dispatched_quantity);
@@ -291,7 +326,32 @@ class InventoryControlService
 
     public function locationTransfers(array $filters)
     {
-        return LocationTransferVoucher::query()->with(['warehouse'])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
+        return LocationTransferVoucher::query()->with(['warehouse', 'items.product'])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
+    }
+
+    public function warehouseLocations(array $filters)
+    {
+        return WarehouseLocation::query()->with('warehouse')->where('business_id', AppController::businessId())
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
+            ->when(!empty($filters['search']), function (Builder $q) use ($filters) {
+                $search = '%' . $filters['search'] . '%';
+                $q->where(fn (Builder $query) => $query->where('rack', 'like', $search)->orWhere('shelf', 'like', $search)->orWhere('bin', 'like', $search)->orWhere('zone', 'like', $search)->orWhere('aisle', 'like', $search));
+            })
+            ->latest('id')
+            ->paginate((int) ($filters['per_page'] ?? 50));
+    }
+
+    public function saveWarehouseLocation(array $data, ?int $id = null): WarehouseLocation
+    {
+        return DB::transaction(function () use ($data, $id) {
+            $businessId = AppController::businessId();
+            $warehouse = $this->assertWarehouse((int) $data['warehouse_id'], $data['branch_id'] ?? null);
+            $location = $id ? WarehouseLocation::query()->where('business_id', $businessId)->findOrFail($id) : new WarehouseLocation(['business_id' => $businessId]);
+            $location->fill(array_merge($data, ['branch_id' => $data['branch_id'] ?? $warehouse->branch_id]))->save();
+
+            return $location->fresh('warehouse');
+        });
     }
 
     public function saveLocationTransfer(array $data, ?int $id = null): LocationTransferVoucher
@@ -337,12 +397,29 @@ class InventoryControlService
     public function reports(array $filters): array
     {
         $businessId = AppController::businessId();
+        $ledger = StockLedger::query()->with(['product', 'warehouse', 'branch', 'creator'])->where('business_id', $businessId)
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
+            ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('transaction_date', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('transaction_date', '<=', $filters['date_to']))
+            ->latest('transaction_date')
+            ->limit(200)
+            ->get();
+        $batchNumberColumn = Schema::hasColumn('product_batches', 'batch_number') ? 'product_batches.batch_number' : 'product_batches.batch_no';
+
         return [
             'stock_summary' => $this->stock->summary($filters),
-            'ledger' => StockLedger::query()->with(['product', 'warehouse', 'branch', 'creator'])->where('business_id', $businessId)->latest('transaction_date')->limit(200)->get(),
+            'ledger' => $ledger,
+            'movement_report' => $ledger,
+            'inventory_valuation' => $this->stock->summary(array_merge($filters, ['view_mode' => 'summary', 'per_page' => 100]))->getCollection()->values(),
+            'branch_report' => DB::table('stock_ledgers')->leftJoin('branches', 'branches.id', '=', 'stock_ledgers.branch_id')->where('stock_ledgers.business_id', $businessId)->selectRaw('COALESCE(branches.name, "Unassigned") as branch_name, SUM(quantity_in) as quantity_in, SUM(quantity_out) as quantity_out, SUM(quantity_in - quantity_out) as quantity_available, SUM(stock_value) as stock_value')->groupBy('branches.name')->orderBy('branches.name')->get(),
+            'warehouse_report' => DB::table('stock_ledgers')->leftJoin('warehouses', 'warehouses.id', '=', 'stock_ledgers.warehouse_id')->where('stock_ledgers.business_id', $businessId)->selectRaw('COALESCE(warehouses.name, "Unassigned") as warehouse_name, SUM(quantity_in) as quantity_in, SUM(quantity_out) as quantity_out, SUM(quantity_in - quantity_out) as quantity_available, SUM(stock_value) as stock_value')->groupBy('warehouses.name')->orderBy('warehouses.name')->get(),
+            'adjustment_report' => StockAdjustmentVoucher::query()->with(['branch', 'warehouse', 'reason'])->where('business_id', $businessId)->latest('id')->limit(100)->get(),
             'transfer_report' => StockTransferVoucher::query()->with(['sourceWarehouse', 'destinationWarehouse'])->where('business_id', $businessId)->latest('id')->limit(100)->get(),
             'variance_report' => StockCountSession::query()->with('items.product')->where('business_id', $businessId)->latest('id')->limit(50)->get(),
-            'batch_report' => DB::table('stock_ledgers')->join('products', 'products.id', '=', 'stock_ledgers.product_id')->leftJoin('product_batches', 'product_batches.id', '=', 'stock_ledgers.batch_id')->where('stock_ledgers.business_id', $businessId)->selectRaw('products.name as product_name, product_batches.batch_number, product_batches.batch_no, product_batches.expiry_date, SUM(quantity_in) as quantity_in, SUM(quantity_out) as quantity_out, SUM(quantity_in - quantity_out) as available_quantity, SUM(stock_value) as stock_value')->groupBy('products.name', 'product_batches.batch_number', 'product_batches.batch_no', 'product_batches.expiry_date')->limit(100)->get(),
+            'damage_report' => StockLedger::query()->with(['product', 'warehouse', 'branch'])->where('business_id', $businessId)->where(fn (Builder $q) => $q->where('transaction_type', 'damaged_stock')->orWhere('stock_status', 'damaged'))->latest('transaction_date')->limit(100)->get(),
+            'expiry_report' => StockLedger::query()->with(['product', 'warehouse', 'branch'])->where('business_id', $businessId)->where(fn (Builder $q) => $q->where('transaction_type', 'expired_stock')->orWhere('stock_status', 'expired'))->latest('transaction_date')->limit(100)->get(),
+            'batch_report' => DB::table('stock_ledgers')->join('products', 'products.id', '=', 'stock_ledgers.product_id')->leftJoin('product_batches', 'product_batches.id', '=', 'stock_ledgers.batch_id')->where('stock_ledgers.business_id', $businessId)->selectRaw("products.name as product_name, {$batchNumberColumn} as batch_number, product_batches.expiry_date, SUM(quantity_in) as quantity_in, SUM(quantity_out) as quantity_out, SUM(quantity_in - quantity_out) as available_quantity, SUM(stock_value) as stock_value")->groupBy('products.name', DB::raw($batchNumberColumn), 'product_batches.expiry_date')->limit(100)->get(),
         ];
     }
 
@@ -374,6 +451,43 @@ class InventoryControlService
         })->all();
     }
 
+    private function validateAdjustmentVoucher(array $data, array $items, bool $posting = false): void
+    {
+        if (empty($items)) {
+            throw ValidationException::withMessages(['items' => 'At least one product line is required.']);
+        }
+
+        if (empty($data['warehouse_id'])) {
+            throw ValidationException::withMessages(['warehouse_id' => 'Source warehouse is required.']);
+        }
+
+        $isDraft = ($data['status'] ?? 'draft') === 'draft' && !$posting;
+        if (!$isDraft && empty($data['adjustment_reason_id']) && empty($data['remarks'])) {
+            throw ValidationException::withMessages(['adjustment_reason_id' => 'Reason is required before posting.']);
+        }
+
+        $serials = [];
+
+        foreach ($items as $index => $item) {
+            $quantity = (float) ($item['adjustment_quantity'] ?? 0);
+            if ($quantity <= 0) {
+                throw ValidationException::withMessages(["items.$index.adjustment_quantity" => 'Quantity must be greater than zero.']);
+            }
+
+            if (!in_array($item['direction'] ?? '', ['in', 'out'], true)) {
+                throw ValidationException::withMessages(["items.$index.direction" => 'Direction must be IN or OUT.']);
+            }
+
+            if (!empty($item['serial_id'])) {
+                $serialKey = implode(':', [$item['product_id'] ?? 0, $item['serial_id']]);
+                if (isset($serials[$serialKey])) {
+                    throw ValidationException::withMessages(["items.$index.serial_id" => 'Duplicate serial number is not allowed in the same voucher.']);
+                }
+                $serials[$serialKey] = true;
+            }
+        }
+    }
+
     private function prepareCountItems(array $data): array
     {
         if (empty($data['items'])) return [];
@@ -390,10 +504,38 @@ class InventoryControlService
 
     private function prepareTransferItems(array $data): array
     {
-        return collect($data['items'])->map(function ($row) use ($data) {
+        $serials = [];
+
+        return collect($data['items'])->map(function ($row, int $index) use ($data, &$serials) {
             $product = $this->assertProduct($row['product_id']);
             $qty = (float) ($row['approved_quantity'] ?? $row['requested_quantity']);
+            if ($qty <= 0) {
+                throw ValidationException::withMessages(["items.$index.requested_quantity" => 'Quantity must be greater than zero.']);
+            }
+
+            if (!empty($row['source_batch_id'])) {
+                $this->assertBatch((int) $row['source_batch_id'], $product->id);
+            }
+
+            if (!empty($row['destination_batch_id'])) {
+                $this->assertBatch((int) $row['destination_batch_id'], $product->id);
+            }
+
+            if (!empty($row['source_serial_id'])) {
+                $serial = $this->assertSerial((int) $row['source_serial_id'], $product->id);
+                $serialKey = implode(':', [$product->id, $serial->id]);
+                if (isset($serials[$serialKey])) {
+                    throw ValidationException::withMessages(["items.$index.source_serial_id" => 'Duplicate serial number is not allowed in the same transfer.']);
+                }
+                $serials[$serialKey] = true;
+            }
+
+            if (!empty($row['destination_serial_id'])) {
+                $this->assertSerial((int) $row['destination_serial_id'], $product->id);
+            }
+
             $this->stock->validateAvailableStock($this->scope($data['source_branch_id'] ?? null, $data['source_warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['source_batch_id'] ?? null), $qty);
+
             return array_merge($row, ['unit_id' => $row['unit_id'] ?? $product->unit_id ?? null, 'approved_quantity' => $row['approved_quantity'] ?? $row['requested_quantity']]);
         })->all();
     }
@@ -434,9 +576,9 @@ class InventoryControlService
         return array_merge(['business_id' => $voucher->business_id, 'branch_id' => $voucher->branch_id, 'warehouse_id' => $voucher->warehouse_id, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id, 'serial_id' => $item->serial_id, 'transaction_date' => $voucher->adjustment_date], $extra);
     }
 
-    private function transferPayload(StockTransferVoucher $voucher, $item, float $qty, ?int $branchId, int $warehouseId, string $type, ?string $location): array
+    private function transferPayload(StockTransferVoucher $voucher, $item, float $qty, ?int $branchId, int $warehouseId, string $type, ?string $location, ?int $batchId = null, ?int $serialId = null): array
     {
-        return ['business_id' => $voucher->business_id, 'branch_id' => $branchId, 'warehouse_id' => $warehouseId, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->source_batch_id, 'transaction_type' => $type, 'reference_type' => StockTransferVoucher::class, 'reference_id' => $voucher->id, 'quantity' => $qty, 'unit_cost' => (float) $item->unit_cost, 'transaction_date' => $voucher->transfer_date, 'warehouse_location' => $location, 'stock_status' => $type === 'stock_transfer_out' ? 'in_transit' : 'saleable', 'remarks' => $voucher->voucher_number];
+        return ['business_id' => $voucher->business_id, 'branch_id' => $branchId, 'warehouse_id' => $warehouseId, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $batchId, 'serial_id' => $serialId, 'transaction_type' => $type, 'reference_type' => StockTransferVoucher::class, 'reference_id' => $voucher->id, 'quantity' => $qty, 'unit_cost' => (float) $item->unit_cost, 'transaction_date' => $voucher->transfer_date, 'warehouse_location' => $location, 'stock_status' => $type === 'stock_transfer_out' ? 'in_transit' : 'saleable', 'remarks' => $voucher->voucher_number];
     }
 
     private function scope(?int $branchId, ?int $warehouseId, int $productId, ?int $variantId = null, ?int $batchId = null): array
@@ -489,9 +631,45 @@ class InventoryControlService
         })->where('status', 'active')->firstOrFail();
     }
 
+    private function assertBatch(int $id, int $productId): ProductBatch
+    {
+        return ProductBatch::query()
+            ->when(Schema::hasColumn('product_batches', 'business_id'), fn (Builder $q) => $q->where('business_id', AppController::businessId()))
+            ->when(Schema::hasColumn('product_batches', 'tenant_id'), fn (Builder $q) => $q->where('tenant_id', AppController::businessId()))
+            ->where('product_id', $productId)
+            ->findOrFail($id);
+    }
+
+    private function assertSerial(int $id, int $productId): ProductSerialNumber
+    {
+        return ProductSerialNumber::query()->where('business_id', AppController::businessId())->where('product_id', $productId)->findOrFail($id);
+    }
+
     private function assertAccount(int $id): Account
     {
         return Account::query()->where('business_id', AppController::businessId())->findOrFail($id);
+    }
+
+    private function columns(string $table, array $columns): array
+    {
+        return array_values(array_filter($columns, fn (string $column) => Schema::hasColumn($table, $column)));
+    }
+
+    private function productReferenceColumns(): array
+    {
+        return $this->columns('products', [
+            'id',
+            'name',
+            'sku',
+            'primary_barcode',
+            'barcode',
+            'unit_id',
+            'unit',
+            'batch_tracking',
+            'serial_tracking',
+            'batch_required',
+            'serial_required',
+        ]);
     }
 
     private function nextNumber(string $prefix, string $model, string $column): string

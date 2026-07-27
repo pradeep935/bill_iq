@@ -32,12 +32,12 @@ return new class extends Migration
                 $table->boolean('require_asset_tag')->default(true);
                 $table->boolean('auto_generate_asset_tag')->default(true);
                 $table->boolean('require_asset_verification')->default(false);
-                $table->unsignedBigInteger('default_asset_clearing_account_id')->nullable()->index();
-                $table->unsignedBigInteger('default_asset_disposal_account_id')->nullable()->index();
-                $table->unsignedBigInteger('default_profit_on_sale_account_id')->nullable()->index();
-                $table->unsignedBigInteger('default_loss_on_sale_account_id')->nullable()->index();
-                $table->unsignedBigInteger('default_impairment_loss_account_id')->nullable()->index();
-                $table->unsignedBigInteger('default_accumulated_impairment_account_id')->nullable()->index();
+                $table->unsignedBigInteger('default_asset_clearing_account_id')->nullable();
+                $table->unsignedBigInteger('default_asset_disposal_account_id')->nullable();
+                $table->unsignedBigInteger('default_profit_on_sale_account_id')->nullable();
+                $table->unsignedBigInteger('default_loss_on_sale_account_id')->nullable();
+                $table->unsignedBigInteger('default_impairment_loss_account_id')->nullable();
+                $table->unsignedBigInteger('default_accumulated_impairment_account_id')->nullable();
                 $table->string('status', 20)->default('active')->index();
                 $table->timestamps();
                 $table->unique('business_id');
@@ -151,10 +151,10 @@ return new class extends Migration
                 $table->softDeletes();
                 $table->unique(['business_id', 'asset_number']);
                 $table->unique(['business_id', 'asset_tag']);
-                $table->index(['business_id', 'asset_category_id']);
-                $table->index(['business_id', 'branch_id']);
-                $table->index(['business_id', 'asset_status']);
-                $table->index(['business_id', 'current_location_id']);
+                $table->index(['business_id', 'asset_category_id'], 'fixed_assets_business_category_idx');
+                $table->index(['business_id', 'branch_id'], 'fixed_assets_business_branch_idx');
+                $table->index(['business_id', 'asset_status'], 'fixed_assets_business_status_idx');
+                $table->index(['business_id', 'current_location_id'], 'fixed_assets_business_location_idx');
             });
         }
 
@@ -267,7 +267,7 @@ return new class extends Migration
                 $table->timestamp('reversed_at')->nullable();
                 $table->timestamps();
                 $table->unique(['business_id', 'run_number']);
-                $table->index(['business_id', 'period_start', 'period_end']);
+                $table->index(['business_id', 'period_start', 'period_end'], 'depn_runs_business_period_idx');
             });
         }
 
@@ -293,7 +293,7 @@ return new class extends Migration
                 $table->timestamp('posted_at')->nullable();
                 $table->timestamps();
                 $table->unique(['fixed_asset_id', 'asset_component_id', 'period_start', 'period_end'], 'asset_depn_unique_period');
-                $table->index(['fixed_asset_id', 'period_start', 'period_end']);
+                $table->index(['fixed_asset_id', 'period_start', 'period_end'], 'asset_depn_schedule_asset_period_idx');
             });
         }
 
@@ -598,7 +598,7 @@ return new class extends Migration
                 $table->foreignId('scanned_by')->nullable()->constrained('users')->nullOnDelete();
                 $table->text('notes')->nullable();
                 $table->timestamps();
-                $table->index(['fixed_asset_id', 'verification_status']);
+                $table->index(['fixed_asset_id', 'verification_status'], 'asset_verification_asset_status_idx');
             });
         }
 

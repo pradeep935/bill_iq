@@ -21,4 +21,7 @@ class StockTransferItem extends Model
     public function voucher() { return $this->belongsTo(StockTransferVoucher::class, 'stock_transfer_voucher_id'); }
     public function product() { return $this->belongsTo(Product::class); }
     public function sourceBatch() { return $this->belongsTo(ProductBatch::class, 'source_batch_id'); }
+    public function destinationBatch() { return $this->belongsTo(ProductBatch::class, 'destination_batch_id'); }
+    public function sourceSerial() { return $this->belongsTo(ProductSerialNumber::class, 'source_serial_id'); }
+    public function destinationSerial() { return $this->belongsTo(ProductSerialNumber::class, 'destination_serial_id'); }
 }

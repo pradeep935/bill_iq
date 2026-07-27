@@ -9,7 +9,7 @@ const processReq = computed(() => {
     if(!req){
       return null;
     } else {
-        return yup.string().required(); 
+        return yup.string().required('This field is required.'); 
     }
 });
 
@@ -20,14 +20,14 @@ const { value, errorMessage } = useField(() => name, processReq, {
 
 <template>
     <div :class="`form-group ${cls}`">
-        <label v-if="label">{{label}} <span class="text-danger" v-if="req">*</span></label>
+        <label v-if="label">{{ label }} <span class="required-mark" v-if="req">*</span></label>
         <div v-if="left_box_text || right_box_text" class="input-group">
             <div v-if="left_box_text" class="input-group-text">
                 <span v-if="box_type=='text'">{{ left_box_text }}</span>
                 <i :class="left_box_text" v-else></i>
             </div>
 
-            <select class="form-control" v-model="value" :disabled="disabled">
+            <select :class="['form-control', { 'is-invalid': errorMessage }]" v-model="value" :disabled="disabled">
                 <option value="">{{ select_name }}</option>
                 <option v-for="opt in options" :value="opt[opt_id]">{{ opt[opt_name] }}</option>
             </select>
@@ -38,12 +38,12 @@ const { value, errorMessage } = useField(() => name, processReq, {
             </div>
         </div>
         <div v-else>
-            <select class="form-control" v-model="value" :disabled="disabled">
+            <select :class="['form-control', { 'is-invalid': errorMessage }]" v-model="value" :disabled="disabled">
                 <option value="">{{ select_name }}</option>
                 <option v-for="opt in options" :value="opt[opt_id]">{{ opt[opt_name] }}</option>
             </select>
         </div>
-        <span class="text-danger" style="font-size: 11px">{{ errorMessage }}</span>
+        <span v-if="errorMessage" class="field-error">{{ errorMessage }}</span>
     </div>
 
 </template>

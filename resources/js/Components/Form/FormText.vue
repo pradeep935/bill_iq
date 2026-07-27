@@ -33,7 +33,7 @@ const processedReq = computed(() => {
     let obj = yup.string();
 
     if (req) {
-        obj = obj.required();
+        obj = obj.required('This field is required.');
     }
 
     if (validate === 'email') {
@@ -54,16 +54,16 @@ const { value, errorMessage } = useField(() => name, processedReq, {
 
 <template>
     <div :class="`form-group ${cls}`">
-        <label v-if="label" >{{label}} <span class="error" v-if="req">*</span></label>
+        <label v-if="label">{{ label }} <span class="required-mark" v-if="req">*</span></label>
         <textarea
             v-model="value"
-            class="form-control  form-control-solid"
+            :class="['form-control form-control-solid', { 'is-invalid': errorMessage }]"
             :placeholder="placeholder"
             :rows="rows"
             :disabled="disabled"
         >
                 
         </textarea>
-        <span class="text-danger" style="font-size: 11px">{{ errorMessage }}</span>                 
+        <span v-if="errorMessage" class="field-error">{{ errorMessage }}</span>                 
     </div>
 </template>

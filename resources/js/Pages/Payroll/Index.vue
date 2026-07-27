@@ -72,8 +72,11 @@ onMounted(load);
 
 <template>
   <Layout page="payroll" title="Payroll">
+    <template #topbar-title>
+      <div class="bill-page-title"><span>HR PAYROLL</span><h1>Payroll, Attendance & Payslips</h1><p>Employee master, salary structures, attendance-based payroll, accounting posting and reports.</p></div>
+    </template>
     <div class="payroll-page">
-      <div class="page-heading"><div><span>HR PAYROLL</span><h1>Payroll, Attendance & Payslips</h1><p>Employee master, salary structures, attendance-based payroll, accounting posting and reports.</p></div><button :disabled="loading" @click="load">Refresh</button></div>
+      <div class="page-toolbar"><button :disabled="loading" @click="load">Refresh</button></div>
       <div class="filters"><input v-model="filters.search" placeholder="Search employee, code, mobile" @keyup.enter="load" /><select v-model="filters.branch_id" @change="load"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="filters.department_id" @change="load"><option value="">Department</option><option v-for="d in refs.departments" :key="d.id" :value="d.id">{{ d.department_name }}</option></select><select v-model="filters.employment_status" @change="load"><option value="">Employment status</option><option>active</option><option>notice_period</option><option>resigned</option><option>terminated</option><option>inactive</option></select></div>
       <div class="tabs"><button v-for="t in tabs" :key="t" :class="{ active: tab === t }" @click="tab = t">{{ t }}</button></div>
       <div v-if="firstError" class="alert">{{ firstError }}</div>

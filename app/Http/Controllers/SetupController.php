@@ -8,7 +8,13 @@ class SetupController extends Controller
 {
     public function branches()
     {
-        return ModuleController::render('branches', 'Branches');
+        if ($redirect = AppController::guardPage('masters')) return $redirect;
+
+        return Inertia::render('Setup/Masters', [
+            'page' => 'masters',
+            'title' => 'Masters',
+            'initial_tab' => 'branch',
+        ]);
     }
 
     public function employees()

@@ -38,7 +38,7 @@
             v-for="item in activeSection.items"
             :key="item.href"
             :class="{ active: page === item.page }"
-            :href="item.href"
+            :href="appUrl(item.href)"
           >
             <span class="bill-nav-icon" v-html="iconSvg(item.icon)"></span>
             {{ item.label }}
@@ -46,7 +46,7 @@
         </div>
       </nav>
       <div class="bill-sidebar-footer">
-        <a class="bill-logout" href="/app/logout">
+        <a class="bill-logout" :href="appUrl('/app/logout')">
           <span class="bill-nav-icon" v-html="iconSvg('log-out')"></span>
           Logout
         </a>
@@ -55,15 +55,14 @@
 
     <main class="bill-main">
       <header class="bill-topbar">
-        <button class="bill-menu" type="button" aria-label="Open menu" @click="menuOpen = true">☰</button>
-        <div>
-          <span class="bill-eyebrow">Billing Software</span>
-          <h1>{{ title }}</h1>
+        <div class="bill-topbar-left">
+          <button class="bill-menu" type="button" aria-label="Open menu" @click="menuOpen = true">☰</button>
+          <slot name="topbar-title" />
         </div>
         <div class="bill-top-actions">
-          <a href="/app/sales/pos">New Bill</a>
-          <a href="/app/accounting/vouchers">Voucher</a>
-          <a href="/app/reports/business">Reports</a>
+          <a :href="appUrl('/app/sales/pos')">New Bill</a>
+          <a :href="appUrl('/app/accounting/vouchers')">Voucher</a>
+          <a :href="appUrl('/app/reports/business')">Reports</a>
         </div>
         <div class="bill-user">
           <span>{{ userInitials }}</span>
@@ -94,6 +93,13 @@ const inertiaPage = usePage();
 const roleId = computed(() => Number(inertiaPage.props.auth?.user?.role_id || inertiaPage.props.role_id || 2));
 const userName = computed(() => inertiaPage.props.auth?.user?.name || 'Amit Kumar');
 const userInitials = computed(() => userName.value.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase());
+const baseUrl = computed(() => String(inertiaPage.props.app?.base_url || '').replace(/\/$/, ''));
+
+const appUrl = (path) => {
+  const normalizedPath = `/${String(path || '').replace(/^\/+/, '')}`;
+
+  return `${baseUrl.value}${normalizedPath}`;
+};
 
 const sections = [
   {
@@ -205,6 +211,7 @@ const sections = [
     label: 'SETUP',
     icon: 'settings',
     items: [
+      { label: 'Masters', page: 'masters', href: '/app/setup/masters', icon: 'settings' },
       { label: 'Branches', page: 'branches', href: '/app/setup/branches', icon: 'building-2' },
       { label: 'Employees', page: 'employees', href: '/app/setup/employees', icon: 'id-card' },
       { label: 'Users & Roles', page: 'users', href: '/app/setup/users', icon: 'user-cog' },
@@ -294,7 +301,7 @@ const selectSection = (key) => {
   const section = visibleSections.value.find((item) => item.key === key);
 
   if (section?.items?.[0]?.href) {
-    window.location.href = section.items[0].href;
+    window.location.href = appUrl(section.items[0].href);
   }
 };
 

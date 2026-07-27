@@ -73,7 +73,7 @@ class AppController extends Controller
                 'inventory-transfer-requests', 'inventory-adjustment', 'inventory-audit', 'inventory-allocation',
                 'accounts', 'vouchers', 'ledgers', 'expenses', 'fixed-assets', 'payroll', 'employees', 'gst', 'inventory-gst-returns',
                 'reports', 'inventory-reports', 'stock-ledger', 'inventory-valuation', 'inventory-audit-trail',
-                'acceptance',
+                'acceptance', 'masters', 'branches',
             ],
             3 => ['staff-workspace', 'crm', 'pos', 'sales', 'customers', 'stock-summary', 'inventory-current-stock', 'inventory-reserved', 'stock-ledger', 'fixed-assets'],
         ];

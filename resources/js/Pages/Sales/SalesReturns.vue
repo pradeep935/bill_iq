@@ -110,8 +110,11 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
 
 <template>
     <Layout :page="page" :title="title">
+        <template #topbar-title>
+            <div class="bill-page-title"><span>SALES MANAGEMENT</span><h1>Sales Returns</h1><p>Credit notes, refunds and stock restoration from posted invoices.</p></div>
+        </template>
         <div class="sales-page">
-            <div class="page-heading"><div><span>SALES MANAGEMENT</span><h1>Sales Returns</h1><p>Credit notes, refunds and stock restoration from posted invoices.</p></div><button @click="reset">New Return</button></div>
+            <div class="page-toolbar"><button @click="reset">New Return</button></div>
             <section class="panel">
                 <div class="form-grid">
                     <select v-model="form.return_type"><option value="against_sale">Against Sale</option><option value="direct_return">Direct Return</option></select>

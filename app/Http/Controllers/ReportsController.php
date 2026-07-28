@@ -27,27 +27,32 @@ class ReportsController extends Controller
 
     public function inventory()
     {
-        return ModuleController::render('inventory-reports', 'Inventory Reports');
+        if ($redirect = AppController::guardPage('reports')) return $redirect;
+        return Inertia::render('Reports/InventoryReports', ['page' => 'inventory-reports', 'title' => 'Inventory Reports', 'initial_tab' => 'inventory']);
     }
 
     public function stockLedger()
     {
-        return ModuleController::render('stock-ledger', 'Stock Ledger');
+        if ($redirect = AppController::guardPage('reports')) return $redirect;
+        return Inertia::render('Reports/InventoryReports', ['page' => 'stock-ledger', 'title' => 'Stock Ledger', 'initial_tab' => 'ledger']);
     }
 
     public function stockValuation()
     {
-        return ModuleController::render('inventory-valuation', 'Stock Valuation');
+        if ($redirect = AppController::guardPage('reports')) return $redirect;
+        return Inertia::render('Reports/InventoryReports', ['page' => 'inventory-valuation', 'title' => 'Stock Valuation', 'initial_tab' => 'valuation']);
     }
 
     public function auditTrail()
     {
-        return ModuleController::render('inventory-audit-trail', 'Voucher Audit Trail');
+        if ($redirect = AppController::guardPage('reports')) return $redirect;
+        return Inertia::render('Reports/InventoryReports', ['page' => 'inventory-audit-trail', 'title' => 'Voucher Audit Trail', 'initial_tab' => 'audit']);
     }
 
     public function acceptance()
     {
-        return ModuleController::render('acceptance', 'Acceptance Matrix');
+        if ($redirect = AppController::guardPage('reports')) return $redirect;
+        return Inertia::render('Reports/InventoryReports', ['page' => 'acceptance', 'title' => 'Acceptance Matrix', 'initial_tab' => 'acceptance']);
     }
 
     public function financialReferences()

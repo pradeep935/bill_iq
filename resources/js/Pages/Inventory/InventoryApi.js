@@ -231,6 +231,161 @@ const InventoryApi = {
         const response = await axios.post(`/app/inventory/batches/${batch}/merge`, payload);
         return response.data;
     },
+
+    async serialReferences() {
+        const response = await axios.get('/app/inventory/serials/references');
+        return response.data;
+    },
+
+    async serialList(params = {}) {
+        const response = await axios.get('/app/inventory/serials/list', { params });
+        return response.data;
+    },
+
+    async serialDetail(id) {
+        const response = await axios.get(`/app/inventory/serials/${id}`);
+        return response.data;
+    },
+
+    async saveSerial(payload, id = null) {
+        const response = id ? await axios.put(`/app/inventory/serials/${id}`, payload) : await axios.post('/app/inventory/serials', payload);
+        return response.data;
+    },
+
+    async bulkSerials(payload) {
+        const response = await axios.post('/app/inventory/serials/bulk', payload);
+        return response.data;
+    },
+
+    async serialStatus(id, payload) {
+        const response = await axios.post(`/app/inventory/serials/${id}/status`, payload);
+        return response.data;
+    },
+
+    async serialTransfer(id, payload) {
+        const response = await axios.post(`/app/inventory/serials/${id}/transfer`, payload);
+        return response.data;
+    },
+
+    async deleteSerial(id) {
+        const response = await axios.delete(`/app/inventory/serials/${id}`);
+        return response.data;
+    },
+
+    async serialReports(params = {}) {
+        const response = await axios.get('/app/inventory/serials/reports', { params });
+        return response.data;
+    },
+
+    async barcodeReferences() {
+        const response = await axios.get('/app/inventory/barcode-center/references');
+        return response.data;
+    },
+
+    async barcodeList(params = {}) {
+        const response = await axios.get('/app/inventory/barcode-center/list', { params });
+        return response.data;
+    },
+
+    async assignBarcode(payload) {
+        const response = await axios.post('/app/inventory/barcode-center/assign', payload);
+        return response.data;
+    },
+
+    async generateBarcode(payload) {
+        const response = await axios.post('/app/inventory/barcode-center/generate', payload);
+        return response.data;
+    },
+
+    async bulkGenerateBarcodes(payload) {
+        const response = await axios.post('/app/inventory/barcode-center/bulk-generate', payload);
+        return response.data;
+    },
+
+    async scanBarcode(barcode) {
+        const response = await axios.post('/app/inventory/barcode-center/scan', { barcode });
+        return response.data;
+    },
+
+    async printBarcode(payload) {
+        const response = await axios.post('/app/inventory/barcode-center/print', payload);
+        return response.data;
+    },
+
+    async setPrimaryBarcode(id) {
+        const response = await axios.post(`/app/inventory/barcode-center/${id}/primary`);
+        return response.data;
+    },
+
+    async toggleBarcode(id, is_active) {
+        const response = await axios.post(`/app/inventory/barcode-center/${id}/toggle`, { is_active });
+        return response.data;
+    },
+
+    async barcodeReports(params = {}) {
+        const response = await axios.get('/app/inventory/barcode-center/reports', { params });
+        return response.data;
+    },
+
+    async manufacturingReferences() {
+        const response = await axios.get('/app/inventory/manufacturing/references');
+        return response.data;
+    },
+
+    async manufacturingDashboard(params = {}) {
+        const response = await axios.get('/app/inventory/manufacturing/dashboard', { params });
+        return response.data;
+    },
+
+    async bomList(params = {}) {
+        const response = await axios.get('/app/inventory/manufacturing/boms/list', { params });
+        return response.data;
+    },
+
+    async saveBom(payload, id = null) {
+        const response = id ? await axios.put(`/app/inventory/manufacturing/boms/${id}`, payload) : await axios.post('/app/inventory/manufacturing/boms', payload);
+        return response.data;
+    },
+
+    async duplicateBom(id) {
+        const response = await axios.post(`/app/inventory/manufacturing/boms/${id}/duplicate`);
+        return response.data;
+    },
+
+    async activateBom(id, active = true) {
+        const response = await axios.post(`/app/inventory/manufacturing/boms/${id}/activate`, { active });
+        return response.data;
+    },
+
+    async productionOrders(params = {}) {
+        const response = await axios.get('/app/inventory/manufacturing/orders/list', { params });
+        return response.data;
+    },
+
+    async saveProductionOrder(payload, id = null) {
+        const response = id ? await axios.put(`/app/inventory/manufacturing/orders/${id}`, payload) : await axios.post('/app/inventory/manufacturing/orders', payload);
+        return response.data;
+    },
+
+    async checkProductionMaterials(id) {
+        const response = await axios.get(`/app/inventory/manufacturing/orders/${id}/materials`);
+        return response.data;
+    },
+
+    async transitionProductionOrder(id, status) {
+        const response = await axios.post(`/app/inventory/manufacturing/orders/${id}/transition`, { status });
+        return response.data;
+    },
+
+    async completeProductionOrder(id, payload) {
+        const response = await axios.post(`/app/inventory/manufacturing/orders/${id}/complete`, payload);
+        return response.data;
+    },
+
+    async manufacturingReports(params = {}) {
+        const response = await axios.get('/app/inventory/manufacturing/reports', { params });
+        return response.data;
+    },
 };
 
 export default InventoryApi;

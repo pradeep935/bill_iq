@@ -38,12 +38,14 @@ class SalesController extends Controller
 
     public function stockOutward()
     {
-        return ModuleController::render('inventory-outward', 'Stock Outward');
+        if ($redirect = AppController::guardPage('sales')) return $redirect;
+        return Inertia::render('Sales/StockOperations', ['page' => 'inventory-outward', 'title' => 'Stock Outward', 'initial_tab' => 'outward']);
     }
 
     public function reservedStock()
     {
-        return ModuleController::render('inventory-reserved', 'Reserved Stock');
+        if ($redirect = AppController::guardPage('sales')) return $redirect;
+        return Inertia::render('Sales/StockOperations', ['page' => 'inventory-reserved', 'title' => 'Reserved Stock', 'initial_tab' => 'reserved']);
     }
 
     public function list(Request $request)

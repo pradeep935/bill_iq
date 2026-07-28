@@ -2,15 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use Inertia\Inertia;
+
 class AdminController extends Controller
 {
     public function workspace()
     {
-        return ModuleController::render('admin-workspace', 'Admin Workspace');
+        return Inertia::render('Setup/Workspace', ['page' => 'admin-workspace', 'title' => 'Admin Workspace', 'initial_tab' => 'admin']);
     }
 
     public function onboarding()
     {
-        return ModuleController::render('onboarding', 'Onboarding');
+        return Inertia::render('Setup/Workspace', ['page' => 'onboarding', 'title' => 'Onboarding', 'initial_tab' => 'onboarding']);
     }
 }

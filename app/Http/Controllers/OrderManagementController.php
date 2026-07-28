@@ -123,6 +123,22 @@ class OrderManagementController extends Controller
         return response()->json(['message' => 'Sales order approved and stock reserved.', 'sales_order' => $row]);
     }
 
+    public function releaseSalesOrderReservation(Request $request, int $order)
+    {
+        abort_unless(AppController::canOpen('sales'), 403);
+        $row = $this->orders->releaseSalesOrderReservation($order, $request->input('reason'));
+
+        return response()->json(['message' => 'Sales order reservation released.', 'sales_order' => $row]);
+    }
+
+    public function createDeliveryFromOrder(Request $request, int $order)
+    {
+        abort_unless(AppController::canOpen('sales'), 403);
+        $row = $this->orders->createDeliveryChallanFromOrder($order, $request->boolean('dispatch'));
+
+        return response()->json(['message' => $request->boolean('dispatch') ? 'Delivery challan generated and dispatched.' : 'Delivery challan generated.', 'delivery_challan' => $row], 201);
+    }
+
     public function deliveryChallans(Request $request)
     {
         abort_unless(AppController::canOpen('sales'), 403);

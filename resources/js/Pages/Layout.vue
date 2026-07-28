@@ -155,7 +155,7 @@ const sections = [
       { label: 'Inventory Dashboard', page: 'inventory', href: '/app/inventory', icon: 'boxes' },
       { label: 'Add Product Master', page: 'products', href: '/app/inventory/products', icon: 'tag' },
       { label: 'Opening Stock', page: 'opening-stock', href: '/app/inventory/add', icon: 'package-plus' },
-      { label: 'Current Stock', page: 'stock-summary', href: '/app/inventory/current-stock', icon: 'warehouse' },
+      { label: 'Current Stock', page: 'inventory-current-stock', href: '/app/inventory/current-stock', icon: 'warehouse' },
       { label: 'Inventory Vouchers', page: 'inventory-vouchers', href: '/app/inventory/vouchers', icon: 'file-stack' },
       { label: 'Batch & Expiry', page: 'inventory-batches', href: '/app/inventory/batches', icon: 'calendar-clock' },
       { label: 'Serial Numbers', page: 'inventory-serials', href: '/app/inventory/serials', icon: 'list-ordered' },

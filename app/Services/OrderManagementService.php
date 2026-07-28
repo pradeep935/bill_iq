@@ -61,7 +61,7 @@ class OrderManagementService
             'status',
             'quotation_date',
             'customer_id'
-        )->latest('id')->paginate(20);
+        )->latest('id')->paginate((int) ($filters['per_page'] ?? 20));
     }
 
     public function saveQuotation(array $data, ?int $id = null): Quotation
@@ -124,7 +124,7 @@ class OrderManagementService
             'order_status',
             'order_date',
             'customer_id'
-        )->latest('id')->paginate(20);
+        )->latest('id')->paginate((int) ($filters['per_page'] ?? 20));
     }
 
     public function saveSalesOrder(array $data, ?int $id = null): SalesOrder
@@ -183,6 +183,93 @@ class OrderManagementService
         });
     }
 
+    public function releaseSalesOrderReservation(int $id, ?string $reason = null): SalesOrder
+    {
+        return DB::transaction(function () use ($id, $reason) {
+            $order = SalesOrder::query()->where('business_id', AppController::businessId())->with('items')->findOrFail($id);
+            if (in_array($order->order_status, ['delivered', 'closed', 'cancelled'], true)) {
+                throw ValidationException::withMessages(['status' => 'Finalized sales order reservation cannot be released.']);
+            }
+
+            StockReservation::query()
+                ->where('business_id', $order->business_id)
+                ->where('reference_type', SalesOrder::class)
+                ->where('reference_id', $order->id)
+                ->where('status', 'active')
+                ->update(['status' => 'released', 'released_quantity' => DB::raw('reserved_quantity')]);
+
+            foreach ($order->items as $item) {
+                $item->update(['reserved_quantity' => 0]);
+            }
+
+            $order->update(['reservation_status' => 'released']);
+            $this->history('sales_order', $order->id, $order->order_status, $order->order_status, $reason ?: 'Reservation released');
+
+            return $order->fresh(['items.product', 'customer', 'warehouse']);
+        });
+    }
+
+    public function createDeliveryChallanFromOrder(int $id, bool $dispatch = false): DeliveryChallan
+    {
+        return DB::transaction(function () use ($id, $dispatch) {
+            $order = SalesOrder::query()
+                ->where('business_id', AppController::businessId())
+                ->with(['items.product', 'customer', 'warehouse'])
+                ->findOrFail($id);
+
+            if (in_array($order->order_status, ['draft', 'pending_approval', 'cancelled', 'delivered', 'closed'], true)) {
+                throw ValidationException::withMessages(['status' => 'Only approved or partially delivered sales orders can be dispatched.']);
+            }
+
+            $items = [];
+            foreach ($order->items as $item) {
+                $pending = max(0, (float) $item->ordered_quantity - (float) $item->delivered_quantity - (float) $item->cancelled_quantity);
+                $reserved = max(0, (float) $item->reserved_quantity - (float) $item->delivered_quantity);
+                $qty = $reserved > 0 ? min($pending, $reserved) : $pending;
+                if ($qty <= 0) continue;
+                $items[] = [
+                    'sales_order_item_id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'product_variant_id' => $item->product_variant_id,
+                    'batch_id' => $item->batch_id,
+                    'serial_id' => $item->serial_id ?? null,
+                    'ordered_quantity' => $item->ordered_quantity,
+                    'dispatch_quantity' => $qty,
+                    'pending_quantity' => max(0, $pending - $qty),
+                    'unit_cost' => $item->product ? (float) ($item->product->purchase_price ?? $item->unit_price ?? 0) : (float) ($item->unit_price ?? 0),
+                    'warehouse_location' => null,
+                ];
+            }
+
+            if (empty($items)) {
+                throw ValidationException::withMessages(['items' => 'No pending reserved quantity is available for dispatch.']);
+            }
+
+            $challan = new DeliveryChallan([
+                'business_id' => $order->business_id,
+                'challan_number' => $this->nextNumber('DC', DeliveryChallan::class, 'challan_number'),
+                'created_by' => Auth::id(),
+            ]);
+            $challan->fill([
+                'branch_id' => $order->branch_id,
+                'warehouse_id' => $order->warehouse_id,
+                'customer_id' => $order->customer_id,
+                'sales_order_id' => $order->id,
+                'challan_date' => now()->toDateString(),
+                'status' => 'draft',
+                'dispatch_reference' => $order->order_number,
+                'remarks' => 'Generated from reserved stock',
+            ])->save();
+            $challan->items()->createMany($items);
+
+            if ($dispatch) {
+                return $this->dispatchChallan($challan->id);
+            }
+
+            return $challan->fresh(['items.product', 'customer', 'warehouse', 'order']);
+        });
+    }
+
     public function deliveryChallans(array $filters)
     {
         return $this->applyDocumentFilters(
@@ -192,7 +279,7 @@ class OrderManagementService
             'status',
             'challan_date',
             'customer_id'
-        )->latest('id')->paginate(20);
+        )->latest('id')->paginate((int) ($filters['per_page'] ?? 20));
     }
 
     public function saveDeliveryChallan(array $data, ?int $id = null): DeliveryChallan
@@ -222,6 +309,16 @@ class OrderManagementService
                     if ($orderItem && (float) $item->dispatch_quantity > ((float) $orderItem->ordered_quantity - (float) $orderItem->delivered_quantity - (float) $orderItem->cancelled_quantity)) throw ValidationException::withMessages(['dispatch_quantity' => 'Cannot over-deliver sales order item.']);
                 }
                 $this->stock->decreaseStock(['business_id' => $challan->business_id, 'branch_id' => $challan->branch_id, 'warehouse_id' => $challan->warehouse_id, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id, 'serial_id' => $item->serial_id, 'transaction_type' => 'delivery_challan', 'reference_type' => DeliveryChallan::class, 'reference_id' => $challan->id, 'quantity' => (float) $item->dispatch_quantity, 'unit_cost' => (float) $item->unit_cost, 'warehouse_location' => $item->warehouse_location, 'transaction_date' => $challan->challan_date, 'remarks' => 'Delivery challan ' . $challan->challan_number]);
+                StockReservation::query()
+                    ->where('business_id', $challan->business_id)
+                    ->where('reference_type', SalesOrder::class)
+                    ->where('reference_id', $challan->sales_order_id)
+                    ->where('product_id', $item->product_id)
+                    ->when($item->product_variant_id, fn (Builder $q) => $q->where('product_variant_id', $item->product_variant_id))
+                    ->when($item->batch_id, fn (Builder $q) => $q->where('batch_id', $item->batch_id))
+                    ->where('status', 'active')
+                    ->limit(1)
+                    ->increment('fulfilled_quantity', (float) $item->dispatch_quantity);
                 if ($item->sales_order_item_id) $item->orderItem()->increment('delivered_quantity', (float) $item->dispatch_quantity);
             }
             if ($challan->order) $this->refreshSalesOrderFulfillment($challan->order);
@@ -230,7 +327,7 @@ class OrderManagementService
         });
     }
 
-    public function requisitions(array $filters) { return $this->applyDocumentFilters(PurchaseRequisition::query()->with(['branch', 'items.product'])->where('business_id', AppController::businessId()), $filters, 'requisition_number', 'status', 'requisition_date')->latest('id')->paginate(20); }
+    public function requisitions(array $filters) { return $this->applyDocumentFilters(PurchaseRequisition::query()->with(['branch', 'items.product'])->where('business_id', AppController::businessId()), $filters, 'requisition_number', 'status', 'requisition_date')->latest('id')->paginate((int) ($filters['per_page'] ?? 20)); }
 
     public function saveRequisition(array $data, ?int $id = null): PurchaseRequisition
     {
@@ -246,7 +343,7 @@ class OrderManagementService
         });
     }
 
-    public function purchaseOrders(array $filters) { return $this->applyDocumentFilters(PurchaseOrder::query()->with(['supplier', 'warehouse', 'items.product'])->where('business_id', AppController::businessId()), $filters, 'po_number', 'status', 'po_date', 'supplier_id')->latest('id')->paginate(20); }
+    public function purchaseOrders(array $filters) { return $this->applyDocumentFilters(PurchaseOrder::query()->with(['supplier', 'warehouse', 'items.product'])->where('business_id', AppController::businessId()), $filters, 'po_number', 'status', 'po_date', 'supplier_id')->latest('id')->paginate((int) ($filters['per_page'] ?? 20)); }
 
     public function savePurchaseOrder(array $data, ?int $id = null): PurchaseOrder
     {
@@ -273,7 +370,7 @@ class OrderManagementService
         });
     }
 
-    public function goodsReceipts(array $filters) { return $this->applyDocumentFilters(GoodsReceipt::query()->with(['supplier', 'order', 'warehouse', 'items.product'])->where('business_id', AppController::businessId()), $filters, 'grn_number', 'status', 'receipt_date', 'supplier_id')->latest('id')->paginate(20); }
+    public function goodsReceipts(array $filters) { return $this->applyDocumentFilters(GoodsReceipt::query()->with(['supplier', 'order', 'warehouse', 'items.product'])->where('business_id', AppController::businessId()), $filters, 'grn_number', 'status', 'receipt_date', 'supplier_id')->latest('id')->paginate((int) ($filters['per_page'] ?? 20)); }
 
     public function saveGoodsReceipt(array $data, ?int $id = null): GoodsReceipt
     {
@@ -405,6 +502,8 @@ class OrderManagementService
 
     private function applyDocumentFilters(Builder $query, array $filters, string $numberColumn, string $statusColumn, string $dateColumn, ?string $partyColumn = null): Builder
     {
+        $filters['q'] = $filters['q'] ?? $filters['search'] ?? null;
+
         return $query
             ->when($filters['q'] ?? null, function (Builder $builder, string $q) use ($numberColumn) {
                 $builder->where(function (Builder $search) use ($numberColumn, $q) {

@@ -48,6 +48,14 @@ const OrderApi = {
         const response = await axios.post(`${salesBase}/orders/${id}/approve`);
         return response.data;
     },
+    async releaseSalesOrderReservation(id, reason = '') {
+        const response = await axios.post(`${salesBase}/orders/${id}/release-reservation`, { reason });
+        return response.data;
+    },
+    async createDeliveryFromOrder(id, dispatch = false) {
+        const response = await axios.post(`${salesBase}/orders/${id}/delivery-challan`, { dispatch });
+        return response.data;
+    },
     async deliveryChallans(params = {}) {
         const response = await axios.get(`${salesBase}/delivery-challans/list`, { params });
         return response.data;

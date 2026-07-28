@@ -118,6 +118,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/orders', [OrderManagementController::class, 'saveSalesOrder'])->name('orders.store');
             Route::put('/orders/{order}', [OrderManagementController::class, 'saveSalesOrder'])->name('orders.update');
             Route::post('/orders/{order}/approve', [OrderManagementController::class, 'approveSalesOrder'])->name('orders.approve');
+            Route::post('/orders/{order}/release-reservation', [OrderManagementController::class, 'releaseSalesOrderReservation'])->name('orders.release-reservation');
+            Route::post('/orders/{order}/delivery-challan', [OrderManagementController::class, 'createDeliveryFromOrder'])->name('orders.delivery-challan');
             Route::get('/delivery-challans/list', [OrderManagementController::class, 'deliveryChallans'])->name('delivery-challans.list');
             Route::post('/delivery-challans', [OrderManagementController::class, 'saveDeliveryChallan'])->name('delivery-challans.store');
             Route::put('/delivery-challans/{challan}', [OrderManagementController::class, 'saveDeliveryChallan'])->name('delivery-challans.update');
@@ -376,16 +378,52 @@ Route::middleware('auth')->group(function () {
             '/serials',
             [InventoryController::class, 'serials']
         )->name('serials');
+        Route::get('/serials/references', [InventoryController::class, 'serialReferences'])->name('serials.references');
+        Route::get('/serials/list', [InventoryController::class, 'serialList'])->name('serials.list');
+        Route::get('/serials/reports', [InventoryController::class, 'serialReports'])->name('serials.reports');
+        Route::get('/serials/import-sample', [InventoryController::class, 'serialSample'])->name('serials.sample');
+        Route::post('/serials', [InventoryController::class, 'serialStore'])->name('serials.store');
+        Route::post('/serials/bulk', [InventoryController::class, 'serialBulk'])->name('serials.bulk');
+        Route::get('/serials/{serial}', [InventoryController::class, 'serialShow'])->name('serials.show');
+        Route::put('/serials/{serial}', [InventoryController::class, 'serialUpdate'])->name('serials.update');
+        Route::post('/serials/{serial}/status', [InventoryController::class, 'serialStatus'])->name('serials.status');
+        Route::post('/serials/{serial}/transfer', [InventoryController::class, 'serialTransfer'])->name('serials.transfer');
+        Route::delete('/serials/{serial}', [InventoryController::class, 'serialDestroy'])->name('serials.destroy');
 
         Route::get(
             '/barcode-center',
             [InventoryController::class, 'barcodeCenter']
         )->name('barcode-center');
+        Route::get('/barcode-center/references', [InventoryController::class, 'barcodeReferences'])->name('barcode-center.references');
+        Route::get('/barcode-center/list', [InventoryController::class, 'barcodeList'])->name('barcode-center.list');
+        Route::get('/barcode-center/reports', [InventoryController::class, 'barcodeReports'])->name('barcode-center.reports');
+        Route::get('/barcode-center/import-sample', [InventoryController::class, 'barcodeSample'])->name('barcode-center.sample');
+        Route::post('/barcode-center/assign', [InventoryController::class, 'barcodeAssign'])->name('barcode-center.assign');
+        Route::post('/barcode-center/generate', [InventoryController::class, 'barcodeGenerate'])->name('barcode-center.generate');
+        Route::post('/barcode-center/bulk-generate', [InventoryController::class, 'barcodeBulkGenerate'])->name('barcode-center.bulk-generate');
+        Route::post('/barcode-center/scan', [InventoryController::class, 'barcodeScan'])->name('barcode-center.scan');
+        Route::post('/barcode-center/print', [InventoryController::class, 'barcodePrint'])->name('barcode-center.print');
+        Route::post('/barcode-center/{barcode}/primary', [InventoryController::class, 'barcodePrimary'])->name('barcode-center.primary');
+        Route::post('/barcode-center/{barcode}/toggle', [InventoryController::class, 'barcodeToggle'])->name('barcode-center.toggle');
 
         Route::get(
             '/manufacturing',
             [InventoryController::class, 'manufacturing']
         )->name('manufacturing');
+        Route::get('/manufacturing/references', [InventoryController::class, 'manufacturingReferences'])->name('manufacturing.references');
+        Route::get('/manufacturing/dashboard', [InventoryController::class, 'manufacturingDashboard'])->name('manufacturing.dashboard');
+        Route::get('/manufacturing/boms/list', [InventoryController::class, 'bomList'])->name('manufacturing.boms.list');
+        Route::post('/manufacturing/boms', [InventoryController::class, 'bomStore'])->name('manufacturing.boms.store');
+        Route::put('/manufacturing/boms/{bom}', [InventoryController::class, 'bomUpdate'])->name('manufacturing.boms.update');
+        Route::post('/manufacturing/boms/{bom}/duplicate', [InventoryController::class, 'bomDuplicate'])->name('manufacturing.boms.duplicate');
+        Route::post('/manufacturing/boms/{bom}/activate', [InventoryController::class, 'bomActivate'])->name('manufacturing.boms.activate');
+        Route::get('/manufacturing/orders/list', [InventoryController::class, 'productionOrderList'])->name('manufacturing.orders.list');
+        Route::post('/manufacturing/orders', [InventoryController::class, 'productionOrderStore'])->name('manufacturing.orders.store');
+        Route::put('/manufacturing/orders/{order}', [InventoryController::class, 'productionOrderUpdate'])->name('manufacturing.orders.update');
+        Route::get('/manufacturing/orders/{order}/materials', [InventoryController::class, 'productionCheck'])->name('manufacturing.orders.materials');
+        Route::post('/manufacturing/orders/{order}/transition', [InventoryController::class, 'productionTransition'])->name('manufacturing.orders.transition');
+        Route::post('/manufacturing/orders/{order}/complete', [InventoryController::class, 'productionComplete'])->name('manufacturing.orders.complete');
+        Route::get('/manufacturing/reports', [InventoryController::class, 'manufacturingReports'])->name('manufacturing.reports');
     });
 
         Route::prefix('warehouse')->name('warehouse.')->group(function () {

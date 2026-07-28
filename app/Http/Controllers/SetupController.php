@@ -25,16 +25,19 @@ class SetupController extends Controller
 
     public function users()
     {
-        return ModuleController::render('users', 'Users & Roles');
+        if ($redirect = AppController::guardPage('users')) return $redirect;
+        return Inertia::render('Setup/Workspace', ['page' => 'users', 'title' => 'Users & Roles', 'initial_tab' => 'users']);
     }
 
     public function saas()
     {
-        return ModuleController::render('saas', 'SaaS Admin');
+        if ($redirect = AppController::guardPage('settings')) return $redirect;
+        return Inertia::render('Setup/Workspace', ['page' => 'saas', 'title' => 'SaaS Admin', 'initial_tab' => 'saas']);
     }
 
     public function settings()
     {
-        return ModuleController::render('settings', 'Settings');
+        if ($redirect = AppController::guardPage('settings')) return $redirect;
+        return Inertia::render('Setup/Workspace', ['page' => 'settings', 'title' => 'Settings', 'initial_tab' => 'settings']);
     }
 }

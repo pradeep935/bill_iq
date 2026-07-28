@@ -42,6 +42,11 @@ class StockService
         'location_transfer',
         'delivery_challan',
         'goods_receipt',
+        'production_consumption',
+        'production_output',
+        'manufacturing_consumption',
+        'manufacturing_output',
+        'manufacturing_wastage',
     ];
 
     public function getCurrentStock(array $scope): float

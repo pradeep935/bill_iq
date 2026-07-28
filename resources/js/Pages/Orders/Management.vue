@@ -5,7 +5,7 @@ import OrderApi from './OrderApi';
 
 const props = defineProps({ page: { type: String, default: 'sales' }, title: { type: String, default: 'Order Management' }, initial_tab: { type: String, default: 'sales-orders' } });
 
-const scope = computed(() => props.page === 'inventory-orders' ? 'purchase' : 'sales');
+const scope = computed(() => ['inventory-orders', 'inventory-inward'].includes(props.page) ? 'purchase' : 'sales');
 const today = new Date().toISOString().slice(0, 10);
 const tab = ref(props.initial_tab);
 const loading = ref(false);

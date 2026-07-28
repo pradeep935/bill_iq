@@ -33,22 +33,25 @@ class PurchaseController extends Controller
 
     public function suppliers()
     {
-        return ModuleController::render('suppliers', 'Suppliers');
+        return app(SupplierController::class)->index();
     }
 
     public function grn()
     {
-        return ModuleController::render('inventory-inward', 'Stock Inward / GRN');
+        if ($redirect = AppController::guardPage('inventory-orders')) return $redirect;
+        return Inertia::render('Orders/Management', ['page' => 'inventory-inward', 'title' => 'Stock Inward / GRN', 'initial_tab' => 'grn']);
     }
 
     public function reorder()
     {
-        return ModuleController::render('inventory-reorder', 'Reorder Suggestions');
+        if ($redirect = AppController::guardPage('purchases')) return $redirect;
+        return Inertia::render('Purchase/ReorderSuggestions', ['page' => 'inventory-reorder', 'title' => 'Reorder Suggestions']);
     }
 
     public function orders()
     {
-        return ModuleController::render('inventory-orders', 'Inventory Orders');
+        if ($redirect = AppController::guardPage('inventory-orders')) return $redirect;
+        return Inertia::render('Orders/Management', ['page' => 'inventory-orders', 'title' => 'Inventory Orders', 'initial_tab' => 'dashboard']);
     }
 
     public function list(Request $request)

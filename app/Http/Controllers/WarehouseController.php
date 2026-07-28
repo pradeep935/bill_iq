@@ -11,20 +11,22 @@ class WarehouseController extends Controller
         if ($redirect = AppController::guardPage('masters')) return $redirect;
 
         return Inertia::render('Setup/Masters', [
-            'page' => 'masters',
-            'title' => 'Masters',
+            'page' => 'inventory-warehouses',
+            'title' => 'Warehouses / Bins',
             'initial_tab' => 'warehouse',
         ]);
     }
 
     public function bins()
     {
-        return ModuleController::render('inventory-bins', 'Bins / Racks');
+        if ($redirect = AppController::guardPage('inventory')) return $redirect;
+        return Inertia::render('Warehouse/Operations', ['page' => 'inventory-bins', 'title' => 'Bins / Racks', 'initial_tab' => 'bins']);
     }
 
     public function godownBalances()
     {
-        return ModuleController::render('inventory-godown-balance', 'Godown Balances');
+        if ($redirect = AppController::guardPage('inventory')) return $redirect;
+        return Inertia::render('Warehouse/Operations', ['page' => 'inventory-godown-balance', 'title' => 'Godown Balances', 'initial_tab' => 'balances']);
     }
 
     public function transfer()
@@ -35,7 +37,8 @@ class WarehouseController extends Controller
 
     public function transferRequests()
     {
-        return ModuleController::render('inventory-transfer-requests', 'Transfer Requests');
+        if ($redirect = AppController::guardPage('inventory-transfer')) return $redirect;
+        return Inertia::render('Warehouse/Operations', ['page' => 'inventory-transfer-requests', 'title' => 'Transfer Requests', 'initial_tab' => 'requests']);
     }
 
     public function adjustment()
@@ -52,6 +55,7 @@ class WarehouseController extends Controller
 
     public function allocation()
     {
-        return ModuleController::render('inventory-allocation', 'Batch / Serial Allocation');
+        if ($redirect = AppController::guardPage('inventory')) return $redirect;
+        return Inertia::render('Warehouse/Operations', ['page' => 'inventory-allocation', 'title' => 'Batch / Serial Allocation', 'initial_tab' => 'allocation']);
     }
 }

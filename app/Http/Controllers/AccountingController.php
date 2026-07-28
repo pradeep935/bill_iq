@@ -317,8 +317,17 @@ class AccountingController extends Controller
     {
         return response()->json($this->expenseIncome->reports($request->all()));
     }
-    public function gst() { return ModuleController::render('gst', 'GST'); }
-    public function gstReturns() { return ModuleController::render('inventory-gst-returns', 'GST Returns'); }
+    public function gst()
+    {
+        if ($redirect = AppController::guardPage('accounts')) return $redirect;
+        return Inertia::render('Accounting/Gst', ['page' => 'gst', 'title' => 'GST', 'initial_tab' => 'summary']);
+    }
+
+    public function gstReturns()
+    {
+        if ($redirect = AppController::guardPage('accounts')) return $redirect;
+        return Inertia::render('Accounting/Gst', ['page' => 'inventory-gst-returns', 'title' => 'GST Returns', 'initial_tab' => 'returns']);
+    }
 
     private function pagination($paginator): array
     {

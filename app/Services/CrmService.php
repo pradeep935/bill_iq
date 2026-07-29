@@ -105,6 +105,11 @@ class CrmService
             ->paginate($perPage);
     }
 
+    public function showLead(int $id): Lead
+    {
+        return $this->lead($id)->fresh(['source', 'campaign', 'statusModel', 'owner', 'team', 'contacts', 'qualification', 'opportunities.stage', 'activities.assignee', 'convertedCustomer']);
+    }
+
     public function saveLead(array $data, ?int $id = null): Lead
     {
         return DB::transaction(function () use ($data, $id) {
@@ -150,12 +155,14 @@ class CrmService
 
     public function bulkAssign(array $data): int
     {
-        $count = 0;
-        foreach ($data['lead_ids'] ?? [] as $id) {
-            $this->assignLead((int) $id, $data);
-            $count++;
-        }
-        return $count;
+        return DB::transaction(function () use ($data) {
+            $count = 0;
+            foreach ($data['lead_ids'] ?? [] as $id) {
+                $this->assignLead((int) $id, $data);
+                $count++;
+            }
+            return $count;
+        });
     }
 
     public function qualifyLead(int $id, array $data): LeadQualification
@@ -179,6 +186,11 @@ class CrmService
     {
         $perPage = min(max((int) ($filters['per_page'] ?? 20), 1), 100);
         return $this->opportunityScope($filters)->with(['lead', 'customer', 'stage', 'pipeline', 'owner', 'items.product'])->latest('id')->paginate($perPage);
+    }
+
+    public function showOpportunity(int $id): Opportunity
+    {
+        return $this->opportunity($id)->fresh(['lead', 'customer', 'stage', 'pipeline', 'owner', 'items.product', 'activities.assignee', 'quotation']);
     }
 
     public function saveOpportunity(array $data, ?int $id = null): Opportunity
@@ -254,6 +266,40 @@ class CrmService
         ], $data), $opportunity->id);
     }
 
+    public function markOpportunityWon(int $id, array $data = []): Opportunity
+    {
+        $opportunity = $this->opportunity($id);
+        $stage = PipelineStage::query()
+            ->whereHas('pipeline', fn (Builder $q) => $q->where('business_id', AppController::businessId()))
+            ->where('is_won', true)
+            ->orderBy('stage_order')
+            ->firstOrFail();
+
+        return $this->moveOpportunity($opportunity->id, $stage->id, [
+            'estimated_value' => $data['final_value'] ?? $opportunity->estimated_value,
+            'probability_percent' => 100,
+            'won_reason' => $data['won_reason'] ?? $opportunity->won_reason,
+            'status' => 'won',
+        ]);
+    }
+
+    public function markOpportunityLost(int $id, array $data): Opportunity
+    {
+        CrmLostReason::query()->where('business_id', AppController::businessId())->findOrFail((int) $data['lost_reason_id']);
+        $stage = PipelineStage::query()
+            ->whereHas('pipeline', fn (Builder $q) => $q->where('business_id', AppController::businessId()))
+            ->where('is_lost', true)
+            ->orderBy('stage_order')
+            ->firstOrFail();
+
+        return $this->moveOpportunity($id, $stage->id, [
+            'lost_reason_id' => $data['lost_reason_id'],
+            'lost_notes' => $data['lost_notes'] ?? null,
+            'probability_percent' => 0,
+            'status' => 'lost',
+        ]);
+    }
+
     public function activities(array $filters)
     {
         $perPage = min(max((int) ($filters['per_page'] ?? 30), 1), 100);
@@ -269,6 +315,14 @@ class CrmService
             ->when($filters['date_to'] ?? null, fn (Builder $q, string $date) => $q->whereDate('activity_date', '<=', $date))
             ->latest('activity_date')
             ->paginate($perPage);
+    }
+
+    public function showActivity(int $id): CrmActivity
+    {
+        return CrmActivity::query()
+            ->where('business_id', AppController::businessId())
+            ->with(['lead', 'opportunity', 'customer', 'assignee', 'creator', 'reminders'])
+            ->findOrFail($id);
     }
 
     public function saveActivity(array $data, ?int $id = null): CrmActivity
@@ -287,6 +341,26 @@ class CrmService
             $this->touchRelatedFollowup($activity);
             return $activity->fresh(['lead', 'opportunity', 'customer', 'assignee']);
         });
+    }
+
+    public function completeActivity(int $id, array $data): CrmActivity
+    {
+        $activity = $this->showActivity($id);
+        return $this->saveActivity(array_merge($this->activityPayload($activity), $data, ['status' => 'completed']), $activity->id);
+    }
+
+    public function cancelActivity(int $id, array $data = []): CrmActivity
+    {
+        $activity = $this->showActivity($id);
+        return $this->saveActivity(array_merge($this->activityPayload($activity), [
+            'status' => 'cancelled',
+            'outcome' => $data['outcome'] ?? $activity->outcome,
+        ]), $activity->id);
+    }
+
+    public function destroyActivity(int $id): void
+    {
+        CrmActivity::query()->where('business_id', AppController::businessId())->findOrFail($id)->delete();
     }
 
     public function convertLead(int $id, array $data): Lead
@@ -411,6 +485,49 @@ class CrmService
         return $model->fresh();
     }
 
+    public function destroyLead(int $id): void
+    {
+        $lead = $this->lead($id);
+        if ($lead->conversion_status === 'converted') {
+            throw ValidationException::withMessages(['lead' => 'Converted leads cannot be deleted. Archive or keep the preserved conversion history.']);
+        }
+        $lead->delete();
+    }
+
+    public function destroyOpportunity(int $id): void
+    {
+        $opportunity = $this->opportunity($id);
+        if (in_array($opportunity->status, ['won', 'lost'], true)) {
+            throw ValidationException::withMessages(['opportunity' => 'Won or lost opportunities cannot be deleted.']);
+        }
+        $opportunity->delete();
+    }
+
+    public function destroyMaster(string $type, int $id): void
+    {
+        $businessId = AppController::businessId();
+        if ($type === 'source') {
+            $source = LeadSource::query()->where('business_id', $businessId)->findOrFail($id);
+            if (Lead::query()->where('business_id', $businessId)->where('lead_source_id', $id)->exists()) {
+                $source->update(['status' => 'inactive']);
+                return;
+            }
+            $source->delete();
+            return;
+        }
+        if ($type === 'campaign') {
+            $campaign = Campaign::query()->where('business_id', $businessId)->findOrFail($id);
+            if (Lead::query()->where('business_id', $businessId)->where('campaign_id', $id)->exists() || Opportunity::query()->where('business_id', $businessId)->where('campaign_id', $id)->exists()) {
+                $campaign->update(['status' => 'inactive']);
+                return;
+            }
+            $campaign->delete();
+            return;
+        }
+
+        abort(404);
+    }
+
     public function importLeads(array $rows): array
     {
         $imported = $duplicates = $failed = 0;
@@ -440,9 +557,12 @@ class CrmService
             })
             ->when($filters['status_id'] ?? null, fn (Builder $q, int $id) => $q->where('status_id', $id))
             ->when($filters['lead_source_id'] ?? null, fn (Builder $q, int $id) => $q->where('lead_source_id', $id))
-            ->when($filters['assigned_to'] ?? null, fn (Builder $q, int $id) => $q->where('assigned_to', $id))
+            ->when(($filters['assigned_to'] ?? null) === 'unassigned', fn (Builder $q) => $q->whereNull('assigned_to'))
+            ->when(($filters['assigned_to'] ?? null) && ($filters['assigned_to'] ?? null) !== 'unassigned', fn (Builder $q) => $q->where('assigned_to', (int) $filters['assigned_to']))
             ->when($filters['branch_id'] ?? null, fn (Builder $q, int $id) => $q->where('branch_id', $id))
-            ->when($filters['priority'] ?? null, fn (Builder $q, string $priority) => $q->where('priority', $priority));
+            ->when($filters['priority'] ?? null, fn (Builder $q, string $priority) => $q->where('priority', $priority))
+            ->when($filters['date_from'] ?? null, fn (Builder $q, string $date) => $q->whereDate('created_at', '>=', $date))
+            ->when($filters['date_to'] ?? null, fn (Builder $q, string $date) => $q->whereDate('created_at', '<=', $date));
     }
 
     private function opportunityScope(array $filters = []): Builder
@@ -454,9 +574,12 @@ class CrmService
                 $q->where(fn (Builder $s) => $s->where('opportunity_number', 'like', $like)->orWhere('opportunity_name', 'like', $like)->orWhereHas('customer', fn (Builder $c) => $c->where('customer_name', 'like', $like))->orWhereHas('lead', fn (Builder $l) => $l->where('contact_person_name', 'like', $like)->orWhere('company_name', 'like', $like)));
             })
             ->when($filters['stage_id'] ?? null, fn (Builder $q, int $id) => $q->where('stage_id', $id))
-            ->when($filters['owner_id'] ?? null, fn (Builder $q, int $id) => $q->where('owner_id', $id))
+            ->when($filters['owner_id'] ?? $filters['assigned_to'] ?? null, fn (Builder $q, $id) => $id === 'unassigned' ? $q->whereNull('owner_id') : $q->where('owner_id', (int) $id))
             ->when($filters['branch_id'] ?? null, fn (Builder $q, int $id) => $q->where('branch_id', $id))
-            ->when($filters['status'] ?? null, fn (Builder $q, string $status) => $q->where('status', $status));
+            ->when($filters['status'] ?? null, fn (Builder $q, string $status) => $q->where('status', $status))
+            ->when($filters['priority'] ?? null, fn (Builder $q, string $priority) => $q->where('priority', $priority))
+            ->when($filters['date_from'] ?? null, fn (Builder $q, string $date) => $q->whereDate('expected_closing_date', '>=', $date))
+            ->when($filters['date_to'] ?? null, fn (Builder $q, string $date) => $q->whereDate('expected_closing_date', '<=', $date));
     }
 
     private function validateLeadReferences(array $data): void
@@ -543,6 +666,35 @@ class CrmService
         $payload = ['last_activity_at' => now(), 'next_follow_up_at' => $activity->next_follow_up_at];
         if ($activity->lead_id) Lead::query()->where('id', $activity->lead_id)->where('business_id', $activity->business_id)->update($payload);
         if ($activity->opportunity_id) Opportunity::query()->where('id', $activity->opportunity_id)->where('business_id', $activity->business_id)->update(['next_follow_up_at' => $activity->next_follow_up_at]);
+    }
+
+    private function activityPayload(CrmActivity $activity): array
+    {
+        return [
+            'activity_type' => $activity->activity_type,
+            'subject' => $activity->subject,
+            'description' => $activity->description,
+            'related_type' => $activity->related_type,
+            'related_id' => $activity->related_id,
+            'lead_id' => $activity->lead_id,
+            'opportunity_id' => $activity->opportunity_id,
+            'customer_id' => $activity->customer_id,
+            'contact_id' => $activity->contact_id,
+            'assigned_to' => $activity->assigned_to,
+            'activity_date' => optional($activity->activity_date)->format('Y-m-d'),
+            'start_at' => optional($activity->start_at)->format('Y-m-d H:i:s'),
+            'end_at' => optional($activity->end_at)->format('Y-m-d H:i:s'),
+            'duration_minutes' => $activity->duration_minutes,
+            'direction' => $activity->direction,
+            'outcome' => $activity->outcome,
+            'next_action' => $activity->next_action,
+            'next_follow_up_at' => optional($activity->next_follow_up_at)->format('Y-m-d H:i:s'),
+            'status' => $activity->status,
+            'priority' => $activity->priority,
+            'location' => $activity->location,
+            'meeting_mode' => $activity->meeting_mode,
+            'external_reference' => $activity->external_reference,
+        ];
     }
 
     private function initialStatus(): LeadStatus

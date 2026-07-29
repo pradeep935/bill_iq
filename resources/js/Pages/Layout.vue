@@ -38,7 +38,7 @@
             v-for="item in activeSection.items"
             :key="item.href"
             :class="{ active: page === item.page }"
-            :href="appUrl(item.href)"
+            :href="normalizeUrl(item.href)"
           >
             <span class="bill-nav-icon" v-html="iconSvg(item.icon)"></span>
             {{ item.label }}
@@ -46,10 +46,10 @@
         </div>
       </nav>
       <div class="bill-sidebar-footer">
-        <a class="bill-logout" :href="appUrl('/app/logout')">
+        <button class="bill-logout" type="button" @click="logout">
           <span class="bill-nav-icon" v-html="iconSvg('log-out')"></span>
           Logout
-        </a>
+        </button>
       </div>
     </aside>
 
@@ -60,17 +60,17 @@
           <slot name="topbar-title" />
         </div>
         <div class="bill-top-actions">
-          <a :href="appUrl('/app/sales/pos')">New Bill</a>
-          <a :href="appUrl('/app/accounting/vouchers')">Voucher</a>
-          <a :href="appUrl('/app/reports/business')">Reports</a>
+          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('sales.invoices.create', '/app/sales/invoices/create')">New Bill</a>
+          <a v-if="permissions['accounting.create'] !== false" :href="routeUrl('accounting.vouchers', '/app/accounting/vouchers')">Voucher</a>
+          <a v-if="permissions['reports.view'] !== false" :href="routeUrl('reports.index', '/app/reports/business')">Reports</a>
         </div>
-        <div class="bill-user">
+        <a class="bill-user" :href="routeUrl('profile.edit', '/profile')">
           <span>{{ userInitials }}</span>
           <div>
             <strong>{{ userName }}</strong>
-            <small>Business Owner</small>
+            <small>{{ roleLabel }}</small>
           </div>
-        </div>
+        </a>
       </header>
       <slot />
     </main>
@@ -79,7 +79,7 @@
 
 <script setup>
 import { computed, ref, watchEffect } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 
 const props = defineProps({
   page: { type: String, required: true },
@@ -94,6 +94,13 @@ const roleId = computed(() => Number(inertiaPage.props.auth?.user?.role_id || in
 const userName = computed(() => inertiaPage.props.auth?.user?.name || 'Amit Kumar');
 const userInitials = computed(() => userName.value.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase());
 const baseUrl = computed(() => String(inertiaPage.props.app?.base_url || '').replace(/\/$/, ''));
+const dashboardRoutes = computed(() => inertiaPage.props.routes || {});
+const permissions = computed(() => inertiaPage.props.permissions || {});
+const roleLabel = computed(() => {
+  if (roleId.value === 1) return 'Super Admin';
+  if (roleId.value === 3) return 'Staff';
+  return 'Business Owner';
+});
 
 const appUrl = (path) => {
   const normalizedPath = `/${String(path || '').replace(/^\/+/, '')}`;
@@ -101,16 +108,25 @@ const appUrl = (path) => {
   return `${baseUrl.value}${normalizedPath}`;
 };
 
+const normalizeUrl = (url) => {
+  if (!url || String(url).startsWith('http')) return url || '#';
+  const normalizedBase = baseUrl.value;
+  if (normalizedBase && String(url).startsWith(`${normalizedBase}/`)) return url;
+  return appUrl(url);
+};
+
+const routeUrl = (name, fallback) => normalizeUrl(dashboardRoutes.value?.[name]?.url || fallback);
+
 const sections = [
   {
     key: 'dashboard',
     label: 'ADMIN',
     icon: 'layout-dashboard',
     items: [
-      { label: 'Business Dashboard', page: 'dashboard', href: '/app', icon: 'layout-dashboard' },
-      { label: 'Admin Workspace', page: 'admin-workspace', href: '/app/admin/workspace', icon: 'shield-check' },
-      { label: 'Staff Workspace', page: 'staff-workspace', href: '/app/staff/workspace', icon: 'users' },
-      { label: 'Onboarding', page: 'onboarding', href: '/app/admin/onboarding', icon: 'clipboard-check' },
+      { label: 'Business Dashboard', page: 'dashboard', href: routeUrl('business.dashboard', '/app'), icon: 'layout-dashboard' },
+      { label: 'Admin Workspace', page: 'admin-workspace', href: routeUrl('admin.workspace', '/app/admin/workspace'), icon: 'shield-check' },
+      { label: 'Staff Workspace', page: 'staff-workspace', href: routeUrl('staff.workspace', '/app/staff/workspace'), icon: 'users' },
+      { label: 'Onboarding', page: 'onboarding', href: routeUrl('onboarding', '/app/admin/onboarding'), icon: 'clipboard-check' },
     ],
   },
   {
@@ -126,12 +142,12 @@ const sections = [
     label: 'SALES',
     icon: 'receipt',
     items: [
-      { label: 'POS Billing', page: 'pos', href: '/app/sales/pos', icon: 'scan-barcode' },
-      { label: 'Sales Invoices', page: 'sales', href: '/app/sales/invoices', icon: 'receipt' },
-      { label: 'Sales Returns', page: 'sales-returns', href: '/app/sales/returns', icon: 'rotate-cw' },
-      { label: 'Customers', page: 'customers', href: '/app/sales/customers', icon: 'users' },
-      { label: 'Stock Outward', page: 'inventory-outward', href: '/app/sales/stock-outward', icon: 'package-minus' },
-      { label: 'Reserved Stock', page: 'inventory-reserved', href: '/app/sales/reserved-stock', icon: 'bookmark-check' },
+      { label: 'POS Billing', page: 'pos', href: routeUrl('sales.pos', '/app/sales/pos'), icon: 'scan-barcode' },
+      { label: 'Sales Invoices', page: 'sales', href: routeUrl('sales.invoices', '/app/sales/invoices'), icon: 'receipt' },
+      { label: 'Sales Returns', page: 'sales-returns', href: routeUrl('sales.returns', '/app/sales/returns'), icon: 'rotate-cw' },
+      { label: 'Customers', page: 'customers', href: routeUrl('sales.customers', '/app/sales/customers'), icon: 'users' },
+      { label: 'Stock Outward', page: 'inventory-outward', href: routeUrl('sales.stock-outward', '/app/sales/stock-outward'), icon: 'package-minus' },
+      { label: 'Reserved Stock', page: 'inventory-reserved', href: routeUrl('sales.reserved-stock', '/app/sales/reserved-stock'), icon: 'bookmark-check' },
     ],
   },
   {
@@ -139,7 +155,7 @@ const sections = [
     label: 'PURCHASE',
     icon: 'shopping-bag',
     items: [
-      { label: 'Purchases', page: 'purchases', href: '/app/purchase/bills', icon: 'shopping-bag' },
+      { label: 'Purchases', page: 'purchases', href: routeUrl('purchases.index', '/app/purchase/bills'), icon: 'shopping-bag' },
       { label: 'Purchase Returns', page: 'purchase-returns', href: '/app/purchase/returns', icon: 'rotate-cw' },
       { label: 'Suppliers', page: 'suppliers', href: '/app/purchase/suppliers', icon: 'truck' },
       { label: 'Stock Inward / GRN', page: 'inventory-inward', href: '/app/purchase/grn', icon: 'package-plus' },
@@ -152,8 +168,8 @@ const sections = [
     label: 'INVENTORY',
     icon: 'boxes',
     items: [
-      { label: 'Inventory Dashboard', page: 'inventory', href: '/app/inventory', icon: 'boxes' },
-      { label: 'Add Product Master', page: 'products', href: '/app/inventory/products', icon: 'tag' },
+      { label: 'Inventory Dashboard', page: 'inventory', href: routeUrl('inventory.dashboard', '/app/inventory'), icon: 'boxes' },
+      { label: 'Add Product Master', page: 'products', href: routeUrl('products.index', '/app/inventory/products'), icon: 'tag' },
       { label: 'Opening Stock', page: 'opening-stock', href: '/app/inventory/add', icon: 'package-plus' },
       { label: 'Current Stock', page: 'inventory-current-stock', href: '/app/inventory/current-stock', icon: 'warehouse' },
       { label: 'Inventory Vouchers', page: 'inventory-vouchers', href: '/app/inventory/vouchers', icon: 'file-stack' },
@@ -183,8 +199,8 @@ const sections = [
     label: 'ACCOUNTING',
     icon: 'landmark',
     items: [
-      { label: 'Chart of Accounts', page: 'accounts', href: '/app/accounting/chart-of-accounts', icon: 'landmark' },
-      { label: 'Vouchers', page: 'vouchers', href: '/app/accounting/vouchers', icon: 'file-plus' },
+      { label: 'Chart of Accounts', page: 'accounts', href: routeUrl('accounting.dashboard', '/app/accounting/chart-of-accounts'), icon: 'landmark' },
+      { label: 'Vouchers', page: 'vouchers', href: routeUrl('accounting.vouchers.index', '/app/accounting/vouchers'), icon: 'file-plus' },
       { label: 'Ledgers', page: 'ledgers', href: '/app/accounting/ledgers', icon: 'book-open' },
       { label: 'Expenses', page: 'expenses', href: '/app/accounting/expenses', icon: 'wallet' },
       { label: 'Fixed Assets', page: 'fixed-assets', href: '/app/fixed-assets', icon: 'boxes' },
@@ -198,9 +214,9 @@ const sections = [
     label: 'REPORTS',
     icon: 'bar-chart',
     items: [
-      { label: 'Business Reports', page: 'reports', href: '/app/reports/business', icon: 'bar-chart' },
+      { label: 'Business Reports', page: 'reports', href: routeUrl('reports.index', '/app/reports/business'), icon: 'bar-chart' },
       { label: 'Inventory Reports', page: 'inventory-reports', href: '/app/reports/inventory', icon: 'pie-chart' },
-      { label: 'Stock Ledger', page: 'stock-ledger', href: '/app/reports/stock-ledger', icon: 'file-text' },
+      { label: 'Stock Ledger', page: 'stock-ledger', href: routeUrl('inventory.stock-ledger', '/app/reports/stock-ledger'), icon: 'file-text' },
       { label: 'Stock Valuation', page: 'inventory-valuation', href: '/app/reports/stock-valuation', icon: 'indian-rupee' },
       { label: 'Voucher Audit Trail', page: 'inventory-audit-trail', href: '/app/reports/audit-trail', icon: 'history' },
       { label: 'Acceptance Matrix', page: 'acceptance', href: '/app/reports/acceptance', icon: 'badge-check' },
@@ -283,6 +299,7 @@ const visibleSections = computed(() => {
   return sections
     .map((section) => ({
       ...section,
+      label: section.key === 'dashboard' ? 'WORKSPACE' : section.label,
       items: section.items.filter((item) => allowedPages.includes(item.page)),
     }))
     .filter((section) => section.items.length);
@@ -301,8 +318,12 @@ const selectSection = (key) => {
   const section = visibleSections.value.find((item) => item.key === key);
 
   if (section?.items?.[0]?.href) {
-    window.location.href = appUrl(section.items[0].href);
+    window.location.href = normalizeUrl(section.items[0].href);
   }
+};
+
+const logout = () => {
+  router.post(routeUrl('logout', '/logout'));
 };
 
 watchEffect(() => {

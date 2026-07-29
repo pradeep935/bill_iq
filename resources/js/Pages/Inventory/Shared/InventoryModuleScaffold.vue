@@ -41,7 +41,7 @@ const emit = defineEmits(['page']);
 
             <slot />
 
-            <div class="pager">
+            <div v-if="(pagination.total || 0) > 0 && (pagination.last_page || 1) > 1" class="pager">
                 <button :disabled="pagination.current_page <= 1" @click="emit('page', pagination.current_page - 1)">Previous</button>
                 <span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span>
                 <button :disabled="pagination.current_page >= pagination.last_page" @click="emit('page', pagination.current_page + 1)">Next</button>

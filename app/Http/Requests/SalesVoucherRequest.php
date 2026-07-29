@@ -62,6 +62,9 @@ class SalesVoucherRequest extends FormRequest
             if ($this->input('sale_type') === 'credit' && !$this->filled('customer_id')) {
                 $validator->errors()->add('customer_id', 'Customer is required for credit sale.');
             }
+            if ($this->filled('due_date') && $this->filled('invoice_date') && strtotime((string) $this->input('due_date')) < strtotime((string) $this->input('invoice_date'))) {
+                $validator->errors()->add('due_date', 'Due date cannot be earlier than invoice date.');
+            }
         });
     }
 }

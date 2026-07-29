@@ -1,21 +1,37 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
 import SalesApi from './SalesApi';
 
-defineProps({ page: { type: String, default: 'sales' }, title: { type: String, default: 'Sales Invoices' } });
+const props = defineProps({ page: { type: String, default: 'sales' }, title: { type: String, default: 'Sales Invoices' }, endpoints: { type: Object, default: () => ({}) } });
+SalesApi.configure(props.endpoints);
 
 const today = new Date().toISOString().slice(0, 10);
+const query = () => new URLSearchParams(window.location.search);
 const sales = ref([]);
 const references = ref({ customers: [], branches: [], warehouses: [], payment_methods: [] });
 const products = ref([]);
 const productSearch = ref('');
 const loading = ref(false);
 const saving = ref(false);
+const savingAction = ref('');
 const errors = ref({});
 const reports = ref({});
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
-const filters = reactive({ status: '', payment_status: '', sale_type: '', invoice_type: '', tax_type: '', date_from: '', date_to: '' });
+const filters = reactive({
+    search: query().get('search') || '',
+    status: query().get('status') || '',
+    payment_status: query().get('payment_status') || '',
+    sale_type: query().get('sale_type') || '',
+    invoice_type: query().get('invoice_type') || '',
+    tax_type: query().get('tax_type') || '',
+    branch_id: query().get('branch_id') || '',
+    warehouse_id: query().get('warehouse_id') || '',
+    customer_id: query().get('customer_id') || '',
+    date: query().get('date') || '',
+    date_from: query().get('date_from') || '',
+    date_to: query().get('date_to') || '',
+});
 const form = reactive({
     id: null, branch_id: '', warehouse_id: '', customer_id: '', invoice_date: today, due_date: '',
     sale_type: 'cash', invoice_type: 'tax_invoice', tax_type: 'intrastate', place_of_supply_state_id: '',
@@ -27,6 +43,25 @@ const filteredWarehouses = computed(() => !form.branch_id ? references.value.war
 const selectedCustomer = computed(() => (references.value.customers || []).find((c) => Number(c.id) === Number(form.customer_id)));
 const priceType = computed(() => selectedCustomer.value?.price_type || 'retail');
 const defaultPayment = computed(() => (references.value.payment_methods || []).find((p) => p.type === 'cash') || (references.value.payment_methods || [])[0]);
+const currentParams = () => Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '' && value !== null && value !== undefined));
+const syncUrl = (replace = false) => {
+    const params = new URLSearchParams(currentParams());
+    const next = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+    window.history[replace ? 'replaceState' : 'pushState']({}, '', next);
+};
+const applyFilters = async () => { syncUrl(); await loadSales(1); await loadReports(); };
+const clearFilters = async () => {
+    Object.assign(filters, { search: '', status: '', payment_status: '', sale_type: '', invoice_type: '', tax_type: '', branch_id: '', warehouse_id: '', customer_id: '', date: '', date_from: '', date_to: '' });
+    syncUrl();
+    await loadSales(1);
+    await loadReports();
+};
+const fromUrl = () => {
+    const params = query();
+    Object.keys(filters).forEach((key) => { filters[key] = params.get(key) || ''; });
+    loadSales(1);
+    loadReports();
+};
 
 const line = (item) => {
     const qty = Number(item.quantity || 0);
@@ -96,7 +131,7 @@ const payload = (status) => ({ ...form, status, branch_id: form.branch_id || nul
 
 const saveSale = async (status = 'draft') => {
     if (saving.value) return;
-    saving.value = true; errors.value = {};
+    saving.value = true; savingAction.value = status; errors.value = {};
     try {
         const response = await SalesApi.saveSale(payload(status), form.id);
         alert(response.message || 'Sale saved.');
@@ -105,7 +140,7 @@ const saveSale = async (status = 'draft') => {
     } catch (error) {
         if (error.response?.status === 422) { errors.value = error.response.data.errors || {}; alert(Object.values(errors.value)?.[0]?.[0] || 'Please check sale fields.'); return; }
         alert(error.response?.data?.message || 'Sale save nahi ho saka.');
-    } finally { saving.value = false; }
+    } finally { saving.value = false; savingAction.value = ''; }
 };
 
 const editSale = (sale) => {
@@ -114,27 +149,22 @@ const editSale = (sale) => {
 const simpleAction = async (fn, row, promptText) => { if (promptText && !window.confirm(promptText)) return; const response = await fn(row.id); alert(response.message || 'Done.'); await loadSales(pagination.value.current_page || 1); await loadReports(); };
 const reverseSale = async (row) => { const remarks = window.prompt('Reversal remarks'); if (!remarks) return; await simpleAction((id) => SalesApi.reverseSale(id, remarks), row); };
 const printSale = (sale) => {
-    const html = `<html><head><title>${sale.invoice_number}</title><style>body{font-family:Arial;margin:24px;color:#111}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:8px;text-align:left}.right{text-align:right}</style></head><body><h2>Tax Invoice</h2><p><b>${sale.invoice_number}</b> | ${sale.invoice_date}</p><p>${sale.customer || 'Walk-in Customer'} ${sale.customer_mobile || ''}</p><table><thead><tr><th>Item</th><th>HSN</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Total</th></tr></thead><tbody>${(sale.items || []).map((i) => `<tr><td>${i.product}</td><td>${i.hsn_code_snapshot || ''}</td><td class="right">${i.quantity}</td><td class="right">${formatMoney(i.selling_rate)}</td><td class="right">${formatMoney(i.line_total)}</td></tr>`).join('')}</tbody></table><h3 class="right">Grand Total: Rs. ${formatMoney(sale.grand_total)}</h3><p>Paid: Rs. ${formatMoney(sale.paid_amount)} | Balance: Rs. ${formatMoney(sale.balance_amount)}</p></body></html>`;
-    const win = window.open('', '_blank'); win.document.write(html); win.document.close(); win.print();
+    window.open(SalesApi.printUrl(sale.id), '_blank');
 };
-const exportRows = () => {
-    const header = ['Invoice', 'Date', 'Customer', 'Grand Total', 'Paid', 'Balance', 'Payment', 'Status'];
-    const rows = sales.value.map((s) => [s.invoice_number, s.invoice_date, s.customer, s.grand_total, s.paid_amount, s.balance_amount, s.payment_status, s.status]);
-    const csv = [header, ...rows].map((row) => row.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'sales-invoices.csv'; a.click(); URL.revokeObjectURL(url);
-};
-const formatMoney = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-onMounted(async () => { await loadReferences(); await loadSales(); await loadReports(); });
+const exportRows = () => { window.location.href = SalesApi.exportUrl(currentParams()); };
+const formatMoney = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+onMounted(async () => { syncUrl(true); window.addEventListener('popstate', fromUrl); await loadReferences(); await loadSales(); await loadReports(); });
+onUnmounted(() => window.removeEventListener('popstate', fromUrl));
 </script>
 
 <template>
-    <Layout :page="page" :title="title">
+    <Layout :page="props.page" :title="props.title">
         <template #topbar-title>
             <div class="bill-page-title"><span>SALES MANAGEMENT</span><h1>Sales Invoices</h1><p>Draft, hold and post GST invoices with stock ledger integration.</p></div>
         </template>
         <div class="sales-page">
             <div class="page-toolbar"><button @click="reset">New Sale</button></div>
-            <section class="metrics"><div><span>Outstanding</span><strong>Rs. {{ formatMoney(reports.outstanding) }}</strong></div><div><span>Cancelled</span><strong>{{ reports.cancelled || 0 }}</strong></div><div><span>Today Total</span><strong>Rs. {{ formatMoney((reports.daily_sales || [])[0]?.total) }}</strong></div></section>
+            <section class="metrics"><div><span>Outstanding</span><strong>{{ formatMoney(reports.outstanding) }}</strong></div><div><span>Cancelled</span><strong>{{ reports.cancelled || 0 }}</strong></div><div><span>Today Total</span><strong>{{ formatMoney(reports.today_total) }}</strong></div><div><span>Draft / Held</span><strong>{{ reports.draft_count || 0 }} / {{ reports.held_count || 0 }}</strong></div></section>
             <section class="panel">
                 <div class="form-grid">
                     <select v-model="form.branch_id"><option value="">Branch</option><option v-for="b in references.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
@@ -150,13 +180,27 @@ onMounted(async () => { await loadReferences(); await loadSales(); await loadRep
                     <input v-model="form.shipping_amount" type="number" placeholder="Shipping" /><input v-model="form.other_charges" type="number" placeholder="Other Charges" /><input v-model="form.reference_number" placeholder="Reference No" /><input v-model="form.remarks" placeholder="Remarks" />
                 </div>
                 <div class="product-search"><input v-model="productSearch" placeholder="Scan barcode or search product / SKU" @keyup.enter="products[0] && addProduct(products[0])" @input="searchProducts" /><div v-if="products.length" class="search-results"><button v-for="product in products" :key="product.id" @click="addProduct(product)"><strong>{{ product.name }}</strong><span>{{ product.sku }} | {{ product.barcode || 'No barcode' }} | Stock {{ product.available_stock ?? 'Service' }}</span></button></div></div>
-                <div class="table-wrapper"><table><thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>Stock</th><th>Qty</th><th>Free</th><th>Rate</th><th>MRP</th><th>Disc</th><th>GST</th><th>Total</th><th></th></tr></thead><tbody><tr v-for="(item,index) in form.items" :key="`${item.product_id}-${index}`"><td><strong>{{ item.product }}</strong><span>{{ item.sku }}</span></td><td><select v-model="item.product_variant_id"><option value="">Default</option><option v-for="v in item.variants" :key="v.id" :value="v.id">{{ v.sku || v.barcode }}</option></select></td><td><select v-model="item.batch_id"><option value="">Batch</option><option v-for="b in item.batches" :key="b.id" :value="b.id">{{ b.batch_no }} | {{ b.expiry_date || '-' }} | {{ b.available_stock }}</option></select></td><td>{{ item.available_stock ?? '-' }}</td><td><input v-model="item.quantity" type="number" step="0.001" /></td><td><input v-model="item.free_quantity" type="number" step="0.001" /></td><td><input v-model="item.selling_rate" type="number" step="0.01" /></td><td><input v-model="item.mrp" type="number" step="0.01" /></td><td><select v-model="item.discount_type"><option value="">No</option><option value="percentage">%</option><option value="amount">Amt</option></select><input v-model="item.discount_value" type="number" step="0.01" /></td><td><input v-model="item.gst_rate" type="number" step="0.01" /></td><td>Rs. {{ formatMoney(line(item).total) }}</td><td><button class="danger" @click="removeItem(index)">Remove</button></td></tr><tr v-if="!form.items.length"><td colspan="12" class="empty">Search or scan products to add invoice lines.</td></tr></tbody></table></div>
+                <div class="table-wrapper"><table><thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>Stock</th><th>Qty</th><th>Free</th><th>Rate</th><th>MRP</th><th>Disc</th><th>GST</th><th>Total</th><th></th></tr></thead><tbody><tr v-for="(item,index) in form.items" :key="`${item.product_id}-${index}`"><td><strong>{{ item.product }}</strong><span>{{ item.sku }}</span></td><td><select v-model="item.product_variant_id"><option value="">Default</option><option v-for="v in item.variants" :key="v.id" :value="v.id">{{ v.sku || v.barcode }}</option></select></td><td><select v-model="item.batch_id"><option value="">Batch</option><option v-for="b in item.batches" :key="b.id" :value="b.id">{{ b.batch_no }} | {{ b.expiry_date || '-' }} | {{ b.available_stock }}</option></select></td><td>{{ item.available_stock ?? '-' }}</td><td><input v-model="item.quantity" type="number" step="0.001" /></td><td><input v-model="item.free_quantity" type="number" step="0.001" /></td><td><input v-model="item.selling_rate" type="number" step="0.01" /></td><td><input v-model="item.mrp" type="number" step="0.01" /></td><td><select v-model="item.discount_type"><option value="">No</option><option value="percentage">%</option><option value="amount">Amt</option></select><input v-model="item.discount_value" type="number" step="0.01" /></td><td><input v-model="item.gst_rate" type="number" step="0.01" /></td><td>{{ formatMoney(line(item).total) }}</td><td><button class="danger" @click="removeItem(index)">Remove</button></td></tr><tr v-if="!form.items.length"><td colspan="12" class="empty">Search or scan a product to add invoice items.</td></tr></tbody></table></div>
                 <div class="payments"><button @click="addPayment">Add Payment</button><div v-for="(payment,index) in form.payments" :key="index"><select v-model="payment.payment_method_id"><option v-for="m in references.payment_methods" :key="m.id" :value="m.id">{{ m.name }}</option></select><input v-model="payment.amount" type="number" step="0.01" /><input v-model="payment.reference_number" placeholder="Payment Ref" /><button class="danger" @click="removePayment(index)">Remove</button></div></div>
-                <div class="total-grid"><span>Subtotal <b>Rs. {{ formatMoney(totals.subtotal) }}</b></span><span>Discount <b>Rs. {{ formatMoney(totals.item_discount + totals.voucherDiscount) }}</b></span><span>Tax <b>Rs. {{ formatMoney(totals.tax) }}</b></span><span>Round Off <b>Rs. {{ formatMoney(totals.roundOff) }}</b></span><span>Grand <b>Rs. {{ formatMoney(totals.grand) }}</b></span><span>Paid <b>Rs. {{ formatMoney(totals.paid) }}</b></span><span>Balance <b>Rs. {{ formatMoney(totals.balance) }}</b></span><span>Change <b>Rs. {{ formatMoney(totals.change) }}</b></span></div>
+                <div class="total-grid"><span>Subtotal <b>{{ formatMoney(totals.subtotal) }}</b></span><span>Discount <b>{{ formatMoney(totals.item_discount + totals.voucherDiscount) }}</b></span><span>Tax <b>{{ formatMoney(totals.tax) }}</b></span><span>Round Off <b>{{ formatMoney(totals.roundOff) }}</b></span><span>Grand <b>{{ formatMoney(totals.grand) }}</b></span><span>Paid <b>{{ formatMoney(totals.paid) }}</b></span><span>Balance <b>{{ formatMoney(totals.balance) }}</b></span><span>Change <b>{{ formatMoney(totals.change) }}</b></span></div>
                 <div v-if="Object.keys(errors).length" class="error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
-                <div class="actions"><button :disabled="saving" @click="saveSale('draft')">Save Draft</button><button :disabled="saving" @click="saveSale('hold')">Hold</button><button class="primary" :disabled="saving" @click="saveSale('approved')">{{ saving ? 'Saving...' : 'Confirm & Print' }}</button></div>
+                <div class="actions"><button :disabled="saving" @click="saveSale('draft')">{{ saving && savingAction === 'draft' ? 'Saving Draft...' : 'Save Draft' }}</button><button :disabled="saving" @click="saveSale('hold')">{{ saving && savingAction === 'hold' ? 'Holding...' : 'Hold' }}</button><button class="primary" :disabled="saving" @click="saveSale('approved')">{{ saving && savingAction === 'approved' ? 'Posting...' : 'Confirm & Print' }}</button></div>
             </section>
-            <section class="panel"><div class="toolbar"><input v-model="filters.date_from" type="date" @change="loadSales(1)" /><input v-model="filters.date_to" type="date" @change="loadSales(1)" /><select v-model="filters.status" @change="loadSales(1)"><option value="">All Status</option><option value="draft">Draft</option><option value="hold">Held</option><option value="approved">Approved</option><option value="cancelled">Cancelled</option><option value="reversed">Reversed</option></select><select v-model="filters.payment_status" @change="loadSales(1)"><option value="">All Payments</option><option value="unpaid">Unpaid</option><option value="partial">Partial</option><option value="paid">Paid</option><option value="overpaid">Overpaid</option></select><button @click="exportRows">Export</button></div><div class="table-wrapper"><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Mobile</th><th>Branch</th><th>Warehouse</th><th>Type</th><th>Total</th><th>Paid</th><th>Balance</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in sales" :key="row.id"><td>{{ row.invoice_number }}</td><td>{{ row.invoice_date }}</td><td>{{ row.customer }}</td><td>{{ row.customer_mobile || '-' }}</td><td>{{ row.branch || '-' }}</td><td>{{ row.warehouse || '-' }}</td><td>{{ row.invoice_type }}</td><td>Rs. {{ formatMoney(row.grand_total) }}</td><td>Rs. {{ formatMoney(row.paid_amount) }}</td><td>Rs. {{ formatMoney(row.balance_amount) }}</td><td>{{ row.payment_status }}</td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td><div class="row-actions"><button @click="printSale(row)">Print</button><button v-if="['draft','hold'].includes(row.status)" @click="editSale(row)">Edit</button><button v-if="['draft','hold'].includes(row.status)" @click="simpleAction(SalesApi.approveSale,row,'Post invoice?')">Post</button><button @click="simpleAction(SalesApi.duplicateSale,row)">Copy</button><button v-if="['draft','hold'].includes(row.status)" class="danger" @click="simpleAction(SalesApi.cancelSale,row,'Cancel invoice?')">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" class="danger" @click="reverseSale(row)">Reverse</button></div></td></tr><tr v-if="!sales.length && !loading"><td colspan="13" class="empty">No sales invoices found.</td></tr></tbody></table></div><div class="pagination"><button :disabled="pagination.current_page <= 1" @click="loadSales(pagination.current_page - 1)">Previous</button><span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span><button :disabled="pagination.current_page >= pagination.last_page" @click="loadSales(pagination.current_page + 1)">Next</button></div></section>
+            <section class="panel">
+                <div class="toolbar">
+                    <input v-model="filters.search" placeholder="Search invoice, customer, mobile, GSTIN" @keyup.enter="applyFilters" />
+                    <input v-model="filters.date_from" type="date" />
+                    <input v-model="filters.date_to" type="date" />
+                    <select v-model="filters.branch_id"><option value="">All Branches</option><option v-for="b in references.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
+                    <select v-model="filters.warehouse_id"><option value="">All Warehouses</option><option v-for="w in references.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
+                    <select v-model="filters.status"><option value="">All Status</option><option value="draft">Draft</option><option value="hold">Held</option><option value="approved">Posted</option><option value="cancelled">Cancelled</option><option value="reversed">Reversed</option></select>
+                    <select v-model="filters.payment_status"><option value="">All Payments</option><option value="unpaid">Unpaid</option><option value="partial">Partial</option><option value="paid">Paid</option><option value="unpaid,partial">Outstanding</option><option value="overpaid">Overpaid</option></select>
+                    <select v-model="filters.invoice_type"><option value="">All Types</option><option value="tax_invoice">Tax Invoice</option><option value="bill_of_supply">Bill of Supply</option><option value="retail_invoice">Retail Invoice</option></select>
+                    <button @click="applyFilters">Apply</button><button @click="clearFilters">Clear Filters</button><button @click="exportRows">Export</button>
+                </div>
+                <div class="table-wrapper"><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Mobile</th><th>Branch</th><th>Warehouse</th><th>Type</th><th>Total</th><th>Paid</th><th>Balance</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in sales" :key="row.id"><td>{{ row.invoice_number }}</td><td>{{ row.invoice_date }}</td><td>{{ row.customer }}</td><td>{{ row.customer_mobile || '-' }}</td><td>{{ row.branch || '-' }}</td><td>{{ row.warehouse || '-' }}</td><td>{{ row.invoice_type }}</td><td>{{ formatMoney(row.grand_total) }}</td><td>{{ formatMoney(row.paid_amount) }}</td><td>{{ formatMoney(row.balance_amount) }}</td><td>{{ row.payment_status }}</td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td><div class="row-actions"><button @click="printSale(row)">Print</button><button v-if="['draft','hold'].includes(row.status)" @click="editSale(row)">Edit</button><button v-if="['draft','hold'].includes(row.status)" @click="simpleAction(SalesApi.approveSale,row,'Post invoice?')">Post</button><button @click="simpleAction(SalesApi.duplicateSale,row)">Copy</button><button v-if="['draft','hold'].includes(row.status)" class="danger" @click="simpleAction(SalesApi.cancelSale,row,'Cancel invoice?')">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" class="danger" @click="reverseSale(row)">Reverse</button></div></td></tr><tr v-if="!sales.length && !loading"><td colspan="13" class="empty">No sales invoices found for the selected filters.</td></tr></tbody></table></div>
+                <div class="pagination"><button :disabled="pagination.current_page <= 1" @click="loadSales(pagination.current_page - 1)">Previous</button><span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span><button :disabled="pagination.current_page >= pagination.last_page" @click="loadSales(pagination.current_page + 1)">Next</button></div>
+            </section>
         </div>
     </Layout>
 </template>

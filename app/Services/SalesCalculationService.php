@@ -96,10 +96,18 @@ class SalesCalculationService
 
         $voucherDiscount = $this->calculateVoucherDiscount($taxable, $data['voucher_discount_type'] ?? null, (float) ($data['voucher_discount_value'] ?? 0));
         $taxableAfterDiscount = max(0, round($taxable - $voucherDiscount, 2));
+        $taxRatio = $taxable > 0 ? $taxableAfterDiscount / $taxable : 1;
+        $cgst = round($cgst * $taxRatio, 2);
+        $sgst = round($sgst * $taxRatio, 2);
+        $igst = round($igst * $taxRatio, 2);
+        $cess = round($cess * $taxRatio, 2);
         $beforeRound = round($taxableAfterDiscount + $cgst + $sgst + $igst + $cess + (float) ($data['shipping_amount'] ?? 0) + (float) ($data['other_charges'] ?? 0), 2);
         $roundOff = $this->calculateRoundOff($beforeRound);
         $grand = round($beforeRound + $roundOff, 2);
         $paid = collect($data['payments'] ?? [])->sum(fn ($payment) => (float) ($payment['amount'] ?? 0));
+        if ($paid > $grand) {
+            throw ValidationException::withMessages(['payments' => 'Total payment cannot exceed invoice grand total.']);
+        }
         $change = $this->calculateChangeReturned($grand, $paid);
         $paidForInvoice = min($paid, $grand);
 

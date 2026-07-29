@@ -16,6 +16,7 @@ use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class SalesReturnService
@@ -38,19 +39,7 @@ class SalesReturnService
         $businessId = AppController::businessId();
         $perPage = min(max((int) ($filters['per_page'] ?? 15), 1), 100);
 
-        return SalesReturnVoucher::query()
-            ->with(['customer', 'sale', 'branch', 'warehouse', 'creator', 'items', 'refunds.method'])
-            ->where('business_id', $businessId)
-            ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('return_date', '>=', $filters['date_from']))
-            ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('return_date', '<=', $filters['date_to']))
-            ->when(!empty($filters['customer_id']), fn (Builder $q) => $q->where('customer_id', $filters['customer_id']))
-            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
-            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
-            ->when(!empty($filters['return_type']), fn (Builder $q) => $q->where('return_type', $filters['return_type']))
-            ->when(!empty($filters['settlement_type']), fn (Builder $q) => $q->where('settlement_type', $filters['settlement_type']))
-            ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
-            ->latest('id')
-            ->paginate($perPage);
+        return $this->returnQuery($filters)->paginate($perPage);
     }
 
     public function create(array $data): SalesReturnVoucher
@@ -145,7 +134,7 @@ class SalesReturnService
                     continue;
                 }
 
-                if (in_array($item->restock_status, ['damaged_stock', 'expired_stock'], true)) {
+                if (in_array($item->restock_status, ['damaged_stock', 'expired_stock', 'quarantine_stock'], true)) {
                     AuditLogger::record([
                         'module_name' => 'Sales Return',
                         'record_id' => $voucher->id,
@@ -207,6 +196,58 @@ class SalesReturnService
         return $this->fresh($voucher);
     }
 
+    public function addRefund(SalesReturnVoucher $voucher, array $refund): SalesReturnVoucher
+    {
+        return DB::transaction(function () use ($voucher, $refund) {
+            $this->assertBusiness($voucher);
+
+            if (!in_array($voucher->status, ['confirmed', 'approved'], true)) {
+                throw ValidationException::withMessages(['status' => 'Refunds can be added only after approval.']);
+            }
+
+            PaymentMethod::query()
+                ->where('id', $refund['payment_method_id'])
+                ->where(function (Builder $q) use ($voucher) {
+                    $q->whereNull('business_id')->orWhere('business_id', $voucher->business_id);
+                })
+                ->firstOrFail();
+
+            $amount = round((float) $refund['amount'], 2);
+            if ($amount > (float) $voucher->balance_amount) {
+                throw ValidationException::withMessages(['amount' => 'Refund cannot exceed remaining credit.']);
+            }
+
+            $voucher->refunds()->create([
+                'business_id' => $voucher->business_id,
+                'payment_method_id' => $refund['payment_method_id'],
+                'amount' => $amount,
+                'refund_date' => $refund['refund_date'] ?? now()->toDateString(),
+                'reference_number' => $refund['reference_number'] ?? null,
+                'notes' => $refund['notes'] ?? null,
+                'created_by' => Auth::id(),
+            ]);
+
+            $refundTotal = round((float) $voucher->refunds()->sum('amount'), 2);
+            $adjustment = $voucher->settlement_type === 'customer_credit' ? max(0, (float) $voucher->grand_total - $refundTotal) : (float) $voucher->adjustment_amount;
+
+            $voucher->update([
+                'refund_amount' => $refundTotal,
+                'adjustment_amount' => round($adjustment, 2),
+                'balance_amount' => round(max(0, (float) $voucher->grand_total - $refundTotal - $adjustment), 2),
+            ]);
+
+            AuditLogger::record([
+                'module_name' => 'Sales Return',
+                'record_id' => $voucher->id,
+                'action_type' => 'Refund Added',
+                'business_id' => $voucher->business_id,
+                'summary' => 'Refund added against sales return credit note',
+            ]);
+
+            return $this->fresh($voucher);
+        });
+    }
+
     public function reverse(SalesReturnVoucher $voucher, ?string $remarks = null): SalesReturnVoucher
     {
         return DB::transaction(function () use ($voucher, $remarks) {
@@ -233,7 +274,7 @@ class SalesReturnService
         return $this->sales->searchProducts($search, $scope);
     }
 
-    public function searchSales(string $search)
+    public function searchSales(string $search, array $filters = [])
     {
         $businessId = AppController::businessId();
 
@@ -241,26 +282,45 @@ class SalesReturnService
             ->with(['customer', 'branch', 'warehouse'])
             ->where('business_id', $businessId)
             ->whereIn('status', ['confirmed', 'approved'])
+            ->when(!empty($filters['customer_id']), fn (Builder $q) => $q->where('customer_id', $filters['customer_id']))
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
             ->where(function (Builder $q) use ($search) {
                 $like = '%' . $search . '%';
                 $q->where('invoice_number', 'like', $like)
                     ->orWhere('voucher_number', 'like', $like)
                     ->orWhere('customer_name_snapshot', 'like', $like)
-                    ->orWhere('customer_mobile_snapshot', 'like', $like);
+                    ->orWhere('customer_mobile_snapshot', 'like', $like)
+                    ->orWhereHas('customer', function (Builder $customer) use ($like) {
+                        $customer->where('customer_name', 'like', $like)
+                            ->orWhere('customer_code', 'like', $like)
+                            ->orWhere('mobile', 'like', $like)
+                            ->orWhere('gstin', 'like', $like);
+                    });
             })
             ->latest('id')
             ->limit(20)
             ->get()
+            ->filter(fn (SalesVoucher $voucher) => $this->invoiceHasReturnableItems($voucher->id))
+            ->values()
             ->map(fn (SalesVoucher $voucher) => [
                 'id' => $voucher->id,
                 'invoice_number' => $voucher->invoice_number,
                 'invoice_date' => optional($voucher->invoice_date)->format('Y-m-d'),
                 'customer_id' => $voucher->customer_id,
                 'customer' => $voucher->customer_name_snapshot ?: optional($voucher->customer)->customer_name,
+                'mobile' => $voucher->customer_mobile_snapshot ?: optional($voucher->customer)->mobile,
                 'branch_id' => $voucher->branch_id,
+                'branch' => optional($voucher->branch)->name,
                 'warehouse_id' => $voucher->warehouse_id,
+                'warehouse' => optional($voucher->warehouse)->name,
                 'tax_type' => $voucher->tax_type,
                 'place_of_supply_state_id' => $voucher->place_of_supply_state_id,
+                'grand_total' => (float) $voucher->grand_total,
+                'paid_amount' => (float) $voucher->paid_amount,
+                'payment_status' => $voucher->payment_status,
+                'existing_return_total' => (float) $voucher->returns()->whereIn('status', ['confirmed', 'approved'])->sum('grand_total'),
+                'returnable_status' => 'Returnable',
             ]);
     }
 
@@ -286,6 +346,7 @@ class SalesReturnService
                 'variant' => optional($item->variant)->sku,
                 'batch_id' => $item->batch_id,
                 'batch' => optional($item->batch)->batch_no ?: optional($item->batch)->batch_number,
+                'expiry_date' => optional($item->batch)->expiry_date ? optional($item->batch->expiry_date)->format('Y-m-d') : ($item->batch->expiry_date ?? null),
                 'unit_id' => $item->unit_id,
                 'sold_quantity' => (float) $item->quantity + (float) $item->free_quantity,
                 'previously_returned' => $returned,
@@ -297,10 +358,81 @@ class SalesReturnService
                 'cess_rate' => (float) $item->cess_rate,
                 'taxable_amount' => (float) $item->taxable_amount,
                 'line_total' => (float) $item->line_total,
+                'return_line_total' => round((float) $item->line_total * (($available > 0 && ((float) $item->quantity + (float) $item->free_quantity) > 0) ? $available / ((float) $item->quantity + (float) $item->free_quantity) : 0), 2),
                 'condition_status' => 'good',
                 'restock_status' => 'restock',
             ];
-        })->values();
+        })->filter(fn (array $item) => $item['available_quantity'] > 0)->values();
+    }
+
+    public function exportRows(array $filters = [])
+    {
+        return $this->returnQuery($filters)->get()->map(function (SalesReturnVoucher $voucher) {
+            return [
+                $voucher->credit_note_number,
+                optional($voucher->return_date)->format('Y-m-d'),
+                optional($voucher->sale)->invoice_number,
+                optional(optional($voucher->sale)->invoice_date)->format('Y-m-d'),
+                optional($voucher->customer)->customer_name ?: optional($voucher->sale)->customer_name_snapshot,
+                optional($voucher->customer)->gstin,
+                optional($voucher->branch)->name,
+                optional($voucher->warehouse)->name,
+                $voucher->return_type,
+                (float) $voucher->taxable_amount,
+                (float) $voucher->cgst_amount,
+                (float) $voucher->sgst_amount,
+                (float) $voucher->igst_amount,
+                (float) $voucher->cess_amount,
+                (float) $voucher->grand_total,
+                (float) $voucher->refund_amount,
+                (float) $voucher->balance_amount,
+                $voucher->settlement_type,
+                $voucher->status,
+                $voucher->reason,
+                optional($voucher->creator)->name,
+                optional($voucher->approver)->name,
+            ];
+        });
+    }
+
+    private function returnQuery(array $filters = []): Builder
+    {
+        $businessId = AppController::businessId();
+
+        return SalesReturnVoucher::query()
+            ->with(['customer', 'sale', 'branch', 'warehouse', 'creator', 'approver', 'items', 'refunds.method'])
+            ->where('business_id', $businessId)
+            ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('return_date', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('return_date', '<=', $filters['date_to']))
+            ->when(!empty($filters['customer_id']), fn (Builder $q) => $q->where('customer_id', $filters['customer_id']))
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
+            ->when(!empty($filters['return_type']), fn (Builder $q) => $q->where('return_type', $filters['return_type']))
+            ->when(!empty($filters['settlement_type']), fn (Builder $q) => $q->where('settlement_type', $filters['settlement_type']))
+            ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['search']), function (Builder $q) use ($filters) {
+                $like = '%' . trim((string) $filters['search']) . '%';
+                $q->where(function (Builder $inner) use ($like) {
+                    $inner->where('credit_note_number', 'like', $like)
+                        ->orWhere('voucher_number', 'like', $like)
+                        ->orWhere('reason', 'like', $like)
+                        ->orWhereHas('sale', fn (Builder $sale) => $sale->where('invoice_number', 'like', $like)->orWhere('voucher_number', 'like', $like))
+                        ->orWhereHas('customer', fn (Builder $customer) => $customer->where('customer_name', 'like', $like)->orWhere('mobile', 'like', $like)->orWhere('gstin', 'like', $like));
+                });
+            })
+            ->latest('id');
+    }
+
+    public function printHtml(SalesReturnVoucher $voucher): string
+    {
+        $voucher = $this->fresh($voucher);
+        $company = Schema::hasTable('companies') ? DB::table('companies')->where('id', $voucher->business_id)->first() : null;
+        $money = fn ($value) => '&#8377;' . number_format((float) $value, 2, '.', ',');
+
+        $rows = $voucher->items->map(fn ($item) => '<tr><td>' . e($item->product_name_snapshot) . '<br><small>' . e($item->sku_snapshot) . '</small></td><td>' . e($item->hsn_code_snapshot) . '</td><td>' . e(optional($item->batch)->batch_no ?: optional($item->batch)->batch_number ?: '-') . '</td><td class="right">' . number_format((float) $item->quantity, 3) . '</td><td class="right">' . $money($item->selling_rate) . '</td><td class="right">' . $money($item->discount_amount) . '</td><td class="right">' . $money($item->taxable_amount) . '</td><td class="right">' . $money($item->cgst_amount) . '</td><td class="right">' . $money($item->sgst_amount) . '</td><td class="right">' . $money($item->igst_amount) . '</td><td class="right">' . $money($item->cess_amount) . '</td><td class="right">' . $money($item->line_total) . '</td></tr>')->implode('');
+        $refundRows = $voucher->refunds->map(fn ($refund) => '<tr><td>' . e(optional($refund->method)->name) . '</td><td>' . e(optional($refund->refund_date)->format('Y-m-d')) . '</td><td>' . e($refund->reference_number ?: '-') . '</td><td class="right">' . $money($refund->amount) . '</td></tr>')->implode('');
+
+        return '<!doctype html><html><head><meta charset="utf-8"><title>' . e($voucher->credit_note_number) . '</title><style>body{font-family:Arial,sans-serif;margin:28px;color:#172033}.top{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #172033;padding-bottom:14px}.muted,small{color:#667085}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:18px 0}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #d0d5dd;padding:8px;font-size:12px;text-align:left}th{background:#f2f4f7}.right{text-align:right}.totals{margin-left:auto;width:320px}.signature{margin-top:54px;text-align:right}@media print{button{display:none}body{margin:0}.no-print{display:none}}</style></head><body><button class="no-print" onclick="window.print()">Print</button><div class="top"><div><h2>GST Credit Note / Sales Return</h2><strong>' . e($company->name ?? 'Bill IQ') . '</strong><br><span class="muted">' . e($company->address ?? '') . '</span><br><span>GSTIN: ' . e($company->gstin ?? '-') . '</span></div><div><strong>Credit Note:</strong> ' . e($voucher->credit_note_number) . '<br><strong>Return Date:</strong> ' . e(optional($voucher->return_date)->format('Y-m-d')) . '<br><strong>Original Invoice:</strong> ' . e(optional($voucher->sale)->invoice_number ?: '-') . '<br><strong>Invoice Date:</strong> ' . e(optional(optional($voucher->sale)->invoice_date)->format('Y-m-d') ?: '-') . '</div></div><div class="grid"><div><h4>Customer</h4>' . e(optional($voucher->customer)->customer_name ?: optional($voucher->sale)->customer_name_snapshot ?: 'Walk-in Customer') . '<br>GSTIN: ' . e(optional($voucher->customer)->gstin ?: '-') . '<br>' . e(optional($voucher->customer)->billing_address ?: '') . '</div><div><h4>Return Details</h4>Supply: ' . e($voucher->tax_type) . '<br>Settlement: ' . e($voucher->settlement_type) . '<br>Status: ' . e($voucher->status) . '<br>Reason: ' . e($voucher->reason ?: '-') . '</div></div><table><thead><tr><th>Product</th><th>HSN</th><th>Batch</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Discount</th><th class="right">Taxable</th><th class="right">CGST</th><th class="right">SGST</th><th class="right">IGST</th><th class="right">Cess</th><th class="right">Credit</th></tr></thead><tbody>' . $rows . '</tbody></table><table class="totals"><tr><th>Taxable Credit</th><td class="right">' . $money($voucher->taxable_amount) . '</td></tr><tr><th>CGST Reversal</th><td class="right">' . $money($voucher->cgst_amount) . '</td></tr><tr><th>SGST Reversal</th><td class="right">' . $money($voucher->sgst_amount) . '</td></tr><tr><th>IGST Reversal</th><td class="right">' . $money($voucher->igst_amount) . '</td></tr><tr><th>Cess Reversal</th><td class="right">' . $money($voucher->cess_amount) . '</td></tr><tr><th>Total Credit</th><td class="right">' . $money($voucher->grand_total) . '</td></tr><tr><th>Refund</th><td class="right">' . $money($voucher->refund_amount) . '</td></tr><tr><th>Balance/Credit</th><td class="right">' . $money($voucher->balance_amount) . '</td></tr></table><h4>Refund Details</h4><table><thead><tr><th>Mode</th><th>Date</th><th>Reference</th><th class="right">Amount</th></tr></thead><tbody>' . ($refundRows ?: '<tr><td colspan="4" class="muted">No refund has been added. The remaining amount will be kept as customer credit.</td></tr>') . '</tbody></table><p><strong>Remarks:</strong> ' . e($voucher->remarks ?: '-') . '</p><div class="signature">Authorized signature</div></body></html>';
     }
 
     public function present(SalesReturnVoucher $voucher): array
@@ -425,12 +557,12 @@ class SalesReturnService
 
     private function linkedLine(array $item, ?int $currentReturnId): array
     {
-        $salesItem = SalesItem::query()->findOrFail($item['sales_item_id']);
+        $salesItem = SalesItem::query()->lockForUpdate()->findOrFail($item['sales_item_id']);
         $baseQty = (float) $salesItem->quantity + (float) $salesItem->free_quantity;
         $available = $baseQty - $this->returnedQuantity($salesItem->id, $currentReturnId);
         $quantity = (float) $item['quantity'];
 
-        if ($quantity > $available) {
+        if ($quantity > $available || $quantity <= 0) {
             throw ValidationException::withMessages(['quantity' => 'Return quantity cannot exceed available return quantity.']);
         }
 
@@ -543,7 +675,7 @@ class SalesReturnService
     private function validateOwnership(int $businessId, array $data, ?int $currentReturnId = null): void
     {
         Branch::query()->where('business_id', $businessId)->where('id', $data['branch_id'])->firstOrFail();
-        Warehouse::query()->where('business_id', $businessId)->where('id', $data['warehouse_id'])->firstOrFail();
+        Warehouse::query()->where('business_id', $businessId)->where('branch_id', $data['branch_id'])->where('id', $data['warehouse_id'])->firstOrFail();
 
         if (!empty($data['customer_id'])) {
             Customer::query()->where('business_id', $businessId)->where('id', $data['customer_id'])->firstOrFail();
@@ -564,9 +696,15 @@ class SalesReturnService
             if ((int) ($sale->customer_id ?: 0) !== (int) ($data['customer_id'] ?: 0)) {
                 throw ValidationException::withMessages(['customer_id' => 'Customer must match original invoice.']);
             }
+
+            if (!empty($data['return_date']) && optional($sale->invoice_date)->format('Y-m-d') && $data['return_date'] < $sale->invoice_date->format('Y-m-d')) {
+                throw ValidationException::withMessages(['return_date' => 'Return date cannot be earlier than original invoice date.']);
+            }
         }
 
         foreach ($data['items'] as $index => $item) {
+            $this->validateRestockDecision($item, $index);
+
             if ($sale) {
                 $salesItem = SalesItem::query()->where('sales_voucher_id', $sale->id)->where('id', $item['sales_item_id'])->firstOrFail();
                 foreach (['product_id', 'product_variant_id', 'batch_id'] as $field) {
@@ -616,6 +754,31 @@ class SalesReturnService
             ->whereIn('sales_return_vouchers.status', ['confirmed', 'approved'])
             ->when($excludeReturnId, fn ($q) => $q->where('sales_return_vouchers.id', '!=', $excludeReturnId))
             ->sum('sales_return_items.quantity');
+    }
+
+    private function invoiceHasReturnableItems(int $saleId): bool
+    {
+        return SalesItem::query()
+            ->where('sales_voucher_id', $saleId)
+            ->get(['id', 'quantity', 'free_quantity'])
+            ->contains(fn (SalesItem $item) => ((float) $item->quantity + (float) $item->free_quantity) > $this->returnedQuantity($item->id));
+    }
+
+    private function validateRestockDecision(array $item, int $index): void
+    {
+        $condition = $item['condition_status'] ?? 'good';
+        $restock = $item['restock_status'] ?? 'restock';
+        $allowed = match ($condition) {
+            'expired' => ['expired_stock', 'non_restockable'],
+            'damaged', 'defective', 'scrap' => ['damaged_stock', 'quarantine_stock', 'non_restockable'],
+            'inspection_required' => ['quarantine_stock', 'non_restockable'],
+            'opened' => ['restock', 'damaged_stock', 'quarantine_stock', 'non_restockable'],
+            default => ['restock', 'damaged_stock', 'expired_stock', 'non_restockable'],
+        };
+
+        if (!in_array($restock, $allowed, true)) {
+            throw ValidationException::withMessages(["items.$index.restock_status" => 'Restock decision is not allowed for the selected condition.']);
+        }
     }
 
     private function hasStockPosting(SalesReturnVoucher $voucher): bool

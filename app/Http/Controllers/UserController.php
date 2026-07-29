@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\Validator;
+use Inertia\Inertia;
 
 class UserController extends Controller
 {
@@ -68,6 +69,15 @@ class UserController extends Controller
         $request->session()->regenerateToken();
 
         return Redirect::to('/');
+    }
+
+    public function profile()
+    {
+        return Inertia::render('Profile/Edit', [
+            'page' => 'profile',
+            'title' => 'Profile',
+            'role_id' => (int) (Auth::user()->role_id ?? 2),
+        ]);
     }
 
     private function homeForRole(int $roleId): string

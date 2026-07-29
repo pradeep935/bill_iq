@@ -193,7 +193,10 @@ class AccountingPostingService
             $this->addDebitEntry($entries, $s->output_sgst_account_id, (float) $return->sgst_amount);
             $this->addDebitEntry($entries, $s->output_igst_account_id, (float) $return->igst_amount);
             $this->addDebitEntry($entries, $s->output_cess_account_id, (float) $return->cess_amount);
-            $this->addCreditEntry($entries, $return->refund_amount > 0 ? $s->cash_account_id : $s->accounts_receivable_id, (float) $return->grand_total, ['customer_id' => $return->customer_id]);
+            $refund = min((float) $return->refund_amount, (float) $return->grand_total);
+            $creditBalance = round((float) $return->grand_total - $refund, 2);
+            $this->addCreditEntry($entries, $s->cash_account_id, $refund, ['customer_id' => $return->customer_id]);
+            $this->addCreditEntry($entries, $s->accounts_receivable_id, $creditBalance, ['customer_id' => $return->customer_id]);
             return $this->sourceVoucher('sales_return', $return, $return->return_date, $return->credit_note_number, $entries);
         });
     }

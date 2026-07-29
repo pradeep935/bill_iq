@@ -4,6 +4,8 @@ namespace App\Http\Requests;
 
 use App\Http\Controllers\AppController;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class CustomerRequest extends FormRequest
@@ -22,10 +24,10 @@ class CustomerRequest extends FormRequest
 
         return [
             'customer_code' => ['nullable', 'string', 'max:50', Rule::unique('customers')->where('business_id', $businessId)->ignore($customerId)],
-            'customer_name' => ['required', 'string', 'max:255'],
-            'customer_type' => ['required', Rule::in(['retail', 'wholesale', 'dealer', 'distributor', 'corporate', 'walk_in'])],
+            'customer_name' => ['required', 'string', 'max:255', 'regex:/\S/'],
+            'customer_type' => ['required', Rule::in(['retail', 'wholesale', 'dealer', 'distributor', 'corporate', 'government', 'export', 'walk_in', 'other'])],
             'contact_person' => ['nullable', 'string', 'max:255'],
-            'mobile' => ['nullable', 'string', 'max:30'],
+            'mobile' => ['nullable', 'regex:/^[6-9][0-9]{9}$/'],
             'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'gstin' => ['nullable', 'regex:/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', Rule::unique('customers')->where('business_id', $businessId)->ignore($customerId)],
@@ -34,13 +36,61 @@ class CustomerRequest extends FormRequest
             'shipping_address' => ['nullable', 'string', 'max:2000'],
             'state_id' => ['nullable', 'integer'],
             'city' => ['nullable', 'string', 'max:100'],
-            'pincode' => ['nullable', 'string', 'max:20'],
+            'pincode' => ['nullable', 'regex:/^[0-9]{6}$/'],
             'opening_balance' => ['nullable', 'numeric', 'min:0'],
             'opening_balance_type' => ['nullable', Rule::in(['debit', 'credit'])],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
             'credit_days' => ['nullable', 'integer', 'min:0'],
-            'price_type' => ['nullable', Rule::in(['retail', 'wholesale', 'dealer', 'online'])],
-            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'price_type' => ['nullable', Rule::in(['retail', 'wholesale', 'dealer', 'distributor', 'online'])],
+            'status' => ['required', Rule::in(['active', 'inactive', 'blocked'])],
+            'blocked_reason' => ['nullable', 'required_if:status,blocked', 'string', 'max:2000'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $mobile = $this->input('mobile');
+        if ($mobile !== null) {
+            $digits = preg_replace('/\D+/', '', (string) $mobile);
+            if (strlen($digits) === 12 && str_starts_with($digits, '91')) {
+                $digits = substr($digits, 2);
+            }
+            if (strlen($digits) === 11 && str_starts_with($digits, '0')) {
+                $digits = substr($digits, 1);
+            }
+            $mobile = $digits ?: null;
+        }
+
+        $this->merge([
+            'customer_code' => $this->filled('customer_code') ? trim((string) $this->input('customer_code')) : null,
+            'customer_name' => trim((string) $this->input('customer_name')),
+            'contact_person' => $this->filled('contact_person') ? trim((string) $this->input('contact_person')) : null,
+            'mobile' => $mobile,
+            'email' => $this->filled('email') ? strtolower(trim((string) $this->input('email'))) : null,
+            'gstin' => $this->filled('gstin') ? strtoupper(trim((string) $this->input('gstin'))) : null,
+            'pan' => $this->filled('pan') ? strtoupper(trim((string) $this->input('pan'))) : null,
+            'city' => $this->filled('city') ? trim((string) $this->input('city')) : null,
+            'pincode' => $this->filled('pincode') ? trim((string) $this->input('pincode')) : null,
+        ]);
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $gstin = (string) $this->input('gstin');
+            $pan = (string) $this->input('pan');
+
+            if ($gstin && $pan && substr($gstin, 2, 10) !== $pan) {
+                $validator->errors()->add('pan', 'PAN must match the PAN segment in GSTIN.');
+            }
+
+            if ($gstin && $this->filled('state_id') && Schema::hasTable('states')) {
+                $state = DB::table('states')->where('id', $this->input('state_id'))->first();
+                $stateCode = $state->code ?? $state->gst_code ?? null;
+                if ($stateCode && str_pad((string) $stateCode, 2, '0', STR_PAD_LEFT) !== substr($gstin, 0, 2)) {
+                    $validator->errors()->add('gstin', 'GSTIN state code does not match selected state.');
+                }
+            }
+        });
     }
 }

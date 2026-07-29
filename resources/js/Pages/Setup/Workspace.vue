@@ -1,71 +1,155 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { router } from '@inertiajs/vue3';
 import Layout from '../Layout.vue';
-import InventoryModuleScaffold from '../Inventory/Shared/InventoryModuleScaffold.vue';
-import InventoryTable from '../Inventory/Shared/InventoryTable.vue';
-import InventoryApi from '../Inventory/InventoryApi';
-import axios from 'axios';
 
-const props = defineProps({ page: String, title: String, initial_tab: { type: String, default: 'admin' } });
-const inertia = usePage();
-const tab = ref(props.initial_tab);
-const loading = ref(false);
-const loaded = ref(false);
-const refs = ref({ branches: [], warehouses: [] });
-const stock = ref([]);
-const masters = ref({});
-
-const rows = computed(() => {
-    if (tab.value === 'users') return inertia.props?.users || [];
-    if (tab.value === 'settings') return Object.entries(masters.value || {}).map(([key, value], id) => ({ id, key, value: Array.isArray(value) ? value.length : value }));
-    if (tab.value === 'onboarding') return [
-        { id: 1, step: 'Branches', status: refs.value.branches?.length ? 'complete' : 'pending', count: refs.value.branches?.length || 0 },
-        { id: 2, step: 'Warehouses', status: refs.value.warehouses?.length ? 'complete' : 'pending', count: refs.value.warehouses?.length || 0 },
-        { id: 3, step: 'Inventory Stock', status: stock.value.length ? 'complete' : 'pending', count: stock.value.length },
-    ];
-    return [
-        { id: 1, metric: 'Branches', value: refs.value.branches?.length || 0 },
-        { id: 2, metric: 'Warehouses', value: refs.value.warehouses?.length || 0 },
-        { id: 3, metric: 'Stock Lines', value: stock.value.length },
-    ];
+const props = defineProps({
+    page: String,
+    title: String,
+    initial_tab: { type: String, default: 'admin' },
+    summary: { type: Array, default: () => [] },
+    activeSection: { type: String, default: 'admin' },
+    sections: { type: Array, default: () => ['admin', 'staff', 'onboarding', 'users', 'settings'] },
+    metrics: { type: Array, default: () => [] },
+    permissions: { type: Object, default: () => ({}) },
+    routes: { type: Object, default: () => ({}) },
+    emptyStates: { type: Object, default: () => ({}) },
 });
-const cards = computed(() => [
-    { label: 'Branches', value: refs.value.branches?.length || 0, tone: 'info' },
-    { label: 'Warehouses', value: refs.value.warehouses?.length || 0, tone: 'good' },
-    { label: 'Stock Lines', value: stock.value.length, tone: 'money' },
-]);
 
-const load = async () => {
-    loading.value = true;
-    try {
-        refs.value = await InventoryApi.stockReferences().catch(() => ({ branches: [], warehouses: [] }));
-        const stockRows = await InventoryApi.stockSummary({ per_page: 25 }).catch(() => ({ stocks: [] }));
-        stock.value = stockRows.stocks || [];
-        masters.value = await axios.get('/app/setup/masters/references').then((r) => r.data).catch(() => ({}));
-    } finally {
-        loaded.value = true;
-        loading.value = false;
-    }
+const refreshing = ref(false);
+const changingSection = ref('');
+
+const cards = computed(() => props.summary || []);
+const rows = computed(() => props.metrics || []);
+const active = computed(() => props.activeSection || props.initial_tab || 'admin');
+const titleCopy = computed(() => {
+    if (active.value === 'staff') return 'Staff setup metrics and employee access health.';
+    if (active.value === 'onboarding') return 'Setup progress for the current business.';
+    if (active.value === 'users') return 'Application user and role readiness.';
+    if (active.value === 'saas') return 'Subscription and module usage for this business.';
+    if (active.value === 'settings') return 'Configuration areas and availability.';
+    return 'Operational setup metrics connected to real business data.';
+});
+
+const routeUrl = (name, fallback = '#') => props.routes?.[name]?.url || fallback;
+const sectionUrl = (section) => `${routeUrl('admin.workspace', '/app/admin/workspace')}?section=${section}`;
+
+const refresh = () => {
+    refreshing.value = true;
+    router.reload({
+        only: ['summary', 'metrics', 'emptyStates'],
+        preserveScroll: true,
+        preserveState: true,
+        onFinish: () => {
+            refreshing.value = false;
+        },
+    });
 };
 
-onMounted(load);
+const openSection = (section) => {
+    if (section === active.value) return;
+    changingSection.value = section;
+    router.visit(sectionUrl(section), {
+        preserveScroll: true,
+        preserveState: false,
+        onFinish: () => {
+            changingSection.value = '';
+        },
+    });
+};
+
+const statusClass = (status) => String(status || '').toLowerCase().replace(/\s+/g, '-');
+const showEmpty = computed(() => Object.values(props.emptyStates || {}).some((item) => item?.show));
 </script>
 
 <template>
     <Layout :page="page" :title="title">
-        <template #topbar-title><div class="bill-page-title"><span>SETUP</span><h1>{{ title }}</h1><p>Operational workspace connected to branches, warehouses, inventory and master setup.</p></div></template>
-        <InventoryModuleScaffold :title="title" :cards="cards" :loading="loading" :initial-loaded="loaded" :pagination="{ current_page: 1, last_page: 1, total: rows.length, from: rows.length ? 1 : 0, to: rows.length }">
-            <template #toolbar><button @click="load">Refresh</button><a href="/app/setup/masters">Open Masters</a><a href="/app/setup/employees">Employees</a></template>
-            <template #section-actions><div class="tabs"><button v-for="t in ['admin','staff','onboarding','users','saas','settings']" :key="t" :class="{ active: tab === t }" @click="tab = t">{{ t }}</button></div></template>
-            <InventoryTable v-if="tab === 'onboarding'" :columns="[{key:'step',label:'Step'},{key:'status',label:'Status'},{key:'count',label:'Records'}]" :rows="rows" />
-            <InventoryTable v-else-if="tab === 'settings'" :columns="[{key:'key',label:'Setting Area'},{key:'value',label:'Records'}]" :rows="rows" />
-            <InventoryTable v-else-if="tab === 'users'" :columns="[{key:'name',label:'Name'},{key:'email',label:'Email'},{key:'role',label:'Role'}]" :rows="rows" empty-text="Use the connected user management endpoint when enabled for this business." />
-            <InventoryTable v-else :columns="[{key:'metric',label:'Metric'},{key:'value',label:'Value'}]" :rows="rows" />
-        </InventoryModuleScaffold>
+        <template #topbar-title>
+            <div class="bill-page-title">
+                <span>SETUP</span>
+                <h1>{{ title }}</h1>
+                <p>{{ titleCopy }}</p>
+            </div>
+        </template>
+
+        <section class="workspace-toolbar">
+            <button type="button" :disabled="refreshing" @click="refresh">{{ refreshing ? 'Refreshing...' : 'Refresh' }}</button>
+            <a :href="routeUrl('admin.masters.index', '/app/setup/masters')">Open Masters</a>
+            <a v-if="permissions['employees.view']" :href="routeUrl('admin.employees.index', '/app/setup/employees')">Employees</a>
+        </section>
+
+        <section class="workspace-summary">
+            <a
+                v-for="card in cards"
+                :key="card.key"
+                class="workspace-card"
+                :class="[`tone-${card.tone || 'info'}`, { disabled: !card.enabled }]"
+                :href="card.enabled ? card.href : null"
+            >
+                <span>{{ card.label }}</span>
+                <strong>{{ Number(card.value || 0).toLocaleString('en-IN') }}</strong>
+                <small v-if="Number(card.value || 0) === 0">{{ card.empty }}</small>
+            </a>
+        </section>
+
+        <section v-if="showEmpty" class="workspace-empty-grid">
+            <article v-for="item in emptyStates" :key="item.message" v-show="item.show" class="workspace-empty">
+                <strong>{{ item.message }}</strong>
+                <a v-if="item.enabled && item.href" :href="item.href">{{ item.action }}</a>
+                <span v-else>Coming Soon</span>
+            </article>
+        </section>
+
+        <section class="workspace-panel">
+            <div class="workspace-head">
+                <div>
+                    <h2>{{ title }}</h2>
+                    <p>{{ titleCopy }}</p>
+                </div>
+                <div class="tabs">
+                    <button
+                        v-for="section in sections"
+                        :key="section"
+                        type="button"
+                        :class="{ active: active === section }"
+                        :disabled="Boolean(changingSection)"
+                        @click="openSection(section)"
+                    >
+                        {{ changingSection === section ? 'Loading...' : section }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="workspace-table-wrap">
+                <table class="workspace-table">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="row in rows" :key="row.id || row.metric">
+                            <td>{{ row.metric }}</td>
+                            <td>{{ row.value }}</td>
+                            <td><span class="metric-status" :class="statusClass(row.status)">{{ row.status }}</span></td>
+                            <td>
+                                <a v-if="row.enabled && row.href" class="workspace-action" :href="row.href">{{ row.action || 'Manage' }}</a>
+                                <span v-else class="workspace-muted">{{ row.action === 'Coming Soon' ? 'Coming Soon' : 'Unavailable' }}</span>
+                            </td>
+                        </tr>
+                        <tr v-if="!rows.length">
+                            <td colspan="4" class="workspace-empty-cell">No metrics available for this section.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </Layout>
 </template>
 
 <style scoped>
-.tabs{display:flex;flex-wrap:wrap;gap:8px}.tabs button.active{background:#142139;color:#fff}button,a{align-items:center;background:#fff;border:1px solid #d8e0eb;border-radius:8px;color:#344159;display:inline-flex;font-size:12px;font-weight:800;min-height:38px;padding:8px 10px;text-decoration:none}
+.workspace-toolbar{display:flex;gap:10px;justify-content:flex-end;margin:-4px 0 14px}.workspace-toolbar button,.workspace-toolbar a,.workspace-action,.workspace-empty a{align-items:center;background:#fff;border:1px solid #d8e0eb;border-radius:8px;color:#344159;display:inline-flex;font-size:12px;font-weight:800;min-height:38px;padding:8px 10px;text-decoration:none}.workspace-toolbar button:disabled,.tabs button:disabled{cursor:not-allowed;opacity:.65}.workspace-summary{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.workspace-card{background:#fff;border:1px solid #dfe6ef;border-left:4px solid #2563eb;border-radius:8px;box-shadow:0 8px 22px rgba(25,50,84,.035);color:inherit;min-height:92px;padding:13px 14px;text-decoration:none}.workspace-card.disabled{opacity:.65;pointer-events:none}.workspace-card span{color:#7f8da4;display:block;font-size:11px;font-weight:800;margin-bottom:7px}.workspace-card strong{color:#142139;display:block;font-size:22px;font-weight:900;line-height:1.1}.workspace-card small{color:#8490a2;display:block;margin-top:8px}.tone-good{border-left-color:#22c55e}.tone-warn{border-left-color:#f59e0b}.tone-money{border-left-color:#14b8a6}.workspace-empty-grid{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.workspace-empty{align-items:center;background:#fff;border:1px dashed #cad5e3;border-radius:8px;display:flex;gap:12px;justify-content:space-between;padding:14px}.workspace-empty strong{color:#344159;font-size:13px}.workspace-empty span,.workspace-muted{color:#8490a2;font-size:12px;font-weight:800}.workspace-panel{background:#fff;border:1px solid #dfe6ef;border-radius:8px;margin-top:18px;padding:18px}.workspace-head{align-items:flex-start;display:flex;gap:14px;justify-content:space-between;margin-bottom:14px}.workspace-head h2{color:#142139;font-size:18px;margin:0}.workspace-head p{color:#758197;font-size:12px;margin:4px 0 0}.tabs{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.tabs button{align-items:center;background:#fff;border:1px solid #d8e0eb;border-radius:8px;color:#344159;display:inline-flex;font-size:12px;font-weight:800;min-height:38px;padding:8px 10px;text-transform:capitalize}.tabs button.active{background:#142139;color:#fff}.workspace-table-wrap{border:1px solid #edf1f5;border-radius:8px;overflow:auto}.workspace-table{border-collapse:collapse;min-width:760px;width:100%}.workspace-table th,.workspace-table td{border-bottom:1px solid #edf1f5;font-size:12px;padding:12px 10px;text-align:left}.workspace-table th{background:#f8fafc;color:#69758a;font-size:10px;letter-spacing:.04em;text-transform:uppercase}.metric-status{background:#eef4ff;border-radius:999px;color:#2457d6;display:inline-flex;font-size:11px;font-weight:900;padding:5px 9px}.metric-status.completed,.metric-status.configured,.metric-status.active{background:#e7f8ef;color:#15803d}.metric-status.pending,.metric-status.not-configured,.metric-status.attention-required{background:#fff7ed;color:#b45309}.metric-status.coming-soon{background:#f1f5f9;color:#64748b}.workspace-empty-cell{color:#8490a2;text-align:center}@media(max-width:900px){.workspace-toolbar,.workspace-head{align-items:flex-start;flex-direction:column}.workspace-summary,.workspace-empty-grid{grid-template-columns:1fr}.tabs{justify-content:flex-start;overflow-x:auto;width:100%}}
 </style>

@@ -41,13 +41,24 @@ class SalesService
             ->where('business_id', $businessId)
             ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('invoice_date', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('invoice_date', '<=', $filters['date_to']))
+            ->when(($filters['date'] ?? null) === 'today', fn (Builder $q) => $q->whereDate('invoice_date', now()->toDateString()))
+            ->when(!empty($filters['search']), function (Builder $q) use ($filters) {
+                $like = '%' . $filters['search'] . '%';
+                $q->where(fn (Builder $s) => $s->where('invoice_number', 'like', $like)
+                    ->orWhere('voucher_number', 'like', $like)
+                    ->orWhere('reference_number', 'like', $like)
+                    ->orWhere('customer_name_snapshot', 'like', $like)
+                    ->orWhere('customer_mobile_snapshot', 'like', $like)
+                    ->orWhere('customer_gstin_snapshot', 'like', $like)
+                    ->orWhereHas('customer', fn (Builder $c) => $c->where('customer_name', 'like', $like)->orWhere('mobile', 'like', $like)->orWhere('gstin', 'like', $like)->orWhere('customer_code', 'like', $like)));
+            })
             ->when(!empty($filters['customer_id']), fn (Builder $q) => $q->where('customer_id', $filters['customer_id']))
             ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
             ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
             ->when(!empty($filters['salesperson_id']), fn (Builder $q) => $q->where('salesperson_id', $filters['salesperson_id']))
             ->when(!empty($filters['sale_type']), fn (Builder $q) => $q->where('sale_type', $filters['sale_type']))
             ->when(!empty($filters['invoice_type']), fn (Builder $q) => $q->where('invoice_type', $filters['invoice_type']))
-            ->when(!empty($filters['payment_status']), fn (Builder $q) => $q->where('payment_status', $filters['payment_status']))
+            ->when(!empty($filters['payment_status']), fn (Builder $q) => str_contains((string) $filters['payment_status'], ',') ? $q->whereIn('payment_status', explode(',', (string) $filters['payment_status'])) : $q->where('payment_status', $filters['payment_status']))
             ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']))
             ->latest('id')
@@ -206,6 +217,62 @@ class SalesService
         });
     }
 
+    public function hold(SalesVoucher $voucher): SalesVoucher
+    {
+        $this->assertBusiness($voucher);
+
+        if (!in_array($voucher->status, ['draft', 'hold'], true)) {
+            throw ValidationException::withMessages(['status' => 'Only draft invoices can be held.']);
+        }
+
+        $voucher->update(['status' => 'hold']);
+
+        return $this->fresh($voucher);
+    }
+
+    public function addPayment(SalesVoucher $voucher, array $payment): SalesVoucher
+    {
+        return DB::transaction(function () use ($voucher, $payment) {
+            $this->assertBusiness($voucher);
+
+            if (!in_array($voucher->status, ['confirmed', 'approved'], true)) {
+                throw ValidationException::withMessages(['status' => 'Payments can be added only after posting the invoice.']);
+            }
+
+            PaymentMethod::query()
+                ->where('id', $payment['payment_method_id'])
+                ->where(function (Builder $q) use ($voucher) {
+                    $q->whereNull('business_id')->orWhere('business_id', $voucher->business_id);
+                })
+                ->firstOrFail();
+
+            $amount = (float) $payment['amount'];
+            if ($amount > (float) $voucher->balance_amount) {
+                throw ValidationException::withMessages(['amount' => 'Payment cannot exceed the invoice balance.']);
+            }
+
+            $voucher->payments()->create([
+                'business_id' => $voucher->business_id,
+                'payment_method_id' => $payment['payment_method_id'],
+                'amount' => $amount,
+                'reference_number' => $payment['reference_number'] ?? null,
+                'payment_date' => $payment['payment_date'] ?? now()->toDateString(),
+                'notes' => $payment['notes'] ?? null,
+                'created_by' => Auth::id(),
+            ]);
+
+            $paid = round((float) $voucher->payments()->sum('amount'), 2);
+            $voucher->update([
+                'paid_amount' => min($paid, (float) $voucher->grand_total),
+                'balance_amount' => round(max(0, (float) $voucher->grand_total - $paid), 2),
+                'change_returned' => round(max(0, $paid - (float) $voucher->grand_total), 2),
+                'payment_status' => $paid <= 0 ? 'unpaid' : ($paid >= (float) $voucher->grand_total ? 'paid' : 'partial'),
+            ]);
+
+            return $this->fresh($voucher);
+        });
+    }
+
     public function cancel(SalesVoucher $voucher, ?string $reason = null): SalesVoucher
     {
         $this->assertBusiness($voucher);
@@ -292,13 +359,48 @@ class SalesService
             ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('invoice_date', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('invoice_date', '<=', $filters['date_to']));
 
+        $today = now()->toDateString();
+        $monthStart = now()->startOfMonth()->toDateString();
+        $monthEnd = now()->endOfMonth()->toDateString();
+
         return [
             'daily_sales' => (clone $base)->selectRaw('invoice_date, COUNT(*) as invoices, SUM(grand_total) as total')->groupBy('invoice_date')->latest('invoice_date')->limit(30)->get(),
             'payment_modes' => DB::table('sales_payments')->join('payment_methods', 'payment_methods.id', '=', 'sales_payments.payment_method_id')->where('sales_payments.business_id', $businessId)->selectRaw('payment_methods.name, SUM(sales_payments.amount) as amount')->groupBy('payment_methods.name')->get(),
             'tax_summary' => (clone $base)->selectRaw('tax_type, SUM(taxable_amount) as taxable, SUM(cgst_amount) as cgst, SUM(sgst_amount) as sgst, SUM(igst_amount) as igst, SUM(cess_amount) as cess')->groupBy('tax_type')->get(),
             'outstanding' => (clone $base)->where('balance_amount', '>', 0)->sum('balance_amount'),
-            'cancelled' => SalesVoucher::query()->where('business_id', $businessId)->where('status', 'cancelled')->count(),
+            'cancelled' => SalesVoucher::query()->where('business_id', $businessId)->where('status', 'cancelled')->whereBetween('invoice_date', [$monthStart, $monthEnd])->count(),
+            'today_total' => (clone $base)->whereDate('invoice_date', $today)->sum('grand_total'),
+            'today_paid' => (clone $base)->whereDate('invoice_date', $today)->sum('paid_amount'),
+            'today_balance' => (clone $base)->whereDate('invoice_date', $today)->sum('balance_amount'),
+            'draft_count' => SalesVoucher::query()->where('business_id', $businessId)->where('status', 'draft')->count(),
+            'held_count' => SalesVoucher::query()->where('business_id', $businessId)->where('status', 'hold')->count(),
         ];
+    }
+
+    public function exportRows(array $filters = []): array
+    {
+        return $this->list(array_merge($filters, ['per_page' => 1000]))
+            ->getCollection()
+            ->map(fn (SalesVoucher $voucher) => [
+                $voucher->invoice_number,
+                optional($voucher->invoice_date)->format('Y-m-d'),
+                $voucher->customer_name_snapshot ?: optional($voucher->customer)->customer_name,
+                $voucher->customer_gstin_snapshot,
+                optional($voucher->branch)->name,
+                optional($voucher->warehouse)->name,
+                $voucher->invoice_type,
+                (float) $voucher->taxable_amount,
+                (float) $voucher->cgst_amount,
+                (float) $voucher->sgst_amount,
+                (float) $voucher->igst_amount,
+                (float) $voucher->cess_amount,
+                (float) $voucher->grand_total,
+                (float) $voucher->paid_amount,
+                (float) $voucher->balance_amount,
+                $voucher->payment_status,
+                $voucher->status,
+            ])
+            ->all();
     }
 
     public function present(SalesVoucher $voucher, bool $includeCost = false): array

@@ -41,8 +41,8 @@ class SalesReturnVoucherRequest extends FormRequest
             'items.*.gst_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'items.*.cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'items.*.return_reason' => ['nullable', 'string', 'max:1000'],
-            'items.*.condition_status' => ['nullable', Rule::in(['good', 'damaged', 'opened', 'expired', 'defective'])],
-            'items.*.restock_status' => ['required', Rule::in(['restock', 'damaged_stock', 'expired_stock', 'non_restockable'])],
+            'items.*.condition_status' => ['nullable', Rule::in(['good', 'resalable', 'damaged', 'opened', 'expired', 'defective', 'scrap', 'inspection_required'])],
+            'items.*.restock_status' => ['required', Rule::in(['restock', 'damaged_stock', 'quarantine_stock', 'expired_stock', 'non_restockable'])],
             'refunds' => ['nullable', 'array'],
             'refunds.*.payment_method_id' => ['required_with:refunds', 'integer'],
             'refunds.*.amount' => ['required_with:refunds', 'numeric', 'min:0.01'],
@@ -61,6 +61,10 @@ class SalesReturnVoucherRequest extends FormRequest
 
             if ($this->input('return_type') === 'direct_return' && !$this->filled('reason')) {
                 $validator->errors()->add('reason', 'Reason is required for direct sales return.');
+            }
+
+            if ($this->input('return_type') === 'direct_return' && !$this->filled('customer_id')) {
+                $validator->errors()->add('customer_id', 'Customer is required for direct sales return.');
             }
 
             foreach ((array) $this->input('items', []) as $index => $item) {

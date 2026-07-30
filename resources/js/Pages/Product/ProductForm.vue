@@ -348,6 +348,15 @@ const syncPrimaryBarcode = () => {
     };
 };
 
+const applySuggestedBarcode = (force = false) => {
+    if (!suggestedBarcode.value || (!force && form.primary_barcode)) {
+        return;
+    }
+
+    form.primary_barcode = suggestedBarcode.value;
+    syncPrimaryBarcode();
+};
+
 const fillSmartFields = (force = false) => {
     if (!canSmartFill.value) {
         return;
@@ -373,6 +382,7 @@ const fillSmartFields = (force = false) => {
     if ((force || !form.variant) && suggestedVariant.value) form.variant = suggestedVariant.value;
     if (force || !form.description) form.description = suggestedDescription.value;
     if (force || !form.invoice_description) form.invoice_description = form.short_name || normalizedProductName.value;
+    applySuggestedBarcode(force);
 
     if (force || !form.hsn_code) {
         applyHsn(findMatchingHsn());
@@ -1368,6 +1378,25 @@ const saveProduct = () => {
                                     <span>
                                         Use this tab to manage scanner barcodes for the product. The primary barcode is used first during billing, stock entry and barcode label printing.
                                     </span>
+                                </div>
+
+                                <div
+                                    v-if="canSmartFill"
+                                    class="suggestion-chips"
+                                >
+                                    <button
+                                        type="button"
+                                        @click="applySuggestedBarcode(false)"
+                                    >
+                                        Suggested barcode: {{ suggestedBarcode }}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        @click="applySuggestedBarcode(true)"
+                                    >
+                                        Regenerate barcode
+                                    </button>
                                 </div>
 
                                 <div class="repeat-list">

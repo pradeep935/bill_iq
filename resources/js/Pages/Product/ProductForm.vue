@@ -2150,6 +2150,7 @@ const saveProduct = () => {
                                 <FormButton
                                     cls="product-save-button"
                                     :processing="processing"
+                                    @click.prevent="saveProduct"
                                 >
                                     <svg
                                         viewBox="0 0 24 24"

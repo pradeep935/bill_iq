@@ -962,7 +962,7 @@ body:has(.bill-app) header:not(.bill-topbar) {
 }
 
 .bill-saas-context {
-    display: flex;
+    display: none;
     align-items: stretch;
     gap: 8px;
     flex-wrap: wrap;

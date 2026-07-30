@@ -318,7 +318,13 @@ const saveProduct = async (form) => {
         }
 
         console.error(error);
-        showMessage('Unable to Save Product', 'Something went wrong while saving the product.', 'error');
+        const message =
+            error.response?.data?.message ||
+            (error.response?.status ? `Server returned ${error.response.status}.` : '') ||
+            error.message ||
+            'Something went wrong while saving the product.';
+
+        showMessage('Unable to Save Product', message, 'error');
     } finally {
         saving.value = false;
     }

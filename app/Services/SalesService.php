@@ -14,6 +14,7 @@ use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class SalesService
@@ -353,6 +354,80 @@ class SalesService
             ->map(function (Product $product) use ($businessId, $branchId, $warehouseId, $priceType) {
                 return $this->presentProduct($product, $businessId, $branchId, $warehouseId, $priceType);
             });
+    }
+
+    public function scanProduct(string $barcode, array $scope = []): array
+    {
+        $barcode = trim($barcode);
+        $businessId = AppController::businessId();
+        $branchId = $scope['branch_id'] ?? null;
+        $warehouseId = $scope['warehouse_id'] ?? null;
+        $priceType = $scope['price_type'] ?? 'retail';
+
+        if (!$branchId || !$warehouseId) {
+            throw ValidationException::withMessages(['barcode' => 'Please select branch and warehouse before scanning.']);
+        }
+
+        Branch::query()->where('business_id', $businessId)->where('status', 'active')->where('id', $branchId)->firstOrFail();
+        Warehouse::query()
+            ->where('business_id', $businessId)
+            ->where('status', 'active')
+            ->where('id', $warehouseId)
+            ->where('branch_id', $branchId)
+            ->firstOrFail();
+
+        $variantId = null;
+        $batchId = null;
+        $hasExtraBarcodes = Schema::hasColumn('products', 'extra_barcodes');
+        $product = Product::query()
+            ->with([
+                'barcodes' => fn ($q) => $q->where('business_id', $businessId)->where('is_active', 1)->where(fn ($query) => $query->whereNull('status')->orWhere('status', 'active')),
+                'variantItems',
+                'images',
+                'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderBy('expiry_date'),
+            ])
+            ->where(function (Builder $q) use ($businessId) {
+                $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
+            })
+            ->where('status', 'active')
+            ->whereNull('deleted_at')
+            ->where(function (Builder $q) use ($barcode, $hasExtraBarcodes) {
+                $q->where('barcode', $barcode)
+                    ->orWhere('primary_barcode', $barcode)
+                    ->orWhereHas('barcodes', function (Builder $b) use ($barcode) {
+                        $b->where('barcode', $barcode)
+                            ->where('business_id', AppController::businessId())
+                            ->where('is_active', 1)
+                            ->where(fn ($query) => $query->whereNull('status')->orWhere('status', 'active'));
+                    })
+                    ->orWhereHas('variantItems', fn (Builder $v) => $v->where('barcode', $barcode)->whereNull('deleted_at'));
+                if ($hasExtraBarcodes) {
+                    $q->orWhereRaw('FIND_IN_SET(?, REPLACE(COALESCE(extra_barcodes, ""), " ", ""))', [$barcode]);
+                }
+            })
+            ->first();
+
+        if (!$product) {
+            throw ValidationException::withMessages(['barcode' => 'Product not found for this barcode.']);
+        }
+
+        $variant = $product->variantItems->firstWhere('barcode', $barcode);
+        if ($variant) {
+            $variantId = $variant->id;
+        }
+
+        $mapped = $product->barcodes->firstWhere('barcode', $barcode);
+        if ($mapped) {
+            $variantId = $mapped->product_variant_id ?: $variantId;
+            $batchId = $mapped->batch_id ?: null;
+        }
+
+        $presented = $this->presentProduct($product, $businessId, (int) $branchId, (int) $warehouseId, $priceType, $variantId, $batchId, $barcode);
+        if ($this->requiresStock($product) && (float) ($presented['available_stock'] ?? 0) <= 0) {
+            throw ValidationException::withMessages(['barcode' => 'Insufficient stock in the selected warehouse.']);
+        }
+
+        return $presented;
     }
 
     public function reports(array $filters = []): array
@@ -711,7 +786,7 @@ class SalesService
         }
     }
 
-    private function presentProduct(Product $product, int $businessId, ?int $branchId, ?int $warehouseId, string $priceType): array
+    private function presentProduct(Product $product, int $businessId, ?int $branchId, ?int $warehouseId, string $priceType, ?int $variantId = null, ?int $batchId = null, ?string $scannedBarcode = null): array
     {
         $priceField = [
             'wholesale' => 'wholesale_price',
@@ -719,6 +794,9 @@ class SalesService
             'online' => 'online_price',
         ][$priceType] ?? 'selling_price';
         $stockScope = ['business_id' => $businessId, 'product_id' => $product->id];
+        if ($variantId) {
+            $stockScope['product_variant_id'] = $variantId;
+        }
         if ($branchId) {
             $stockScope['branch_id'] = $branchId;
         }
@@ -726,11 +804,23 @@ class SalesService
             $stockScope['warehouse_id'] = $warehouseId;
         }
 
+        $batches = $product->batches->map(function ($batch) use ($stockScope) {
+            $scope = array_merge($stockScope, ['batch_id' => $batch->id]);
+            return [
+                'id' => $batch->id,
+                'batch_no' => $batch->batch_no ?: $batch->batch_number,
+                'expiry_date' => optional($batch->expiry_date)->format('Y-m-d'),
+                'available_stock' => $this->stock->getCurrentStock($scope),
+            ];
+        })->filter(fn ($batch) => (float) $batch['available_stock'] > 0 || (int) $batch['id'] === (int) $batchId)->values();
+        $selectedBatchId = $batchId ?: ($batches->first()['id'] ?? null);
+        $availableStock = $product->product_type === 'service' ? null : $this->stock->getCurrentStock($selectedBatchId ? array_merge($stockScope, ['batch_id' => $selectedBatchId]) : $stockScope);
+
         return [
             'id' => $product->id,
             'name' => $product->name,
             'sku' => $product->sku,
-            'barcode' => $product->primary_barcode ?: $product->barcode,
+            'barcode' => $scannedBarcode ?: ($product->primary_barcode ?: $product->barcode),
             'image_url' => $this->imageUrl(optional($product->images->sortByDesc('is_primary')->first())->image_path),
             'unit_id' => $product->unit_id,
             'selling_rate' => (float) ($product->{$priceField} ?: $product->selling_price ?: $product->sale_price ?: $product->default_selling_price),
@@ -742,18 +832,18 @@ class SalesService
             'item_type' => $product->item_type,
             'tracking_type' => $product->tracking_type ?: 'none',
             'batch_required' => (bool) $product->batch_required,
-            'available_stock' => $product->product_type === 'service' ? null : $this->stock->getCurrentStock($stockScope),
+            'serial_required' => (bool) ($product->serial_required || $product->tracking_type === 'serial'),
+            'product_variant_id' => $variantId,
+            'batch_id' => $selectedBatchId,
+            'available_stock' => $availableStock,
             'variants' => $product->variantItems->map(fn ($variant) => ['id' => $variant->id, 'sku' => $variant->sku, 'barcode' => $variant->barcode])->values(),
-            'batches' => $product->batches->map(function ($batch) use ($stockScope) {
-                $scope = array_merge($stockScope, ['batch_id' => $batch->id]);
-                return [
-                    'id' => $batch->id,
-                    'batch_no' => $batch->batch_no ?: $batch->batch_number,
-                    'expiry_date' => optional($batch->expiry_date)->format('Y-m-d'),
-                    'available_stock' => $this->stock->getCurrentStock($scope),
-                ];
-            })->values(),
+            'batches' => $batches,
         ];
+    }
+
+    private function requiresStock(Product $product): bool
+    {
+        return $product->product_type !== 'service' && $product->item_type !== 'non_stock' && (bool) ($product->track_inventory ?? true);
     }
 
     private function imageUrl(?string $path): ?string

@@ -95,6 +95,11 @@ const SalesApi = {
         return response.data;
     },
 
+    async scanProduct(barcode = '', scope = {}) {
+        const response = await axios.get(url('productScan', '/invoices/products/scan'), { params: { barcode, ...scope } });
+        return response.data;
+    },
+
     async saveSale(payload, id = null) {
         const response = id
             ? await axios.put(withId('update', '/invoices/__ID__', id), payload)

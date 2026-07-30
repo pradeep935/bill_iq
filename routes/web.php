@@ -6,6 +6,7 @@ use App\Http\Controllers\GeneralController;
 use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Admin\OnboardingController;
+use App\Http\Controllers\AppController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
@@ -172,6 +173,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/invoices/list', [SalesController::class, 'list'])->name('invoices.list');
             Route::get('/invoices/references', [SalesController::class, 'references'])->name('invoices.references');
             Route::get('/invoices/products/search', [SalesController::class, 'searchProducts'])->name('invoices.products.search');
+            Route::get('/invoices/products/scan', [SalesController::class, 'scanProduct'])->name('invoices.products.scan');
             Route::get('/invoices/reports', [SalesController::class, 'reports'])->name('invoices.reports');
             Route::get('/invoices/export', [SalesController::class, 'export'])->name('invoices.export');
             Route::post('/invoices', [SalesController::class, 'store'])->name('invoices.store');

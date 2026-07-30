@@ -3,7 +3,6 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import Layout from './Layout.vue';
 import SalesApi from './Sales/SalesApi';
 import ActionFooter from '@/Components/Billing/ActionFooter.vue';
-import CustomerSelector from '@/Components/Billing/CustomerSelector.vue';
 import FilterCard from '@/Components/Billing/FilterCard.vue';
 import InvoiceHeader from '@/Components/Billing/InvoiceHeader.vue';
 import PaymentPanel from '@/Components/Billing/PaymentPanel.vue';
@@ -30,9 +29,13 @@ const activeCategory = ref('');
 const paymentMode = ref('cash');
 const saving = ref(false);
 const savingAction = ref('');
+const scanning = ref(false);
 const message = ref('');
+const messageTone = ref('info');
 const lastSale = ref(null);
 const invoiceStatus = ref('draft');
+const scannerFocused = ref(false);
+const highlightedRowKey = ref('');
 
 const form = reactive({
     id: null,
@@ -118,6 +121,19 @@ const summaryRows = computed(() => [
 
 const formatMoney = (value) => `${currencySymbol.value}${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const productLineTotal = (item) => formatMoney(line(item).total);
+const showToast = (text, tone = 'info') => {
+    message.value = text;
+    messageTone.value = tone;
+};
+const focusScanner = () => nextTick(() => scanInput.value?.focus());
+const rowKey = (item) => `${item.product_id}-${item.product_variant_id || 0}-${item.batch_id || 0}`;
+const flashRow = (item) => {
+    highlightedRowKey.value = rowKey(item);
+    window.setTimeout(() => {
+        if (highlightedRowKey.value === rowKey(item)) highlightedRowKey.value = '';
+    }, 1200);
+};
+const isStockItem = (item) => item.available_stock !== null && item.available_stock !== undefined;
 
 const loadReferences = async () => {
     references.value = await SalesApi.references();
@@ -125,6 +141,7 @@ const loadReferences = async () => {
     form.warehouse_id = filteredWarehouses.value?.[0]?.id || references.value.warehouses?.[0]?.id || '';
     form.customer_id = customers.value.find((customer) => customer.customer_type === 'walk_in')?.id || customers.value[0]?.id || '';
     setPaymentMode('cash');
+    focusScanner();
 };
 
 const searchProducts = async () => {
@@ -141,20 +158,40 @@ const searchProducts = async () => {
     });
 };
 
-const addProduct = (product) => {
-    const batch = (product.batches || []).find((item) => Number(item.available_stock || 0) > 0);
-    const existing = form.items.find((item) => Number(item.product_id) === Number(product.id) && Number(item.batch_id || 0) === Number(batch?.id || 0));
+const addProduct = (product, fromScan = false) => {
+    const batch = (product.batches || []).find((item) => Number(item.id || 0) === Number(product.batch_id || 0))
+        || (product.batches || []).find((item) => Number(item.available_stock || 0) > 0);
+    const available = Number(batch?.available_stock ?? product.available_stock ?? 0);
+    if (product.serial_required) {
+        showToast('Serial-number products require serial selection before billing.', 'error');
+        focusScanner();
+        return false;
+    }
+    if (product.product_type !== 'service' && product.item_type !== 'non_stock' && available <= 0) {
+        showToast('Insufficient stock in the selected warehouse.', 'error');
+        focusScanner();
+        return false;
+    }
+    const variantId = product.product_variant_id || '';
+    const batchId = batch?.id || product.batch_id || '';
+    const existing = form.items.find((item) => Number(item.product_id) === Number(product.id) && Number(item.product_variant_id || 0) === Number(variantId || 0) && Number(item.batch_id || 0) === Number(batchId || 0));
+    let touched = existing;
     if (existing) {
+        if (isStockItem(existing) && Number(existing.quantity || 0) + 1 > Number(existing.available_stock || 0)) {
+            showToast('Insufficient stock in the selected warehouse.', 'error');
+            focusScanner();
+            return false;
+        }
         existing.quantity = Number(existing.quantity || 0) + 1;
     } else {
-        form.items.push({
+        touched = {
             product_id: product.id,
             product: product.name,
             sku: product.sku,
             barcode: product.barcode,
             image_url: product.image_url,
-            product_variant_id: '',
-            batch_id: batch?.id || '',
+            product_variant_id: variantId,
+            batch_id: batchId,
             unit_id: product.unit_id || '',
             quantity: 1,
             free_quantity: 0,
@@ -165,24 +202,64 @@ const addProduct = (product) => {
             gst_rate: product.gst_rate || '',
             cess_rate: product.cess_rate || '',
             batches: product.batches || [],
-            available_stock: batch?.available_stock ?? product.available_stock,
-        });
+            available_stock: product.product_type === 'service' || product.item_type === 'non_stock' ? null : available,
+        };
+        form.items.push(touched);
     }
     search.value = '';
     productResults.value = [];
-    message.value = '';
+    if (fromScan) showToast('Product added to cart.', 'success');
+    flashRow(touched);
     syncPaymentAmount();
-    nextTick(() => scanInput.value?.focus());
+    focusScanner();
+    return true;
 };
 
 const scan = async () => {
-    await searchProducts();
-    if (productResults.value.length) addProduct(productResults.value[0]);
-    else message.value = 'Barcode or product not found.';
+    const barcode = search.value.trim();
+    if (!barcode || scanning.value) return;
+    if (!form.branch_id || !form.warehouse_id) {
+        search.value = '';
+        productResults.value = [];
+        showToast('Please select branch and warehouse before scanning.', 'error');
+        focusScanner();
+        return;
+    }
+    scanning.value = true;
+    try {
+        const product = await SalesApi.scanProduct(barcode, {
+            branch_id: form.branch_id,
+            warehouse_id: form.warehouse_id,
+            price_type: priceType.value,
+        });
+        addProduct(product, true);
+    } catch (error) {
+        showToast(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'Product not found for this barcode.', 'error');
+    } finally {
+        scanning.value = false;
+        search.value = '';
+        productResults.value = [];
+        focusScanner();
+    }
 };
 
 const updateQty = (item, amount) => {
-    item.quantity = Math.max(1, Number(item.quantity || 0) + amount);
+    const next = Math.max(1, Number(item.quantity || 0) + amount);
+    if (isStockItem(item) && next > Number(item.available_stock || 0)) {
+        showToast('Insufficient stock in the selected warehouse.', 'error');
+        item.quantity = Number(item.available_stock || 1);
+    } else {
+        item.quantity = next;
+    }
+    flashRow(item);
+    syncPaymentAmount();
+};
+const normalizeQty = (item) => {
+    item.quantity = Math.max(1, Number(item.quantity || 1));
+    if (isStockItem(item) && Number(item.quantity || 0) > Number(item.available_stock || 0)) {
+        item.quantity = Number(item.available_stock || 1);
+        showToast('Insufficient stock in the selected warehouse.', 'error');
+    }
     syncPaymentAmount();
 };
 const removeItem = (index) => {
@@ -243,6 +320,7 @@ const newBill = () => {
     paymentMode.value = 'cash';
     lastSale.value = null;
     message.value = '';
+    messageTone.value = 'info';
     setPaymentMode('cash');
     nextTick(() => scanInput.value?.focus());
 };
@@ -282,9 +360,9 @@ const recallBill = async (bill) => {
         }));
         invoiceStatus.value = 'hold';
         setPaymentMode(form.sale_type === 'credit' ? 'credit' : 'cash');
-        message.value = `Recalled ${sale.invoice_number}.`;
+        showToast(`Recalled ${sale.invoice_number}.`, 'info');
     } catch (error) {
-        message.value = error.response?.data?.message || 'Held bill could not be recalled.';
+        showToast(error.response?.data?.message || 'Held bill could not be recalled.', 'error');
     }
 };
 
@@ -309,7 +387,7 @@ const save = async (status, options = {}) => {
         const response = await SalesApi.saveSale(payload(status), form.id);
         lastSale.value = response.sale;
         invoiceStatus.value = status === 'approved' ? 'paid' : status;
-        message.value = response.message || 'Sale saved.';
+        showToast(response.message || 'Sale saved.', 'success');
         if (status === 'hold') {
             heldBills.value = [{ id: response.sale.id, invoice_number: response.sale.invoice_number, customer: response.sale.customer, grand_total: response.sale.grand_total, created_at: response.sale.invoice_date }, ...heldBills.value.filter((bill) => bill.id !== response.sale.id)].slice(0, 10);
         }
@@ -317,7 +395,7 @@ const save = async (status, options = {}) => {
         if (options.reset) newBill();
         return response.sale;
     } catch (error) {
-        message.value = error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'POS sale could not be saved.';
+        showToast(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'POS sale could not be saved.', 'error');
         return null;
     } finally {
         saving.value = false;
@@ -328,7 +406,7 @@ const save = async (status, options = {}) => {
 
 const printInvoice = (sale = lastSale.value) => {
     if (!sale?.id) {
-        message.value = 'Complete or save a sale before printing.';
+        showToast('Complete or save a sale before printing.', 'error');
         return;
     }
     window.open(SalesApi.printUrl(sale.id), '_blank');
@@ -353,6 +431,10 @@ const handleShortcut = (event) => {
 watch(() => totals.value.grand, syncPaymentAmount);
 watch(() => form.branch_id, () => {
     form.warehouse_id = filteredWarehouses.value?.[0]?.id || '';
+    focusScanner();
+});
+watch(() => form.warehouse_id, () => {
+    focusScanner();
 });
 
 onMounted(async () => {
@@ -376,13 +458,13 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
         </template>
 
         <div class="pos-saas-page">
-            <InvoiceHeader title="POS Billing" subtitle="Create fast counter invoices with the same SaaS invoice layout used across BillIQ." />
+            <InvoiceHeader title="POS Billing" subtitle="Fast counter billing with scanner-first product entry, live stock and payment posting." />
 
-            <div v-if="message" class="pos-message">{{ message }}</div>
+            <div v-if="message" class="pos-message" :class="messageTone">{{ message }}</div>
 
             <section class="pos-saas-layout">
                 <main class="pos-saas-main">
-                    <FilterCard title="Invoice Information" eyebrow="INVOICE">
+                    <FilterCard title="Counter Details" eyebrow="BILLING">
                         <label class="bill-field">
                             <span>Branch</span>
                             <select v-model="form.branch_id" title="Select branch">
@@ -405,12 +487,20 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
                             <span>Status</span>
                             <span class="bill-status-badge" :class="paymentStatus">{{ statusLabel }}</span>
                         </label>
+                        <label class="bill-field pos-customer-field">
+                            <span>Customer</span>
+                            <select ref="customerSelect" v-model="form.customer_id" title="Select invoice customer">
+                                <option value="">Walk-in Customer</option>
+                                <option v-for="customer in customers" :key="customer.id" :value="customer.id">
+                                    {{ customer.customer_name }}{{ customer.mobile ? ` - ${customer.mobile}` : '' }}
+                                </option>
+                            </select>
+                        </label>
                     </FilterCard>
 
-                    <CustomerSelector ref="customerSelect" v-model="form.customer_id" :customers="customers" />
-
-                    <FilterCard title="Product Entry" eyebrow="BARCODE">
+                    <FilterCard title="Scan Product" eyebrow="BARCODE">
                         <template #actions>
+                            <span class="pos-scan-state" :class="{ ready: scannerFocused }">{{ scannerFocused ? 'Ready to Scan' : 'Click barcode field' }}</span>
                             <div class="pos-category-row">
                                 <button type="button" :class="{ active: !activeCategory }" title="Show all categories" @click="activeCategory = ''; searchProducts()">All</button>
                                 <button v-for="category in categories" :key="category.id" type="button" :class="{ active: Number(activeCategory) === Number(category.id) }" :title="`Filter ${category.name}`" @click="activeCategory = category.id; searchProducts()">{{ category.name }}</button>
@@ -418,7 +508,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
                         </template>
                         <label class="bill-field pos-product-search">
                             <span>Barcode Search</span>
-                            <input ref="scanInput" v-model="search" type="search" placeholder="Scan barcode or search product / SKU" @keyup.enter="scan" @input="searchProducts" />
+                            <input ref="scanInput" v-model="search" class="pos-scan-input" type="search" placeholder="Scan barcode and press Enter, or type product / SKU" @focus="scannerFocused = true" @blur="scannerFocused = false" @keyup.enter="scan" @input="searchProducts" />
                             <div v-if="productResults.length" class="pos-autocomplete">
                                 <button v-for="product in productResults" :key="product.id" type="button" :title="`Add ${product.name}`" @click="addProduct(product)">
                                     <span class="pos-product-thumb">
@@ -445,10 +535,12 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
                     <ProductTable
                         :items="form.items"
                         :line-total="productLineTotal"
+                        :highlight-key="highlightedRowKey"
                         @increment="updateQty($event, 1)"
                         @decrement="updateQty($event, -1)"
                         @remove="removeItem"
                         @change="syncPaymentAmount"
+                        @quantity-change="normalizeQty"
                     />
 
                     <FilterCard title="Invoice Actions" eyebrow="HELD">
@@ -497,5 +589,5 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
 </template>
 
 <style scoped>
-.pos-saas-page{display:grid;gap:12px;padding-bottom:10px}.pos-message{padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-weight:850}.pos-saas-layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px;align-items:start}.pos-saas-main,.pos-saas-side{display:grid;gap:12px;min-width:0}.pos-saas-side{position:relative}.pos-category-row{display:flex;gap:6px;flex-wrap:wrap}.pos-category-row button{min-height:30px;padding:6px 9px;border:1px solid var(--bill-line);border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:850}.pos-category-row button.active{border-color:#9ec2ff;background:#e8f1ff;color:var(--bill-accent-dark)}.pos-product-search{position:relative;grid-column:1 / -1}.pos-autocomplete{position:absolute;top:63px;left:0;right:0;z-index:12;display:grid;max-height:260px;overflow:auto;border:1px solid var(--bill-line);border-radius:8px;background:#fff;box-shadow:0 18px 40px rgba(15,34,66,.14)}.pos-autocomplete button{display:grid;grid-template-columns:40px 1fr;column-gap:10px;align-items:center;justify-items:start;padding:9px 10px;border:0;border-bottom:1px solid #edf2f7;background:#fff;text-align:left;cursor:pointer}.pos-autocomplete small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-product-thumb{width:36px;height:36px;overflow:hidden;display:grid;place-items:center;border-radius:8px;background:#eef2ff;color:var(--bill-accent-dark);font-size:11px;font-weight:900}.pos-product-thumb img{width:100%;height:100%;object-fit:cover}.pos-recent-products{grid-column:1 / -1;display:flex;gap:8px;overflow:auto;padding-bottom:2px}.pos-recent-products button{min-width:150px;display:grid;grid-template-columns:36px 1fr;column-gap:8px;align-items:center;justify-items:start;padding:8px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-recent-products small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-held-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.pos-held-list button{display:grid;justify-items:start;gap:3px;padding:10px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-held-list span,.pos-held-list p{color:var(--bill-muted);font-size:11px}.pos-held-list p{margin:0}@media(max-width:1180px){.pos-saas-layout{grid-template-columns:1fr}.pos-saas-side{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.pos-saas-side,.pos-held-list{grid-template-columns:1fr}.pos-recent-products{display:grid;grid-template-columns:1fr}.pos-recent-products button{min-width:0}}
+.pos-saas-page{display:grid;gap:10px;padding-bottom:8px}.pos-message{padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-weight:850}.pos-message.success{border-color:#bbf7d0;background:#ecfdf5;color:#15803d}.pos-message.error{border-color:#fecdd3;background:#fff1f2;color:#be123c}.pos-saas-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;align-items:start}.pos-saas-main,.pos-saas-side{display:grid;gap:10px;min-width:0}.pos-saas-side{position:sticky;top:86px}.pos-customer-field{grid-column:span 2}.pos-category-row{display:flex;gap:6px;flex-wrap:wrap}.pos-category-row button{min-height:28px;padding:5px 9px;border:1px solid var(--bill-line);border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:850}.pos-category-row button.active{border-color:#9ec2ff;background:#e8f1ff;color:var(--bill-accent-dark)}.pos-scan-state{display:inline-flex;align-items:center;min-height:28px;padding:5px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:900}.pos-scan-state.ready{background:#dcfce7;color:#15803d}.pos-product-search{position:relative;grid-column:1 / -1}.pos-scan-input{min-height:56px!important;border:2px solid #9ec2ff!important;border-radius:12px!important;background:#fff!important;font-size:18px!important;font-weight:850;letter-spacing:.02em}.pos-scan-input:focus{border-color:#2457d6!important;box-shadow:0 0 0 4px rgba(36,87,214,.12);outline:0}.pos-autocomplete{position:absolute;top:82px;left:0;right:0;z-index:12;display:grid;max-height:260px;overflow:auto;border:1px solid var(--bill-line);border-radius:8px;background:#fff;box-shadow:0 18px 40px rgba(15,34,66,.14)}.pos-autocomplete button{display:grid;grid-template-columns:40px 1fr;column-gap:10px;align-items:center;justify-items:start;padding:9px 10px;border:0;border-bottom:1px solid #edf2f7;background:#fff;text-align:left;cursor:pointer}.pos-autocomplete small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-product-thumb{width:36px;height:36px;overflow:hidden;display:grid;place-items:center;border-radius:8px;background:#eef2ff;color:var(--bill-accent-dark);font-size:11px;font-weight:900}.pos-product-thumb img{width:100%;height:100%;object-fit:cover}.pos-recent-products{grid-column:1 / -1;display:flex;gap:8px;overflow:auto;padding-bottom:2px}.pos-recent-products button{min-width:140px;display:grid;grid-template-columns:36px 1fr;column-gap:8px;align-items:center;justify-items:start;padding:8px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-recent-products small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-held-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.pos-held-list button{display:grid;justify-items:start;gap:3px;padding:10px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-held-list span,.pos-held-list p{color:var(--bill-muted);font-size:11px}.pos-held-list p{margin:0}:deep(.bill-invoice-header){margin-bottom:2px}:deep(.bill-filter-grid){grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}:deep(.bill-filter-grid>.bill-field){grid-column:span 2}:deep(.bill-product-table-wrap){max-height:calc(100vh - 455px);min-height:250px}:deep(.bill-summary-card),:deep(.bill-payment-panel){position:static}@media(min-width:1500px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 360px}:deep(.bill-product-table-wrap){max-height:calc(100vh - 430px)}}@media(max-width:1366px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 315px}.pos-scan-input{min-height:52px!important;font-size:16px!important}:deep(.bill-filter-grid){grid-template-columns:repeat(4,minmax(0,1fr))}:deep(.bill-filter-grid>.bill-field){grid-column:span 1}.pos-customer-field{grid-column:span 2}}@media(max-width:1180px){.pos-saas-layout{grid-template-columns:1fr}.pos-saas-side{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}:deep(.bill-product-table-wrap){max-height:520px}}@media(max-width:760px){.pos-saas-side,.pos-held-list{grid-template-columns:1fr}.pos-recent-products{display:grid;grid-template-columns:1fr}.pos-recent-products button{min-width:0}:deep(.bill-filter-grid){grid-template-columns:1fr}:deep(.bill-filter-grid>.bill-field),.pos-customer-field{grid-column:auto}}
 </style>

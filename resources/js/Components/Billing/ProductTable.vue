@@ -27,7 +27,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, index) in items" :key="`${item.product_id}-${index}`">
+          <tr v-for="(item, index) in items" :key="`${item.product_id}-${item.product_variant_id || 0}-${item.batch_id || 0}-${index}`" :class="{ 'scan-highlight': highlightKey && rowKey(item) === highlightKey }">
             <td>
               <div class="bill-product-image">
                 <img v-if="item.image_url" :src="item.image_url" :alt="item.product" />
@@ -47,7 +47,7 @@
             <td>
               <div class="bill-qty-control">
                 <button type="button" title="Decrease quantity" @click="$emit('decrement', item)">-</button>
-                <input v-model.number="item.quantity" type="number" min="1" placeholder="Qty" @input="$emit('change')" />
+                <input v-model.number="item.quantity" type="number" min="1" :max="item.available_stock || undefined" placeholder="Qty" @input="$emit('quantity-change', item)" />
                 <button type="button" title="Increase quantity" @click="$emit('increment', item)">+</button>
               </div>
             </td>
@@ -71,9 +71,22 @@
 defineProps({
   items: { type: Array, default: () => [] },
   lineTotal: { type: Function, required: true },
+  highlightKey: { type: String, default: '' },
 });
 
-defineEmits(['increment', 'decrement', 'remove', 'change']);
+defineEmits(['increment', 'decrement', 'remove', 'change', 'quantity-change']);
 
 const initials = (name = '') => String(name).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'BI';
+const rowKey = (item) => `${item.product_id}-${item.product_variant_id || 0}-${item.batch_id || 0}`;
 </script>
+
+<style scoped>
+.scan-highlight td {
+  animation: scan-row-pulse 1.2s ease-out;
+}
+
+@keyframes scan-row-pulse {
+  0% { background: #dcfce7; }
+  100% { background: transparent; }
+}
+</style>

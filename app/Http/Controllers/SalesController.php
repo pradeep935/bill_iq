@@ -259,6 +259,20 @@ class SalesController extends Controller
         return response()->json($this->sales->searchProducts(trim((string) $request->query('q')), $request->only(['branch_id', 'warehouse_id', 'price_type'])));
     }
 
+    public function scanProduct(Request $request)
+    {
+        abort_unless(AppController::canOpen('sales') || AppController::canOpen('pos'), 403);
+
+        $data = $request->validate([
+            'barcode' => ['required', 'string', 'max:120'],
+            'branch_id' => ['required', 'integer'],
+            'warehouse_id' => ['required', 'integer'],
+            'price_type' => ['nullable', 'string', 'max:30'],
+        ]);
+
+        return response()->json($this->sales->scanProduct($data['barcode'], $request->only(['branch_id', 'warehouse_id', 'price_type'])));
+    }
+
     public function store(SalesVoucherRequest $request)
     {
         $voucher = $this->sales->create($request->validated());
@@ -365,6 +379,7 @@ class SalesController extends Controller
             'list' => 'app.sales.invoices.list',
             'references' => 'app.sales.invoices.references',
             'productSearch' => 'app.sales.invoices.products.search',
+            'productScan' => 'app.sales.invoices.products.scan',
             'reports' => 'app.sales.invoices.reports',
             'store' => 'app.sales.invoices.store',
             'export' => 'app.sales.invoices.export',

@@ -199,6 +199,12 @@ class AdminWorkspaceService
         $hasEmployees = Schema::hasTable('employees');
         $employees = $hasEmployees ? $this->tableCount('employees', $businessId) : 0;
         $users = $this->usersQuery($businessId);
+        $hasUserStatus = Schema::hasColumn('users', 'status');
+        $hasUserActive = Schema::hasColumn('users', 'is_active');
+        $hasUserRole = Schema::hasColumn('users', 'role_id');
+        $hasEmployeeUser = $hasEmployees && Schema::hasColumn('employees', 'user_id');
+        $hasEmployeeBranch = $hasEmployees && Schema::hasColumn('employees', 'branch_id');
+        $hasEmployeeStatus = $hasEmployees && Schema::hasColumn('employees', 'status');
 
         return [
             'branches' => $this->activeCount('branches', $businessId),
@@ -214,18 +220,18 @@ class AdminWorkspaceService
             'customers' => $this->activeCount('customers', $businessId),
             'suppliers' => $this->activeCount('suppliers', $businessId),
             'employees' => $employees,
-            'active_employees' => $hasEmployees ? $this->employeeQuery($businessId)->whereIn('status', ['active', 'confirmed', 'probation'])->count() : 0,
-            'inactive_employees' => $hasEmployees ? $this->employeeQuery($businessId)->whereNotIn('status', ['active', 'confirmed', 'probation'])->count() : 0,
-            'unassigned_employees' => $hasEmployees ? $this->employeeQuery($businessId)->whereNull('user_id')->count() : 0,
-            'employees_without_branch' => $hasEmployees ? $this->employeeQuery($businessId)->whereNull('branch_id')->count() : 0,
-            'employees_without_role' => $hasEmployees ? $this->employeeQuery($businessId)->leftJoin('users', 'users.id', '=', 'employees.user_id')->whereNull('users.role_id')->count() : 0,
+            'active_employees' => $hasEmployees && $hasEmployeeStatus ? $this->employeeQuery($businessId)->whereIn('status', ['active', 'confirmed', 'probation'])->count() : $employees,
+            'inactive_employees' => $hasEmployees && $hasEmployeeStatus ? $this->employeeQuery($businessId)->whereNotIn('status', ['active', 'confirmed', 'probation'])->count() : 0,
+            'unassigned_employees' => $hasEmployeeUser ? $this->employeeQuery($businessId)->whereNull('user_id')->count() : 0,
+            'employees_without_branch' => $hasEmployeeBranch ? $this->employeeQuery($businessId)->whereNull('branch_id')->count() : 0,
+            'employees_without_role' => $hasEmployeeUser && $hasUserRole ? $this->employeeQuery($businessId)->leftJoin('users', 'users.id', '=', 'employees.user_id')->whereNull('users.role_id')->count() : 0,
             'users' => (clone $users)->count(),
-            'active_users' => (clone $users)->where('status', 'active')->where('is_active', 1)->count(),
-            'inactive_users' => (clone $users)->where(fn ($q) => $q->where('status', '!=', 'active')->orWhere('is_active', 0))->count(),
-            'users_without_roles' => (clone $users)->whereNull('role_id')->count(),
+            'active_users' => $this->activeUsersCount($users, $hasUserStatus, $hasUserActive),
+            'inactive_users' => $this->inactiveUsersCount($users, $hasUserStatus, $hasUserActive),
+            'users_without_roles' => $hasUserRole ? (clone $users)->whereNull('role_id')->count() : 0,
             'locked_users' => Schema::hasColumn('users', 'locked_until') ? (clone $users)->where('locked_until', '>', now())->count() : 0,
-            'admin_users' => (clone $users)->whereIn('role_id', [1, 2])->count(),
-            'staff_users' => (clone $users)->where('role_id', 3)->count(),
+            'admin_users' => $hasUserRole ? (clone $users)->whereIn('role_id', [1, 2])->count() : 0,
+            'staff_users' => $hasUserRole ? (clone $users)->where('role_id', 3)->count() : 0,
         ];
     }
 
@@ -234,17 +240,63 @@ class AdminWorkspaceService
         if (!Schema::hasTable('stock_ledgers')) {
             return 0;
         }
+        foreach (['business_id', 'branch_id', 'warehouse_id', 'product_id', 'quantity_in', 'quantity_out'] as $column) {
+            if (!Schema::hasColumn('stock_ledgers', $column)) {
+                return 0;
+            }
+        }
+
+        $groupColumns = ['business_id', 'branch_id', 'warehouse_id', 'product_id'];
+        if (Schema::hasColumn('stock_ledgers', 'product_variant_id')) {
+            $groupColumns[] = 'product_variant_id';
+        }
+        if (Schema::hasColumn('stock_ledgers', 'batch_id')) {
+            $groupColumns[] = 'batch_id';
+        }
 
         return (int) DB::query()
             ->fromSub(
                 DB::table('stock_ledgers')
                     ->where('business_id', $businessId)
-                    ->groupBy('business_id', 'branch_id', 'warehouse_id', 'product_id', 'product_variant_id', 'batch_id')
-                    ->selectRaw('business_id, branch_id, warehouse_id, product_id, product_variant_id, batch_id, COALESCE(SUM(quantity_in), 0) - COALESCE(SUM(quantity_out), 0) as balance'),
+                    ->groupBy($groupColumns)
+                    ->selectRaw(implode(', ', $groupColumns) . ', COALESCE(SUM(quantity_in), 0) - COALESCE(SUM(quantity_out), 0) as balance'),
                 'stock_lines'
             )
             ->where('balance', '!=', 0)
             ->count();
+    }
+
+    private function activeUsersCount($users, bool $hasStatus, bool $hasActive): int
+    {
+        $query = clone $users;
+        if ($hasStatus) {
+            $query->where('status', 'active');
+        }
+        if ($hasActive) {
+            $query->where('is_active', 1);
+        }
+
+        return (int) $query->count();
+    }
+
+    private function inactiveUsersCount($users, bool $hasStatus, bool $hasActive): int
+    {
+        if (!$hasStatus && !$hasActive) {
+            return 0;
+        }
+
+        $query = clone $users;
+        $query->where(function ($inner) use ($hasStatus, $hasActive) {
+            if ($hasStatus) {
+                $inner->where('status', '!=', 'active');
+            }
+            if ($hasActive) {
+                $method = $hasStatus ? 'orWhere' : 'where';
+                $inner->{$method}('is_active', 0);
+            }
+        });
+
+        return (int) $query->count();
     }
 
     private function activeCount(string $table, int $businessId): int

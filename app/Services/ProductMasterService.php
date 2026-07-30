@@ -11,6 +11,7 @@ use App\Models\HsnMaster;
 use App\Models\ProductImage;
 use App\Models\ProductPrice;
 use App\Models\ProductSerial;
+use App\Models\ProductSerialNumber;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantItem;
 use App\Models\ProductVariantValue;
@@ -302,7 +303,7 @@ class ProductMasterService
                 'selling_price' => (float) ($batch->selling_price ?: 0),
                 'quantity' => (float) ($batch->quantity ?: 0),
             ])->values(),
-            'serials' => $this->relationValues($product, 'serials')->map(fn (ProductSerial $serial) => [
+            'serials' => $this->productSerialValues($product)->map(fn ($serial) => [
                 'id' => $serial->id,
                 'serial_number' => $serial->serial_number,
                 'status' => $serial->status,
@@ -651,7 +652,7 @@ class ProductMasterService
 
     private function syncSerials(Product $product, array $serials): void
     {
-        $this->childBusinessQuery(ProductSerial::withTrashed(), $product, 'product_serial_numbers')
+        $this->childBusinessQuery(ProductSerialNumber::withTrashed(), $product, 'product_serial_numbers')
             ->where('product_id', $product->id)
             ->forceDelete();
 
@@ -660,7 +661,7 @@ class ProductMasterService
                 continue;
             }
 
-            ProductSerial::create($this->childPayload('product_serial_numbers', $product, [
+            ProductSerialNumber::create($this->childPayload('product_serial_numbers', $product, [
                 'product_id' => $product->id,
                 'serial_number' => $serial['serial_number'],
                 'status' => $serial['status'] ?? 'available',
@@ -865,6 +866,7 @@ class ProductMasterService
             Schema::hasTable('product_variants') ? 'variants.values' : null,
             Schema::hasTable('product_variant_items') ? 'variantItems' : null,
             Schema::hasTable('product_batches') ? 'batches' : null,
+            Schema::hasTable('product_serial_numbers') ? 'serialNumbers' : null,
             Schema::hasTable('product_serials') ? 'serials' : null,
         ]));
     }
@@ -876,5 +878,14 @@ class ProductMasterService
         }
 
         return $product->getRelation($relation) ?: collect();
+    }
+
+    private function productSerialValues(Product $product): Collection
+    {
+        $serialNumbers = $this->relationValues($product, 'serialNumbers');
+
+        return $serialNumbers->isNotEmpty()
+            ? $serialNumbers
+            : $this->relationValues($product, 'serials');
     }
 }

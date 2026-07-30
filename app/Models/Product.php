@@ -96,4 +96,9 @@ class Product extends Model
     {
         return $this->hasMany(ProductSerial::class);
     }
+
+    public function serialNumbers()
+    {
+        return $this->hasMany(ProductSerialNumber::class);
+    }
 }

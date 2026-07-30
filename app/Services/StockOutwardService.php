@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 
 class StockOutwardService
 {
-    private const TABS = ['outward', 'reserved', 'ledger'];
+    private const TABS = ['ready', 'reserved', 'picking', 'packing', 'dispatched', 'delivered', 'ledger'];
     private const PER_PAGE = [10, 25, 50, 100];
     private const OUTWARD_SORTS = ['number', 'date', 'customer', 'warehouse', 'status', 'reference_number', 'created_at'];
     private const LEDGER_SORTS = ['date', 'product', 'quantity', 'value', 'transaction_type'];
@@ -30,8 +30,12 @@ class StockOutwardService
             'references' => $this->references(),
             'summary' => $this->summary($filters),
             'rows' => [
-                'outward' => $filters['tab'] === 'outward' ? $this->outward($filters) : $this->emptyPage($filters),
+                'ready' => $filters['tab'] === 'ready' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'ready'])) : $this->emptyPage($filters),
                 'reserved' => $filters['tab'] === 'reserved' ? $this->reserved($filters) : $this->emptyPage($filters),
+                'picking' => $filters['tab'] === 'picking' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'picking'])) : $this->emptyPage($filters),
+                'packing' => $filters['tab'] === 'packing' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'packed'])) : $this->emptyPage($filters),
+                'dispatched' => $filters['tab'] === 'dispatched' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'dispatched'])) : $this->emptyPage($filters),
+                'delivered' => $filters['tab'] === 'delivered' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'delivered'])) : $this->emptyPage($filters),
                 'ledger' => $filters['tab'] === 'ledger' ? $this->ledger($filters) : $this->emptyPage($filters),
             ],
             'permissions' => $this->permissions(),
@@ -94,10 +98,14 @@ class StockOutwardService
         $period = $this->periodFilters($filters);
 
         return [
+            'total_dispatch_documents' => (clone $this->outwardQuery(array_merge($filters, $period)))->count(),
             'dispatch_docs' => (clone $this->outwardQuery(array_merge($filters, $period, ['type' => 'dispatch'])))->count(),
             'reserved_orders' => (clone $this->reservedQuery(array_merge($filters, $period)))->count(),
-            'outward_lines' => (clone $this->ledgerQuery(array_merge($filters, $period)))->count(),
+            'ready_for_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['status' => 'ready'])))->count(),
             'pending_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['status' => 'pending'])))->count(),
+            'completed_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['status' => 'delivered'])))->count(),
+            'cancelled_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['status' => 'cancelled'])))->count(),
+            'outward_lines' => (clone $this->ledgerQuery(array_merge($filters, $period)))->count(),
         ];
     }
 
@@ -109,8 +117,15 @@ class StockOutwardService
         return [
             'tabs' => self::TABS,
             'per_page' => self::PER_PAGE,
-            'statuses' => ['pending', 'draft', 'dispatched', 'delivered', 'partial', 'completed'],
+            'statuses' => ['draft', 'reserved', 'ready', 'picking', 'packed', 'dispatched', 'delivered', 'cancelled', 'pending', 'partial', 'completed'],
+            'delivery_statuses' => ['pending', 'ready', 'in_transit', 'delivered', 'cancelled'],
             'reference_types' => ['sales_invoice', 'sales_order', 'delivery_challan', 'stock_transfer', 'manual_outward'],
+            'customers' => Schema::hasTable('customers')
+                ? DB::table('customers')->where('business_id', $businessId)->orderBy('customer_name')->limit(500)->get(['id', 'customer_name', 'customer_code', 'mobile'])
+                : collect(),
+            'transporters' => Schema::hasTable('delivery_challans')
+                ? DB::table('delivery_challans')->where('business_id', $businessId)->whereNotNull('transporter_name')->distinct()->orderBy('transporter_name')->pluck('transporter_name')
+                : collect(),
             'branches' => Schema::hasTable('branches')
                 ? DB::table('branches')->where('business_id', $businessId)->when($allowedBranchIds, fn ($q) => $q->whereIn('id', $allowedBranchIds))->orderBy('name')->get(['id', 'name', 'code'])
                 : collect(),
@@ -124,17 +139,16 @@ class StockOutwardService
     {
         $filters = $this->filters($filters);
         $tab = $filters['tab'];
-        $rows = match ($tab) {
-            'reserved' => $this->reservedQuery($filters)->orderBy('reserved_date')->limit(5000)->get(),
-            'ledger' => $this->ledgerQuery($filters)->orderBy('stock_ledgers.transaction_date')->limit(5000)->get(),
-            default => $this->outwardQuery($filters)->orderBy('document_date')->limit(5000)->get(),
-        };
-
-        $headers = match ($tab) {
-            'reserved' => ['Reservation number', 'Source type', 'Source number', 'Customer', 'Warehouse', 'Reserved quantity', 'Dispatched quantity', 'Remaining quantity', 'Expiry', 'Status'],
-            'ledger' => ['Date', 'Product', 'SKU', 'Variant', 'Batch', 'Branch', 'Warehouse', 'Quantity out', 'Unit cost', 'Value', 'Transaction type', 'Reference'],
-            default => ['Outward number', 'Date', 'Reference type', 'Reference number', 'Customer', 'Branch', 'Warehouse', 'Product lines', 'Total quantity', 'Status', 'Created by'],
-        };
+        if ($tab === 'reserved') {
+            $rows = $this->reservedQuery($filters)->orderBy('reserved_date')->limit(5000)->get();
+            $headers = ['Reservation number', 'Source type', 'Source number', 'Customer', 'Warehouse', 'Reserved quantity', 'Dispatched quantity', 'Remaining quantity', 'Expiry', 'Status'];
+        } elseif ($tab === 'ledger') {
+            $rows = $this->ledgerQuery($filters)->orderBy('stock_ledgers.transaction_date')->limit(5000)->get();
+            $headers = ['Date', 'Product', 'SKU', 'Variant', 'Batch', 'Branch', 'Warehouse', 'Quantity out', 'Unit cost', 'Value', 'Transaction type', 'Reference'];
+        } else {
+            $rows = $this->outwardQuery($filters)->orderBy('document_date')->limit(5000)->get();
+            $headers = ['Outward number', 'Date', 'Reference type', 'Reference number', 'Customer', 'Branch', 'Warehouse', 'Product lines', 'Total quantity', 'Status', 'Created by'];
+        }
 
         $mapped = $rows->map(function ($row) use ($tab) {
             if ($tab === 'reserved') {
@@ -148,11 +162,7 @@ class StockOutwardService
         })->all();
 
         return [
-            'filename' => match ($tab) {
-                'reserved' => 'reserved-stock-' . now()->toDateString() . '.csv',
-                'ledger' => 'stock-outward-ledger-' . now()->toDateString() . '.csv',
-                default => 'stock-outward-' . now()->toDateString() . '.csv',
-            },
+            'filename' => ($tab === 'reserved' ? 'reserved-stock-' : ($tab === 'ledger' ? 'stock-outward-ledger-' : 'stock-outward-')) . now()->toDateString() . '.csv',
             'headers' => $headers,
             'rows' => $mapped,
         ];
@@ -189,19 +199,160 @@ class StockOutwardService
         return $posted;
     }
 
+    public function workflow(int $challanId, string $action, array $data = []): DeliveryChallan
+    {
+        abort_unless($this->permissions()['dispatch'], 403);
+
+        if ($action === 'dispatch') {
+            return $this->dispatchChallan($challanId);
+        }
+
+        $challan = DeliveryChallan::query()
+            ->where('business_id', AppController::businessId())
+            ->when($this->allowedBranchIds(), fn ($q) => $q->whereIn('branch_id', $this->allowedBranchIds()))
+            ->findOrFail($challanId);
+
+        if ($action === 'cancel') {
+            if (in_array($challan->status, ['dispatched', 'delivered'], true)) {
+                throw ValidationException::withMessages(['status' => 'Posted dispatch cannot be cancelled from Stock Outward. Use a reversal workflow.']);
+            }
+            $challan->update(['status' => 'cancelled', 'remarks' => trim(($challan->remarks ? $challan->remarks . "\n" : '') . ($data['reason'] ?? 'Dispatch cancelled'))]);
+            return $challan->fresh(['items.product', 'customer', 'warehouse', 'order']);
+        }
+
+        $target = [
+            'pick' => 'picking',
+            'pack' => 'packed',
+            'deliver' => 'delivered',
+        ][$action] ?? null;
+
+        if (!$target) {
+            throw ValidationException::withMessages(['action' => 'Unknown dispatch action.']);
+        }
+
+        if ($target === 'delivered' && !in_array($challan->status, ['dispatched', 'delivered'], true)) {
+            throw ValidationException::withMessages(['status' => 'Only dispatched challans can be marked delivered.']);
+        }
+
+        $payload = ['status' => $target];
+        if ($target === 'delivered') {
+            $payload['delivered_by'] = Auth::id();
+            $payload['delivered_at'] = now();
+        }
+
+        $challan->update($payload);
+
+        AuditLogger::record([
+            'module_name' => 'stock_outward',
+            'record_id' => $challan->id,
+            'action_type' => 'Dispatch ' . ucfirst($action),
+            'changes' => [['field_name' => 'status', 'old_value' => $challan->getOriginal('status'), 'new_value' => $target]],
+        ]);
+
+        return $challan->fresh(['items.product', 'customer', 'warehouse', 'order']);
+    }
+
+    public function detail(int $id, string $rowType = 'challan'): array
+    {
+        if ($rowType === 'invoice') {
+            $voucher = SalesVoucher::query()
+                ->with(['customer', 'branch', 'warehouse', 'items.product', 'items.batch'])
+                ->where('business_id', AppController::businessId())
+                ->when($this->allowedBranchIds(), fn ($q) => $q->whereIn('branch_id', $this->allowedBranchIds()))
+                ->findOrFail($id);
+
+            return [
+                'id' => $voucher->id,
+                'row_type' => 'invoice',
+                'number' => $voucher->invoice_number,
+                'invoice_number' => $voucher->invoice_number,
+                'order_number' => null,
+                'customer' => optional($voucher->customer)->customer_name ?: $voucher->customer_name_snapshot,
+                'mobile' => optional($voucher->customer)->mobile ?: $voucher->customer_mobile_snapshot,
+                'delivery_address' => optional($voucher->customer)->shipping_address ?: optional($voucher->customer)->billing_address,
+                'branch' => optional($voucher->branch)->name,
+                'warehouse' => optional($voucher->warehouse)->name,
+                'date' => optional($voucher->invoice_date)->format('Y-m-d'),
+                'dispatch_status' => 'dispatched',
+                'delivery_status' => 'in_transit',
+                'transporter' => null,
+                'vehicle_number' => null,
+                'driver_name' => null,
+                'driver_mobile' => null,
+                'lr_number' => null,
+                'e_way_bill_number' => null,
+                'items' => $voucher->items->map(fn ($item) => [
+                    'product' => $item->product_name_snapshot,
+                    'sku' => $item->sku_snapshot,
+                    'batch' => optional($item->batch)->batch_no ?: optional($item->batch)->batch_number,
+                    'quantity' => (float) $item->quantity + (float) $item->free_quantity,
+                    'picked_quantity' => (float) $item->quantity + (float) $item->free_quantity,
+                    'packed_quantity' => (float) $item->quantity + (float) $item->free_quantity,
+                    'remaining_quantity' => 0,
+                ])->values(),
+            ];
+        }
+
+        $challan = DeliveryChallan::query()
+            ->with(['customer', 'branch', 'warehouse', 'order', 'items.product'])
+            ->where('business_id', AppController::businessId())
+            ->when($this->allowedBranchIds(), fn ($q) => $q->whereIn('branch_id', $this->allowedBranchIds()))
+            ->findOrFail($id);
+
+        $batchIds = $challan->items->pluck('batch_id')->filter()->unique()->values();
+        $batches = $batchIds->isEmpty() ? collect() : DB::table('product_batches')->whereIn('id', $batchIds)->get()->keyBy('id');
+
+        return [
+            'id' => $challan->id,
+            'row_type' => 'challan',
+            'number' => $challan->challan_number,
+            'invoice_number' => null,
+            'order_number' => optional($challan->order)->order_number ?: $challan->dispatch_reference,
+            'customer' => optional($challan->customer)->customer_name,
+            'mobile' => optional($challan->customer)->mobile,
+            'delivery_address' => optional($challan->customer)->shipping_address ?: optional($challan->customer)->billing_address,
+            'branch' => optional($challan->branch)->name,
+            'warehouse' => optional($challan->warehouse)->name,
+            'date' => optional($challan->challan_date)->format('Y-m-d'),
+            'dispatch_status' => $challan->status,
+            'delivery_status' => $challan->status === 'delivered' ? 'delivered' : ($challan->status === 'dispatched' ? 'in_transit' : 'pending'),
+            'transporter' => $challan->transporter_name,
+            'vehicle_number' => $challan->vehicle_number,
+            'driver_name' => null,
+            'driver_mobile' => null,
+            'lr_number' => $challan->tracking_number,
+            'e_way_bill_number' => null,
+            'items' => $challan->items->map(function ($item) use ($batches, $challan) {
+                $quantity = (float) $item->dispatch_quantity;
+                $picked = in_array($challan->status, ['picking', 'packed', 'dispatched', 'delivered'], true) ? $quantity : 0;
+                $packed = in_array($challan->status, ['packed', 'dispatched', 'delivered'], true) ? $quantity : 0;
+                $batch = $item->batch_id ? $batches->get($item->batch_id) : null;
+                return [
+                    'product' => optional($item->product)->name,
+                    'sku' => optional($item->product)->sku,
+                    'batch' => $batch ? ($batch->batch_no ?: $batch->batch_number) : null,
+                    'quantity' => $quantity,
+                    'picked_quantity' => $picked,
+                    'packed_quantity' => $packed,
+                    'remaining_quantity' => max(0, $quantity - $packed),
+                ];
+            })->values(),
+        ];
+    }
+
     public function printHtml(array $filters): string
     {
         $filters = $this->filters($filters);
-        $data = match ($filters['tab']) {
-            'reserved' => $this->reservedQuery($filters)->orderBy('reserved_date')->limit(500)->get(),
-            'ledger' => $this->ledgerQuery($filters)->orderBy('stock_ledgers.transaction_date')->limit(500)->get(),
-            default => $this->outwardQuery($filters)->orderBy('document_date')->limit(500)->get(),
-        };
-        $title = match ($filters['tab']) {
-            'reserved' => 'Reserved Stock Report',
-            'ledger' => 'Stock Outward Ledger Report',
-            default => 'Stock Outward Report',
-        };
+        if ($filters['tab'] === 'reserved') {
+            $data = $this->reservedQuery($filters)->orderBy('reserved_date')->limit(500)->get();
+            $title = 'Reserved Stock Report';
+        } elseif ($filters['tab'] === 'ledger') {
+            $data = $this->ledgerQuery($filters)->orderBy('stock_ledgers.transaction_date')->limit(500)->get();
+            $title = 'Stock Outward Ledger Report';
+        } else {
+            $data = $this->outwardQuery($filters)->orderBy('document_date')->limit(500)->get();
+            $title = 'Stock Outward Report';
+        }
         $rows = $data->map(fn ($row) => '<tr><td>' . e($row->date ?? $row->reserved_date) . '</td><td>' . e($row->number ?? $row->reservation_number ?? $row->reference_number) . '</td><td>' . e($row->customer_name ?? $row->product_name ?? '-') . '</td><td>' . e($row->warehouse_name ?? '-') . '</td><td>' . e($row->dispatch_status ?? $row->status ?? $row->transaction_type) . '</td></tr>')->implode('');
 
         return '<!doctype html><html><head><meta charset="utf-8"><title>' . e($title) . '</title><style>body{font-family:Arial,sans-serif;color:#111;margin:24px}.muted{color:#667085}table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f8fafc}.print{margin-top:20px}@media print{.print{display:none}}</style></head><body><h1>' . e($title) . '</h1><p class="muted">Generated ' . e(now()->format('Y-m-d H:i')) . ' by ' . e(Auth::user()->name ?? 'System') . '</p><p class="muted">Date range: ' . e($filters['date_from'] ?: 'All') . ' to ' . e($filters['date_to'] ?: 'All') . '</p><table><thead><tr><th>Date</th><th>Number / Reference</th><th>Customer / Product</th><th>Warehouse</th><th>Status</th></tr></thead><tbody>' . $rows . '</tbody></table><button class="print" onclick="window.print()">Print</button></body></html>';
@@ -209,7 +360,7 @@ class StockOutwardService
 
     public function filters(array $filters): array
     {
-        $tab = in_array(($filters['tab'] ?? 'outward'), self::TABS, true) ? $filters['tab'] : 'outward';
+        $tab = in_array(($filters['tab'] ?? 'ready'), self::TABS, true) ? $filters['tab'] : 'ready';
         $perPage = in_array((int) ($filters['per_page'] ?? 25), self::PER_PAGE, true) ? (int) ($filters['per_page'] ?? 25) : 25;
         $direction = strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
 
@@ -225,7 +376,12 @@ class StockOutwardService
             'customer_id' => $filters['customer_id'] ?? null,
             'created_by' => $filters['created_by'] ?? null,
             'status' => $filters['status'] ?? null,
+            'delivery_status' => $filters['delivery_status'] ?? null,
             'reference_type' => $filters['reference_type'] ?? null,
+            'sales_invoice' => trim((string) ($filters['sales_invoice'] ?? '')),
+            'order_number' => trim((string) ($filters['order_number'] ?? '')),
+            'transporter' => trim((string) ($filters['transporter'] ?? '')),
+            'vehicle_number' => trim((string) ($filters['vehicle_number'] ?? '')),
             'type' => $filters['type'] ?? null,
             'movement' => $filters['movement'] ?? null,
             'sort' => $filters['sort'] ?? 'date',
@@ -251,8 +407,9 @@ class StockOutwardService
             ->leftJoin('users', 'users.id', '=', 'delivery_challans.created_by')
             ->leftJoin('delivery_challan_items', 'delivery_challan_items.delivery_challan_id', '=', 'delivery_challans.id')
             ->where('delivery_challans.business_id', $businessId)
-            ->selectRaw("'challan' as row_type, delivery_challans.id, delivery_challans.branch_id, delivery_challans.warehouse_id, delivery_challans.customer_id, delivery_challans.created_by, delivery_challans.challan_number as number, delivery_challans.challan_date as date, delivery_challans.challan_date as document_date, 'Delivery Challan' as reference_type, COALESCE(sales_orders.order_number, delivery_challans.dispatch_reference) as reference_number, customers.customer_name, customers.mobile, branches.name as branch_name, warehouses.name as warehouse_name, delivery_challans.status as dispatch_status, CASE WHEN delivery_challans.status IN ('dispatched','delivered') THEN 'posted' ELSE 'pending' END as stock_status, users.name as created_by_name, delivery_challans.created_at, COUNT(delivery_challan_items.id) as total_lines, COALESCE(SUM(delivery_challan_items.dispatch_quantity), 0) as total_quantity")
-            ->groupBy('delivery_challans.id', 'delivery_challans.branch_id', 'delivery_challans.warehouse_id', 'delivery_challans.customer_id', 'delivery_challans.created_by', 'delivery_challans.challan_number', 'delivery_challans.challan_date', 'sales_orders.order_number', 'delivery_challans.dispatch_reference', 'customers.customer_name', 'customers.mobile', 'branches.name', 'warehouses.name', 'delivery_challans.status', 'users.name', 'delivery_challans.created_at');
+            ->selectRaw("'challan' as row_type, delivery_challans.id, delivery_challans.branch_id, delivery_challans.warehouse_id, delivery_challans.customer_id, delivery_challans.created_by, delivery_challans.challan_number as number, delivery_challans.challan_number as challan_number, NULL as sales_invoice, delivery_challans.challan_date as date, delivery_challans.challan_date as document_date, 'Delivery Challan' as reference_type, COALESCE(sales_orders.order_number, delivery_challans.dispatch_reference) as reference_number, COALESCE(sales_orders.order_number, delivery_challans.dispatch_reference) as order_number, customers.customer_name, customers.mobile, branches.name as branch_name, warehouses.name as warehouse_name, delivery_challans.status as dispatch_status, CASE WHEN delivery_challans.status = 'delivered' THEN 'delivered' WHEN delivery_challans.status IN ('dispatched') THEN 'in_transit' WHEN delivery_challans.status = 'cancelled' THEN 'cancelled' ELSE 'pending' END as delivery_status, delivery_challans.transporter_name as transporter, delivery_challans.vehicle_number, NULL as driver_name, NULL as driver_mobile, delivery_challans.tracking_number as lr_number, NULL as e_way_bill_number, CASE WHEN delivery_challans.status IN ('dispatched','delivered') THEN 'posted' ELSE 'pending' END as stock_status, users.name as created_by_name, delivery_challans.created_at, COUNT(delivery_challan_items.id) as total_lines, COALESCE(SUM(delivery_challan_items.dispatch_quantity), 0) as total_quantity")
+            ->groupBy('delivery_challans.id', 'delivery_challans.branch_id', 'delivery_challans.warehouse_id', 'delivery_challans.customer_id', 'delivery_challans.created_by', 'delivery_challans.challan_number', 'delivery_challans.challan_date', 'sales_orders.order_number', 'delivery_challans.dispatch_reference', 'customers.customer_name', 'customers.mobile', 'branches.name', 'warehouses.name', 'delivery_challans.status', 'delivery_challans.transporter_name', 'delivery_challans.vehicle_number', 'delivery_challans.tracking_number', 'users.name', 'delivery_challans.created_at');
+        AppController::applyTenantScope($challans, 'delivery_challans');
 
         $invoices = DB::table('sales_vouchers')
             ->leftJoin('customers', 'customers.id', '=', 'sales_vouchers.customer_id')
@@ -262,17 +419,24 @@ class StockOutwardService
             ->leftJoin('sales_items', 'sales_items.sales_voucher_id', '=', 'sales_vouchers.id')
             ->where('sales_vouchers.business_id', $businessId)
             ->whereIn('sales_vouchers.status', ['confirmed', 'approved'])
-            ->selectRaw("'invoice' as row_type, sales_vouchers.id, sales_vouchers.branch_id, sales_vouchers.warehouse_id, sales_vouchers.customer_id, sales_vouchers.created_by, sales_vouchers.invoice_number as number, sales_vouchers.invoice_date as date, sales_vouchers.invoice_date as document_date, 'Sales Invoice' as reference_type, sales_vouchers.invoice_number as reference_number, customers.customer_name, customers.mobile, branches.name as branch_name, warehouses.name as warehouse_name, 'dispatched' as dispatch_status, 'posted' as stock_status, users.name as created_by_name, sales_vouchers.created_at, COUNT(sales_items.id) as total_lines, COALESCE(SUM(sales_items.quantity + COALESCE(sales_items.free_quantity, 0)), 0) as total_quantity")
-            ->groupBy('sales_vouchers.id', 'sales_vouchers.branch_id', 'sales_vouchers.warehouse_id', 'sales_vouchers.customer_id', 'sales_vouchers.created_by', 'sales_vouchers.invoice_number', 'sales_vouchers.invoice_date', 'customers.customer_name', 'customers.mobile', 'branches.name', 'warehouses.name', 'users.name', 'sales_vouchers.created_at');
+            ->selectRaw("'invoice' as row_type, sales_vouchers.id, sales_vouchers.branch_id, sales_vouchers.warehouse_id, sales_vouchers.customer_id, sales_vouchers.created_by, sales_vouchers.invoice_number as number, NULL as challan_number, sales_vouchers.invoice_number as sales_invoice, sales_vouchers.invoice_date as date, sales_vouchers.invoice_date as document_date, 'Sales Invoice' as reference_type, sales_vouchers.invoice_number as reference_number, NULL as order_number, customers.customer_name, customers.mobile, branches.name as branch_name, warehouses.name as warehouse_name, 'dispatched' as dispatch_status, CASE WHEN sales_vouchers.status IN ('confirmed','approved') THEN 'in_transit' ELSE 'pending' END as delivery_status, NULL as transporter, NULL as vehicle_number, NULL as driver_name, NULL as driver_mobile, NULL as lr_number, NULL as e_way_bill_number, 'posted' as stock_status, users.name as created_by_name, sales_vouchers.created_at, COUNT(sales_items.id) as total_lines, COALESCE(SUM(sales_items.quantity + COALESCE(sales_items.free_quantity, 0)), 0) as total_quantity")
+            ->groupBy('sales_vouchers.id', 'sales_vouchers.branch_id', 'sales_vouchers.warehouse_id', 'sales_vouchers.customer_id', 'sales_vouchers.created_by', 'sales_vouchers.invoice_number', 'sales_vouchers.invoice_date', 'sales_vouchers.status', 'customers.customer_name', 'customers.mobile', 'branches.name', 'warehouses.name', 'users.name', 'sales_vouchers.created_at');
+        AppController::applyTenantScope($invoices, 'sales_vouchers');
 
         $query = DB::query()->fromSub($challans->unionAll($invoices), 'outward');
         $this->applyCommon($query, $filters, 'document_date');
 
         return $query
             ->when(($filters['status'] ?? null) === 'pending', fn ($q) => $q->whereIn('dispatch_status', ['draft', 'ready_to_pick', 'picking', 'packed', 'partial', 'pending']))
-            ->when(!empty($filters['status']) && $filters['status'] !== 'pending', fn ($q) => $q->where('dispatch_status', $filters['status']))
+            ->when(($filters['status'] ?? null) === 'ready', fn ($q) => $q->whereIn('dispatch_status', ['draft', 'ready', 'ready_to_pick', 'pending']))
+            ->when(!empty($filters['status']) && !in_array($filters['status'], ['pending', 'ready'], true), fn ($q) => $q->where('dispatch_status', $filters['status']))
             ->when(($filters['type'] ?? null) === 'dispatch', fn ($q) => $q->where('row_type', 'challan'))
-            ->when(!empty($filters['reference_type']), fn ($q) => $q->where('reference_type', str_replace('_', ' ', $filters['reference_type'])));
+            ->when(!empty($filters['reference_type']), fn ($q) => $q->where('reference_type', str_replace('_', ' ', $filters['reference_type'])))
+            ->when(!empty($filters['delivery_status']), fn ($q) => $q->where('delivery_status', $filters['delivery_status']))
+            ->when(!empty($filters['sales_invoice']), fn ($q) => $q->where('sales_invoice', 'like', '%' . $filters['sales_invoice'] . '%'))
+            ->when(!empty($filters['order_number']), fn ($q) => $q->where('order_number', 'like', '%' . $filters['order_number'] . '%'))
+            ->when(!empty($filters['transporter']), fn ($q) => $q->where('transporter', 'like', '%' . $filters['transporter'] . '%'))
+            ->when(!empty($filters['vehicle_number']), fn ($q) => $q->where('vehicle_number', 'like', '%' . $filters['vehicle_number'] . '%'));
     }
 
     private function reservedQuery(array $filters): Builder
@@ -289,6 +453,7 @@ class StockOutwardService
             ->where('stock_reservations.business_id', AppController::businessId())
             ->selectRaw("stock_reservations.reference_id as id, CONCAT('RSV-', stock_reservations.reference_id) as reservation_number, MIN(stock_reservations.created_at) as reserved_date, stock_reservations.reference_type as source_type, COALESCE(sales_orders.order_number, stock_reservations.reference_id) as source_number, customers.customer_name, branches.name as branch_name, warehouses.name as warehouse_name, COUNT(DISTINCT stock_reservations.product_id) as product_lines, COALESCE(SUM(stock_reservations.reserved_quantity),0) as reserved_quantity, COALESCE(SUM(stock_reservations.fulfilled_quantity),0) as dispatched_quantity, COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity),0) as remaining_quantity, MAX(stock_reservations.expires_at) as expiry, CASE WHEN COALESCE(SUM(stock_reservations.released_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity),0) THEN 'released' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity),0) THEN 'fully_dispatched' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) > 0 THEN 'partially_dispatched' ELSE 'active' END as status")
             ->groupBy('stock_reservations.reference_id', 'stock_reservations.reference_type', 'sales_orders.order_number', 'customers.customer_name', 'branches.name', 'warehouses.name');
+        AppController::applyTenantScope($query, 'stock_reservations');
 
         $this->applyCommon($query, $filters, 'stock_reservations.created_at', 'stock_reservations');
 
@@ -310,6 +475,7 @@ class StockOutwardService
             ->where('stock_ledgers.business_id', AppController::businessId())
             ->where('stock_ledgers.quantity_out', '>', 0)
             ->selectRaw("stock_ledgers.id, stock_ledgers.transaction_date as date, products.name as product_name, products.sku, product_variant_items.sku as variant_name, COALESCE(product_batches.batch_no, product_batches.batch_number) as batch_number, branches.name as branch_name, warehouses.name as warehouse_name, stock_ledgers.quantity_out, stock_ledgers.unit_cost, stock_ledgers.stock_value as value, stock_ledgers.transaction_type, stock_ledgers.reference_type, stock_ledgers.reference_id, stock_ledgers.reference_id as reference_number, users.name as created_by_name");
+        AppController::applyTenantScope($query, 'stock_ledgers');
 
         $this->applyCommon($query, $filters, 'stock_ledgers.transaction_date', 'stock_ledgers');
 

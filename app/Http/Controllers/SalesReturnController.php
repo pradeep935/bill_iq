@@ -178,10 +178,12 @@ class SalesReturnController extends Controller
 
     private function voucher(int $id): SalesReturnVoucher
     {
-        return SalesReturnVoucher::query()
-            ->where('business_id', AppController::businessId())
-            ->with(['customer', 'sale', 'branch', 'warehouse', 'creator', 'items.product', 'items.variant', 'items.batch', 'refunds.method'])
-            ->where('id', $id)
-            ->firstOrFail();
+        $query = SalesReturnVoucher::query()
+            ->with(['customer', 'sale', 'branch', 'warehouse', 'creator', 'items.product.images', 'items.variant', 'items.batch', 'refunds.method'])
+            ->where('id', $id);
+
+        AppController::applyTenantScope($query, 'sales_return_vouchers');
+
+        return $query->firstOrFail();
     }
 }

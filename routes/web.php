@@ -49,6 +49,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/ledger', [SalesController::class, 'stockOutwardLedger'])->name('ledger');
         Route::get('/print', [SalesController::class, 'stockOutwardPrint'])->name('print-list');
         Route::post('/reservations/{order}/release', [SalesController::class, 'releaseStockReservation'])->name('reservations.release');
+        Route::get('/{outward}/detail', [SalesController::class, 'stockOutwardDetail'])->name('detail');
+        Route::post('/{outward}/workflow', [SalesController::class, 'stockOutwardWorkflow'])->name('workflow');
         Route::get('/{outward}', [SalesController::class, 'stockOutward'])->name('show');
         Route::get('/{outward}/edit', [SalesController::class, 'stockOutward'])->name('edit');
         Route::patch('/{outward}', fn () => abort(422, 'Editing posted stock outward documents is not available here. Edit the source delivery challan while it is draft.'))->name('update');
@@ -79,6 +81,13 @@ Route::middleware('auth')->group(function () {
 
     Route::prefix('app')->name('app.')->group(function () {
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.clean');
+        Route::post('/context', [AppController::class, 'switchContext'])->name('context.switch');
+        Route::get('/customers', [CustomerController::class, 'index'])->name('customers');
+        Route::get('/purchases', [PurchaseController::class, 'bills'])->name('purchases');
+        Route::get('/inventory/stock', [InventoryController::class, 'currentStock'])->name('inventory.stock');
+        Route::get('/reports', [ReportsController::class, 'business'])->name('reports');
+        Route::get('/settings', [SetupController::class, 'settings'])->name('settings');
         Route::get('/logout', [UserController::class, 'logout'])->name('logout');
 
         Route::prefix('crm')->name('crm.')->group(function () {

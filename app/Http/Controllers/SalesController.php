@@ -53,7 +53,7 @@ class SalesController extends Controller
         return Inertia::render('Sales/StockOperations', array_merge([
             'page' => 'inventory-outward',
             'title' => 'Stock Outward',
-            'initial_tab' => 'outward',
+            'initial_tab' => 'ready',
             'endpoints' => $this->stockOutwardEndpoints(),
         ], $this->stockOutward->payload($request->query())));
     }
@@ -163,6 +163,26 @@ class SalesController extends Controller
         return response()->json([
             'message' => 'Stock outward posted successfully.',
             'outward' => $this->stockOutward->dispatchChallan($outward),
+        ]);
+    }
+
+    public function stockOutwardDetail(Request $request, int $outward)
+    {
+        abort_unless(AppController::canOpen('inventory-outward') || AppController::canOpen('stock-ledger'), 403);
+
+        return response()->json(['dispatch' => $this->stockOutward->detail($outward, $request->query('row_type', 'challan'))]);
+    }
+
+    public function stockOutwardWorkflow(Request $request, int $outward)
+    {
+        $data = $request->validate([
+            'action' => ['required', 'string', 'in:pick,pack,dispatch,deliver,cancel'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        return response()->json([
+            'message' => 'Dispatch workflow updated successfully.',
+            'outward' => $this->stockOutward->workflow($outward, $data['action'], $data),
         ]);
     }
 
@@ -385,6 +405,8 @@ class SalesController extends Controller
             ->map(fn ($name) => route($name, [], false))
             ->merge([
                 'dispatch' => Route::has('inventory.stock-outward.dispatch') ? route('inventory.stock-outward.dispatch', ['outward' => '__ID__'], false) : null,
+                'detail' => Route::has('inventory.stock-outward.detail') ? route('inventory.stock-outward.detail', ['outward' => '__ID__'], false) : null,
+                'workflow' => Route::has('inventory.stock-outward.workflow') ? route('inventory.stock-outward.workflow', ['outward' => '__ID__'], false) : null,
                 'cancel' => Route::has('inventory.stock-outward.cancel') ? route('inventory.stock-outward.cancel', ['outward' => '__ID__'], false) : null,
                 'releaseReservation' => Route::has('inventory.stock-outward.reservations.release') ? route('inventory.stock-outward.reservations.release', ['order' => '__ID__'], false) : null,
             ])
@@ -436,9 +458,12 @@ class SalesController extends Controller
 
     private function voucher(int $id): SalesVoucher
     {
-        return SalesVoucher::query()
-            ->where('business_id', AppController::businessId())
-            ->with(['customer', 'branch', 'warehouse', 'salesperson', 'creator', 'items.product', 'items.variant', 'items.batch', 'payments.method'])
+        $query = SalesVoucher::query()
+            ->with(['customer', 'branch', 'warehouse', 'salesperson', 'creator', 'items.product', 'items.variant', 'items.batch', 'payments.method']);
+
+        AppController::applyTenantScope($query, 'sales_vouchers');
+
+        return $query
             ->where('id', $id)
             ->firstOrFail();
     }

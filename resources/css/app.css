@@ -635,6 +635,11 @@ body:has(.bill-app) header:not(.bill-topbar) {
     max-width: 1540px;
     margin: 0 auto 18px;
     gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 18;
+    padding: 10px 0;
+    background: var(--bill-bg);
 }
 
 .bill-hero h2,
@@ -929,6 +934,7 @@ body:has(.bill-app) header:not(.bill-topbar) {
 
 .bill-toolbar-actions button,
 .bill-top-actions a,
+.bill-top-actions button,
 .bill-customer-row button {
     border: 1px solid var(--bill-line);
     background: #ffffff;
@@ -937,9 +943,83 @@ body:has(.bill-app) header:not(.bill-topbar) {
     padding: 9px 12px;
     font-weight: 800;
     text-decoration: none;
+    cursor: pointer;
 }
 
-.bill-top-actions a {
+.bill-top-actions a,
+.bill-top-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+}
+
+.bill-top-actions .bill-nav-icon,
+.bill-global-search .bill-nav-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+}
+
+.bill-saas-context {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.bill-saas-context label,
+.bill-fy,
+.bill-global-search {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--bill-line);
+    border-radius: 8px;
+    background: #ffffff;
+    padding: 6px 9px;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, .04);
+}
+
+.bill-saas-context label span,
+.bill-fy span {
+    color: var(--bill-muted);
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.bill-saas-context select {
+    min-width: 128px;
+    max-width: 190px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #1f2937;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.bill-fy strong {
+    color: #1f2937;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.bill-global-search {
+    flex: 1 1 260px;
+    max-width: 360px;
+    padding-left: 8px;
+}
+
+.bill-global-search input {
+    min-width: 0;
+    width: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #1f2937;
     font-size: 12px;
 }
 
@@ -1013,6 +1093,389 @@ body:has(.bill-app) header:not(.bill-topbar) {
     display: none;
 }
 
+.bill-invoice-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 12px;
+}
+
+.bill-invoice-header span,
+.bill-ui-card-head > div > span {
+    display: block;
+    color: var(--bill-accent);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+
+.bill-invoice-header h1,
+.bill-ui-card-head h2 {
+    margin: 2px 0 0;
+    color: #142139;
+    letter-spacing: 0;
+}
+
+.bill-invoice-header h1 {
+    font-size: 24px;
+    line-height: 1.15;
+}
+
+.bill-invoice-header p {
+    margin: 5px 0 0;
+    color: var(--bill-muted);
+    font-size: 12px;
+}
+
+.bill-shortcuts {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
+    max-width: 560px;
+}
+
+.bill-shortcuts span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 28px;
+    padding: 4px 8px;
+    border: 1px solid var(--bill-line);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.bill-shortcuts kbd {
+    min-width: 24px;
+    padding: 2px 5px;
+    border-radius: 5px;
+    background: #eef2ff;
+    color: var(--bill-accent-dark);
+    font-family: inherit;
+    font-size: 10px;
+    text-align: center;
+}
+
+.bill-ui-card {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--bill-line);
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 12px 28px rgba(15, 23, 42, .06);
+}
+
+.bill-ui-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.bill-ui-card-head h2 {
+    font-size: 15px;
+}
+
+.bill-ui-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.bill-filter-grid,
+.bill-form-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.bill-field {
+    display: grid;
+    gap: 5px;
+}
+
+.bill-field > span {
+    color: #475569;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.bill-field input,
+.bill-field select,
+.bill-ui-card input,
+.bill-ui-card select {
+    min-height: 38px;
+    width: 100%;
+    border: 1px solid var(--bill-line);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #1f2937;
+    padding: 8px 10px;
+    font-size: 12px;
+}
+
+.bill-status-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    background: #edf2ff;
+    color: var(--bill-accent-dark);
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: capitalize;
+}
+
+.bill-status-badge.hold,
+.bill-status-badge.partial {
+    background: #fff7ed;
+    color: #b45309;
+}
+
+.bill-status-badge.paid,
+.bill-status-badge.approved,
+.bill-status-badge.confirmed {
+    background: #eaf8f1;
+    color: #168757;
+}
+
+.bill-status-badge.cancelled,
+.bill-status-badge.reversed {
+    background: #fff1f2;
+    color: #be123c;
+}
+
+.bill-customer-meta,
+.bill-payment-balance {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.bill-customer-meta div,
+.bill-payment-balance div {
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid #e7ecf2;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.bill-customer-meta span,
+.bill-payment-balance span {
+    display: block;
+    color: var(--bill-muted);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.bill-customer-meta strong,
+.bill-payment-balance strong {
+    display: block;
+    margin-top: 3px;
+    color: #142139;
+    font-size: 12px;
+}
+
+.bill-product-table-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.bill-product-table-card .bill-ui-card-head {
+    margin: 0;
+    padding: 14px;
+    border-bottom: 1px solid var(--bill-line);
+}
+
+.bill-product-table-wrap {
+    max-height: min(52vh, 560px);
+    overflow: auto;
+}
+
+.bill-product-table {
+    width: 100%;
+    min-width: 1220px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.bill-product-table th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    padding: 10px 9px;
+    border-bottom: 1px solid #dbe4ef;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 900;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.bill-product-table td {
+    padding: 9px;
+    border-bottom: 1px solid #edf2f7;
+    color: #27344c;
+    font-size: 12px;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.bill-product-image {
+    width: 36px;
+    height: 36px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: #eef2ff;
+    color: var(--bill-accent-dark);
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.bill-product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.bill-qty-control {
+    display: grid;
+    grid-template-columns: 30px 56px 30px;
+    gap: 4px;
+}
+
+.bill-qty-control button,
+.bill-delete-button,
+.bill-action-footer button,
+.bill-payment-methods button {
+    min-height: 34px;
+    border: 1px solid var(--bill-line);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 850;
+    cursor: pointer;
+}
+
+.bill-delete-button {
+    border-color: #fecdd3;
+    background: #fff1f2;
+    color: #be123c;
+    padding: 7px 9px;
+}
+
+.bill-empty-row {
+    padding: 42px !important;
+    color: var(--bill-muted) !important;
+    text-align: center;
+}
+
+.bill-summary-card {
+    position: sticky;
+    top: 92px;
+}
+
+.bill-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--bill-line);
+    color: #475569;
+    font-size: 13px;
+}
+
+.bill-summary-row.grand {
+    border-bottom: 0;
+    padding-top: 12px;
+}
+
+.bill-summary-row.grand span {
+    color: #142139;
+    font-weight: 900;
+}
+
+.bill-summary-row.grand strong,
+.bill-payment-total {
+    color: var(--bill-accent);
+    font-size: 24px;
+    line-height: 1.1;
+}
+
+.bill-payment-methods {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+
+.bill-payment-methods button {
+    padding: 7px 10px;
+    border-radius: 999px;
+}
+
+.bill-payment-methods button.active {
+    border-color: #9ec2ff;
+    background: #e8f1ff;
+    color: var(--bill-accent-dark);
+}
+
+.bill-payment-line {
+    display: grid;
+    grid-template-columns: 1fr 130px;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.bill-action-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 16;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 12px 0 0;
+    background: linear-gradient(180deg, rgba(238, 243, 248, 0), var(--bill-bg) 34%);
+}
+
+.bill-action-footer button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 12px;
+}
+
+.bill-action-footer button.primary {
+    border-color: var(--bill-accent);
+    background: var(--bill-accent);
+    color: #ffffff;
+}
+
+.bill-action-footer button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
 @media (max-width: 900px) {
     .bill-grid-2,
     .bill-grid-4,
@@ -1072,6 +1535,7 @@ body:has(.bill-app) header:not(.bill-topbar) {
         align-items: stretch;
         flex-direction: column;
         margin-bottom: 16px;
+        position: static;
     }
 
     .bill-topbar-left {
@@ -1091,8 +1555,43 @@ body:has(.bill-app) header:not(.bill-topbar) {
         width: 100%;
     }
 
-    .bill-top-actions a {
+    .bill-top-actions a,
+    .bill-top-actions button {
         flex: 1;
         text-align: center;
+    }
+
+    .bill-saas-context,
+    .bill-global-search {
+        width: 100%;
+        max-width: none;
+    }
+
+    .bill-saas-context label {
+        flex: 1 1 180px;
+    }
+
+    .bill-saas-context select {
+        max-width: none;
+        width: 100%;
+    }
+
+    .bill-invoice-header {
+        flex-direction: column;
+    }
+
+    .bill-shortcuts {
+        justify-content: flex-start;
+    }
+
+    .bill-filter-grid,
+    .bill-form-grid,
+    .bill-customer-meta,
+    .bill-payment-balance {
+        grid-template-columns: 1fr;
+    }
+
+    .bill-summary-card {
+        position: static;
     }
 }

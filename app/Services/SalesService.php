@@ -33,12 +33,10 @@ class SalesService
 
     public function list(array $filters = [])
     {
-        $businessId = AppController::businessId();
         $perPage = min(max((int) ($filters['per_page'] ?? 15), 1), 100);
 
-        return SalesVoucher::query()
+        $query = SalesVoucher::query()
             ->with(['customer', 'branch', 'warehouse', 'salesperson', 'creator', 'items', 'payments.method'])
-            ->where('business_id', $businessId)
             ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('invoice_date', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('invoice_date', '<=', $filters['date_to']))
             ->when(($filters['date'] ?? null) === 'today', fn (Builder $q) => $q->whereDate('invoice_date', now()->toDateString()))
@@ -53,14 +51,21 @@ class SalesService
                     ->orWhereHas('customer', fn (Builder $c) => $c->where('customer_name', 'like', $like)->orWhere('mobile', 'like', $like)->orWhere('gstin', 'like', $like)->orWhere('customer_code', 'like', $like)));
             })
             ->when(!empty($filters['customer_id']), fn (Builder $q) => $q->where('customer_id', $filters['customer_id']))
-            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
             ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
             ->when(!empty($filters['salesperson_id']), fn (Builder $q) => $q->where('salesperson_id', $filters['salesperson_id']))
             ->when(!empty($filters['sale_type']), fn (Builder $q) => $q->where('sale_type', $filters['sale_type']))
             ->when(!empty($filters['invoice_type']), fn (Builder $q) => $q->where('invoice_type', $filters['invoice_type']))
             ->when(!empty($filters['payment_status']), fn (Builder $q) => str_contains((string) $filters['payment_status'], ',') ? $q->whereIn('payment_status', explode(',', (string) $filters['payment_status'])) : $q->where('payment_status', $filters['payment_status']))
             ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
-            ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']))
+            ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']));
+
+        AppController::applyTenantScope($query, 'sales_vouchers');
+
+        if (!empty($filters['branch_id'])) {
+            $query->where('branch_id', $filters['branch_id']);
+        }
+
+        return $query
             ->latest('id')
             ->paginate($perPage);
     }
@@ -330,7 +335,7 @@ class SalesService
         $priceType = $scope['price_type'] ?? 'retail';
 
         return Product::query()
-            ->with(['barcodes', 'variantItems', 'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderBy('expiry_date')])
+            ->with(['barcodes', 'variantItems', 'images', 'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderBy('expiry_date')])
             ->where(function (Builder $q) use ($businessId) {
                 $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
             })
@@ -354,10 +359,10 @@ class SalesService
     {
         $businessId = AppController::businessId();
         $base = SalesVoucher::query()
-            ->where('business_id', $businessId)
             ->whereIn('status', ['confirmed', 'approved'])
             ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('invoice_date', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('invoice_date', '<=', $filters['date_to']));
+        AppController::applyTenantScope($base, 'sales_vouchers');
 
         $today = now()->toDateString();
         $monthStart = now()->startOfMonth()->toDateString();
@@ -365,15 +370,22 @@ class SalesService
 
         return [
             'daily_sales' => (clone $base)->selectRaw('invoice_date, COUNT(*) as invoices, SUM(grand_total) as total')->groupBy('invoice_date')->latest('invoice_date')->limit(30)->get(),
-            'payment_modes' => DB::table('sales_payments')->join('payment_methods', 'payment_methods.id', '=', 'sales_payments.payment_method_id')->where('sales_payments.business_id', $businessId)->selectRaw('payment_methods.name, SUM(sales_payments.amount) as amount')->groupBy('payment_methods.name')->get(),
+            'payment_modes' => DB::table('sales_payments')
+                ->join('payment_methods', 'payment_methods.id', '=', 'sales_payments.payment_method_id')
+                ->join('sales_vouchers', 'sales_vouchers.id', '=', 'sales_payments.sales_voucher_id')
+                ->where('sales_payments.business_id', $businessId)
+                ->when(AppController::branchId(), fn ($q) => $q->where('sales_vouchers.branch_id', AppController::branchId()))
+                ->selectRaw('payment_methods.name, SUM(sales_payments.amount) as amount')
+                ->groupBy('payment_methods.name')
+                ->get(),
             'tax_summary' => (clone $base)->selectRaw('tax_type, SUM(taxable_amount) as taxable, SUM(cgst_amount) as cgst, SUM(sgst_amount) as sgst, SUM(igst_amount) as igst, SUM(cess_amount) as cess')->groupBy('tax_type')->get(),
             'outstanding' => (clone $base)->where('balance_amount', '>', 0)->sum('balance_amount'),
-            'cancelled' => SalesVoucher::query()->where('business_id', $businessId)->where('status', 'cancelled')->whereBetween('invoice_date', [$monthStart, $monthEnd])->count(),
+            'cancelled' => AppController::applyTenantScope(SalesVoucher::query(), 'sales_vouchers')->where('status', 'cancelled')->whereBetween('invoice_date', [$monthStart, $monthEnd])->count(),
             'today_total' => (clone $base)->whereDate('invoice_date', $today)->sum('grand_total'),
             'today_paid' => (clone $base)->whereDate('invoice_date', $today)->sum('paid_amount'),
             'today_balance' => (clone $base)->whereDate('invoice_date', $today)->sum('balance_amount'),
-            'draft_count' => SalesVoucher::query()->where('business_id', $businessId)->where('status', 'draft')->count(),
-            'held_count' => SalesVoucher::query()->where('business_id', $businessId)->where('status', 'hold')->count(),
+            'draft_count' => AppController::applyTenantScope(SalesVoucher::query(), 'sales_vouchers')->where('status', 'draft')->count(),
+            'held_count' => AppController::applyTenantScope(SalesVoucher::query(), 'sales_vouchers')->where('status', 'hold')->count(),
         ];
     }
 
@@ -719,6 +731,7 @@ class SalesService
             'name' => $product->name,
             'sku' => $product->sku,
             'barcode' => $product->primary_barcode ?: $product->barcode,
+            'image_url' => $this->imageUrl(optional($product->images->sortByDesc('is_primary')->first())->image_path),
             'unit_id' => $product->unit_id,
             'selling_rate' => (float) ($product->{$priceField} ?: $product->selling_price ?: $product->sale_price ?: $product->default_selling_price),
             'mrp' => $product->mrp !== null ? (float) $product->mrp : null,
@@ -741,6 +754,19 @@ class SalesService
                 ];
             })->values(),
         ];
+    }
+
+    private function imageUrl(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/')) {
+            return $path;
+        }
+
+        return asset($path);
     }
 
     private function dueDate(?Customer $customer, string $invoiceDate): ?string

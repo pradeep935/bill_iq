@@ -196,6 +196,11 @@ const SalesApi = {
         return response.data;
     },
 
+    async addSalesReturnRefund(id, payload) {
+        const response = await axios.post(`/app/sales/returns/${id}/refunds`, payload);
+        return response.data;
+    },
+
     salesReturnPrintUrl(id) { return `/app/sales/returns/${id}/print`; },
     salesReturnExportUrl(params = {}) {
         const target = new URL('/app/sales/returns/export', window.location.origin);

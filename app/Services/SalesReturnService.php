@@ -123,7 +123,7 @@ class SalesReturnService
                     continue;
                 }
 
-                if ($item->restock_status === 'non_restockable') {
+                if (in_array($item->restock_status, ['non_restockable', 'scrap', 'vendor_return'], true)) {
                     AuditLogger::record([
                         'module_name' => 'Sales Return',
                         'record_id' => $voucher->id,
@@ -276,16 +276,16 @@ class SalesReturnService
 
     public function searchSales(string $search, array $filters = [])
     {
-        $businessId = AppController::businessId();
-
-        return SalesVoucher::query()
+        $query = SalesVoucher::query()
             ->with(['customer', 'branch', 'warehouse'])
-            ->where('business_id', $businessId)
             ->whereIn('status', ['confirmed', 'approved'])
             ->when(!empty($filters['customer_id']), fn (Builder $q) => $q->where('customer_id', $filters['customer_id']))
             ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
-            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
-            ->where(function (Builder $q) use ($search) {
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']));
+
+        AppController::applyTenantScope($query, 'sales_vouchers');
+
+        return $query->where(function (Builder $q) use ($search) {
                 $like = '%' . $search . '%';
                 $q->where('invoice_number', 'like', $like)
                     ->orWhere('voucher_number', 'like', $like)
@@ -327,21 +327,24 @@ class SalesReturnService
     public function saleItems(int $saleId)
     {
         $sale = SalesVoucher::query()
-            ->with(['items.product', 'items.variant', 'items.batch'])
-            ->where('business_id', AppController::businessId())
+            ->with(['items.product.images', 'items.variant', 'items.batch'])
             ->whereIn('status', ['confirmed', 'approved'])
             ->where('id', $saleId)
+            ->tap(fn (Builder $q) => AppController::applyTenantScope($q, 'sales_vouchers'))
             ->firstOrFail();
 
         return $sale->items->map(function (SalesItem $item) {
             $returned = $this->returnedQuantity($item->id);
             $available = (float) $item->quantity + (float) $item->free_quantity - $returned;
+            $image = $item->product ? $item->product->images->sortByDesc('is_primary')->first() : null;
 
             return [
                 'sales_item_id' => $item->id,
                 'product_id' => $item->product_id,
                 'product' => $item->product_name_snapshot,
                 'sku' => $item->sku_snapshot,
+                'barcode' => optional($item->product)->primary_barcode ?: optional($item->product)->barcode,
+                'image_url' => $this->imageUrl(optional($image)->image_path),
                 'product_variant_id' => $item->product_variant_id,
                 'variant' => optional($item->variant)->sku,
                 'batch_id' => $item->batch_id,
@@ -397,11 +400,8 @@ class SalesReturnService
 
     private function returnQuery(array $filters = []): Builder
     {
-        $businessId = AppController::businessId();
-
-        return SalesReturnVoucher::query()
+        $query = SalesReturnVoucher::query()
             ->with(['customer', 'sale', 'branch', 'warehouse', 'creator', 'approver', 'items', 'refunds.method'])
-            ->where('business_id', $businessId)
             ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('return_date', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('return_date', '<=', $filters['date_to']))
             ->when(!empty($filters['customer_id']), fn (Builder $q) => $q->where('customer_id', $filters['customer_id']))
@@ -419,8 +419,11 @@ class SalesReturnService
                         ->orWhereHas('sale', fn (Builder $sale) => $sale->where('invoice_number', 'like', $like)->orWhere('voucher_number', 'like', $like))
                         ->orWhereHas('customer', fn (Builder $customer) => $customer->where('customer_name', 'like', $like)->orWhere('mobile', 'like', $like)->orWhere('gstin', 'like', $like));
                 });
-            })
-            ->latest('id');
+            });
+
+        AppController::applyTenantScope($query, 'sales_return_vouchers');
+
+        return $query->latest('id');
     }
 
     public function printHtml(SalesReturnVoucher $voucher): string
@@ -768,13 +771,25 @@ class SalesReturnService
     {
         $condition = $item['condition_status'] ?? 'good';
         $restock = $item['restock_status'] ?? 'restock';
-        $allowed = match ($condition) {
-            'expired' => ['expired_stock', 'non_restockable'],
-            'damaged', 'defective', 'scrap' => ['damaged_stock', 'quarantine_stock', 'non_restockable'],
-            'inspection_required' => ['quarantine_stock', 'non_restockable'],
-            'opened' => ['restock', 'damaged_stock', 'quarantine_stock', 'non_restockable'],
-            default => ['restock', 'damaged_stock', 'expired_stock', 'non_restockable'],
-        };
+        switch ($condition) {
+            case 'expired':
+                $allowed = ['expired_stock', 'non_restockable', 'scrap', 'vendor_return'];
+                break;
+            case 'damaged':
+            case 'defective':
+            case 'scrap':
+                $allowed = ['damaged_stock', 'quarantine_stock', 'non_restockable', 'scrap', 'vendor_return'];
+                break;
+            case 'inspection_required':
+                $allowed = ['quarantine_stock', 'non_restockable', 'scrap', 'vendor_return'];
+                break;
+            case 'opened':
+                $allowed = ['restock', 'damaged_stock', 'quarantine_stock', 'non_restockable', 'scrap', 'vendor_return'];
+                break;
+            default:
+                $allowed = ['restock', 'damaged_stock', 'expired_stock', 'non_restockable', 'scrap', 'vendor_return'];
+                break;
+        }
 
         if (!in_array($restock, $allowed, true)) {
             throw ValidationException::withMessages(["items.$index.restock_status" => 'Restock decision is not allowed for the selected condition.']);
@@ -797,6 +812,19 @@ class SalesReturnService
 
     private function fresh(SalesReturnVoucher $voucher): SalesReturnVoucher
     {
-        return $voucher->fresh(['customer', 'sale', 'branch', 'warehouse', 'creator', 'items.product', 'items.variant', 'items.batch', 'refunds.method']);
+        return $voucher->fresh(['customer', 'sale', 'branch', 'warehouse', 'creator', 'items.product.images', 'items.variant', 'items.batch', 'refunds.method']);
+    }
+
+    private function imageUrl(?string $path): ?string
+    {
+        if (!$path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/')) {
+            return $path;
+        }
+
+        return asset($path);
     }
 }

@@ -22,7 +22,7 @@ class SalesReturnVoucherRequest extends FormRequest
             'customer_id' => ['nullable', 'integer'],
             'sales_voucher_id' => ['nullable', 'integer'],
             'return_date' => ['required', 'date'],
-            'return_type' => ['required', Rule::in(['against_sale', 'direct_return'])],
+            'return_type' => ['required', Rule::in(['against_sale', 'direct_return', 'exchange'])],
             'tax_type' => ['required', Rule::in(['intrastate', 'interstate', 'exempt', 'nil_rated'])],
             'place_of_supply_state_id' => ['nullable', 'integer'],
             'settlement_type' => ['required', Rule::in(['customer_credit', 'cash_refund', 'bank_refund', 'upi_refund', 'card_refund', 'invoice_adjustment', 'pending'])],
@@ -42,7 +42,7 @@ class SalesReturnVoucherRequest extends FormRequest
             'items.*.cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'items.*.return_reason' => ['nullable', 'string', 'max:1000'],
             'items.*.condition_status' => ['nullable', Rule::in(['good', 'resalable', 'damaged', 'opened', 'expired', 'defective', 'scrap', 'inspection_required'])],
-            'items.*.restock_status' => ['required', Rule::in(['restock', 'damaged_stock', 'quarantine_stock', 'expired_stock', 'non_restockable'])],
+            'items.*.restock_status' => ['required', Rule::in(['restock', 'damaged_stock', 'quarantine_stock', 'expired_stock', 'non_restockable', 'scrap', 'vendor_return'])],
             'refunds' => ['nullable', 'array'],
             'refunds.*.payment_method_id' => ['required_with:refunds', 'integer'],
             'refunds.*.amount' => ['required_with:refunds', 'numeric', 'min:0.01'],
@@ -59,12 +59,12 @@ class SalesReturnVoucherRequest extends FormRequest
                 $validator->errors()->add('sales_voucher_id', 'Original sales invoice is required.');
             }
 
-            if ($this->input('return_type') === 'direct_return' && !$this->filled('reason')) {
-                $validator->errors()->add('reason', 'Reason is required for direct sales return.');
+            if (in_array($this->input('return_type'), ['direct_return', 'exchange'], true) && !$this->filled('reason')) {
+                $validator->errors()->add('reason', 'Reason is required for direct sales return or exchange.');
             }
 
-            if ($this->input('return_type') === 'direct_return' && !$this->filled('customer_id')) {
-                $validator->errors()->add('customer_id', 'Customer is required for direct sales return.');
+            if (in_array($this->input('return_type'), ['direct_return', 'exchange'], true) && !$this->filled('customer_id')) {
+                $validator->errors()->add('customer_id', 'Customer is required for direct sales return or exchange.');
             }
 
             foreach ((array) $this->input('items', []) as $index => $item) {

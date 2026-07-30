@@ -3,11 +3,15 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
 import PayrollApi from './PayrollApi';
 
-defineProps({ page: { type: String, default: 'payroll' }, title: { type: String, default: 'Payroll' } });
+const props = defineProps({
+    page: { type: String, default: 'payroll' },
+    title: { type: String, default: 'Payroll' },
+    initial_tab: { type: String, default: 'dashboard' },
+});
 
 const today = new Date().toISOString().slice(0, 10);
 const monthStart = today.slice(0, 8) + '01';
-const tab = ref('dashboard');
+const tab = ref(props.initial_tab || 'dashboard');
 const loading = ref(false);
 const saving = ref(false);
 const errors = ref({});
@@ -71,9 +75,9 @@ onMounted(load);
 </script>
 
 <template>
-  <Layout page="payroll" title="Payroll">
+  <Layout :page="props.page" :title="props.title">
     <template #topbar-title>
-      <div class="bill-page-title"><span>HR PAYROLL</span><h1>Payroll, Attendance & Payslips</h1><p>Employee master, salary structures, attendance-based payroll, accounting posting and reports.</p></div>
+      <div class="bill-page-title"><span>{{ props.page === 'employees' ? 'ADMIN SETUP' : 'HR PAYROLL' }}</span><h1>{{ props.title }}</h1><p>Employee master, salary structures, attendance-based payroll, accounting posting and reports.</p></div>
     </template>
     <div class="payroll-page">
       <div class="page-toolbar"><button :disabled="loading" @click="load">Refresh</button></div>

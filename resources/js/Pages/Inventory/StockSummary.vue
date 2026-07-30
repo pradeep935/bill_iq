@@ -10,7 +10,7 @@ import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 import TableLoadingState from '../../Components/Common/TableLoadingState.vue';
 
 defineProps({
-    page: { type: String, default: 'stock-summary' },
+    page: { type: String, default: 'inventory-current-stock' },
     title: { type: String, default: 'Current Stock' },
 });
 

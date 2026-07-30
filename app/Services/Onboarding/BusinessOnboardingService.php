@@ -622,7 +622,7 @@ class BusinessOnboardingService
 
     private function routeInfo(string $name, array $parameters = []): array
     {
-        return ['name' => $name, 'url' => Route::has($name) ? route($name, $parameters, false) : null];
+        return ['name' => $name, 'url' => Route::has($name) ? route($name, $parameters) : null];
     }
 
     private function readinessLabel(string $status): string

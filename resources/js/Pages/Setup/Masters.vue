@@ -1,15 +1,15 @@
 <template>
-  <Layout page="masters" title="Masters">
+  <Layout :page="page" :title="title">
     <template #topbar-title>
       <div class="bill-page-title">
         <span>ADMIN SETUP</span>
-        <h1>Masters</h1>
-        <p>Maintain branch, warehouse, catalog and tax master records used across billing and inventory.</p>
+        <h1>{{ title }}</h1>
+        <p>{{ pageDescription }}</p>
       </div>
     </template>
 
-    <div class="master-tabs">
-      <button v-for="tab in tabs" :key="tab.key" :class="{ active: activeTab === tab.key }" @click="switchTab(tab.key)">
+    <div v-if="visibleTabs.length > 1" class="master-tabs">
+      <button v-for="tab in visibleTabs" :key="tab.key" :class="{ active: activeTab === tab.key }" @click="switchTab(tab.key)">
         {{ tab.label }}
       </button>
     </div>
@@ -55,7 +55,7 @@
       @save="saveRecord"
     >
       <template #tabs>
-        <button v-for="tab in tabs" :key="tab.key" type="button" class="master-drawer-tab" :class="{ active: activeTab === tab.key }" @click="switchTab(tab.key)">
+        <button v-for="tab in visibleTabs" :key="tab.key" type="button" class="master-drawer-tab" :class="{ active: activeTab === tab.key }" @click="switchTab(tab.key)">
           {{ tab.label }}
         </button>
       </template>
@@ -147,7 +147,9 @@ import DrawerField from '../../Components/Common/DrawerField.vue';
 import Layout from '../Layout.vue';
 
 const props = defineProps({
-  initial_tab: { type: String, default: 'branch' },
+  page: { type: String, default: 'masters' },
+  title: { type: String, default: 'Masters' },
+  initial_tab: { type: String, default: 'category' },
 });
 
 const tabs = [
@@ -160,7 +162,18 @@ const tabs = [
   { key: 'hsn', label: 'HSN/SAC', singular: 'HSN/SAC', hint: 'Maintain HSN/SAC tax codes and GST rates for taxable products and services.', helpTitle: 'Where is this used?', helpPoints: ['Applies the correct GST rate to products and services.', 'Provides tax classification for invoices, tax summaries and GST reports.', 'Keeps Product Master tax setup faster and consistent.'], columns: [{ key: 'hsn_code', label: 'Code' }, { key: 'description', label: 'Description' }, { key: 'gst_rate', label: 'GST %' }] },
 ];
 
-const activeTab = ref(tabs.some((tab) => tab.key === props.initial_tab) ? props.initial_tab : 'branch');
+const visibleTabs = computed(() => {
+  if (props.page === 'branches') return tabs.filter((tab) => tab.key === 'branch');
+  if (props.page === 'inventory-warehouses') return tabs.filter((tab) => tab.key === 'warehouse');
+  return tabs.filter((tab) => !['branch', 'warehouse'].includes(tab.key));
+});
+
+const initialTab = computed(() => (
+  visibleTabs.value.some((tab) => tab.key === props.initial_tab)
+    ? props.initial_tab
+    : visibleTabs.value[0]?.key || 'category'
+));
+const activeTab = ref(initialTab.value);
 const records = ref([]);
 const references = reactive({ branches: [], categories: [] });
 const filters = reactive({ search: '', status: '' });
@@ -172,7 +185,12 @@ const saving = ref(false);
 const editingId = ref(null);
 const drawerOpen = ref(false);
 
-const current = computed(() => tabs.find((tab) => tab.key === activeTab.value));
+const current = computed(() => visibleTabs.value.find((tab) => tab.key === activeTab.value) || visibleTabs.value[0] || tabs[0]);
+const pageDescription = computed(() => {
+  if (props.page === 'branches') return 'Create and maintain business branches used in vouchers, payroll and inventory reports.';
+  if (props.page === 'inventory-warehouses') return 'Create warehouses and map storage locations to business branches for stock transactions.';
+  return 'Maintain catalog, product grouping, units and tax master records used across billing and inventory.';
+});
 const firstError = computed(() => Object.values(errors.value || {})?.[0]?.[0] || '');
 
 const defaults = () => ({

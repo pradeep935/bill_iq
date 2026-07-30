@@ -29,6 +29,7 @@ class MasterDataController extends Controller
         return Inertia::render('Setup/Masters', [
             'page' => 'masters',
             'title' => 'Masters',
+            'initial_tab' => 'category',
         ]);
     }
 

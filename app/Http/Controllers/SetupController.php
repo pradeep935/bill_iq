@@ -13,8 +13,8 @@ class SetupController extends Controller
         if ($redirect = AppController::guardPage('masters')) return $redirect;
 
         return Inertia::render('Setup/Masters', [
-            'page' => 'masters',
-            'title' => 'Masters',
+            'page' => 'branches',
+            'title' => 'Branches',
             'initial_tab' => 'branch',
         ]);
     }
@@ -22,7 +22,7 @@ class SetupController extends Controller
     public function employees()
     {
         if ($redirect = AppController::guardPage('employees')) return $redirect;
-        return Inertia::render('Payroll/Index', ['page' => 'employees', 'title' => 'Employees']);
+        return Inertia::render('Payroll/Index', ['page' => 'employees', 'title' => 'Employees', 'initial_tab' => 'employees']);
     }
 
     public function users(Request $request, AdminWorkspaceService $workspace)

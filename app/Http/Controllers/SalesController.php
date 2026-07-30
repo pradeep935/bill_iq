@@ -395,7 +395,7 @@ class SalesController extends Controller
             'index' => 'inventory.stock-outward.index',
             'data' => 'inventory.stock-outward.data',
             'export' => 'inventory.stock-outward.export',
-            'print' => 'inventory.stock-outward.print',
+            'print' => 'inventory.stock-outward.print-list',
             'reserved' => 'inventory.stock-outward.reserved',
             'ledger' => 'inventory.stock-outward.ledger',
         ];

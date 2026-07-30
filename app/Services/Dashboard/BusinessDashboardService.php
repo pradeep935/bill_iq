@@ -222,7 +222,7 @@ class BusinessDashboardService
             ],
             [
                 'label' => 'Bank reconciliation completed',
-                'status' => Schema::hasTable('bank_reconciliations') ? $this->checkStatus(true, DB::table('bank_reconciliations')->where('business_id', $businessId)->whereDate('reconciliation_date', $today)->exists()) : 'warning',
+                'status' => $this->bankReconciliationStatus($businessId, $today),
                 'href' => $routes['accounting.bank-reconciliation']['url'],
                 'enabled' => false,
                 'comingSoon' => true,
@@ -532,12 +532,37 @@ class BusinessDashboardService
             return null;
         }
 
-        return route($route, $parameters, false);
+        return route($route, $parameters);
     }
 
     private function taxExpression(): string
     {
         return 'COALESCE(cgst_amount, 0) + COALESCE(sgst_amount, 0) + COALESCE(igst_amount, 0) + COALESCE(cess_amount, 0)';
+    }
+
+    private function bankReconciliationStatus(int $businessId, string $today): string
+    {
+        if (!Schema::hasTable('bank_reconciliations')) {
+            return 'warning';
+        }
+
+        $query = DB::table('bank_reconciliations')->where('business_id', $businessId);
+
+        if (Schema::hasColumn('bank_reconciliations', 'statement_start_date') && Schema::hasColumn('bank_reconciliations', 'statement_end_date')) {
+            $query->where(function (QueryBuilder $range) use ($today) {
+                $range->where(function (QueryBuilder $bounded) use ($today) {
+                    $bounded
+                        ->whereDate('statement_start_date', '<=', $today)
+                        ->whereDate('statement_end_date', '>=', $today);
+                })->orWhereDate('created_at', $today);
+            });
+        } elseif (Schema::hasColumn('bank_reconciliations', 'reconciliation_date')) {
+            $query->whereDate('reconciliation_date', $today);
+        } else {
+            $query->whereDate('created_at', $today);
+        }
+
+        return $this->checkStatus(true, $query->exists());
     }
 
     private function checkStatus(bool $available, bool $completed): string

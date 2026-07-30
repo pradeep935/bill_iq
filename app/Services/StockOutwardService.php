@@ -360,7 +360,8 @@ class StockOutwardService
 
     public function filters(array $filters): array
     {
-        $tab = in_array(($filters['tab'] ?? 'ready'), self::TABS, true) ? $filters['tab'] : 'ready';
+        $requestedTab = $filters['tab'] ?? 'ready';
+        $tab = in_array($requestedTab, self::TABS, true) ? $requestedTab : 'ready';
         $perPage = in_array((int) ($filters['per_page'] ?? 25), self::PER_PAGE, true) ? (int) ($filters['per_page'] ?? 25) : 25;
         $direction = strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
 
@@ -564,6 +565,6 @@ class StockOutwardService
 
     private function emptyPage(array $filters): LengthAwarePaginator
     {
-        return DB::query()->fromRaw('(select 1 as id) as empty')->whereRaw('1 = 0')->paginate($filters['per_page']);
+        return DB::query()->fromRaw('(select 1 as id) as empty_rows')->whereRaw('1 = 0')->paginate($filters['per_page']);
     }
 }

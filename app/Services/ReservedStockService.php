@@ -232,7 +232,8 @@ class ReservedStockService
 
     public function filters(array $input): array
     {
-        $tab = in_array(($input['tab'] ?? 'active'), self::TABS, true) ? $input['tab'] : 'active';
+        $requestedTab = $input['tab'] ?? 'active';
+        $tab = in_array($requestedTab, self::TABS, true) ? $requestedTab : 'active';
         $perPage = in_array((int) ($input['per_page'] ?? 25), self::PER_PAGE, true) ? (int) ($input['per_page'] ?? 25) : 25;
 
         return [
@@ -447,6 +448,6 @@ class ReservedStockService
 
     private function emptyPage(array $filters): LengthAwarePaginator
     {
-        return DB::query()->fromRaw('(select 1 as id) as empty')->whereRaw('1 = 0')->paginate($filters['per_page']);
+        return DB::query()->fromRaw('(select 1 as id) as empty_rows')->whereRaw('1 = 0')->paginate($filters['per_page']);
     }
 }

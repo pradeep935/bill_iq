@@ -24,7 +24,10 @@ return new class extends Migration
 
         Schema::table('products', function (Blueprint $table) {
             if (!Schema::hasColumn('products', 'tracking_type')) {
-                $table->string('tracking_type', 30)->default('none')->after('track_inventory');
+                $column = $table->string('tracking_type', 30)->default('none');
+                if (Schema::hasColumn('products', 'track_inventory')) {
+                    $column->after('track_inventory');
+                }
             }
             if (!Schema::hasColumn('products', 'batch_required')) {
                 $table->boolean('batch_required')->default(false)->after('tracking_type');

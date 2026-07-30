@@ -231,17 +231,20 @@ class StaffWorkspaceService
     private function recentActivity(User $user, int $businessId, array $context, array $routes): array
     {
         if (Schema::hasTable('audit_logs')) {
+            $businessColumn = Schema::hasColumn('audit_logs', 'client_id') ? 'client_id' : (Schema::hasColumn('audit_logs', 'tenant_id') ? 'tenant_id' : null);
+            $userColumn = Schema::hasColumn('audit_logs', 'changed_by_user_id') ? 'changed_by_user_id' : (Schema::hasColumn('audit_logs', 'actor_id') ? 'actor_id' : null);
+
             return DB::table('audit_logs')
-                ->where('client_id', $businessId)
-                ->where('changed_by_user_id', $user->id)
+                ->when($businessColumn, fn ($query) => $query->where($businessColumn, $businessId))
+                ->when($userColumn, fn ($query) => $query->where($userColumn, $user->id))
                 ->latest('created_at')
                 ->limit(10)
                 ->get()
                 ->map(fn ($row) => [
-                    'activity' => $row->summary ?? (($row->action_type ?? 'Activity') . ' ' . ($row->module_name ?? '')),
+                    'activity' => $row->summary ?? (($row->action_type ?? $row->action ?? 'Activity') . ' ' . ($row->module_name ?? $row->module ?? '')),
                     'reference' => $row->record_id ? '#' . $row->record_id : '-',
                     'date' => $row->created_at,
-                    'status' => $row->action_type ?? 'Done',
+                    'status' => $row->action_type ?? $row->action ?? 'Done',
                     'href' => null,
                 ])
                 ->values()
@@ -352,13 +355,18 @@ class StaffWorkspaceService
             return [];
         }
 
+        $columns = ['id', 'name'];
+        if (Schema::hasColumn('branches', 'code')) {
+            $columns[] = 'code';
+        }
+
         return DB::table('branches')
             ->where('business_id', $businessId)
             ->where('status', 'active')
             ->when(!$isAdmin, fn ($q) => $q->where('id', $user->branch_id))
             ->orderBy('name')
-            ->get(['id', 'name', 'code'])
-            ->map(fn ($row) => ['id' => (int) $row->id, 'name' => $row->name, 'code' => $row->code])
+            ->get($columns)
+            ->map(fn ($row) => ['id' => (int) $row->id, 'name' => $row->name, 'code' => $row->code ?? null])
             ->values()
             ->all();
     }
@@ -542,7 +550,7 @@ class StaffWorkspaceService
 
     private function routeInfo(string $name, array $parameters = []): array
     {
-        return ['name' => $name, 'url' => Route::has($name) ? route($name, $parameters, false) : null];
+        return ['name' => $name, 'url' => Route::has($name) ? route($name, $parameters) : null];
     }
 
     private function roleLabel(int $roleId): string

@@ -55,6 +55,12 @@ class ReportsController extends Controller
         return Inertia::render('Reports/InventoryReports', ['page' => 'acceptance', 'title' => 'Acceptance Matrix', 'initial_tab' => 'acceptance']);
     }
 
+    public function setupAcceptance()
+    {
+        if ($redirect = AppController::guardPage('acceptance')) return $redirect;
+        return Inertia::render('Reports/InventoryReports', ['page' => 'setup-acceptance', 'title' => 'Acceptance Matrix', 'initial_tab' => 'acceptance']);
+    }
+
     public function financialReferences()
     {
         return response()->json($this->financialReports->references());

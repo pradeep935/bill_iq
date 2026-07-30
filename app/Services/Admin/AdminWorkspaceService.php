@@ -19,8 +19,6 @@ class AdminWorkspaceService
         $permissions = $this->permissions($user);
         $counts = $this->counts($businessId);
 
-        $voucherCreate = AppController::canOpen('vouchers') && $admin;
-
         return [
             'summary' => $this->summary($counts, $routes, $permissions),
             'activeSection' => $section,
@@ -377,6 +375,7 @@ class AdminWorkspaceService
     private function permissions(User $user): array
     {
         $admin = $user->isSuperAdmin() || $user->isAdmin();
+        $voucherCreate = AppController::canOpen('vouchers') && $admin;
 
         return [
             'admin.workspace.view' => $admin,
@@ -447,7 +446,7 @@ class AdminWorkspaceService
     {
         return [
             'name' => $name,
-            'url' => Route::has($name) ? route($name, $parameters, false) : null,
+            'url' => Route::has($name) ? route($name, $parameters) : null,
             'label' => $label,
         ];
     }

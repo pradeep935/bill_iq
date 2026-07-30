@@ -723,6 +723,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/employees', [SetupController::class, 'employees'])->name('employees');
             Route::get('/users', [SetupController::class, 'users'])->name('users');
             Route::get('/saas', [SetupController::class, 'saas'])->name('saas');
+            Route::get('/acceptance', [ReportsController::class, 'setupAcceptance'])->name('acceptance');
             Route::get('/settings', [SetupController::class, 'settings'])->name('settings');
         });
     });

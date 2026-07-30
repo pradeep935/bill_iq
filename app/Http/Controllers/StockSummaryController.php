@@ -26,7 +26,7 @@ class StockSummaryController extends Controller
         }
 
         return Inertia::render('Inventory/StockSummary', [
-            'page' => 'stock-summary',
+            'page' => 'inventory-current-stock',
             'title' => 'Current Stock',
             'role_id' => AppController::roleId(),
         ]);

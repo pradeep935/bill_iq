@@ -61,16 +61,36 @@ class MasterDataService
 
     public function categories(int $businessId, bool $subCategories = false)
     {
+        $nameColumn = Schema::hasColumn('product_categories', 'category_name') ? 'category_name' : 'name';
+
         return ProductCategory::query()
-            ->where(function (Builder $query) use ($businessId) {
-                $query->whereNull('business_id')->orWhere('business_id', $businessId);
-            })
+            ->when(
+                Schema::hasColumn('product_categories', 'business_id'),
+                fn (Builder $query) => $query->where(fn (Builder $scope) => $scope->whereNull('business_id')->orWhere('business_id', $businessId))
+            )
+            ->when(
+                !Schema::hasColumn('product_categories', 'business_id') && Schema::hasColumn('product_categories', 'company_id'),
+                fn (Builder $query) => $query->where(fn (Builder $scope) => $scope->whereNull('company_id')->orWhere('company_id', $businessId))
+            )
             ->when(Schema::hasColumn('product_categories', 'parent_id'), function (Builder $query) use ($subCategories) {
                 $subCategories ? $query->whereNotNull('parent_id') : $query->whereNull('parent_id');
             })
-            ->when(Schema::hasColumn('product_categories', 'status'), fn (Builder $query) => $query->where('status', 'active'))
-            ->orderBy('name')
-            ->get($this->columns('product_categories', ['id', 'parent_id', 'name', 'code']));
+            ->when(Schema::hasColumn('product_categories', 'status'), fn (Builder $query) => $query->whereRaw('LOWER(status) = ?', ['active']))
+            ->orderBy($nameColumn)
+            ->get($this->columns('product_categories', ['id', 'parent_id', $nameColumn, 'code']))
+            ->map(function (ProductCategory $category) use ($nameColumn) {
+                $label = $category->{$nameColumn} ?? $category->name ?? $category->category_name ?? '';
+
+                return [
+                    'id' => $category->id,
+                    'value' => (string) $category->id,
+                    'label' => $label,
+                    'name' => $label,
+                    'parent_id' => $category->parent_id ?? null,
+                    'code' => $category->code ?? null,
+                ];
+            })
+            ->values();
     }
 
     public function brands(int $businessId)
@@ -81,7 +101,15 @@ class MasterDataService
             })
             ->when(Schema::hasColumn('brands', 'status'), fn (Builder $query) => $query->where('status', 'active'))
             ->orderBy('name')
-            ->get($this->columns('brands', ['id', 'name', 'code']));
+            ->get($this->columns('brands', ['id', 'name', 'code']))
+            ->map(fn (Brand $brand) => [
+                'id' => $brand->id,
+                'value' => (string) $brand->id,
+                'label' => $brand->name,
+                'name' => $brand->name,
+                'code' => $brand->code ?? null,
+            ])
+            ->values();
     }
 
     public function units()

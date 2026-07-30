@@ -962,10 +962,16 @@ const saveProduct = () => {
         { price_type: 'Dealer', price: form.dealer_price || 0 },
         { price_type: 'Online', price: form.online_price || 0 },
     ];
+    const selectedCategory = categoryOptions.value.find((category) => String(category.value ?? category.id ?? '') === String(form.category));
+    const selectedSubCategory = subCategoryOptions.value.find((category) => String(category.value ?? category.id ?? '') === String(form.subcategory));
 
     emit('save', {
         ...form,
 
+        category_id: /^\d+$/.test(String(form.category || '')) ? form.category : null,
+        sub_category_id: /^\d+$/.test(String(form.subcategory || '')) ? form.subcategory : null,
+        category: selectedCategory?.label || selectedCategory?.name || form.category || null,
+        subcategory: selectedSubCategory?.label || selectedSubCategory?.name || form.subcategory || null,
         brand_id: /^\d+$/.test(String(form.brand_id || '')) ? form.brand_id : null,
         cost_price: form.cost_price || 0,
         selling_price: form.selling_price || 0,

@@ -791,19 +791,23 @@ const setPrimaryImage = (index) => {
 };
 
 const imagePreviewUrl = (image = {}) => {
-    const path = image.preview_url || image.image_path || '';
+    const path = String(image.preview_url || image.image_path || '').trim();
 
     if (!path) {
         return '';
     }
 
-    if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('/storage/')) {
+    if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) {
         return path;
     }
 
-    const appBasePath = window.location.pathname.split('/app')[0] || '';
+    const normalizedPath = path.replace(/^\/+/, '');
 
-    return `${appBasePath}/storage/${path}`;
+    if (normalizedPath.startsWith('storage/') || normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('upload/')) {
+        return `/${normalizedPath}`;
+    }
+
+    return `/storage/${normalizedPath}`;
 };
 
 const uploadImage = async (event, index) => {

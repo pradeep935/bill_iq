@@ -580,20 +580,23 @@ const primaryBarcode = (product) => {
 
 const productImage = (product) => {
     const primary = (product.images || []).find((image) => image.is_primary);
-    const path = primary?.image_path || product.images?.[0]?.image_path;
+    const path = String(primary?.image_path || product.images?.[0]?.image_path || '').trim();
 
     if (!path) {
         return null;
     }
 
-    if (String(path).startsWith('http')) {
+    if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) {
         return path;
     }
 
-    const appBasePath = window.location.pathname.split('/app')[0] || '';
-    const cleanPath = String(path).replace(/^\/storage\//, '');
+    const normalizedPath = path.replace(/^\/+/, '');
 
-    return `${appBasePath}/storage/${cleanPath}`;
+    if (normalizedPath.startsWith('storage/') || normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('upload/')) {
+        return `/${normalizedPath}`;
+    }
+
+    return `/storage/${normalizedPath}`;
 };
 
 const openProductImage = (product) => {

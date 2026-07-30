@@ -289,6 +289,42 @@ const findMatchingOption = (options = [], source = '') => {
     }) || null;
 };
 
+const applyHsn = (hsn) => {
+    if (!hsn) {
+        return;
+    }
+
+    form.hsn_master_id = hsn.id || '';
+    form.hsn_code = hsn.hsn_code || '';
+    hsnSearch.value = hsn.hsn_code || '';
+    form.cess_rate = String(hsn.cess_rate ?? '0');
+
+    if (isTaxable.value) {
+        form.gst_rate = String(hsn.gst_rate ?? '0');
+    }
+};
+
+const findMatchingHsn = () => {
+    const source = [
+        normalizedProductName.value,
+        categoryLabel.value,
+        form.description,
+    ].join(' ').toLowerCase();
+    const words = source.split(/\s+/).filter((word) => word.length > 3);
+
+    if (!source.trim()) {
+        return null;
+    }
+
+    return hsnOptions.value.find((hsn) => {
+        const code = String(hsn.hsn_code || '').toLowerCase();
+        const description = String(hsn.description || '').toLowerCase();
+
+        return (code && source.includes(code)) ||
+            words.some((word) => description.includes(word));
+    }) || null;
+};
+
 const syncPrimaryBarcode = () => {
     if (!form.primary_barcode) {
         return;
@@ -337,6 +373,10 @@ const fillSmartFields = (force = false) => {
     if ((force || !form.variant) && suggestedVariant.value) form.variant = suggestedVariant.value;
     if (force || !form.description) form.description = suggestedDescription.value;
     if (force || !form.invoice_description) form.invoice_description = form.short_name || normalizedProductName.value;
+
+    if (force || !form.hsn_code) {
+        applyHsn(findMatchingHsn());
+    }
 };
 
 const productTypeOptions = [
@@ -372,6 +412,7 @@ const unitOptions = [
 
 const categoryOptions = computed(() => props.references?.categories || []);
 const subCategoryOptions = computed(() => props.references?.sub_categories || []);
+const hsnOptions = computed(() => props.references?.hsn_codes || []);
 const brandOptions = computed(() => {
     const options = [...(props.references?.brands || [])];
 
@@ -843,24 +884,26 @@ const searchHsn = async () => {
         return;
     }
 
+    const normalizedKeyword = keyword.toLowerCase();
+    hsnResults.value = hsnOptions.value
+        .filter((hsn) => {
+            return String(hsn.hsn_code || '').toLowerCase().includes(normalizedKeyword) ||
+                String(hsn.description || '').toLowerCase().includes(normalizedKeyword);
+        })
+        .slice(0, 8);
+
     hsnSearching.value = true;
 
     try {
-        hsnResults.value = await ProductApi.searchHsn(keyword);
+        const results = await ProductApi.searchHsn(keyword);
+        hsnResults.value = results.length ? results : hsnResults.value;
     } finally {
         hsnSearching.value = false;
     }
 };
 
 const selectHsn = (hsn) => {
-    form.hsn_master_id = hsn.id;
-    form.hsn_code = hsn.hsn_code;
-    hsnSearch.value = hsn.hsn_code;
-    form.cess_rate = String(hsn.cess_rate ?? '0');
-    if (isTaxable.value) {
-        form.gst_rate = String(hsn.gst_rate ?? '0');
-    }
-
+    applyHsn(hsn);
     hsnResults.value = [];
 };
 
@@ -1486,13 +1529,6 @@ const saveProduct = () => {
                                                 </small>
                                             </button>
                                         </div>
-
-                                        <input
-                                            v-model="form.hsn_code"
-                                            type="text"
-                                            :class="['form-control selected-hsn', { 'is-invalid': fieldError('hsn_code') }]"
-                                            :placeholder="`Selected ${hsnSacLabel}`"
-                                        />
 
                                         <span
                                             v-if="fieldError('hsn_code')"

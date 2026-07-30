@@ -2147,10 +2147,11 @@ const saveProduct = () => {
                                     Cancel
                                 </Button2>
 
-                                <FormButton
-                                    cls="product-save-button"
-                                    :processing="processing"
-                                    @click.prevent="saveProduct"
+                                <button
+                                    class="btn product-save-button"
+                                    type="button"
+                                    :disabled="processing"
+                                    @click="saveProduct"
                                 >
                                     <svg
                                         viewBox="0 0 24 24"
@@ -2171,7 +2172,13 @@ const saveProduct = () => {
                                             ? 'Update Product'
                                             : 'Save Product'
                                     }}
-                                </FormButton>
+                                    <span
+                                        v-if="processing"
+                                        class="spinner-border text-white spinner-border-sm"
+                                        role="status"
+                                        style="margin-left: 5px"
+                                    ></span>
+                                </button>
                             </div>
                         </footer>
                     </Form>

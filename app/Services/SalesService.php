@@ -408,7 +408,7 @@ class SalesService
             ->first();
 
         if (!$product) {
-            throw ValidationException::withMessages(['barcode' => 'Product not found for this barcode.']);
+            throw ValidationException::withMessages(['barcode' => 'Product not found']);
         }
 
         $variant = $product->variantItems->firstWhere('barcode', $barcode);
@@ -424,7 +424,7 @@ class SalesService
 
         $presented = $this->presentProduct($product, $businessId, (int) $branchId, (int) $warehouseId, $priceType, $variantId, $batchId, $barcode);
         if ($this->requiresStock($product) && (float) ($presented['available_stock'] ?? 0) <= 0) {
-            throw ValidationException::withMessages(['barcode' => 'Insufficient stock in the selected warehouse.']);
+            throw ValidationException::withMessages(['barcode' => 'Insufficient stock']);
         }
 
         return $presented;

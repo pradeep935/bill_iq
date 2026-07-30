@@ -34,6 +34,7 @@ class PosController extends Controller
             'store' => 'app.sales.invoices.store',
             'references' => 'app.sales.invoices.references',
             'productSearch' => 'app.sales.invoices.products.search',
+            'productScan' => 'app.sales.invoices.products.scan',
             'show' => 'app.sales.invoices.show',
             'print' => 'app.sales.invoices.print',
             'contextSwitch' => 'app.context.switch',

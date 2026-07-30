@@ -126,6 +126,21 @@ const showToast = (text, tone = 'info') => {
     messageTone.value = tone;
 };
 const focusScanner = () => nextTick(() => scanInput.value?.focus());
+const firstWarehouseForBranch = (branchId = form.branch_id) => {
+    const warehouses = references.value.warehouses || [];
+    if (!warehouses.length) return '';
+    return (branchId
+        ? warehouses.find((warehouse) => Number(warehouse.branch_id || 0) === Number(branchId))
+        : warehouses[0])?.id || warehouses[0]?.id || '';
+};
+const ensureDefaultCounterScope = () => {
+    if (!form.branch_id) {
+        form.branch_id = props.context?.branch?.id || references.value.branches?.[0]?.id || '';
+    }
+    if (!form.warehouse_id) {
+        form.warehouse_id = firstWarehouseForBranch(form.branch_id);
+    }
+};
 const rowKey = (item) => `${item.product_id}-${item.product_variant_id || 0}-${item.batch_id || 0}`;
 const flashRow = (item) => {
     highlightedRowKey.value = rowKey(item);
@@ -137,8 +152,7 @@ const isStockItem = (item) => item.available_stock !== null && item.available_st
 
 const loadReferences = async () => {
     references.value = await SalesApi.references();
-    form.branch_id = props.context?.branch?.id || references.value.branches?.[0]?.id || '';
-    form.warehouse_id = filteredWarehouses.value?.[0]?.id || references.value.warehouses?.[0]?.id || '';
+    ensureDefaultCounterScope();
     form.customer_id = customers.value.find((customer) => customer.customer_type === 'walk_in')?.id || customers.value[0]?.id || '';
     setPaymentMode('cash');
     focusScanner();
@@ -168,7 +182,7 @@ const addProduct = (product, fromScan = false) => {
         return false;
     }
     if (product.product_type !== 'service' && product.item_type !== 'non_stock' && available <= 0) {
-        showToast('Insufficient stock in the selected warehouse.', 'error');
+        showToast('Insufficient stock', 'error');
         focusScanner();
         return false;
     }
@@ -178,7 +192,7 @@ const addProduct = (product, fromScan = false) => {
     let touched = existing;
     if (existing) {
         if (isStockItem(existing) && Number(existing.quantity || 0) + 1 > Number(existing.available_stock || 0)) {
-            showToast('Insufficient stock in the selected warehouse.', 'error');
+            showToast('Insufficient stock', 'error');
             focusScanner();
             return false;
         }
@@ -218,6 +232,7 @@ const addProduct = (product, fromScan = false) => {
 const scan = async () => {
     const barcode = search.value.trim();
     if (!barcode || scanning.value) return;
+    ensureDefaultCounterScope();
     if (!form.branch_id || !form.warehouse_id) {
         search.value = '';
         productResults.value = [];
@@ -234,7 +249,8 @@ const scan = async () => {
         });
         addProduct(product, true);
     } catch (error) {
-        showToast(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'Product not found for this barcode.', 'error');
+        const serverMessage = error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || '';
+        showToast(serverMessage.includes('Insufficient stock') ? 'Insufficient stock' : serverMessage || 'Product not found', 'error');
     } finally {
         scanning.value = false;
         search.value = '';
@@ -246,7 +262,7 @@ const scan = async () => {
 const updateQty = (item, amount) => {
     const next = Math.max(1, Number(item.quantity || 0) + amount);
     if (isStockItem(item) && next > Number(item.available_stock || 0)) {
-        showToast('Insufficient stock in the selected warehouse.', 'error');
+        showToast('Insufficient stock', 'error');
         item.quantity = Number(item.available_stock || 1);
     } else {
         item.quantity = next;
@@ -258,7 +274,7 @@ const normalizeQty = (item) => {
     item.quantity = Math.max(1, Number(item.quantity || 1));
     if (isStockItem(item) && Number(item.quantity || 0) > Number(item.available_stock || 0)) {
         item.quantity = Number(item.available_stock || 1);
-        showToast('Insufficient stock in the selected warehouse.', 'error');
+        showToast('Insufficient stock', 'error');
     }
     syncPaymentAmount();
 };
@@ -430,7 +446,7 @@ const handleShortcut = (event) => {
 
 watch(() => totals.value.grand, syncPaymentAmount);
 watch(() => form.branch_id, () => {
-    form.warehouse_id = filteredWarehouses.value?.[0]?.id || '';
+    form.warehouse_id = firstWarehouseForBranch(form.branch_id);
     focusScanner();
 });
 watch(() => form.warehouse_id, () => {
@@ -508,7 +524,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
                         </template>
                         <label class="bill-field pos-product-search">
                             <span>Barcode Search</span>
-                            <input ref="scanInput" v-model="search" class="pos-scan-input" type="search" placeholder="Scan barcode and press Enter, or type product / SKU" @focus="scannerFocused = true" @blur="scannerFocused = false" @keyup.enter="scan" @input="searchProducts" />
+                            <input ref="scanInput" v-model="search" class="pos-scan-input" type="search" placeholder="Scan barcode or search product" @focus="scannerFocused = true" @blur="scannerFocused = false" @keyup.enter="scan" @input="searchProducts" />
                             <div v-if="productResults.length" class="pos-autocomplete">
                                 <button v-for="product in productResults" :key="product.id" type="button" :title="`Add ${product.name}`" @click="addProduct(product)">
                                     <span class="pos-product-thumb">

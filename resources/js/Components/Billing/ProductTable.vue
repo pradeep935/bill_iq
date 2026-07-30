@@ -15,15 +15,13 @@
             <th>Product Name</th>
             <th>SKU</th>
             <th>Barcode</th>
-            <th>Available Stock</th>
+            <th>Stock</th>
             <th>Batch</th>
             <th>Qty</th>
-            <th>Unit</th>
             <th>Rate</th>
             <th>Discount</th>
-            <th>GST</th>
-            <th>Total</th>
-            <th>Delete</th>
+            <th>Line Total</th>
+            <th>Remove</th>
           </tr>
         </thead>
         <tbody>
@@ -51,15 +49,13 @@
                 <button type="button" title="Increase quantity" @click="$emit('increment', item)">+</button>
               </div>
             </td>
-            <td><input v-model="item.unit_id" placeholder="Unit" title="Unit" @input="$emit('change')" /></td>
             <td><input v-model.number="item.selling_rate" type="number" min="0" placeholder="Rate" @input="$emit('change')" /></td>
             <td><input v-model.number="item.discount_value" type="number" min="0" placeholder="Discount" @input="$emit('change')" /></td>
-            <td><input v-model.number="item.gst_rate" type="number" min="0" max="100" placeholder="GST %" @input="$emit('change')" /></td>
             <td><strong>{{ lineTotal(item) }}</strong></td>
-            <td><button class="bill-delete-button" type="button" title="Delete product" @click="$emit('remove', index)">Delete</button></td>
+            <td><button class="bill-delete-button" type="button" title="Remove product" @click="$emit('remove', index)">Remove</button></td>
           </tr>
           <tr v-if="!items.length">
-            <td colspan="13" class="bill-empty-row">Scan barcode or search a product to add invoice lines.</td>
+            <td colspan="11" class="bill-empty-row">Scan barcode or search a product to add invoice lines.</td>
           </tr>
         </tbody>
       </table>

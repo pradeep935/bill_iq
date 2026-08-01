@@ -2,6 +2,7 @@ import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import axios from 'axios';
+import { normalizeAxiosError } from './Support/errorMessages';
 
 import Header from '@/Components/Common/Header.vue';
 import Portlet from '@/Components/Common/Portlet.vue';
@@ -38,6 +39,10 @@ import MediaDisplay from '@/Components/Common/MediaDisplay.vue';
 
 const appBasePath = window.location.pathname.split('/app')[0] || '';
 axios.defaults.baseURL = `${window.location.origin}${appBasePath}`;
+axios.interceptors.response.use(
+  (response) => response,
+  normalizeAxiosError
+);
 
 createInertiaApp({
   title: (title) => (title ? `${title} - Bill IQ` : 'Bill IQ'),

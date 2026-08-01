@@ -3,7 +3,7 @@ import { useField } from 'vee-validate';
 import { ref, computed  } from "vue";
 import * as yup from 'yup';
 
-const {name, type='text', modelValue, cls='', req=false, label='', placeholder='', options=[], opt_id='value', opt_name='label', select_name='Select', disabled=false, left_box_text=null, right_box_text=null, box_type='text'} = defineProps(['name','type','modelValue','cls','req','label','placeholder','options','opt_id','opt_name','select_name', 'disabled', 'left_box_text', 'right_box_text', 'box_type']); 
+const {name, type='text', modelValue, cls='', req=false, label='', placeholder='', options=[], opt_id='value', opt_name='label', select_name='Select', disabled=false, left_box_text=null, right_box_text=null, box_type='text', hint=''} = defineProps(['name','type','modelValue','cls','req','label','placeholder','options','opt_id','opt_name','select_name', 'disabled', 'left_box_text', 'right_box_text', 'box_type', 'hint']);
 
 const processReq = computed(() => {
     if(!req){
@@ -16,6 +16,9 @@ const processReq = computed(() => {
 const { value, errorMessage } = useField(() => name, processReq, {
   syncVModel: true,
 });
+
+const optionValue = (opt = {}) => opt?.[opt_id] ?? opt?.value ?? opt?.id ?? opt?.code ?? opt?.name ?? opt?.label ?? '';
+const optionLabel = (opt = {}) => opt?.[opt_name] ?? opt?.label ?? opt?.name ?? opt?.title ?? opt?.code ?? opt?.value ?? opt?.id ?? '';
 </script>
 
 <template>
@@ -29,7 +32,7 @@ const { value, errorMessage } = useField(() => name, processReq, {
 
             <select :class="['form-control', { 'is-invalid': errorMessage }]" v-model="value" :disabled="disabled">
                 <option value="">{{ select_name }}</option>
-                <option v-for="opt in options" :value="opt[opt_id]">{{ opt[opt_name] }}</option>
+                <option v-for="opt in options" :key="optionValue(opt)" :value="optionValue(opt)">{{ optionLabel(opt) }}</option>
             </select>
 
             <div v-if="right_box_text" class="input-group-text">
@@ -40,9 +43,10 @@ const { value, errorMessage } = useField(() => name, processReq, {
         <div v-else>
             <select :class="['form-control', { 'is-invalid': errorMessage }]" v-model="value" :disabled="disabled">
                 <option value="">{{ select_name }}</option>
-                <option v-for="opt in options" :value="opt[opt_id]">{{ opt[opt_name] }}</option>
+                <option v-for="opt in options" :key="optionValue(opt)" :value="optionValue(opt)">{{ optionLabel(opt) }}</option>
             </select>
         </div>
+        <span v-if="hint" class="field-hint">{{ hint }}</span>
         <span v-if="errorMessage" class="field-error">{{ errorMessage }}</span>
     </div>
 

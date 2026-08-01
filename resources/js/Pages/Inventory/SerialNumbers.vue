@@ -174,7 +174,7 @@ onMounted(async () => { await loadRefs(); await load(); });
             <section class="reports"><div class="tabs"><button v-for="r in ['serial_stock','serial_movement','sold_serials','warranty_expiry','damaged_blocked']" :key="r" :class="{active: activeReport === r}" @click="activeReport = r">{{ statusLabel(r) }}</button></div></section>
         </InventoryModuleScaffold>
 
-        <InventoryModal v-if="['add','edit','bulk','transfer'].includes(modal)" :title="modal === 'bulk' ? 'Bulk Add Serials' : modal === 'transfer' ? 'Transfer Serial' : 'Serial Number'" @close="closeModal">
+        <InventoryModal v-if="['add','edit','bulk','transfer'].includes(modal)" :title="modal === 'bulk' ? 'Bulk Add Serials' : modal === 'transfer' ? 'Transfer Serial' : 'Serial Number'" :errors="errors" @close="closeModal">
             <div class="form-grid" v-if="modal !== 'transfer'">
                 <select v-model="form.product_id"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select>
                 <select v-model="form.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>

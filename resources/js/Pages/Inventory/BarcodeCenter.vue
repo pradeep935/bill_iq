@@ -24,6 +24,7 @@ const toast = ref(null);
 const modal = ref(null);
 const current = ref(null);
 const scanResult = ref(null);
+const errors = ref({});
 const activeReport = ref('product_barcodes');
 const filters = ref({ search: '', product_id: '', category_id: '', brand_id: '', barcode_type: '', has_barcode: '', active_status: '', per_page: 15 });
 const form = ref({ product_id: '', barcode: '', format: 'CODE128', barcode_type: 'internal', is_primary: true, is_active: true, quantity: 1 });
@@ -60,14 +61,16 @@ const load = async (page = 1) => {
 const clearFilters = () => { filters.value = { search: '', product_id: '', category_id: '', brand_id: '', barcode_type: '', has_barcode: '', active_status: '', per_page: 15 }; };
 const openAssign = (row = null) => {
     current.value = row;
+    errors.value = {};
     form.value = { product_id: row?.id || '', barcode: row?.primary_barcode || '', format: 'CODE128', barcode_type: row?.barcode_type || 'internal', is_primary: true, is_active: true, quantity: 1 };
     modal.value = 'assign';
 };
 const openManage = (row) => { current.value = row; modal.value = 'manage'; };
 const openPrint = (row) => { current.value = row; label.value = { ...label.value, product_id: row.id, barcode: row.primary_barcode }; modal.value = 'print'; };
 const saveBarcode = async () => {
+    errors.value = {};
     saving.value = true;
-    try { await InventoryApi.assignBarcode(form.value); showToast('Barcode saved.'); modal.value = null; await load(pagination.value.current_page || 1); } catch (e) { showToast(e?.response?.data?.message || 'Barcode save failed.', 'error'); } finally { saving.value = false; }
+    try { await InventoryApi.assignBarcode(form.value); showToast('Barcode saved.'); modal.value = null; await load(pagination.value.current_page || 1); } catch (e) { errors.value = e?.response?.data?.errors || {}; showToast(e?.response?.data?.message || 'Barcode save failed.', 'error'); } finally { saving.value = false; }
 };
 const generateBarcode = async (row, overwrite = false) => {
     try { await InventoryApi.generateBarcode({ product_id: row.id, format: 'CODE128', overwrite }); showToast('Barcode generated.'); await load(pagination.value.current_page || 1); } catch (e) {
@@ -137,7 +140,7 @@ onMounted(async () => { await loadRefs(); await load(); });
             <section class="reports"><div class="tabs"><button v-for="r in ['product_barcodes','without_barcode','alternate_barcodes','generation_history','printing_history']" :key="r" :class="{active: activeReport === r}" @click="activeReport = r">{{ statusLabel(r) }}</button></div></section>
         </InventoryModuleScaffold>
 
-        <InventoryModal v-if="modal === 'assign'" title="Assign Barcode" :subtitle="selectedProduct.name" @close="modal = null">
+        <InventoryModal v-if="modal === 'assign'" title="Assign Barcode" :subtitle="selectedProduct.name" :errors="errors" @close="modal = null">
             <div class="form-grid"><select v-model="form.product_id"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select><input v-model="form.barcode" placeholder="Barcode value" /><select v-model="form.format"><option v-for="f in refs.formats" :key="f">{{ f }}</option></select><select v-model="form.barcode_type"><option v-for="t in refs.types" :key="t">{{ t }}</option></select><label><input v-model="form.is_primary" type="checkbox" /> Primary</label><label><input v-model="form.is_active" type="checkbox" /> Active</label></div>
             <BarcodePreview :title="selectedProduct.name" :subtitle="selectedProduct.sku" :value="form.barcode" :price="selectedProduct.selling_price" />
             <footer class="modal-actions"><button @click="modal = null">Cancel</button><button class="primary" :disabled="saving" @click="saveBarcode">Save</button></footer>

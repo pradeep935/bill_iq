@@ -22,6 +22,20 @@ class ProductMasterRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        foreach (['category_id', 'sub_category_id', 'brand_id', 'unit_id', 'hsn_master_id', 'hsn_id'] as $field) {
+            $value = $this->input($field);
+
+            if ($value === '' || $value === null || !ctype_digit((string) $value)) {
+                $this->merge([$field => null]);
+            }
+        }
+
+        foreach (['name', 'product_name', 'short_name', 'sku', 'primary_barcode', 'hsn_code', 'category', 'subcategory', 'brand', 'unit', 'variant'] as $field) {
+            if ($this->has($field) && is_string($this->input($field))) {
+                $this->merge([$field => trim($this->input($field))]);
+            }
+        }
+
         if (in_array($this->input('taxability'), ['exempt', 'non_gst', 'nil_rated'], true)) {
             $this->merge([
                 'gst_rate' => 0,
@@ -166,6 +180,69 @@ class ProductMasterRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'name.required' => 'Please enter the product name.',
+            'product_type.required' => 'Please select product type: Goods or Service.',
+            'product_type.in' => 'Product type must be Goods or Service.',
+            'item_type.required' => 'Please select whether this is a stock item or non-stock item.',
+            'unit.required' => 'Please select the unit used for billing and stock.',
+            'sku.required' => 'Please enter a unique SKU/item code.',
+            'sku.unique' => 'This SKU already exists in this business. Please use a different SKU.',
+            'category_id.integer' => 'Please select a valid category from the list.',
+            'category_id.exists' => 'Selected category was not found or is inactive.',
+            'sub_category_id.integer' => 'Please select a valid sub category from the list.',
+            'sub_category_id.exists' => 'Selected sub category was not found or is inactive.',
+            'brand_id.integer' => 'Please select a valid brand from the list.',
+            'brand_id.exists' => 'Selected brand was not found or is inactive.',
+            'hsn_code.required' => 'Please enter or select HSN/SAC code for taxable products.',
+            'hsn_master_id.exists' => 'Selected HSN/SAC master was not found.',
+            'taxability.required' => 'Please select taxability.',
+            'gst_rate.required' => 'Please select GST rate for taxable products.',
+            'gst_rate.numeric' => 'GST rate must be a valid number.',
+            'gst_rate.max' => 'GST rate cannot be more than 100%.',
+            'selling_price.required' => 'Please enter the selling price.',
+            'selling_price.numeric' => 'Selling price must be a valid number.',
+            'selling_price.min' => 'Selling price cannot be negative.',
+            '*.numeric' => ':attribute must be a valid number.',
+            '*.min' => ':attribute cannot be negative.',
+            'tracking_type.required' => 'Please select inventory tracking method.',
+            'tracking_type.in' => 'Please select a valid inventory tracking method.',
+            'status.required' => 'Please select product status.',
+            'status.in' => 'Please select a valid product status.',
+            'barcodes.*.barcode.distinct' => 'Duplicate barcodes are not allowed.',
+        ];
+    }
+
+    public function attributes(): array
+    {
+        return [
+            'name' => 'product name',
+            'product_type' => 'product type',
+            'item_type' => 'item type',
+            'category_id' => 'category',
+            'sub_category_id' => 'sub category',
+            'brand_id' => 'brand',
+            'unit' => 'unit',
+            'sku' => 'SKU',
+            'primary_barcode' => 'primary barcode',
+            'hsn_code' => 'HSN/SAC code',
+            'gst_rate' => 'GST rate',
+            'cess_rate' => 'cess rate',
+            'cost_price' => 'cost price',
+            'selling_price' => 'selling price',
+            'mrp' => 'MRP',
+            'wholesale_price' => 'wholesale price',
+            'dealer_price' => 'dealer price',
+            'online_price' => 'online price',
+            'minimum_stock' => 'minimum stock',
+            'reorder_stock' => 'reorder stock',
+            'maximum_stock' => 'maximum stock',
+            'tracking_type' => 'tracking method',
+        ];
+    }
+
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
@@ -202,6 +279,24 @@ class ProductMasterRequest extends FormRequest
                     (float) $item['selling_price'] > (float) $item['mrp']
                 ) {
                     $validator->errors()->add("variant_items.$index.selling_price", 'Variant selling price cannot be greater than MRP.');
+                }
+            }
+
+            if ($this->input('product_type') !== 'service') {
+                $minimumStock = (float) ($this->input('minimum_stock') ?? 0);
+                $reorderStock = (float) ($this->input('reorder_stock') ?? 0);
+                $maximumStock = (float) ($this->input('maximum_stock') ?? 0);
+
+                if ($reorderStock > 0 && $minimumStock > 0 && $reorderStock < $minimumStock) {
+                    $validator->errors()->add('reorder_stock', 'Reorder stock should be equal to or greater than minimum stock.');
+                }
+
+                if ($maximumStock > 0 && $minimumStock > 0 && $maximumStock < $minimumStock) {
+                    $validator->errors()->add('maximum_stock', 'Maximum stock should be equal to or greater than minimum stock.');
+                }
+
+                if ($maximumStock > 0 && $reorderStock > 0 && $maximumStock < $reorderStock) {
+                    $validator->errors()->add('maximum_stock', 'Maximum stock should be equal to or greater than reorder stock.');
                 }
             }
 

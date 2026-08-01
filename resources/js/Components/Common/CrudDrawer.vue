@@ -27,6 +27,10 @@
           </nav>
 
           <main class="crud-drawer-content">
+            <div v-if="errorList.length" class="crud-error-summary">
+              <strong>Please check these fields</strong>
+              <span v-for="(error, index) in errorList" :key="index">{{ error }}</span>
+            </div>
             <slot></slot>
           </main>
 
@@ -43,7 +47,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, watch } from 'vue';
+import { computed, onBeforeUnmount, watch } from 'vue';
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -53,6 +57,7 @@ const props = defineProps({
   saveLabel: { type: String, default: 'Save' },
   processing: { type: Boolean, default: false },
   showFooter: { type: Boolean, default: true },
+  errors: { type: Object, default: () => ({}) },
 });
 
 defineEmits(['close', 'save']);
@@ -67,6 +72,12 @@ watch(
 onBeforeUnmount(() => {
   document.body.classList.remove('product-drawer-open');
 });
+
+const errorList = computed(() =>
+  Object.values(props.errors || {})
+    .flatMap((messages) => Array.isArray(messages) ? messages : [messages])
+    .filter(Boolean)
+);
 </script>
 
 <style scoped>
@@ -181,6 +192,23 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   padding: 22px 28px 30px;
+}
+
+.crud-error-summary {
+  background: #fff3f4;
+  border: 1px solid #ffd4d8;
+  border-radius: 9px;
+  color: #96333a;
+  display: grid;
+  font-size: 11px;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+}
+
+.crud-error-summary strong {
+  color: #7d2730;
+  font-size: 12px;
 }
 
 .crud-drawer-tabs {

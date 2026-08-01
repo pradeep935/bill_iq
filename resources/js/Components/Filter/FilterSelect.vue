@@ -6,6 +6,9 @@ const {name, type='text', modelValue, cls='', req=false, label='', placeholder='
 
 const model = defineModel()
 
+const optionValue = (opt = {}) => opt?.[opt_id] ?? opt?.value ?? opt?.id ?? opt?.code ?? opt?.name ?? opt?.label ?? '';
+const optionLabel = (opt = {}) => opt?.[opt_name] ?? opt?.label ?? opt?.name ?? opt?.title ?? opt?.code ?? opt?.value ?? opt?.id ?? '';
+
 const format = (date) => {
   const day = date.getDate();
   const month = date.getMonth() + 1;
@@ -21,7 +24,7 @@ const format = (date) => {
         <div class="filter-group-label">{{label}}</div>
         <select class="form-select form-select-sm" v-model="model" :placeholder="placeholder" >
             <option value="">{{ select_name }}</option>
-            <option v-for="opt in options" :value="opt[opt_id]">{{ opt[opt_name] }}</option>
+            <option v-for="opt in options" :key="optionValue(opt)" :value="optionValue(opt)">{{ optionLabel(opt) }}</option>
         </select>
     </div>
 </template>

@@ -7,7 +7,7 @@
 
     <textarea
       v-if="as === 'textarea'"
-      class="drawer-control"
+      :class="['drawer-control', { 'is-invalid': error }]"
       :value="modelValue"
       :rows="rows"
       :placeholder="placeholder"
@@ -17,7 +17,7 @@
 
     <select
       v-else-if="as === 'select'"
-      class="drawer-control"
+      :class="['drawer-control', { 'is-invalid': error }]"
       :value="modelValue"
       :disabled="disabled"
       @change="$emit('update:modelValue', $event.target.value)"
@@ -27,7 +27,7 @@
 
     <input
       v-else
-      class="drawer-control"
+      :class="['drawer-control', { 'is-invalid': error }]"
       :value="modelValue"
       :type="type"
       :min="min"
@@ -38,6 +38,7 @@
       @input="$emit('update:modelValue', castValue($event.target.value))"
     />
 
+    <small v-if="error" class="drawer-field-error">{{ error }}</small>
     <small v-if="hint" class="drawer-field-hint">{{ hint }}</small>
   </label>
 </template>
@@ -50,6 +51,7 @@ const props = defineProps({
   type: { type: String, default: 'text' },
   placeholder: { type: String, default: '' },
   hint: { type: String, default: '' },
+  error: { type: String, default: '' },
   required: { type: Boolean, default: false },
   number: { type: Boolean, default: false },
   span: { type: Number, default: 1 },
@@ -110,6 +112,21 @@ const castValue = (value) => (props.number ? Number(value) : value);
 .drawer-control:focus {
   border-color: #2457d6;
   box-shadow: 0 0 0 3px rgba(36, 87, 214, .1);
+}
+
+.drawer-control.is-invalid {
+  background: #fffafa;
+  border-color: #dc2626;
+  color: #7f1d1d;
+}
+
+.drawer-field-error {
+  color: #dc2626;
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+  margin-top: 6px;
 }
 
 .drawer-control:disabled {

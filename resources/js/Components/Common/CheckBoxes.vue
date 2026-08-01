@@ -2,6 +2,9 @@
 const { label, error, options, opt_id='value', opt_name='label', cls='' } = defineProps(['label','error','options','opt_id','opt_name','cls'])
 const model = defineModel() 
 
+const optionValue = (opt = {}) => opt?.[opt_id] ?? opt?.value ?? opt?.id ?? opt?.code ?? opt?.name ?? opt?.label ?? '';
+const optionLabel = (opt = {}) => opt?.[opt_name] ?? opt?.label ?? opt?.name ?? opt?.title ?? opt?.code ?? opt?.value ?? opt?.id ?? '';
+
 function addItem(item) {
     var idx = model.value.indexOf(item);
     if (idx == -1) {
@@ -16,8 +19,8 @@ function addItem(item) {
 <template>
     <div :class="`form-group ${cls}`">
         <label>{{label}}</label>
-        <div v-for="opt in options">
-            <input type="checkbox" @click="addItem(opt[opt_id])" :checked="model.indexOf(opt[opt_id]) > -1" /> {{ opt[opt_name] }}
+        <div v-for="opt in options" :key="optionValue(opt)">
+            <input type="checkbox" @click="addItem(optionValue(opt))" :checked="model.indexOf(optionValue(opt)) > -1" /> {{ optionLabel(opt) }}
         </div>
     </div>
 </template>

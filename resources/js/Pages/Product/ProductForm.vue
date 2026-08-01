@@ -50,6 +50,9 @@ const initialForm = () => ({
     product_type: 'goods',
     item_type: 'stock',
     short_name: '',
+    category_id: '',
+    sub_category_id: '',
+    unit_id: '',
     category: '',
     subcategory: '',
     brand_id: '',
@@ -224,7 +227,7 @@ const displayNameWithBrand = computed(() => {
 
 const categoryLabel = computed(() => {
     const selectedCategory = categoryOptions.value.find((category) => {
-        return String(category.value ?? category.id ?? category.name) === String(form.category);
+        return String(category.value ?? category.id ?? category.name) === String(form.category_id || form.category);
     });
 
     return selectedCategory?.label || selectedCategory?.name || form.category || '';
@@ -273,7 +276,28 @@ const suggestedDescription = computed(() => {
 
 const canSmartFill = computed(() => Boolean(normalizedProductName.value));
 
-const optionText = (option = {}) => String(option.label || option.name || option.value || '').trim();
+const normalizeReferenceOptions = (options = [], labelKeys = ['label', 'name', 'code']) => {
+    return (options || [])
+        .map((option) => {
+            const label = labelKeys
+                .map((key) => option?.[key])
+                .find((value) => String(value ?? '').trim());
+            const value = option?.value ?? option?.id ?? label;
+
+            return {
+                ...option,
+                value: value === undefined || value === null ? '' : String(value),
+                label: String(label ?? value ?? '').trim(),
+            };
+        })
+        .filter((option) => option.value !== '' && option.label !== '');
+};
+
+const optionText = (option = {}) => String(option.label || option.name || option.code || option.value || '').trim();
+
+const selectedOption = (options = [], value = '') => {
+    return options.find((option) => String(option.value) === String(value)) || null;
+};
 
 const findMatchingOption = (options = [], source = '') => {
     const sourceText = String(source || '').toLowerCase();
@@ -372,11 +396,12 @@ const fillSmartFields = (force = false) => {
             form.brand = matchingBrand.name || matchingBrand.label || '';
         }
     }
-    if (force || !form.category) {
+    if (force || !form.category_id) {
         const matchingCategory = findMatchingOption(categoryOptions.value, normalizedProductName.value);
 
         if (matchingCategory) {
-            form.category = String(matchingCategory.value ?? matchingCategory.id ?? matchingCategory.label);
+            form.category_id = /^\d+$/.test(String(matchingCategory.value || '')) ? String(matchingCategory.value) : '';
+            form.category = matchingCategory.label || matchingCategory.name || '';
         }
     }
     if ((force || !form.variant) && suggestedVariant.value) form.variant = suggestedVariant.value;
@@ -420,11 +445,11 @@ const unitOptions = [
     { value: 'HRS', label: 'Hours' },
 ];
 
-const categoryOptions = computed(() => props.references?.categories || []);
-const subCategoryOptions = computed(() => props.references?.sub_categories || []);
+const categoryOptions = computed(() => normalizeReferenceOptions(props.references?.categories || [], ['name', 'label', 'code']));
+const subCategoryOptions = computed(() => normalizeReferenceOptions(props.references?.sub_categories || [], ['name', 'label', 'code']));
 const hsnOptions = computed(() => props.references?.hsn_codes || []);
 const brandOptions = computed(() => {
-    const options = [...(props.references?.brands || [])];
+    const options = normalizeReferenceOptions(props.references?.brands || [], ['name', 'label', 'code']);
 
     if (form.brand && !options.some((brand) => brand.name === form.brand || brand.label === form.brand)) {
         options.push({
@@ -489,9 +514,12 @@ const fillForm = (product = {}) => {
         product_type: product?.product_type || 'goods',
         item_type: product?.item_type || 'stock',
         short_name: product?.short_name || '',
+        category_id: product?.category_id || '',
+        sub_category_id: product?.sub_category_id || '',
+        unit_id: product?.unit_id || '',
         category: product?.category || '',
         subcategory: product?.subcategory || '',
-        brand_id: product?.brand_id || (product?.brand ? `legacy:${product.brand}` : ''),
+        brand_id: product?.brand_id ? String(product.brand_id) : (product?.brand ? `legacy:${product.brand}` : ''),
         brand: product?.brand || '',
         variant: product?.variant || '',
         unit: product?.unit || 'PCS',
@@ -650,13 +678,40 @@ watch(
 );
 
 watch(
-    () => form.category,
+    () => form.category_id,
     () => {
         if (fillingForm.value) {
             return;
         }
 
+        form.sub_category_id = '';
         form.subcategory = '';
+    }
+);
+
+watch(
+    () => form.category_id,
+    (categoryId) => {
+        const category = selectedOption(categoryOptions.value, categoryId);
+
+        if (category) {
+            form.category = category.name || category.label;
+        } else if (!categoryId) {
+            form.category = '';
+        }
+    }
+);
+
+watch(
+    () => form.sub_category_id,
+    (subCategoryId) => {
+        const subCategory = selectedOption(subCategoryOptions.value, subCategoryId);
+
+        if (subCategory) {
+            form.subcategory = subCategory.name || subCategory.label;
+        } else if (!subCategoryId) {
+            form.subcategory = '';
+        }
     }
 );
 
@@ -965,6 +1020,27 @@ const validateBeforeSave = () => {
         });
     }
 
+    if (form.product_type === 'goods') {
+        const minimumStock = Number(form.minimum_stock || 0);
+        const reorderStock = Number(form.reorder_stock || 0);
+        const maximumStock = Number(form.maximum_stock || 0);
+
+        if (reorderStock > 0 && minimumStock > 0 && reorderStock < minimumStock) {
+            errors.reorder_stock = 'Reorder stock should be equal to or greater than minimum stock.';
+            firstErrorTab ||= 'inventory';
+        }
+
+        if (maximumStock > 0 && minimumStock > 0 && maximumStock < minimumStock) {
+            errors.maximum_stock = 'Maximum stock should be equal to or greater than minimum stock.';
+            firstErrorTab ||= 'inventory';
+        }
+
+        if (maximumStock > 0 && reorderStock > 0 && maximumStock < reorderStock) {
+            errors.maximum_stock = 'Maximum stock should be equal to or greater than reorder stock.';
+            firstErrorTab ||= 'inventory';
+        }
+    }
+
     const filledBarcodes = barcodes.value
         .map((barcode) => barcode.barcode.trim())
         .filter(Boolean);
@@ -1019,17 +1095,15 @@ const saveProduct = () => {
         { price_type: 'Dealer', price: form.dealer_price || 0 },
         { price_type: 'Online', price: form.online_price || 0 },
     ];
-    const selectedCategory = categoryOptions.value.find((category) => String(category.value ?? category.id ?? '') === String(form.category));
-    const selectedSubCategory = subCategoryOptions.value.find((category) => String(category.value ?? category.id ?? '') === String(form.subcategory));
-
     emit('save', {
         ...form,
 
-        category_id: /^\d+$/.test(String(form.category || '')) ? form.category : null,
-        sub_category_id: /^\d+$/.test(String(form.subcategory || '')) ? form.subcategory : null,
-        category: selectedCategory?.label || selectedCategory?.name || form.category || null,
-        subcategory: selectedSubCategory?.label || selectedSubCategory?.name || form.subcategory || null,
+        category_id: /^\d+$/.test(String(form.category_id || '')) ? form.category_id : null,
+        sub_category_id: /^\d+$/.test(String(form.sub_category_id || '')) ? form.sub_category_id : null,
         brand_id: /^\d+$/.test(String(form.brand_id || '')) ? form.brand_id : null,
+        category: form.category || selectedOption(categoryOptions.value, form.category_id)?.label || null,
+        subcategory: form.subcategory || selectedOption(subCategoryOptions.value, form.sub_category_id)?.label || null,
+        brand: form.brand || selectedOption(brandOptions.value, form.brand_id)?.label || null,
         cost_price: form.cost_price || 0,
         selling_price: form.selling_price || 0,
         mrp: form.mrp || null,
@@ -1252,6 +1326,7 @@ const saveProduct = () => {
                                         name="name"
                                         label="Product Name"
                                         placeholder="Example: Samsung Galaxy S25"
+                                        hint="Bill, purchase, stock report aur search mein yahi main product name dikhega."
                                         cls="product-field field-span-2"
                                         :req="true"
                                     />
@@ -1261,6 +1336,7 @@ const saveProduct = () => {
                                         name="short_name"
                                         label="Short Name"
                                         placeholder="Invoice display name"
+                                        hint="Invoice ya compact list mein short display name ke liye."
                                         cls="product-field"
                                     />
 
@@ -1299,6 +1375,7 @@ const saveProduct = () => {
                                         name="sku"
                                         label="SKU"
                                         placeholder="Example: SG25-256-BLK"
+                                        hint="Unique item code. Same business mein duplicate SKU save nahi hoga."
                                         cls="product-field"
                                         :req="true"
                                     />
@@ -1311,21 +1388,23 @@ const saveProduct = () => {
                                     </span>
 
                                     <FormSelect
-                                        v-model="form.category"
-                                        name="category"
+                                        v-model="form.category_id"
+                                        name="category_id"
                                         label="Category"
                                         cls="product-field"
                                         :options="categoryOptions"
                                         select_name="Select category"
+                                        hint="Product grouping ke liye, jaise Mobile, Grocery, Service."
                                     />
 
                                     <FormSelect
-                                        v-model="form.subcategory"
-                                        name="subcategory"
+                                        v-model="form.sub_category_id"
+                                        name="sub_category_id"
                                         label="Sub Category"
                                         cls="product-field"
                                         :options="subCategoryOptions"
                                         select_name="Select sub category"
+                                        hint="Category ke andar detailed group, jaise Charger, Cable, Spare Part."
                                     />
 
                                     <FormSelect
@@ -1335,6 +1414,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="brandOptions"
                                         select_name="Select brand"
+                                        hint="Manufacturer ya brand name. Select karne par brand text auto save hoga."
                                     />
 
                                     <FormInput
@@ -1342,6 +1422,7 @@ const saveProduct = () => {
                                         name="variant"
                                         label="Variant"
                                         placeholder="Example: 256GB / Black"
+                                        hint="Size, color, storage ya pack details ke liye."
                                         cls="product-field field-span-2"
                                     />
 
@@ -1350,6 +1431,7 @@ const saveProduct = () => {
                                         name="description"
                                         label="Description"
                                         placeholder="Internal product description"
+                                        hint="Internal notes/search help ke liye. Invoice text alag GST tab mein hai."
                                         cls="product-field field-span-2"
                                         :rows="3"
                                     />
@@ -1858,27 +1940,51 @@ const saveProduct = () => {
                                         name="minimum_stock"
                                         type="number"
                                         label="Minimum Stock"
-                                        placeholder="0"
+                                        placeholder="Example: 5"
+                                        hint="Is quantity se neeche stock aane par low-stock alert ya report warning milegi."
                                         cls="product-field"
                                     />
+
+                                    <div
+                                        v-if="fieldError('minimum_stock')"
+                                        class="field-error"
+                                    >
+                                        {{ fieldError('minimum_stock') }}
+                                    </div>
 
                                     <FormInput
                                         v-model="form.reorder_stock"
                                         name="reorder_stock"
                                         type="number"
                                         label="Reorder Stock"
-                                        placeholder="0"
+                                        placeholder="Example: 20"
+                                        hint="Minimum stock hit hone par usually itni quantity purchase/order karni hai."
                                         cls="product-field"
                                     />
+
+                                    <div
+                                        v-if="fieldError('reorder_stock')"
+                                        class="field-error"
+                                    >
+                                        {{ fieldError('reorder_stock') }}
+                                    </div>
 
                                     <FormInput
                                         v-model="form.maximum_stock"
                                         name="maximum_stock"
                                         type="number"
                                         label="Maximum Stock"
-                                        placeholder="0"
+                                        placeholder="Example: 100"
+                                        hint="Recommended upper stock limit. Overstock check/reporting ke kaam aata hai."
                                         cls="product-field"
                                     />
+
+                                    <div
+                                        v-if="fieldError('maximum_stock')"
+                                        class="field-error"
+                                    >
+                                        {{ fieldError('maximum_stock') }}
+                                    </div>
 
                                     <FormSelect
                                         v-model="form.tracking_type"
@@ -1887,6 +1993,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="trackingOptions"
                                         select_name="Select tracking"
+                                        hint="Batch, expiry, serial ya IMEI wise stock trace karna ho toh yahan select karein."
                                         :req="true"
                                     />
 
@@ -2669,6 +2776,14 @@ const saveProduct = () => {
     color: #dc2626;
     font-size: 11px !important;
     font-weight: 700;
+}
+
+:deep(.product-field .field-hint) {
+    display: block;
+    margin-top: 6px;
+    color: #6b778c;
+    font-size: 10.5px;
+    line-height: 1.45;
 }
 
 .field-help {

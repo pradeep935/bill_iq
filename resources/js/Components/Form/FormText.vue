@@ -12,7 +12,8 @@ const {
     validate = '',
     placeholder = '',
     disabled = false,
-    rows = 3
+    rows = 3,
+    hint = ''
 } = defineProps([
     'name',
     'modelValue',
@@ -22,7 +23,8 @@ const {
     'validate',
     'placeholder',
     'disabled',
-    'rows'
+    'rows',
+    'hint'
 ]);
 
 const processedReq = computed(() => {
@@ -64,6 +66,7 @@ const { value, errorMessage } = useField(() => name, processedReq, {
         >
                 
         </textarea>
+        <span v-if="hint" class="field-hint">{{ hint }}</span>
         <span v-if="errorMessage" class="field-error">{{ errorMessage }}</span>                 
     </div>
 </template>

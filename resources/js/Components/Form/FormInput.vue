@@ -5,7 +5,7 @@ import * as yup from 'yup';
 import VueDatePicker from '@vuepic/vue-datepicker';
 import '@vuepic/vue-datepicker/dist/main.css'
 
-const {name, type='text', modelValue, cls='', req=false, label='', validate = '', placeholder='', disabled=false, left_box_text=null, right_box_text=null, box_type='text'} = defineProps(['name','type','modelValue','cls','req','label','validate','placeholder', 'disabled', 'left_box_text', 'right_box_text', 'box_type']); 
+const {name, type='text', modelValue, cls='', req=false, label='', validate = '', placeholder='', disabled=false, left_box_text=null, right_box_text=null, box_type='text', hint=''} = defineProps(['name','type','modelValue','cls','req','label','validate','placeholder', 'disabled', 'left_box_text', 'right_box_text', 'box_type', 'hint']);
 
 const format = (date) => {
   const day = date.getDate();
@@ -69,6 +69,7 @@ const { value, errorMessage } = useField(() => name, processedReq, {
     
             <VueDatePicker v-model="value" :class="{ 'is-invalid': errorMessage }" :format="format" :enable-time-picker="false" auto-apply :placeholder="placeholder" :hide-input-icon="true" v-if="type == 'date'" :teleport="true" :disabled="disabled"></VueDatePicker>
         </div>
+        <span v-if="hint" class="field-hint">{{ hint }}</span>
         <span v-if="errorMessage" class="field-error">{{ errorMessage }}</span>
     </div>
 </template>

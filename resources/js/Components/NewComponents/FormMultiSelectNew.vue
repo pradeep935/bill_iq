@@ -25,6 +25,8 @@
     const open = ref(false);
     const search = ref('')
     const temp_select = ref('');
+    const optionValue = (opt = {}) => opt?.[opt_id] ?? opt?.value ?? opt?.id ?? opt?.code ?? opt?.name ?? opt?.label ?? '';
+    const optionLabel = (opt = {}) => opt?.[opt_name] ?? opt?.label ?? opt?.name ?? opt?.title ?? opt?.code ?? opt?.value ?? opt?.id ?? '';
 
     const {name, type='text', modelValue, cls='', cls2='', cls3='px-2 me-2', color='', req=false, label='', placeholder='', options=[], opt_id='value', opt_name='label', select_name='Select', disabled=false, field_name=""} = defineProps(['name','type','modelValue','cls','cls2','cls3','color','req','label','placeholder','options','opt_id','opt_name','select_name', 'disabled','field_name']); 
 
@@ -50,7 +52,7 @@
     }
 
     function removeSelectedOption(temp_obj){
-        let idx = model.value.indexOf(temp_obj[opt_id]);
+        let idx = model.value.indexOf(optionValue(temp_obj));
         model.value.splice(idx, 1);
     };
 
@@ -71,7 +73,7 @@
 
 
     const selectedOption = computed(() => {
-        return options.find(o => o[opt_id] == temp_select.value);
+        return options.find(o => optionValue(o) == temp_select.value);
     });
 
     function toggleDropdown(){
@@ -80,15 +82,15 @@
     }
 
     function selectOption(opt){
-        temp_select.value = opt[opt_id];
+        temp_select.value = optionValue(opt);
         newMultiSelectDisplay();
         // open.value = false;
     }
 
     const filteredOptions = computed(() => {
         return options.filter(opt => {
-            const name = opt[opt_name].toLowerCase()
-            return (!model.value.includes(opt[opt_id]) && name.includes(search.value.toLowerCase()))
+            const name = optionLabel(opt).toLowerCase()
+            return (!model.value.includes(optionValue(opt)) && name.includes(search.value.toLowerCase()))
         })
     })
 </script>
@@ -108,14 +110,14 @@
             </div>
 
             <div :class="cls2" class="selected-chip-wrap d-flex flex-wrap gap-2 mb-2" v-show="model.length > 0" >
-                <div class="multi-chip" :class="cls3" :style="color ? 'background-color: ' + color : ''" v-for="opt in options"  v-show="model.includes(opt[opt_id])" >
+                <div class="multi-chip" :class="cls3" :style="color ? 'background-color: ' + color : ''" v-for="opt in options" :key="optionValue(opt)" v-show="model.includes(optionValue(opt))" >
                     <div class="avatar-box">
                         <img v-if="opt.avatar" :src="s3_url_link + opt.avatar" class="avatar-img" />
-                        <span class="avatar-fallback" :style="{ background: getColor(opt[opt_name]) }">
-                            {{ getInitials(opt[opt_name]) }}
+                        <span class="avatar-fallback" :style="{ background: getColor(optionLabel(opt)) }">
+                            {{ getInitials(optionLabel(opt)) }}
                         </span>
                     </div>
-                    <span class="chip-label">{{ opt[opt_name] }}</span>
+                    <span class="chip-label">{{ optionLabel(opt) }}</span>
                     <button type="button" class="chip-close" @click.stop="removeSelectedOption(opt)">
                         <i class="bi bi-x-lg"></i>
                     </button>
@@ -126,7 +128,7 @@
                 <span v-if="!selectedOption">{{ select_name }}</span>
                 <div v-else class="selected-item">
                     <img :src="s3_url_link + selectedOption.avatar" />
-                    <span>{{ selectedOption[opt_name] }}</span>
+                    <span>{{ optionLabel(selectedOption) }}</span>
                 </div>
                 <i class="bi bi-chevron-down"></i>
             </div>
@@ -136,14 +138,14 @@
                     <i class="bi bi-search"></i>
                     <input type="text" v-model="search" placeholder="Search..." @click.stop />
                 </div>
-                <div class="dropdown-item" v-for="opt in filteredOptions"  :key="opt[opt_id]" v-show="!model.includes(opt[opt_id])" @click.stop="selectOption(opt)" >
+                <div class="dropdown-item" v-for="opt in filteredOptions" :key="optionValue(opt)" v-show="!model.includes(optionValue(opt))" @click.stop="selectOption(opt)" >
                     <div class="avatar-box">
                         <img v-if="opt.avatar" :src="s3_url_link + opt.avatar" class="avatar-img" />
-                        <span v-else class="avatar-fallback" :style="{ background: getColor(opt[opt_name]) }">
-                            {{ getInitials(opt[opt_name]) }}
+                        <span v-else class="avatar-fallback" :style="{ background: getColor(optionLabel(opt)) }">
+                            {{ getInitials(optionLabel(opt)) }}
                         </span>
                     </div>
-                    <span class="name">{{ opt[opt_name] }}</span>
+                    <span class="name">{{ optionLabel(opt) }}</span>
                 </div>
             </div>
         </div>

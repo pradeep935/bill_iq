@@ -105,6 +105,17 @@ const showMessage = (title, message, type = 'info') => {
     }, type === 'error' ? 5200 : 3200);
 };
 
+const firstResponseError = (error, fallback) => {
+    const errors = error.response?.data?.errors || {};
+    const first = Object.values(errors)?.[0];
+
+    if (Array.isArray(first)) {
+        return first[0] || fallback;
+    }
+
+    return first || error.response?.data?.message || fallback;
+};
+
 const requestConfirmation = ({ title, message, confirmText = 'Confirm', danger = false }) => {
     return new Promise((resolve) => {
         confirmModal.value = {
@@ -304,13 +315,9 @@ const saveProduct = async (form) => {
             const errors = error.response.data.errors || {};
             serverErrors.value = errors;
 
-            const firstError = Object.values(errors)?.[0]?.[0];
-
             showMessage(
                 'Please Review the Form',
-                firstError ||
-                error.response.data.message ||
-                'Please check the highlighted fields.',
+                firstResponseError(error, 'Please check the highlighted fields.'),
                 'error'
             );
 
@@ -318,13 +325,7 @@ const saveProduct = async (form) => {
         }
 
         console.error(error);
-        const message =
-            error.response?.data?.message ||
-            (error.response?.status ? `Server returned ${error.response.status}.` : '') ||
-            error.message ||
-            'Something went wrong while saving the product.';
-
-        showMessage('Unable to Save Product', message, 'error');
+        showMessage('Unable to Save Product', firstResponseError(error, 'Something went wrong while saving the product.'), 'error');
     } finally {
         saving.value = false;
     }

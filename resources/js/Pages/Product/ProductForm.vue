@@ -214,6 +214,155 @@ const marginPercent = computed(() => {
     return selling > 0 ? (profitAmount.value / selling) * 100 : 0;
 });
 
+const parsePrice = (value) => {
+    const normalized = String(value).trim();
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const numericCostPrice = computed(() => parsePrice(form.cost_price));
+const numericSellingPrice = computed(() => parsePrice(form.selling_price));
+const numericMrp = computed(() => parsePrice(form.mrp));
+const numericWholesalePrice = computed(() => parsePrice(form.wholesale_price));
+const numericDealerPrice = computed(() => parsePrice(form.dealer_price));
+const numericOnlinePrice = computed(() => parsePrice(form.online_price));
+
+const pricingErrors = computed(() => {
+    const errors = {};
+
+    if (form.cost_price === '' || form.cost_price === null || form.cost_price === undefined) {
+        errors.cost_price = 'Cost price is required.';
+    }
+
+    if (form.selling_price === '' || form.selling_price === null || form.selling_price === undefined) {
+        errors.selling_price = 'Selling price is required.';
+    }
+
+    if (numericMrp.value > 0 && numericSellingPrice.value > numericMrp.value) {
+        errors.selling_price = 'Selling price cannot exceed MRP.';
+    }
+
+    if (numericWholesalePrice.value > 0 && numericWholesalePrice.value > numericSellingPrice.value) {
+        errors.wholesale_price = 'Wholesale price cannot exceed Selling Price.';
+    }
+
+    if (numericDealerPrice.value > 0 && numericDealerPrice.value > numericSellingPrice.value) {
+        errors.dealer_price = 'Dealer price cannot exceed Selling Price.';
+    }
+
+    if (numericMrp.value > 0 && numericOnlinePrice.value > numericMrp.value) {
+        errors.online_price = 'Online price cannot exceed MRP.';
+    }
+
+    return errors;
+});
+
+const pricingWarnings = computed(() => {
+    if (
+        numericSellingPrice.value > 0 &&
+        numericCostPrice.value > 0 &&
+        numericSellingPrice.value < numericCostPrice.value
+    ) {
+        return ['Selling price is below cost price.'];
+    }
+
+    return [];
+});
+
+const pricingStatus = computed(() => {
+    if (Object.keys(pricingErrors.value).length) {
+        return {
+            label: 'Validation Error',
+            description: 'Fix pricing fields highlighted below.',
+            tone: 'error',
+        };
+    }
+
+    if (pricingWarnings.value.length) {
+        return {
+            label: 'Warning',
+            description: pricingWarnings.value[0],
+            tone: 'warning',
+        };
+    }
+
+    if (form.cost_price !== '' || form.selling_price !== '') {
+        return {
+            label: 'Ready to Save',
+            description: 'Pricing values are valid and ready.',
+            tone: 'success',
+        };
+    }
+
+    return {
+        label: 'Ready to Save',
+        description: 'Enter cost and selling price to calculate profit.',
+        tone: 'neutral',
+    };
+});
+
+const formatMoney = (value) => {
+    const amount = Number(value);
+    return Number.isFinite(amount) ? amount.toFixed(2) : '0.00';
+};
+
+const fieldError = (field) => {
+    return (
+        clientErrors.value[field] ||
+        pricingErrors.value[field] ||
+        props.errors?.[field]?.[0] ||
+        ''
+    );
+};
+
+const allErrors = computed(() => {
+    return [
+        ...Object.values(clientErrors.value),
+        ...Object.values(pricingErrors.value),
+        ...Object.values(props.errors || {})
+            .map((value) => value?.[0])
+            .filter(Boolean),
+    ];
+});
+
+const formValidationErrors = computed(() => {
+    const errors = {};
+
+    const requiredChecks = [
+        ['name', 'Product name is required.', 'basic'],
+        ['product_type', 'Product type is required.', 'basic'],
+        ['item_type', 'Item type is required.', 'basic'],
+        ['unit', 'Unit is required.', 'basic'],
+        ['sku', 'SKU is required.', 'basic'],
+        ['cost_price', 'Cost price is required.', 'pricing'],
+        ['selling_price', 'Selling price is required.', 'pricing'],
+        ['status', 'Status is required.', 'advanced'],
+    ];
+
+    requiredChecks.forEach(([field, message]) => {
+        if (form[field] === '' || form[field] === null || form[field] === undefined) {
+            errors[field] = message;
+        }
+    });
+
+    if (isTaxable.value && !form.hsn_code) {
+        errors.hsn_code = `${hsnSacLabel.value} is required for taxable products.`;
+    }
+
+    if (isTaxable.value && form.gst_rate === '') {
+        errors.gst_rate = 'GST rate is required for taxable products.';
+    }
+
+    return {
+        ...errors,
+        ...pricingErrors.value,
+    };
+});
+
+const canSave = computed(() => {
+    return !props.processing && !Object.keys(formValidationErrors.value).length;
+});
+
 const displayNameWithBrand = computed(() => {
     const name = normalizedProductName.value;
     const brand = String(form.brand || '').trim();
@@ -753,23 +902,6 @@ const closeDrawer = () => {
     emit('update:modelValue', false);
 };
 
-const fieldError = (field) => {
-    return (
-        clientErrors.value[field] ||
-        props.errors?.[field]?.[0] ||
-        ''
-    );
-};
-
-const allErrors = computed(() => {
-    return [
-        ...Object.values(clientErrors.value),
-        ...Object.values(props.errors || {})
-            .map((value) => value?.[0])
-            .filter(Boolean),
-    ];
-});
-
 const setPrimaryBarcode = (index) => {
     barcodes.value = barcodes.value.map((barcode, barcodeIndex) => ({
         ...barcode,
@@ -985,6 +1117,7 @@ const validateBeforeSave = () => {
         ['item_type', 'Item type is required.', 'basic'],
         ['unit', 'Unit is required.', 'basic'],
         ['sku', 'SKU is required.', 'basic'],
+        ['cost_price', 'Cost price is required.', 'pricing'],
         ['selling_price', 'Selling price is required.', 'pricing'],
         ['status', 'Status is required.', 'advanced'],
     ];
@@ -1018,6 +1151,16 @@ const validateBeforeSave = () => {
                 firstErrorTab ||= 'pricing';
             }
         });
+    }
+
+    if (form.wholesale_price !== '' && Number(form.wholesale_price || 0) > Number(form.selling_price || 0)) {
+        errors.wholesale_price = 'Wholesale price cannot exceed Selling Price.';
+        firstErrorTab ||= 'pricing';
+    }
+
+    if (form.dealer_price !== '' && Number(form.dealer_price || 0) > Number(form.selling_price || 0)) {
+        errors.dealer_price = 'Dealer price cannot exceed Selling Price.';
+        firstErrorTab ||= 'pricing';
     }
 
     if (form.product_type === 'goods') {
@@ -1778,9 +1921,10 @@ const saveProduct = () => {
                                         name="cost_price"
                                         type="number"
                                         label="Cost Price"
-                                        placeholder="0.00"
+                                        placeholder="Enter Cost Price"
                                         cls="product-field"
                                         left_box_text="Rs."
+                                        :req="true"
                                     />
 
                                     <FormInput
@@ -1788,11 +1932,18 @@ const saveProduct = () => {
                                         name="selling_price"
                                         type="number"
                                         label="Selling Price"
-                                        placeholder="0.00"
+                                        placeholder="Enter Selling Price"
                                         cls="product-field"
                                         left_box_text="Rs."
                                         :req="true"
                                     />
+
+                                    <div
+                                        v-if="fieldError('cost_price')"
+                                        class="field-error"
+                                    >
+                                        {{ fieldError('cost_price') }}
+                                    </div>
 
                                     <div
                                         v-if="fieldError('selling_price')"
@@ -1806,7 +1957,7 @@ const saveProduct = () => {
                                         name="mrp"
                                         type="number"
                                         label="MRP"
-                                        placeholder="0.00"
+                                        placeholder="Enter MRP (Optional)"
                                         cls="product-field"
                                         left_box_text="Rs."
                                     />
@@ -1816,7 +1967,7 @@ const saveProduct = () => {
                                         name="wholesale_price"
                                         type="number"
                                         label="Wholesale Price"
-                                        placeholder="0.00"
+                                        placeholder="Enter Wholesale Price"
                                         cls="product-field"
                                         left_box_text="Rs."
                                     />
@@ -1833,7 +1984,7 @@ const saveProduct = () => {
                                         name="dealer_price"
                                         type="number"
                                         label="Dealer Price"
-                                        placeholder="0.00"
+                                        placeholder="Enter Dealer Price"
                                         cls="product-field"
                                         left_box_text="Rs."
                                     />
@@ -1850,7 +2001,7 @@ const saveProduct = () => {
                                         name="online_price"
                                         type="number"
                                         label="Online Price"
-                                        placeholder="0.00"
+                                        placeholder="Enter Online Price"
                                         cls="product-field"
                                         left_box_text="Rs."
                                     />
@@ -1861,43 +2012,63 @@ const saveProduct = () => {
                                     >
                                         {{ fieldError('online_price') }}
                                     </div>
+                                </div>
 
-                                    <div class="pricing-rule">
-                                        <div>
-                                            <strong>Profit Amount</strong>
+                                <div class="pricing-panel">
+                                    <div class="pricing-status-card" :class="pricingStatus.tone">
+                                        <span class="status-label">{{ pricingStatus.label }}</span>
+                                        <strong>{{ pricingStatus.description }}</strong>
+                                    </div>
 
-                                            <span>Rs. {{ profitAmount.toFixed(2) }}</span>
+                                    <div class="pricing-statistics">
+                                        <div class="pricing-card">
+                                            <span>Profit Amount</span>
+                                            <strong :class="{ 'positive': profitAmount >= 0, 'negative': profitAmount < 0 }">
+                                                Rs. {{ formatMoney(profitAmount) }}
+                                            </strong>
+                                        </div>
+
+                                        <div class="pricing-card">
+                                            <span>Profit %</span>
+                                            <strong :class="{ 'positive': profitPercent >= 0, 'negative': profitPercent < 0 }">
+                                                {{ formatMoney(profitPercent) }}%
+                                            </strong>
+                                        </div>
+
+                                        <div class="pricing-card">
+                                            <span>Margin %</span>
+                                            <strong :class="{ 'positive': marginPercent >= 0, 'negative': marginPercent < 0 }">
+                                                {{ formatMoney(marginPercent) }}%
+                                            </strong>
                                         </div>
                                     </div>
 
-                                    <div class="pricing-rule">
-                                        <div>
-                                            <strong>Profit %</strong>
+                                    <div class="pricing-summary-card">
+                                        <h4>Pricing Summary</h4>
 
-                                            <span>{{ profitPercent.toFixed(2) }}%</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="pricing-rule">
-                                        <div>
-                                            <strong>Margin %</strong>
-
-                                            <span>{{ marginPercent.toFixed(2) }}%</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="pricing-rule">
-                                        <div class="pricing-rule-icon">
-                                            !
+                                        <div class="pricing-summary-row">
+                                            <span>Cost Price</span>
+                                            <strong>Rs. {{ formatMoney(numericCostPrice) }}</strong>
                                         </div>
 
-                                        <div>
-                                            <strong>MRP validation</strong>
+                                        <div class="pricing-summary-row">
+                                            <span>Selling Price</span>
+                                            <strong>Rs. {{ formatMoney(numericSellingPrice) }}</strong>
+                                        </div>
 
-                                            <span>
-                                                Selling price cannot be higher
-                                                than MRP.
-                                            </span>
+                                        <div class="pricing-summary-row">
+                                            <span>Profit</span>
+                                            <strong>Rs. {{ formatMoney(profitAmount) }}</strong>
+                                        </div>
+
+                                        <div class="pricing-summary-row">
+                                            <span>Profit %</span>
+                                            <strong>{{ formatMoney(profitPercent) }}%</strong>
+                                        </div>
+
+                                        <div class="pricing-summary-row">
+                                            <span>Margin %</span>
+                                            <strong>{{ formatMoney(marginPercent) }}%</strong>
                                         </div>
                                     </div>
                                 </div>
@@ -2332,7 +2503,7 @@ const saveProduct = () => {
                                 <button
                                     class="btn product-save-button"
                                     type="button"
-                                    :disabled="processing"
+                                    :disabled="processing || !canSave"
                                     @click="saveProduct"
                                 >
                                     <svg
@@ -2807,6 +2978,125 @@ const saveProduct = () => {
     color: #d83946;
     font-size: 11px;
     font-weight: 700;
+}
+
+.pricing-panel {
+    margin-top: 22px;
+    display: grid;
+    gap: 18px;
+}
+
+.pricing-status-card {
+    padding: 16px 18px;
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+    border: 1px solid transparent;
+}
+
+.pricing-status-card.success {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #166534;
+}
+
+.pricing-status-card.warning {
+    background: #fef3c7;
+    border-color: #fde68a;
+    color: #92400e;
+}
+
+.pricing-status-card.error {
+    background: #fee2e2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+
+.pricing-status-card.neutral {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+}
+
+.status-label {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.pricing-statistics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.pricing-card {
+    padding: 16px;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 6px 24px rgba(15, 23, 42, 0.04);
+}
+
+.pricing-card span {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.pricing-card strong {
+    display: block;
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.pricing-card strong.positive {
+    color: #166534;
+}
+
+.pricing-card strong.negative {
+    color: #b91c1c;
+}
+
+.pricing-summary-card {
+    padding: 20px;
+    border-radius: 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    display: grid;
+    gap: 12px;
+}
+
+.pricing-summary-card h4 {
+    margin: 0;
+    font-size: 14px;
+    color: #0f172a;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.pricing-summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: #475569;
+    font-size: 13px;
+}
+
+.pricing-summary-row strong {
+    color: #0f172a;
+    font-weight: 700;
+}
+
+@media (max-width: 900px) {
+    .pricing-statistics {
+        grid-template-columns: 1fr;
+    }
 }
 
 .repeat-list {

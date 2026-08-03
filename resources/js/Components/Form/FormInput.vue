@@ -7,6 +7,44 @@ import '@vuepic/vue-datepicker/dist/main.css'
 
 const {name, type='text', modelValue, cls='', req=false, label='', validate = '', placeholder='', disabled=false, left_box_text=null, right_box_text=null, box_type='text', hint=''} = defineProps(['name','type','modelValue','cls','req','label','validate','placeholder', 'disabled', 'left_box_text', 'right_box_text', 'box_type', 'hint']);
 
+const purposeHint = computed(() => {
+    if (hint) {
+        return hint;
+    }
+
+    const text = `${label || name || placeholder}`.toLowerCase();
+
+    if (!text.trim()) {
+        return '';
+    }
+
+    if (type === 'date' || text.includes('date')) {
+        return 'Is date se record ledger, report aur workflow timeline mein place hota hai.';
+    }
+
+    if (type === 'number' || ['amount', 'price', 'rate', 'cost', 'qty', 'quantity', 'stock', 'discount', 'tax', 'gst'].some((word) => text.includes(word))) {
+        return 'Ye number calculation, totals, reports aur validation ke liye use hota hai.';
+    }
+
+    if (text.includes('sku') || text.includes('code')) {
+        return 'Ye unique code search, import/export aur duplicate checking ke liye use hota hai.';
+    }
+
+    if (text.includes('reference')) {
+        return 'Ye external bill, payment, bank ya document reference ko trace karne ke liye use hota hai.';
+    }
+
+    if (text.includes('name')) {
+        return 'Ye naam list, search, print aur reports mein record ko identify karne ke liye use hota hai.';
+    }
+
+    if (text.includes('remark') || text.includes('note') || text.includes('description')) {
+        return 'Ye internal explanation/audit note ke liye use hota hai, taaki baad mein context clear rahe.';
+    }
+
+    return 'Ye field record ko save, search aur report karne mein kaam aata hai.';
+});
+
 const format = (date) => {
   const day = date.getDate();
   const month = date.getMonth() + 1;
@@ -69,7 +107,7 @@ const { value, errorMessage } = useField(() => name, processedReq, {
     
             <VueDatePicker v-model="value" :class="{ 'is-invalid': errorMessage }" :format="format" :enable-time-picker="false" auto-apply :placeholder="placeholder" :hide-input-icon="true" v-if="type == 'date'" :teleport="true" :disabled="disabled"></VueDatePicker>
         </div>
-        <span v-if="hint" class="field-hint">{{ hint }}</span>
+        <span v-if="purposeHint" class="field-hint">{{ purposeHint }}</span>
         <span v-if="errorMessage" class="field-error">{{ errorMessage }}</span>
     </div>
 </template>

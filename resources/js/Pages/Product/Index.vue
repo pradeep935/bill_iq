@@ -142,16 +142,16 @@ const resolveConfirmation = (confirmed) => {
 const rows = computed(() => products.value);
 
 const productColumns = [
-    { key: 'image', label: 'Image' },
-    { key: 'name', label: 'Product Name' },
-    { key: 'sku', label: 'SKU' },
-    { key: 'barcode', label: 'Barcode' },
-    { key: 'category', label: 'Category' },
-    { key: 'brand', label: 'Brand' },
-    { key: 'unit', label: 'Unit' },
-    { key: 'selling_price', label: 'Selling Price' },
-    { key: 'mrp', label: 'MRP' },
-    { key: 'gst_rate', label: 'GST' },
+    { key: 'image', label: 'Image', hint: 'Main product photo used for quick visual verification.' },
+    { key: 'name', label: 'Product Name', hint: 'Primary product/service name used in billing, purchase and reports.' },
+    { key: 'sku', label: 'SKU', hint: 'Unique item code for search, import and duplicate prevention.' },
+    { key: 'barcode', label: 'Barcode', hint: 'Primary scanner code used in POS, stock entry and label printing.' },
+    { key: 'category', label: 'Category', hint: 'Product group used for filtering, reporting and setup organization.' },
+    { key: 'brand', label: 'Brand', hint: 'Manufacturer or brand name used for filtering and analytics.' },
+    { key: 'unit', label: 'Unit', hint: 'Billing and stock measurement unit such as PCS, KG or HRS.' },
+    { key: 'selling_price', label: 'Selling Price', hint: 'Default sales rate used on invoices and POS.' },
+    { key: 'mrp', label: 'MRP', hint: 'Printed maximum retail price used for pricing validation.' },
+    { key: 'gst_rate', label: 'GST', hint: 'Tax percentage applied during taxable billing.' },
 ];
 
 const productValueFor = (product, column) => {
@@ -511,6 +511,8 @@ const buildCsv = (exportRows) => {
             row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')
         )
         .join('\n');
+
+    return csv;
 };
 
 const exportProducts = async () => {

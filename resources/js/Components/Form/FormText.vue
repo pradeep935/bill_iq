@@ -27,6 +27,24 @@ const {
     'hint'
 ]);
 
+const purposeHint = computed(() => {
+    if (hint) {
+        return hint;
+    }
+
+    const text = `${label || name || placeholder}`.toLowerCase();
+
+    if (!text.trim()) {
+        return '';
+    }
+
+    if (text.includes('remark') || text.includes('note') || text.includes('description') || text.includes('narration')) {
+        return 'Ye detail internal explanation, audit trail, print note ya future follow-up ke liye use hoti hai.';
+    }
+
+    return 'Ye long text record ka context clear karta hai aur reports/audit mein reference ke kaam aata hai.';
+});
+
 const processedReq = computed(() => {
     if (!req && !validate) {
         return null;
@@ -66,7 +84,7 @@ const { value, errorMessage } = useField(() => name, processedReq, {
         >
                 
         </textarea>
-        <span v-if="hint" class="field-hint">{{ hint }}</span>
+        <span v-if="purposeHint" class="field-hint">{{ purposeHint }}</span>
         <span v-if="errorMessage" class="field-error">{{ errorMessage }}</span>                 
     </div>
 </template>

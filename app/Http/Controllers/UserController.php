@@ -36,12 +36,14 @@ class UserController extends Controller
         }
 
         $user = User::where('email', trim($credentials['username']))->first();
+        $passwordHash = $user?->password_hash ?? $user?->password;
 
         if (
             !$user ||
             $user->status !== 'active' ||
             (int) $user->is_active !== 1 ||
-            !Hash::check($credentials['password'], $user->password_hash)
+            !$passwordHash ||
+            !Hash::check($credentials['password'], $passwordHash)
         ) {
             return Redirect::back()
                 ->with('failure', 'Invalid email or password')
@@ -51,11 +53,15 @@ class UserController extends Controller
         Auth::login($user, $request->boolean('remember'));
         $request->session()->regenerate();
 
-        DB::table('users')->where('id', $user->id)->update([
+        $loginUpdate = collect([
             'last_login_at' => now(),
             'last_login_ip' => $request->ip(),
             'failed_login_attempts' => 0,
-        ]);
+        ])->only(DB::getSchemaBuilder()->getColumnListing('users'))->all();
+
+        if ($loginUpdate) {
+            DB::table('users')->where('id', $user->id)->update($loginUpdate);
+        }
 
         Session::put('access_rights', []);
 

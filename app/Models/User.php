@@ -16,6 +16,7 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
+        'password',
         'password_hash',
         'status',
         'is_active',
@@ -41,7 +42,7 @@ class User extends Authenticatable
 
     public function getAuthPassword()
     {
-        return $this->password_hash;
+        return $this->password_hash ?? $this->password;
     }
 
     public function isSuperAdmin(): bool

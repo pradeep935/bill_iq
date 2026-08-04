@@ -39,11 +39,13 @@
     />
 
     <small v-if="error" class="drawer-field-error">{{ error }}</small>
-    <small v-if="hint" class="drawer-field-hint">{{ hint }}</small>
+    <small v-if="purposeHint" class="drawer-field-hint">{{ purposeHint }}</small>
   </label>
 </template>
 
 <script setup>
+import { computed } from 'vue';
+
 const props = defineProps({
   modelValue: { type: [String, Number, Boolean, null], default: '' },
   label: { type: String, required: true },
@@ -65,6 +67,21 @@ const props = defineProps({
 defineEmits(['update:modelValue']);
 
 const castValue = (value) => (props.number ? Number(value) : value);
+
+const purposeHint = computed(() => {
+  if (props.hint) return props.hint;
+
+  const text = `${props.label || props.placeholder}`.toLowerCase();
+  if (!text.trim()) return '';
+  if (props.type === 'date' || text.includes('date')) return 'Is date se record ledger, report aur workflow timeline mein place hota hai.';
+  if (props.number || props.type === 'number' || ['amount', 'price', 'rate', 'cost', 'qty', 'quantity', 'stock'].some((word) => text.includes(word))) return 'Ye number calculation, totals aur validation ke liye use hota hai.';
+  if (text.includes('branch')) return 'Branch se record us branch ke billing, stock aur reports mein link hota hai.';
+  if (text.includes('warehouse')) return 'Warehouse se stock location, transfer aur availability track hoti hai.';
+  if (text.includes('status')) return 'Status record ka workflow stage aur availability batata hai.';
+  if (text.includes('remark') || text.includes('note') || text.includes('description')) return 'Ye internal context aur audit note ke liye use hota hai.';
+
+  return 'Ye field record ko save, search aur report karne mein kaam aata hai.';
+});
 </script>
 
 <style scoped>

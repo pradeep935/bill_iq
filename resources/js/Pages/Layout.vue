@@ -4,7 +4,7 @@
 
     <aside class="bill-sidebar">
       <div class="bill-brand">
-        <span class="bill-logo">₹</span>
+        <span class="bill-logo">Rs.</span>
         <div>
           <strong>Bill IQ</strong>
           <small>Billing + Accounting</small>
@@ -13,11 +13,11 @@
 
       <div class="bill-company">
         <strong>{{ currentBusiness.name }}</strong>
-        <span>{{ currentBranch.name }} · FY {{ currentFinancialYear.name }}</span>
+        <span>{{ currentBranch.name }} - FY {{ currentFinancialYear.name }}</span>
         <div class="bill-module-picker">
           <button type="button" title="Switch module" @click="moduleOpen = !moduleOpen">
             {{ activeSection.label }}
-            <span>⌄</span>
+            <span>v</span>
           </button>
           <div v-if="moduleOpen" class="bill-module-menu">
             <button
@@ -62,7 +62,7 @@
     <main class="bill-main">
       <header class="bill-topbar">
         <div class="bill-topbar-left">
-          <button class="bill-menu" type="button" aria-label="Open menu" title="Open menu" @click="menuOpen = true">☰</button>
+          <button class="bill-menu" type="button" aria-label="Open menu" title="Open menu" @click="menuOpen = true">Menu</button>
           <slot name="topbar-title" />
         </div>
 
@@ -93,15 +93,15 @@
         </div>
 
         <div class="bill-top-actions">
-          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('sales.invoices.create', '/app/sales/invoices/create')" title="Create a new bill">
+          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.invoices.create', '/app/sales/invoices/create')" title="Create a new bill">
             <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
             New Bill
           </a>
-          <a v-if="permissions['accounting.create'] !== false" :href="routeUrl('accounting.vouchers', '/app/accounting/vouchers')" title="Open accounting vouchers">
+          <a v-if="permissions['accounting.create'] !== false" :href="routeUrl('app.accounting.vouchers', '/app/accounting/vouchers')" title="Open accounting vouchers">
             <span class="bill-nav-icon" v-html="iconSvg('file-plus')"></span>
             Voucher
           </a>
-          <a v-if="permissions['reports.view'] !== false" :href="routeUrl('reports.index', '/app/reports')" title="Open reports">
+          <a v-if="permissions['reports.view'] !== false" :href="routeUrl('app.reports.business', '/app/reports/business')" title="Open reports">
             <span class="bill-nav-icon" v-html="iconSvg('bar-chart')"></span>
             Reports
           </a>
@@ -179,10 +179,10 @@ const sections = [
     label: 'ADMIN',
     icon: 'layout-dashboard',
     items: [
-      { label: 'Business Dashboard', page: 'dashboard', href: routeUrl('business.dashboard', '/app'), icon: 'layout-dashboard' },
-      { label: 'Admin Workspace', page: 'admin-workspace', href: routeUrl('admin.workspace', '/app/admin/workspace'), icon: 'shield-check' },
-      { label: 'Staff Workspace', page: 'staff-workspace', href: routeUrl('staff.workspace', '/app/staff/workspace'), icon: 'users' },
-      { label: 'Onboarding', page: 'onboarding', href: routeUrl('onboarding', '/app/admin/onboarding'), icon: 'clipboard-check' },
+      { label: 'Business Dashboard', page: 'dashboard', href: routeUrl('business.dashboard', '/business-dashboard'), icon: 'layout-dashboard' },
+      { label: 'Admin Workspace', page: 'admin-workspace', href: routeUrl('app.admin.workspace', '/app/admin/workspace'), icon: 'shield-check' },
+      { label: 'Staff Workspace', page: 'staff-workspace', href: routeUrl('app.staff.workspace', '/app/staff/workspace'), icon: 'users' },
+      { label: 'Onboarding', page: 'onboarding', href: routeUrl('app.onboarding', '/app/onboarding'), icon: 'clipboard-check' },
     ],
   },
   {
@@ -190,7 +190,7 @@ const sections = [
     label: 'CRM',
     icon: 'users',
     items: [
-      { label: 'Leads & Pipeline', page: 'crm', href: '/app/crm', icon: 'users' },
+      { label: 'Leads & Pipeline', page: 'crm', href: routeUrl('app.crm.index', '/app/crm'), icon: 'users' },
     ],
   },
   {
@@ -198,12 +198,12 @@ const sections = [
     label: 'SALES',
     icon: 'receipt',
     items: [
-      { label: 'POS Billing', page: 'pos', href: routeUrl('sales.pos', '/app/sales/pos'), icon: 'scan-barcode' },
-      { label: 'Sales Invoices', page: 'sales', href: routeUrl('sales.invoices', '/app/sales/invoices'), icon: 'receipt' },
-      { label: 'Sales Returns', page: 'sales-returns', href: routeUrl('sales.returns', '/app/sales/returns'), icon: 'rotate-cw' },
-      { label: 'Customers', page: 'customers', href: routeUrl('sales.customers', '/app/sales/customers'), icon: 'users' },
-      { label: 'Stock Outward', page: 'inventory-outward', href: routeUrl('sales.stock-outward', '/app/sales/stock-outward'), icon: 'package-minus' },
-      { label: 'Reserved Stock', page: 'inventory-reserved', href: routeUrl('sales.reserved-stock', '/app/sales/reserved-stock'), icon: 'bookmark-check' },
+      { label: 'POS Billing', page: 'pos', href: routeUrl('app.sales.pos', '/app/sales/pos'), icon: 'scan-barcode' },
+      { label: 'Sales Invoices', page: 'sales', href: routeUrl('app.sales.invoices', '/app/sales/invoices'), icon: 'receipt' },
+      { label: 'Sales Returns', page: 'sales-returns', href: routeUrl('app.sales.returns', '/app/sales/returns'), icon: 'rotate-cw' },
+      { label: 'Customers', page: 'customers', href: routeUrl('app.sales.customers', '/app/sales/customers'), icon: 'users' },
+      { label: 'Stock Outward', page: 'inventory-outward', href: routeUrl('app.sales.stock-outward', '/app/sales/stock-outward'), icon: 'package-minus' },
+      { label: 'Reserved Stock', page: 'inventory-reserved', href: routeUrl('app.sales.reserved-stock', '/app/sales/reserved-stock'), icon: 'bookmark-check' },
     ],
   },
   {
@@ -211,12 +211,12 @@ const sections = [
     label: 'PURCHASE',
     icon: 'shopping-bag',
     items: [
-      { label: 'Purchases', page: 'purchases', href: routeUrl('purchases.index', '/app/purchase/bills'), icon: 'shopping-bag' },
-      { label: 'Purchase Returns', page: 'purchase-returns', href: '/app/purchase/returns', icon: 'rotate-cw' },
-      { label: 'Suppliers', page: 'suppliers', href: '/app/purchase/suppliers', icon: 'truck' },
-      { label: 'Stock Inward / GRN', page: 'inventory-inward', href: '/app/purchase/grn', icon: 'package-plus' },
-      { label: 'Reorder Suggestions', page: 'inventory-reorder', href: '/app/purchase/reorder', icon: 'rotate-cw' },
-      { label: 'Inventory Orders', page: 'inventory-orders', href: '/app/purchase/orders', icon: 'clipboard-list' },
+      { label: 'Purchases', page: 'purchases', href: routeUrl('app.purchase.bills', '/app/purchase/bills'), icon: 'shopping-bag' },
+      { label: 'Purchase Returns', page: 'purchase-returns', href: routeUrl('app.purchase.returns', '/app/purchase/returns'), icon: 'rotate-cw' },
+      { label: 'Suppliers', page: 'suppliers', href: routeUrl('app.purchase.suppliers', '/app/purchase/suppliers'), icon: 'truck' },
+      { label: 'Stock Inward / GRN', page: 'inventory-inward', href: routeUrl('app.purchase.grn', '/app/purchase/grn'), icon: 'package-plus' },
+      { label: 'Reorder Suggestions', page: 'inventory-reorder', href: routeUrl('app.purchase.reorder', '/app/purchase/reorder'), icon: 'rotate-cw' },
+      { label: 'Inventory Orders', page: 'inventory-orders', href: routeUrl('app.purchase.orders', '/app/purchase/orders'), icon: 'clipboard-list' },
     ],
   },
   {
@@ -224,15 +224,15 @@ const sections = [
     label: 'INVENTORY',
     icon: 'boxes',
     items: [
-      { label: 'Inventory Dashboard', page: 'inventory', href: routeUrl('inventory.dashboard', '/app/inventory'), icon: 'boxes' },
-      { label: 'Add Product Master', page: 'products', href: routeUrl('products.index', '/app/inventory/products'), icon: 'tag' },
-      { label: 'Opening Stock', page: 'opening-stock', href: '/app/inventory/add', icon: 'package-plus' },
-      { label: 'Current Stock', page: 'inventory-current-stock', href: '/app/inventory/current-stock', icon: 'warehouse' },
-      { label: 'Inventory Vouchers', page: 'inventory-vouchers', href: '/app/inventory/vouchers', icon: 'file-stack' },
-      { label: 'Batch & Expiry', page: 'inventory-batches', href: '/app/inventory/batches', icon: 'calendar-clock' },
-      { label: 'Serial Numbers', page: 'inventory-serials', href: '/app/inventory/serials', icon: 'list-ordered' },
-      { label: 'Barcode Center', page: 'inventory-barcode-center', href: '/app/inventory/barcode-center', icon: 'barcode' },
-      { label: 'Manufacturing / BOM', page: 'inventory-manufacturing', href: '/app/inventory/manufacturing', icon: 'factory' },
+      { label: 'Inventory Dashboard', page: 'inventory', href: routeUrl('app.inventory.dashboard', '/app/inventory'), icon: 'boxes' },
+      { label: 'Product Master', page: 'products', href: routeUrl('app.inventory.products', '/app/inventory/products'), icon: 'tag' },
+      { label: 'Opening Stock', page: 'opening-stock', href: routeUrl('app.inventory.opening-stock', '/app/inventory/add'), icon: 'package-plus' },
+      { label: 'Current Stock', page: 'inventory-current-stock', href: routeUrl('app.inventory.current-stock', '/app/inventory/current-stock'), icon: 'warehouse' },
+      { label: 'Inventory Vouchers', page: 'inventory-vouchers', href: routeUrl('app.inventory.vouchers', '/app/inventory/vouchers'), icon: 'file-stack' },
+      { label: 'Batch & Expiry', page: 'inventory-batches', href: routeUrl('app.inventory.batches', '/app/inventory/batches'), icon: 'calendar-clock' },
+      { label: 'Serial Numbers', page: 'inventory-serials', href: routeUrl('app.inventory.serials', '/app/inventory/serials'), icon: 'list-ordered' },
+      { label: 'Barcode Center', page: 'inventory-barcode-center', href: routeUrl('app.inventory.barcode-center', '/app/inventory/barcode-center'), icon: 'barcode' },
+      { label: 'Manufacturing / BOM', page: 'inventory-manufacturing', href: routeUrl('app.inventory.manufacturing', '/app/inventory/manufacturing'), icon: 'factory' },
     ],
   },
   {
@@ -240,14 +240,14 @@ const sections = [
     label: 'WAREHOUSE',
     icon: 'warehouse',
     items: [
-      { label: 'Warehouses / Bins', page: 'inventory-warehouses', href: '/app/warehouse/warehouses', icon: 'warehouse' },
-      { label: 'Bins / Racks', page: 'inventory-bins', href: '/app/warehouse/bins', icon: 'layers' },
-      { label: 'Godown Balances', page: 'inventory-godown-balance', href: '/app/warehouse/godown-balances', icon: 'scale' },
-      { label: 'Stock Transfer', page: 'inventory-transfer', href: '/app/warehouse/transfer', icon: 'arrow-left-right' },
-      { label: 'Transfer Requests', page: 'inventory-transfer-requests', href: '/app/warehouse/transfer-requests', icon: 'repeat' },
-      { label: 'Stock Adjustment', page: 'inventory-adjustment', href: '/app/warehouse/adjustment', icon: 'sliders' },
-      { label: 'Physical Audit', page: 'inventory-audit', href: '/app/warehouse/audit', icon: 'search-check' },
-      { label: 'Batch / Serial Allocation', page: 'inventory-allocation', href: '/app/warehouse/allocation', icon: 'git-branch' },
+      { label: 'Warehouses / Bins', page: 'inventory-warehouses', href: routeUrl('app.warehouse.warehouses', '/app/warehouse/warehouses'), icon: 'warehouse' },
+      { label: 'Bins / Racks', page: 'inventory-bins', href: routeUrl('app.warehouse.bins', '/app/warehouse/bins'), icon: 'layers' },
+      { label: 'Godown Balances', page: 'inventory-godown-balance', href: routeUrl('app.warehouse.godown-balances', '/app/warehouse/godown-balances'), icon: 'scale' },
+      { label: 'Stock Transfer', page: 'inventory-transfer', href: routeUrl('app.warehouse.transfer', '/app/warehouse/transfer'), icon: 'arrow-left-right' },
+      { label: 'Transfer Requests', page: 'inventory-transfer-requests', href: routeUrl('app.warehouse.transfer-requests', '/app/warehouse/transfer-requests'), icon: 'repeat' },
+      { label: 'Stock Adjustment', page: 'inventory-adjustment', href: routeUrl('app.warehouse.adjustment', '/app/warehouse/adjustment'), icon: 'sliders' },
+      { label: 'Physical Audit', page: 'inventory-audit', href: routeUrl('app.warehouse.audit', '/app/warehouse/audit'), icon: 'search-check' },
+      { label: 'Batch / Serial Allocation', page: 'inventory-allocation', href: routeUrl('app.warehouse.allocation', '/app/warehouse/allocation'), icon: 'git-branch' },
     ],
   },
   {
@@ -255,14 +255,14 @@ const sections = [
     label: 'ACCOUNTING',
     icon: 'landmark',
     items: [
-      { label: 'Chart of Accounts', page: 'accounts', href: routeUrl('accounting.dashboard', '/app/accounting/chart-of-accounts'), icon: 'landmark' },
-      { label: 'Vouchers', page: 'vouchers', href: routeUrl('accounting.vouchers.index', '/app/accounting/vouchers'), icon: 'file-plus' },
-      { label: 'Ledgers', page: 'ledgers', href: '/app/accounting/ledgers', icon: 'book-open' },
-      { label: 'Expenses', page: 'expenses', href: '/app/accounting/expenses', icon: 'wallet' },
-      { label: 'Fixed Assets', page: 'fixed-assets', href: '/app/fixed-assets', icon: 'boxes' },
-      { label: 'Payroll', page: 'payroll', href: '/app/payroll', icon: 'id-card' },
-      { label: 'GST', page: 'gst', href: '/app/accounting/gst', icon: 'percent' },
-      { label: 'GST Returns', page: 'inventory-gst-returns', href: '/app/accounting/gst-returns', icon: 'file-check' },
+      { label: 'Chart of Accounts', page: 'accounts', href: routeUrl('app.accounting.chart-of-accounts', '/app/accounting/chart-of-accounts'), icon: 'landmark' },
+      { label: 'Vouchers', page: 'vouchers', href: routeUrl('app.accounting.vouchers', '/app/accounting/vouchers'), icon: 'file-plus' },
+      { label: 'Ledgers', page: 'ledgers', href: routeUrl('app.accounting.ledgers', '/app/accounting/ledgers'), icon: 'book-open' },
+      { label: 'Expenses', page: 'expenses', href: routeUrl('app.accounting.expenses', '/app/accounting/expenses'), icon: 'wallet' },
+      { label: 'Fixed Assets', page: 'fixed-assets', href: routeUrl('app.fixed-assets.index', '/app/fixed-assets'), icon: 'boxes' },
+      { label: 'Payroll', page: 'payroll', href: routeUrl('app.payroll.index', '/app/payroll'), icon: 'id-card' },
+      { label: 'GST', page: 'gst', href: routeUrl('app.accounting.gst', '/app/accounting/gst'), icon: 'percent' },
+      { label: 'GST Returns', page: 'inventory-gst-returns', href: routeUrl('app.accounting.gst-returns', '/app/accounting/gst-returns'), icon: 'file-check' },
     ],
   },
   {
@@ -270,12 +270,12 @@ const sections = [
     label: 'REPORTS',
     icon: 'bar-chart',
     items: [
-      { label: 'Business Reports', page: 'reports', href: routeUrl('reports.index', '/app/reports/business'), icon: 'bar-chart' },
-      { label: 'Inventory Reports', page: 'inventory-reports', href: '/app/reports/inventory', icon: 'pie-chart' },
-      { label: 'Stock Ledger', page: 'stock-ledger', href: routeUrl('inventory.stock-ledger', '/app/reports/stock-ledger'), icon: 'file-text' },
-      { label: 'Stock Valuation', page: 'inventory-valuation', href: '/app/reports/stock-valuation', icon: 'indian-rupee' },
-      { label: 'Voucher Audit Trail', page: 'inventory-audit-trail', href: '/app/reports/audit-trail', icon: 'history' },
-      { label: 'Acceptance Matrix', page: 'acceptance', href: '/app/reports/acceptance', icon: 'badge-check' },
+      { label: 'Business Reports', page: 'reports', href: routeUrl('app.reports.business', '/app/reports/business'), icon: 'bar-chart' },
+      { label: 'Inventory Reports', page: 'inventory-reports', href: routeUrl('app.reports.inventory', '/app/reports/inventory'), icon: 'pie-chart' },
+      { label: 'Stock Ledger', page: 'stock-ledger', href: routeUrl('app.reports.stock-ledger', '/app/reports/stock-ledger'), icon: 'file-text' },
+      { label: 'Stock Valuation', page: 'inventory-valuation', href: routeUrl('app.reports.stock-valuation', '/app/reports/stock-valuation'), icon: 'indian-rupee' },
+      { label: 'Voucher Audit Trail', page: 'inventory-audit-trail', href: routeUrl('app.reports.audit-trail', '/app/reports/audit-trail'), icon: 'history' },
+      { label: 'Acceptance Matrix', page: 'acceptance', href: routeUrl('app.reports.acceptance', '/app/reports/acceptance'), icon: 'badge-check' },
     ],
   },
   {
@@ -283,13 +283,13 @@ const sections = [
     label: 'SETUP',
     icon: 'settings',
     items: [
-      { label: 'Masters', page: 'masters', href: '/app/setup/masters', icon: 'settings' },
-      { label: 'Branches', page: 'branches', href: '/app/setup/branches', icon: 'building-2' },
-      { label: 'Employees', page: 'employees', href: '/app/setup/employees', icon: 'id-card' },
-      { label: 'Users & Roles', page: 'users', href: '/app/setup/users', icon: 'user-cog' },
-      { label: 'SaaS Admin', page: 'saas', href: '/app/setup/saas', icon: 'cloud-cog' },
-      { label: 'Acceptance Matrix', page: 'setup-acceptance', href: '/app/setup/acceptance', icon: 'badge-check' },
-      { label: 'Settings', page: 'settings', href: '/app/setup/settings', icon: 'settings' },
+      { label: 'Masters', page: 'masters', href: routeUrl('app.setup.masters', '/app/setup/masters'), icon: 'settings' },
+      { label: 'Branches', page: 'branches', href: routeUrl('app.setup.branches', '/app/setup/branches'), icon: 'building-2' },
+      { label: 'Employees', page: 'employees', href: routeUrl('app.setup.employees', '/app/setup/employees'), icon: 'id-card' },
+      { label: 'Users & Roles', page: 'users', href: routeUrl('app.setup.users', '/app/setup/users'), icon: 'user-cog' },
+      { label: 'SaaS Admin', page: 'saas', href: routeUrl('app.setup.saas', '/app/setup/saas'), icon: 'cloud-cog', superAdminOnly: true },
+      { label: 'Acceptance Matrix', page: 'setup-acceptance', href: routeUrl('app.setup.acceptance', '/app/setup/acceptance'), icon: 'badge-check' },
+      { label: 'Settings', page: 'settings', href: routeUrl('app.setup.settings', '/app/setup/settings'), icon: 'settings' },
     ],
   },
 ];
@@ -306,6 +306,7 @@ const iconPaths = {
   'shopping-bag': '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
   truck: '<path d="M10 17h4V5H2v12h3"/><path d="M14 8h4l4 4v5h-3"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
   'package-plus': '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/><path d="M12 13v6"/><path d="M9 16h6"/>',
+  'clipboard-list': '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8"/><path d="M8 15h8"/><path d="M8 19h5"/>',
   'rotate-cw': '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',
   boxes: '<path d="M2 7.5 12 2l10 5.5-10 5.5Z"/><path d="M2 12.5 12 18l10-5.5"/><path d="M2 17.5 12 23l10-5.5"/><path d="M12 13v5"/>',
   tag: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
@@ -314,6 +315,14 @@ const iconPaths = {
   'calendar-clock': '<path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/><path d="M12 14v3l2 1"/>',
   'list-ordered': '<path d="M10 6h10"/><path d="M10 12h10"/><path d="M10 18h10"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1-2-1"/>',
   barcode: '<path d="M4 7v10"/><path d="M8 7v10"/><path d="M12 7v10"/><path d="M16 7v10"/><path d="M20 7v10"/>',
+  factory: '<path d="M2 20h20"/><path d="M4 20V10l5 3V8l5 3V6l6 4v10"/><path d="M8 17h1"/><path d="M12 17h1"/><path d="M16 17h1"/>',
+  layers: '<path d="m12 2 10 6-10 6L2 8Z"/><path d="m2 13 10 6 10-6"/><path d="m2 18 10 6 10-6"/>',
+  scale: '<path d="m16 16 3-8 3 8c-.87.65-1.87 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.87 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 8h18"/>',
+  'arrow-left-right': '<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+  sliders: '<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/>',
+  'search-check': '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="m8 11 2 2 4-4"/>',
+  'git-branch': '<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
   landmark: '<path d="M3 21h18"/><path d="M5 21V10"/><path d="M19 21V10"/><path d="M9 21V10"/><path d="M15 21V10"/><path d="M2 10h20"/><path d="m12 3 9 7H3Z"/>',
   'file-plus': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/>',
   'book-open': '<path d="M2 4h7a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2Z"/><path d="M22 4h-7a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h8Z"/>',
@@ -323,9 +332,14 @@ const iconPaths = {
   'pie-chart': '<path d="M21 12a9 9 0 1 1-9-9v9Z"/><path d="M12 3a9 9 0 0 1 9 9h-9Z"/>',
   'file-text': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/>',
   'indian-rupee': '<path d="M6 3h12"/><path d="M6 8h12"/><path d="M6 13l8 8"/><path d="M6 13h3a4 4 0 0 0 0-8H6"/>',
+  history: '<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>',
+  'badge-check': '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.78 4.78 4 4 0 0 1-6.74 0 4 4 0 0 1-4.78-4.78 4 4 0 0 1 0-6.75Z"/><path d="m9 12 2 2 4-4"/>',
   settings: '<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.37.61 1 .97 1.68 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z"/>',
   'building-2': '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><path d="M6 12H4a2 2 0 0 0-2 2v8h20v-8a2 2 0 0 0-2-2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
   'user-cog': '<circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h5"/><path d="M19 15a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/><path d="M19 13v2"/><path d="M19 19v2"/><path d="M17.3 14 16 15.3"/><path d="M22 15.3 20.7 14"/><path d="M16 18.7l1.3 1.3"/><path d="M20.7 20 22 18.7"/>',
+  'id-card': '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h3"/><path d="M15 12h3"/><path d="M7 16h4"/>',
+  'cloud-cog': '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><circle cx="12" cy="14" r="2"/><path d="M12 10v2"/><path d="M12 16v2"/><path d="M9.5 11.5 11 13"/><path d="m13 15 1.5 1.5"/>',
+  'file-check': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/>',
   'log-out': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   bell: '<path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>',
@@ -336,7 +350,12 @@ const iconSvg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPat
 
 const visibleSections = computed(() => {
   if (roleId.value === 1) return sections;
-  if (roleId.value === 2) return sections.filter((section) => section.key !== 'admin');
+  if (roleId.value === 2) {
+    return sections.map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.superAdminOnly),
+    }));
+  }
 
   const allowedPages = ['staff-workspace', 'pos', 'sales', 'customers', 'inventory-current-stock', 'inventory-reserved', 'stock-ledger'];
   return sections

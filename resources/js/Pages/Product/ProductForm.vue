@@ -1490,6 +1490,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="productTypeOptions"
                                         select_name="Select product type"
+                                        hint="Goods stock mein track ho sakte hain; Service billing ke liye hota hai aur stock maintain nahi karta."
                                         :req="true"
                                     />
 
@@ -1500,6 +1501,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="itemTypeOptions"
                                         select_name="Select item type"
+                                        hint="Stock Item inventory balance maintain karta hai; Non Stock Item sirf billing/purchase line ke liye."
                                         :req="true"
                                     />
 
@@ -1510,6 +1512,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="unitOptions"
                                         select_name="Select unit"
+                                        hint="Quantity kis unit mein bill aur stock hogi, jaise PCS, KG, LTR ya HRS."
                                         :req="true"
                                     />
 
@@ -1794,6 +1797,10 @@ const saveProduct = () => {
                                         >
                                             {{ fieldError('hsn_code') }}
                                         </span>
+
+                                        <span class="field-hint">
+                                            GST invoice/reporting ke liye correct {{ hsnSacLabel }} select karein.
+                                        </span>
                                     </div>
 
                                     <FormSelect
@@ -1803,6 +1810,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="taxabilityOptions"
                                         select_name="Select taxability"
+                                        hint="Taxable items GST charge karte hain; exempt/nil/non-GST par GST rate 0 ho jayega."
                                         :req="true"
                                     />
 
@@ -1814,6 +1822,7 @@ const saveProduct = () => {
                                         :options="gstRateOptions"
                                         select_name="Select GST rate"
                                         :disabled="!canEditCurrentGstRate"
+                                        hint="Billing ke time item amount par yahi GST percentage apply hoga."
                                         :req="isTaxable"
                                     />
 
@@ -1837,6 +1846,7 @@ const saveProduct = () => {
                                         placeholder="0"
                                         cls="product-field"
                                         right_box_text="%"
+                                        hint="Applicable ho toh GST ke upar compensation cess percentage."
                                     />
 
                                     <FormSelect
@@ -1846,6 +1856,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="reverseChargeOptions"
                                         select_name="Select option"
+                                        hint="Reverse charge mein tax liability buyer/customer side par report hoti hai."
                                         :req="true"
                                     />
 
@@ -1858,6 +1869,8 @@ const saveProduct = () => {
                                         <span>
                                             Tax Inclusive Pricing
                                         </span>
+
+                                        <small class="toggle-hint">On karne par entered selling price GST inclusive maana jayega.</small>
                                     </label>
 
                                     <div class="product-field tax-summary">
@@ -1881,6 +1894,7 @@ const saveProduct = () => {
                                         name="invoice_description"
                                         label="Invoice Description"
                                         placeholder="Description displayed on customer invoice"
+                                        hint="Customer invoice line par dikhne wali description; internal product description se alag ho sakti hai."
                                         cls="product-field field-span-2"
                                         :rows="3"
                                     />
@@ -1924,6 +1938,7 @@ const saveProduct = () => {
                                         placeholder="Enter Cost Price"
                                         cls="product-field"
                                         left_box_text="Rs."
+                                        hint="Purchase/landing cost. Profit aur margin calculation isi se hota hai."
                                         :req="true"
                                     />
 
@@ -1935,6 +1950,7 @@ const saveProduct = () => {
                                         placeholder="Enter Selling Price"
                                         cls="product-field"
                                         left_box_text="Rs."
+                                        hint="Default customer selling rate. MRP set ho toh selling price MRP se zyada save nahi hoga."
                                         :req="true"
                                     />
 
@@ -1960,6 +1976,7 @@ const saveProduct = () => {
                                         placeholder="Enter MRP (Optional)"
                                         cls="product-field"
                                         left_box_text="Rs."
+                                        hint="Printed Maximum Retail Price. Selling/online price validation ke liye use hota hai."
                                     />
 
                                     <FormInput
@@ -1970,6 +1987,7 @@ const saveProduct = () => {
                                         placeholder="Enter Wholesale Price"
                                         cls="product-field"
                                         left_box_text="Rs."
+                                        hint="Bulk/wholesale customers ke liye optional price level."
                                     />
 
                                     <div
@@ -1987,6 +2005,7 @@ const saveProduct = () => {
                                         placeholder="Enter Dealer Price"
                                         cls="product-field"
                                         left_box_text="Rs."
+                                        hint="Dealer/distributor customers ke liye optional price level."
                                     />
 
                                     <div
@@ -2004,6 +2023,7 @@ const saveProduct = () => {
                                         placeholder="Enter Online Price"
                                         cls="product-field"
                                         left_box_text="Rs."
+                                        hint="Website/marketplace sales ke liye optional price level."
                                     />
 
                                     <div
@@ -2381,6 +2401,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Weight"
                                         placeholder="0.000"
+                                        hint="Shipping, packing aur logistics calculation ke liye product weight."
                                         cls="product-field"
                                     />
 
@@ -2390,6 +2411,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Length"
                                         placeholder="0.000"
+                                        hint="Package/product length dimension, logistics ya catalog details ke liye."
                                         cls="product-field"
                                     />
 
@@ -2399,6 +2421,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Width"
                                         placeholder="0.000"
+                                        hint="Package/product width dimension, logistics ya catalog details ke liye."
                                         cls="product-field"
                                     />
 
@@ -2408,6 +2431,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Height"
                                         placeholder="0.000"
+                                        hint="Package/product height dimension, logistics ya catalog details ke liye."
                                         cls="product-field"
                                     />
 
@@ -2418,6 +2442,8 @@ const saveProduct = () => {
                                         />
 
                                         <span>Batch Required</span>
+
+                                        <small class="toggle-hint">On karne par stock batch number ke saath receive/sell hoga.</small>
                                     </label>
 
                                     <label class="toggle-field">
@@ -2427,6 +2453,8 @@ const saveProduct = () => {
                                         />
 
                                         <span>Expiry Required</span>
+
+                                        <small class="toggle-hint">On karne par batch expiry date capture/report karni hogi.</small>
                                     </label>
 
                                     <label class="toggle-field">
@@ -2436,6 +2464,8 @@ const saveProduct = () => {
                                         />
 
                                         <span>Serial Number Required</span>
+
+                                        <small class="toggle-hint">On karne par each piece serial/IMEI wise trace hoga.</small>
                                     </label>
 
                                     <FormSelect
@@ -2445,6 +2475,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="statusOptions"
                                         select_name="Select status"
+                                        hint="Active products billing mein available hote hain; inactive/discontinued new bills se hide ho sakte hain."
                                         :req="true"
                                     />
 
@@ -3329,9 +3360,10 @@ const saveProduct = () => {
 
 .toggle-field {
     min-height: 44px;
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 3px 9px;
     align-items: center;
-    gap: 9px;
     padding: 11px 13px;
     color: #344159;
     background: #f7f9fc;
@@ -3342,9 +3374,17 @@ const saveProduct = () => {
 }
 
 .toggle-field input {
+    grid-row: span 2;
     width: 16px;
     height: 16px;
     flex-shrink: 0;
+}
+
+.toggle-hint {
+    color: #778399;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.35;
 }
 
 .help-icon {

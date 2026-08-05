@@ -103,6 +103,7 @@ const hsnSearch = ref('');
 const hsnResults = ref([]);
 const hsnSearching = ref(false);
 const clientErrors = ref({});
+const attemptedSave = ref(false);
 const fillingForm = ref(false);
 const imageUploads = ref({});
 
@@ -307,9 +308,11 @@ const formatMoney = (value) => {
 };
 
 const fieldError = (field) => {
+    const shouldShowPricingError = attemptedSave.value || activeTab.value === 'pricing';
+
     return (
         clientErrors.value[field] ||
-        pricingErrors.value[field] ||
+        (shouldShowPricingError ? pricingErrors.value[field] : '') ||
         props.errors?.[field]?.[0] ||
         ''
     );
@@ -318,49 +321,11 @@ const fieldError = (field) => {
 const allErrors = computed(() => {
     return [
         ...Object.values(clientErrors.value),
-        ...Object.values(pricingErrors.value),
+        ...(attemptedSave.value ? Object.values(pricingErrors.value) : []),
         ...Object.values(props.errors || {})
             .map((value) => value?.[0])
             .filter(Boolean),
     ];
-});
-
-const formValidationErrors = computed(() => {
-    const errors = {};
-
-    const requiredChecks = [
-        ['name', 'Product name is required.', 'basic'],
-        ['product_type', 'Product type is required.', 'basic'],
-        ['item_type', 'Item type is required.', 'basic'],
-        ['unit', 'Unit is required.', 'basic'],
-        ['sku', 'SKU is required.', 'basic'],
-        ['cost_price', 'Cost price is required.', 'pricing'],
-        ['selling_price', 'Selling price is required.', 'pricing'],
-        ['status', 'Status is required.', 'advanced'],
-    ];
-
-    requiredChecks.forEach(([field, message]) => {
-        if (form[field] === '' || form[field] === null || form[field] === undefined) {
-            errors[field] = message;
-        }
-    });
-
-    if (isTaxable.value && !form.hsn_code) {
-        errors.hsn_code = `${hsnSacLabel.value} is required for taxable products.`;
-    }
-
-    if (isTaxable.value && form.gst_rate === '') {
-        errors.gst_rate = 'GST rate is required for taxable products.';
-    }
-
-    return {
-        ...errors,
-        ...pricingErrors.value,
-    };
-});
-
-const canSave = computed(() => {
-    return !props.processing && !Object.keys(formValidationErrors.value).length;
 });
 
 const displayNameWithBrand = computed(() => {
@@ -714,6 +679,7 @@ const fillForm = (product = {}) => {
     hsnSearch.value = product?.hsn_code || '';
     hsnResults.value = [];
     clientErrors.value = {};
+    attemptedSave.value = false;
 
     nextTick(() => {
         fillingForm.value = false;
@@ -1203,6 +1169,7 @@ const validateBeforeSave = () => {
 };
 
 const saveProduct = () => {
+    attemptedSave.value = true;
     fillSmartFields(false);
 
     if (props.processing || !validateBeforeSave()) {
@@ -1469,7 +1436,7 @@ const saveProduct = () => {
                                         name="name"
                                         label="Product Name"
                                         placeholder="Example: Samsung Galaxy S25"
-                                        hint="Bill, purchase, stock report aur search mein yahi main product name dikhega."
+                                        hint="This product name appears on bills, purchases, stock reports and search results."
                                         cls="product-field field-span-2"
                                         :req="true"
                                     />
@@ -1479,7 +1446,7 @@ const saveProduct = () => {
                                         name="short_name"
                                         label="Short Name"
                                         placeholder="Invoice display name"
-                                        hint="Invoice ya compact list mein short display name ke liye."
+                                        hint="Use this when invoices or compact lists need a shorter display name."
                                         cls="product-field"
                                     />
 
@@ -1490,7 +1457,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="productTypeOptions"
                                         select_name="Select product type"
-                                        hint="Goods stock mein track ho sakte hain; Service billing ke liye hota hai aur stock maintain nahi karta."
+                                        hint="Goods can be tracked in stock. Services are used for billing and do not maintain stock."
                                         :req="true"
                                     />
 
@@ -1501,7 +1468,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="itemTypeOptions"
                                         select_name="Select item type"
-                                        hint="Stock Item inventory balance maintain karta hai; Non Stock Item sirf billing/purchase line ke liye."
+                                        hint="Stock items maintain inventory balances. Non-stock items are used only on billing or purchase lines."
                                         :req="true"
                                     />
 
@@ -1512,7 +1479,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="unitOptions"
                                         select_name="Select unit"
-                                        hint="Quantity kis unit mein bill aur stock hogi, jaise PCS, KG, LTR ya HRS."
+                                        hint="Select the unit used for billing and stock, such as PCS, KG, LTR or HRS."
                                         :req="true"
                                     />
 
@@ -1521,7 +1488,7 @@ const saveProduct = () => {
                                         name="sku"
                                         label="SKU"
                                         placeholder="Example: SG25-256-BLK"
-                                        hint="Unique item code. Same business mein duplicate SKU save nahi hoga."
+                                        hint="Unique item code. Duplicate SKUs cannot be saved in the same business."
                                         cls="product-field"
                                         :req="true"
                                     />
@@ -1540,7 +1507,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="categoryOptions"
                                         select_name="Select category"
-                                        hint="Product grouping ke liye, jaise Mobile, Grocery, Service."
+                                        hint="Use categories to group products, such as Mobile, Grocery or Service."
                                     />
 
                                     <FormSelect
@@ -1550,7 +1517,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="subCategoryOptions"
                                         select_name="Select sub category"
-                                        hint="Category ke andar detailed group, jaise Charger, Cable, Spare Part."
+                                        hint="Use subcategories for detailed grouping, such as Charger, Cable or Spare Part."
                                     />
 
                                     <FormSelect
@@ -1560,7 +1527,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="brandOptions"
                                         select_name="Select brand"
-                                        hint="Manufacturer ya brand name. Select karne par brand text auto save hoga."
+                                        hint="Manufacturer or brand name. The selected brand text will be saved automatically."
                                     />
 
                                     <FormInput
@@ -1568,7 +1535,7 @@ const saveProduct = () => {
                                         name="variant"
                                         label="Variant"
                                         placeholder="Example: 256GB / Black"
-                                        hint="Size, color, storage ya pack details ke liye."
+                                        hint="Use this for size, color, storage or pack details."
                                         cls="product-field field-span-2"
                                     />
 
@@ -1577,7 +1544,7 @@ const saveProduct = () => {
                                         name="description"
                                         label="Description"
                                         placeholder="Internal product description"
-                                        hint="Internal notes/search help ke liye. Invoice text alag GST tab mein hai."
+                                        hint="Internal notes and search help. Invoice text is managed separately on the GST tab."
                                         cls="product-field field-span-2"
                                         :rows="3"
                                     />
@@ -1799,7 +1766,7 @@ const saveProduct = () => {
                                         </span>
 
                                         <span class="field-hint">
-                                            GST invoice/reporting ke liye correct {{ hsnSacLabel }} select karein.
+                                            Select the correct {{ hsnSacLabel }} for GST invoices and reports.
                                         </span>
                                     </div>
 
@@ -1810,7 +1777,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="taxabilityOptions"
                                         select_name="Select taxability"
-                                        hint="Taxable items GST charge karte hain; exempt/nil/non-GST par GST rate 0 ho jayega."
+                                        hint="Taxable items charge GST. Exempt, nil-rated and non-GST items use a 0% GST rate."
                                         :req="true"
                                     />
 
@@ -1822,7 +1789,7 @@ const saveProduct = () => {
                                         :options="gstRateOptions"
                                         select_name="Select GST rate"
                                         :disabled="!canEditCurrentGstRate"
-                                        hint="Billing ke time item amount par yahi GST percentage apply hoga."
+                                        hint="This GST percentage is applied to the item amount during billing."
                                         :req="isTaxable"
                                     />
 
@@ -1846,7 +1813,7 @@ const saveProduct = () => {
                                         placeholder="0"
                                         cls="product-field"
                                         right_box_text="%"
-                                        hint="Applicable ho toh GST ke upar compensation cess percentage."
+                                        hint="Optional compensation cess percentage applied in addition to GST."
                                     />
 
                                     <FormSelect
@@ -1856,7 +1823,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="reverseChargeOptions"
                                         select_name="Select option"
-                                        hint="Reverse charge mein tax liability buyer/customer side par report hoti hai."
+                                        hint="Under reverse charge, tax liability is reported on the buyer or customer side."
                                         :req="true"
                                     />
 
@@ -1870,7 +1837,7 @@ const saveProduct = () => {
                                             Tax Inclusive Pricing
                                         </span>
 
-                                        <small class="toggle-hint">On karne par entered selling price GST inclusive maana jayega.</small>
+                                        <small class="toggle-hint">When enabled, the entered selling price is treated as GST-inclusive.</small>
                                     </label>
 
                                     <div class="product-field tax-summary">
@@ -1894,7 +1861,7 @@ const saveProduct = () => {
                                         name="invoice_description"
                                         label="Invoice Description"
                                         placeholder="Description displayed on customer invoice"
-                                        hint="Customer invoice line par dikhne wali description; internal product description se alag ho sakti hai."
+                                        hint="Description shown on the customer invoice line. It can be different from the internal product description."
                                         cls="product-field field-span-2"
                                         :rows="3"
                                     />
@@ -1938,7 +1905,7 @@ const saveProduct = () => {
                                         placeholder="Enter Cost Price"
                                         cls="product-field"
                                         left_box_text="Rs."
-                                        hint="Purchase/landing cost. Profit aur margin calculation isi se hota hai."
+                                        hint="Purchase or landing cost. Profit and margin are calculated from this value."
                                         :req="true"
                                     />
 
@@ -1950,7 +1917,7 @@ const saveProduct = () => {
                                         placeholder="Enter Selling Price"
                                         cls="product-field"
                                         left_box_text="Rs."
-                                        hint="Default customer selling rate. MRP set ho toh selling price MRP se zyada save nahi hoga."
+                                        hint="Default customer selling rate. When MRP is set, selling price cannot be higher than MRP."
                                         :req="true"
                                     />
 
@@ -1976,7 +1943,7 @@ const saveProduct = () => {
                                         placeholder="Enter MRP (Optional)"
                                         cls="product-field"
                                         left_box_text="Rs."
-                                        hint="Printed Maximum Retail Price. Selling/online price validation ke liye use hota hai."
+                                        hint="Printed Maximum Retail Price. Used to validate selling and online prices."
                                     />
 
                                     <FormInput
@@ -1987,7 +1954,7 @@ const saveProduct = () => {
                                         placeholder="Enter Wholesale Price"
                                         cls="product-field"
                                         left_box_text="Rs."
-                                        hint="Bulk/wholesale customers ke liye optional price level."
+                                        hint="Optional price level for bulk or wholesale customers."
                                     />
 
                                     <div
@@ -2005,7 +1972,7 @@ const saveProduct = () => {
                                         placeholder="Enter Dealer Price"
                                         cls="product-field"
                                         left_box_text="Rs."
-                                        hint="Dealer/distributor customers ke liye optional price level."
+                                        hint="Optional price level for dealer or distributor customers."
                                     />
 
                                     <div
@@ -2023,7 +1990,7 @@ const saveProduct = () => {
                                         placeholder="Enter Online Price"
                                         cls="product-field"
                                         left_box_text="Rs."
-                                        hint="Website/marketplace sales ke liye optional price level."
+                                        hint="Optional price level for website or marketplace sales."
                                     />
 
                                     <div
@@ -2132,7 +2099,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Minimum Stock"
                                         placeholder="Example: 5"
-                                        hint="Is quantity se neeche stock aane par low-stock alert ya report warning milegi."
+                                        hint="Low-stock alerts and report warnings are shown when stock falls below this quantity."
                                         cls="product-field"
                                     />
 
@@ -2149,7 +2116,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Reorder Stock"
                                         placeholder="Example: 20"
-                                        hint="Minimum stock hit hone par usually itni quantity purchase/order karni hai."
+                                        hint="Recommended purchase or order quantity when stock reaches the minimum level."
                                         cls="product-field"
                                     />
 
@@ -2166,7 +2133,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Maximum Stock"
                                         placeholder="Example: 100"
-                                        hint="Recommended upper stock limit. Overstock check/reporting ke kaam aata hai."
+                                        hint="Recommended upper stock limit. Used for overstock checks and reporting."
                                         cls="product-field"
                                     />
 
@@ -2184,7 +2151,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="trackingOptions"
                                         select_name="Select tracking"
-                                        hint="Batch, expiry, serial ya IMEI wise stock trace karna ho toh yahan select karein."
+                                        hint="Select this when stock must be traced by batch, expiry date, serial number or IMEI."
                                         :req="true"
                                     />
 
@@ -2401,7 +2368,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Weight"
                                         placeholder="0.000"
-                                        hint="Shipping, packing aur logistics calculation ke liye product weight."
+                                        hint="Product weight used for shipping, packing and logistics calculations."
                                         cls="product-field"
                                     />
 
@@ -2411,7 +2378,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Length"
                                         placeholder="0.000"
-                                        hint="Package/product length dimension, logistics ya catalog details ke liye."
+                                        hint="Package or product length used for logistics and catalog details."
                                         cls="product-field"
                                     />
 
@@ -2421,7 +2388,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Width"
                                         placeholder="0.000"
-                                        hint="Package/product width dimension, logistics ya catalog details ke liye."
+                                        hint="Package or product width used for logistics and catalog details."
                                         cls="product-field"
                                     />
 
@@ -2431,7 +2398,7 @@ const saveProduct = () => {
                                         type="number"
                                         label="Height"
                                         placeholder="0.000"
-                                        hint="Package/product height dimension, logistics ya catalog details ke liye."
+                                        hint="Package or product height used for logistics and catalog details."
                                         cls="product-field"
                                     />
 
@@ -2443,7 +2410,7 @@ const saveProduct = () => {
 
                                         <span>Batch Required</span>
 
-                                        <small class="toggle-hint">On karne par stock batch number ke saath receive/sell hoga.</small>
+                                        <small class="toggle-hint">When enabled, stock must be received and sold with batch numbers.</small>
                                     </label>
 
                                     <label class="toggle-field">
@@ -2454,7 +2421,7 @@ const saveProduct = () => {
 
                                         <span>Expiry Required</span>
 
-                                        <small class="toggle-hint">On karne par batch expiry date capture/report karni hogi.</small>
+                                        <small class="toggle-hint">When enabled, batch expiry dates must be captured and reported.</small>
                                     </label>
 
                                     <label class="toggle-field">
@@ -2465,7 +2432,7 @@ const saveProduct = () => {
 
                                         <span>Serial Number Required</span>
 
-                                        <small class="toggle-hint">On karne par each piece serial/IMEI wise trace hoga.</small>
+                                        <small class="toggle-hint">When enabled, each piece is tracked by serial number or IMEI.</small>
                                     </label>
 
                                     <FormSelect
@@ -2475,7 +2442,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="statusOptions"
                                         select_name="Select status"
-                                        hint="Active products billing mein available hote hain; inactive/discontinued new bills se hide ho sakte hain."
+                                        hint="Active products are available for billing. Inactive or discontinued products can be hidden from new bills."
                                         :req="true"
                                     />
 
@@ -2534,7 +2501,7 @@ const saveProduct = () => {
                                 <button
                                     class="btn product-save-button"
                                     type="button"
-                                    :disabled="processing || !canSave"
+                                    :disabled="processing"
                                     @click="saveProduct"
                                 >
                                     <svg

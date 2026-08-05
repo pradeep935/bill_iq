@@ -301,12 +301,18 @@ class ProductMasterRequest extends FormRequest
             }
 
             if ($this->filled('hsn_master_id')) {
+                $expectedCodeType = $this->input('product_type') === 'service' ? 'SAC' : 'HSN';
                 $hsn = HsnMaster::query()
                     ->where('status', 'active')
+                    ->where(function ($query) use ($businessId) {
+                        $query->whereNull('business_id')->orWhere('business_id', $businessId);
+                    })
                     ->find($this->input('hsn_master_id'));
 
                 if (!$hsn) {
                     $validator->errors()->add('hsn_master_id', 'Selected HSN is not active.');
+                } elseif ($hsn->code_type && $hsn->code_type !== $expectedCodeType) {
+                    $validator->errors()->add('hsn_master_id', "Select a valid {$expectedCodeType} record for this product type.");
                 } elseif ($this->filled('hsn_code') && $this->input('hsn_code') !== $hsn->hsn_code) {
                     $validator->errors()->add('hsn_code', 'HSN code does not match selected HSN master.');
                 }

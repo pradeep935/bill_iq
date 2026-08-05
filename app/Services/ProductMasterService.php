@@ -338,8 +338,15 @@ class ProductMasterService
         $businessId = $this->businessId();
         $name = $data['name'];
         $hsnId = $data['hsn_master_id'] ?? $data['hsn_id'] ?? null;
-        $hsn = $hsnId ? HsnMaster::query()->find($hsnId) : null;
         $isService = $data['product_type'] === 'service';
+        $hsn = $hsnId
+            ? HsnMaster::query()
+                ->where(function (Builder $query) use ($businessId) {
+                    $query->whereNull('business_id')->orWhere('business_id', $businessId);
+                })
+                ->where('code_type', $isService ? 'SAC' : 'HSN')
+                ->find($hsnId)
+            : null;
         $itemType = $isService ? 'non_stock' : $data['item_type'];
         $trackingType = $isService ? 'none' : $data['tracking_type'];
 
@@ -381,9 +388,12 @@ class ProductMasterService
         $hsnCode = $hsn ? $hsn->hsn_code : $data['hsn_code'];
         $this->setProductColumn($product, 'hsn', $hsnCode);
         $this->setProductColumn($product, 'hsn_code', $hsnCode);
-        $this->setProductColumn($product, 'taxability', $data['taxability']);
-        $this->setProductColumn($product, 'gst_rate', $data['gst_rate']);
-        $this->setProductColumn($product, 'cess_rate', $data['cess_rate'] ?? 0);
+        $taxability = $hsn?->taxability ?: $data['taxability'];
+        $gstRate = $hsn ? $hsn->gst_rate : $data['gst_rate'];
+        $cessRate = $hsn ? $hsn->cess_rate : ($data['cess_rate'] ?? 0);
+        $this->setProductColumn($product, 'taxability', $taxability);
+        $this->setProductColumn($product, 'gst_rate', $gstRate);
+        $this->setProductColumn($product, 'cess_rate', $cessRate);
         $this->setProductColumn($product, 'reverse_charge', $data['reverse_charge']);
         $this->setProductColumn($product, 'tax_inclusive', (bool) ($data['tax_inclusive'] ?? false));
         $this->setProductColumn($product, 'invoice_description', $data['invoice_description'] ?? null);

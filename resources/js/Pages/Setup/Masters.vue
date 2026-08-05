@@ -28,6 +28,7 @@
             <option value="inactive">Inactive</option>
           </select>
           <button type="button" class="primary-add" @click="openDrawer()">+ Add {{ current.singular }}</button>
+          <button v-if="activeTab === 'hsn'" type="button" class="secondary-action" @click="notify('HSN/SAC import will be available soon.', 'success')">Import HSN/SAC</button>
         </div>
       </div>
 
@@ -109,12 +110,28 @@
 
             <template v-if="activeTab === 'hsn'">
               <DrawerField v-model="form.hsn_code" label="HSN/SAC Code" hint="Enter the tax classification code used for GST invoices." required />
-              <DrawerField v-model="form.chapter_code" label="Chapter Code" />
-              <DrawerField v-model="form.gst_rate" label="GST Rate %" type="number" :min="0" :max="100" step="0.01" hint="Enter the GST percentage applied to this HSN/SAC code." number required />
-              <DrawerField v-model="form.cess_rate" label="CESS Rate %" type="number" :min="0" :max="100" step="0.01" number />
-              <DrawerField v-model="form.effective_from" label="Effective From" type="date" />
-              <DrawerField v-model="form.effective_to" label="Effective To" type="date" />
-              <DrawerField v-model="form.description" label="Description" as="textarea" hint="Describe the goods or services covered by this code." :span="2" required />
+              <DrawerField v-model="form.code_type" label="Code Type" as="select" hint="Use HSN for goods and SAC for services." required>
+                <option value="HSN">HSN - Goods</option>
+                <option value="SAC">SAC - Services</option>
+              </DrawerField>
+
+              <DrawerField v-model="form.taxability" label="Taxability" as="select" hint="Defines how this classification is treated for GST." required>
+                <option value="taxable">Taxable</option>
+                <option value="exempt">Exempt</option>
+                <option value="nil_rated">Nil Rated</option>
+                <option value="non_gst">Non-GST</option>
+              </DrawerField>
+              <DrawerField v-model="gstRateSelection" label="GST Rate %" as="select" hint="Select the statutory GST rate for this classification." required>
+                <option v-for="rate in gstRateOptions" :key="rate.value" :value="rate.value">{{ rate.label }}</option>
+                <option value="custom">Custom rate</option>
+              </DrawerField>
+              <DrawerField v-if="gstRateSelection === 'custom'" v-model="form.gst_rate" label="Custom GST Rate %" type="number" :min="0" :max="100" step="0.01" hint="Enter a custom GST percentage only when needed." number required />
+              <DrawerField v-model="form.cess_rate" label="CESS Rate %" type="number" :min="0" :max="100" step="0.01" hint="Optional compensation cess percentage. Leave as 0 when not applicable." number />
+
+              <DrawerField v-model="form.effective_from" label="Effective From" type="date" hint="Required start date for this tax rate." required />
+              <DrawerField v-model="form.effective_to" label="Effective To" type="date" hint="Optional end date. Leave blank while this rate is current." />
+              <DrawerField v-model="form.chapter_code" label="Chapter Code" hint="Optional classification chapter used for filtering and reports." />
+              <DrawerField v-model="form.description" label="Classification Description" as="textarea" hint="Describe the tax classification, not a product or brand name." :span="2" required />
             </template>
 
             <DrawerField v-model="form.status" label="Status" as="select" hint="Keep active records available for selection in transactions." required>
@@ -139,7 +156,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import axios from 'axios';
 import CrudDrawer from '../../Components/Common/CrudDrawer.vue';
 import CrudTable from '../../Components/Common/CrudTable.vue';
@@ -159,7 +176,22 @@ const tabs = [
   { key: 'subcategory', label: 'Sub Categories', singular: 'Sub Category', hint: 'Maintain sub categories under product categories for cleaner catalog grouping.', helpTitle: 'Where is this used?', helpPoints: ['Adds a more specific grouping under each product category.', 'Improves product filters, barcode labels and catalog organization.', 'Helps compare and report similar products together.'], columns: [{ key: 'name', label: 'Name' }, { key: 'parent_id', label: 'Category', type: 'category' }] },
   { key: 'brand', label: 'Brands', singular: 'Brand', hint: 'Maintain product brands used in Product Master, filters and reports.', helpTitle: 'Where is this used?', helpPoints: ['Tags products with the brand or manufacturer name.', 'Supports brand-wise sales, purchase and stock performance reporting.', 'Improves product search, filtering and billing selection.'], columns: [{ key: 'name', label: 'Name' }] },
   { key: 'unit', label: 'Units', singular: 'Unit', hint: 'Maintain units such as PCS, KG, LTR and BOX for billing and inventory quantities.', helpTitle: 'Where is this used?', helpPoints: ['Defines how quantities are entered in billing and inventory.', 'Keeps purchase and sales quantities in a consistent measurement format.', 'Improves accuracy in stock movement and valuation reports.'], columns: [{ key: 'code', label: 'Code' }, { key: 'name', label: 'Name' }] },
-  { key: 'hsn', label: 'HSN/SAC', singular: 'HSN/SAC', hint: 'Maintain HSN/SAC tax codes and GST rates for taxable products and services.', helpTitle: 'Where is this used?', helpPoints: ['Applies the correct GST rate to products and services.', 'Provides tax classification for invoices, tax summaries and GST reports.', 'Keeps Product Master tax setup faster and consistent.'], columns: [{ key: 'hsn_code', label: 'Code' }, { key: 'description', label: 'Description' }, { key: 'gst_rate', label: 'GST %' }] },
+  { key: 'hsn', label: 'HSN/SAC', singular: 'HSN/SAC', hint: 'Maintain HSN/SAC tax classifications and GST rates used by many products and services.', helpTitle: 'Where is this used?', helpPoints: ['One HSN/SAC classification can be linked with many products.', 'Product Master stores the actual product name separately from this tax description.', 'Provides stable tax snapshots for invoices, tax summaries and GST reports.'], columns: [{ key: 'hsn_code', label: 'Code' }, { key: 'code_type', label: 'Type' }, { key: 'taxability', label: 'Taxability' }, { key: 'gst_rate', label: 'GST %' }, { key: 'cess_rate', label: 'CESS %' }, { key: 'description', label: 'Description' }] },
+];
+
+const gstRateOptions = [
+  { value: '0', label: '0%' },
+  { value: '0.1', label: '0.1%' },
+  { value: '0.25', label: '0.25%' },
+  { value: '1', label: '1%' },
+  { value: '1.5', label: '1.5%' },
+  { value: '3', label: '3%' },
+  { value: '5', label: '5%' },
+  { value: '6', label: '6%' },
+  { value: '7.5', label: '7.5%' },
+  { value: '12', label: '12%' },
+  { value: '18', label: '18%' },
+  { value: '28', label: '28%' },
 ];
 
 const visibleTabs = computed(() => {
@@ -178,6 +210,7 @@ const records = ref([]);
 const references = reactive({ branches: [], categories: [] });
 const filters = reactive({ search: '', status: '' });
 const form = reactive({});
+const gstRateSelection = ref('0');
 const errors = ref({});
 const flash = reactive({ message: '', type: 'success' });
 const loading = ref(false);
@@ -203,11 +236,13 @@ const defaults = () => ({
   parent_id: '',
   code: '',
   hsn_code: '',
+  code_type: 'HSN',
+  taxability: 'taxable',
   description: '',
   chapter_code: '',
   gst_rate: 0,
   cess_rate: 0,
-  effective_from: '',
+  effective_from: new Date().toISOString().slice(0, 10),
   effective_to: '',
   status: 'active',
 });
@@ -216,6 +251,7 @@ const resetForm = () => {
   editingId.value = null;
   errors.value = {};
   Object.assign(form, defaults());
+  gstRateSelection.value = '0';
 };
 
 const openDrawer = (record = null) => {
@@ -226,6 +262,9 @@ const openDrawer = (record = null) => {
       form[key] = record[key] ?? '';
     });
     form.status = record.status || 'active';
+    gstRateSelection.value = gstRateOptions.some((rate) => Number(rate.value) === Number(form.gst_rate))
+      ? String(Number(form.gst_rate))
+      : 'custom';
   }
   drawerOpen.value = true;
 };
@@ -277,8 +316,12 @@ const payload = () => {
     subcategory: ['parent_id', 'name', 'status'],
     brand: ['name', 'status'],
     unit: ['code', 'name', 'status'],
-    hsn: ['hsn_code', 'description', 'chapter_code', 'gst_rate', 'cess_rate', 'effective_from', 'effective_to', 'status'],
+    hsn: ['hsn_code', 'code_type', 'taxability', 'description', 'chapter_code', 'gst_rate', 'cess_rate', 'effective_from', 'effective_to', 'status'],
   }[activeTab.value];
+
+  if (activeTab.value === 'hsn' && gstRateSelection.value !== 'custom') {
+    form.gst_rate = Number(form.taxability === 'taxable' ? gstRateSelection.value : 0);
+  }
 
   allowed.forEach((key) => {
     data[key] = form[key] === '' ? null : form[key];
@@ -331,8 +374,33 @@ const valueFor = (record, column) => {
   if (column.key === 'gst_rate') {
     return `${Number(record[column.key] || 0).toFixed(2)}%`;
   }
+  if (column.key === 'cess_rate') {
+    return `${Number(record[column.key] || 0).toFixed(2)}%`;
+  }
+  if (column.key === 'taxability') {
+    return String(record[column.key] || '-').replace('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
   return record[column.key] || '-';
 };
+
+watch(
+  () => form.taxability,
+  (taxability) => {
+    if (activeTab.value === 'hsn' && taxability !== 'taxable') {
+      gstRateSelection.value = '0';
+      form.gst_rate = 0;
+    }
+  }
+);
+
+watch(
+  gstRateSelection,
+  (rate) => {
+    if (activeTab.value === 'hsn' && rate !== 'custom') {
+      form.gst_rate = Number(form.taxability === 'taxable' ? rate : 0);
+    }
+  }
+);
 
 onMounted(async () => {
   resetForm();
@@ -350,7 +418,8 @@ onMounted(async () => {
 }
 
 .master-tabs button,
-.primary-add {
+.primary-add,
+.secondary-action {
   border: 1px solid #dbe4f0;
   background: #fff;
   color: #334155;
@@ -368,6 +437,13 @@ onMounted(async () => {
 }
 
 .primary-add {
+  white-space: nowrap;
+}
+
+.secondary-action {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
   white-space: nowrap;
 }
 

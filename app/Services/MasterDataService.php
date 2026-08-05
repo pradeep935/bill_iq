@@ -122,10 +122,21 @@ class MasterDataService
 
     public function hsnCodes()
     {
+        $businessId = AppController::businessId();
+
         return HsnMaster::query()
+            ->when(Schema::hasColumn('hsn_masters', 'business_id'), function (Builder $query) use ($businessId) {
+                $query->where(fn (Builder $scope) => $scope->whereNull('business_id')->orWhere('business_id', $businessId));
+            })
             ->when(Schema::hasColumn('hsn_masters', 'status'), fn (Builder $query) => $query->where('status', 'active'))
+            ->where(function (Builder $query) {
+                $query->whereNull('effective_from')->orWhereDate('effective_from', '<=', now()->toDateString());
+            })
+            ->where(function (Builder $query) {
+                $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', now()->toDateString());
+            })
             ->orderBy('hsn_code')
-            ->get($this->columns('hsn_masters', ['id', 'hsn_code', 'description', 'gst_rate', 'cess_rate']));
+            ->get($this->columns('hsn_masters', ['id', 'hsn_code', 'code_type', 'description', 'taxability', 'gst_rate', 'cess_rate', 'effective_from', 'effective_to']));
     }
 
     public function ensureDefaultWarehouses(int $businessId): void

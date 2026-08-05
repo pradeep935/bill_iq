@@ -649,6 +649,8 @@ class SalesService
                 'product_name_snapshot' => $product->invoice_description ?: $product->name,
                 'sku_snapshot' => $product->sku,
                 'hsn_code_snapshot' => $product->hsn_code ?: $product->hsn ?: optional($product->hsn)->hsn_code,
+                'hsn_code_type_snapshot' => optional($product->hsn)->code_type ?: ($product->product_type === 'service' ? 'SAC' : 'HSN'),
+                'taxability_snapshot' => $product->taxability ?: (((float) $product->gst_rate > 0) ? 'taxable' : 'nil_rated'),
                 'quantity' => $item['quantity'],
                 'free_quantity' => $item['free_quantity'] ?? 0,
                 'selling_rate' => $item['selling_rate'],

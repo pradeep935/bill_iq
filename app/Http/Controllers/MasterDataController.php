@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
@@ -118,7 +119,7 @@ class MasterDataController extends Controller
             'category', 'subcategory' => [ProductCategory::class, ['name']],
             'brand' => [Brand::class, ['name']],
             'unit' => [Unit::class, ['code', 'name']],
-            'hsn' => [HsnMaster::class, ['hsn_code', 'description', 'chapter_code']],
+            'hsn' => [HsnMaster::class, ['hsn_code', 'description', 'chapter_code', 'code_type', 'taxability']],
             default => abort(404),
         };
     }
@@ -127,7 +128,7 @@ class MasterDataController extends Controller
     {
         $businessId = AppController::businessId();
 
-        return $request->validate(match ($type) {
+        $data = $request->validate(match ($type) {
             'branch' => [
                 'name' => ['required', 'string', 'max:255'],
                 'type' => ['nullable', 'string', 'max:50'],
@@ -163,14 +164,22 @@ class MasterDataController extends Controller
             'hsn' => [
                 'hsn_code' => ['required', 'string', 'max:12'],
                 'description' => ['required', 'string', 'max:255'],
+                'code_type' => ['required', Rule::in(['HSN', 'SAC'])],
+                'taxability' => ['required', Rule::in(['taxable', 'exempt', 'nil_rated', 'non_gst'])],
                 'chapter_code' => ['nullable', 'string', 'max:8'],
                 'gst_rate' => ['required', 'numeric', 'min:0', 'max:100'],
                 'cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
-                'effective_from' => ['nullable', 'date'],
+                'effective_from' => ['required', 'date'],
                 'effective_to' => ['nullable', 'date', 'after_or_equal:effective_from'],
                 'status' => ['required', Rule::in(['active', 'inactive'])],
             ],
         });
+
+        if ($type === 'hsn') {
+            $this->validateHsn($data, $businessId, $id);
+        }
+
+        return $data;
     }
 
     private function payload(string $type, array $data, object $record): array
@@ -192,11 +201,57 @@ class MasterDataController extends Controller
 
         if ($type === 'hsn') {
             $payload['cess_rate'] = $payload['cess_rate'] ?? 0;
+            $payload['code_type'] = strtoupper($payload['code_type'] ?? 'HSN');
+
+            if (in_array($payload['taxability'] ?? 'taxable', ['exempt', 'nil_rated', 'non_gst'], true)) {
+                $payload['gst_rate'] = 0;
+            }
         }
 
         return collect($payload)
             ->only(Schema::getColumnListing($record->getTable()))
             ->all();
+    }
+
+    private function validateHsn(array $data, int $businessId, ?int $id = null): void
+    {
+        $duplicate = HsnMaster::query()
+            ->where('business_id', $businessId)
+            ->where('code_type', $data['code_type'])
+            ->where('hsn_code', $data['hsn_code'])
+            ->when($id, fn (Builder $query) => $query->whereKeyNot($id))
+            ->exists();
+
+        if ($duplicate) {
+            throw ValidationException::withMessages([
+                'hsn_code' => 'This HSN/SAC code already exists for the selected code type.',
+            ]);
+        }
+
+        if (($data['status'] ?? 'active') !== 'active') {
+            return;
+        }
+
+        $from = $data['effective_from'];
+        $to = $data['effective_to'] ?? null;
+
+        $overlap = HsnMaster::query()
+            ->where('business_id', $businessId)
+            ->where('code_type', $data['code_type'])
+            ->where('hsn_code', $data['hsn_code'])
+            ->where('status', 'active')
+            ->when($id, fn (Builder $query) => $query->whereKeyNot($id))
+            ->whereDate('effective_from', '<=', $to ?: '9999-12-31')
+            ->where(function (Builder $query) use ($from) {
+                $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $from);
+            })
+            ->exists();
+
+        if ($overlap) {
+            throw ValidationException::withMessages([
+                'effective_from' => 'An active tax period already exists for this HSN/SAC code and date range.',
+            ]);
+        }
     }
 
     private function findScoped(string $model, string $type, int $id): object

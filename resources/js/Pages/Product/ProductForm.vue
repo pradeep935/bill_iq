@@ -435,11 +435,9 @@ const applyHsn = (hsn) => {
     form.hsn_master_id = hsn.id || '';
     form.hsn_code = hsn.hsn_code || '';
     hsnSearch.value = hsn.hsn_code || '';
+    form.taxability = hsn.taxability || 'taxable';
+    form.gst_rate = String(hsn.gst_rate ?? '0');
     form.cess_rate = String(hsn.cess_rate ?? '0');
-
-    if (isTaxable.value) {
-        form.gst_rate = String(hsn.gst_rate ?? '0');
-    }
 };
 
 const findMatchingHsn = () => {
@@ -561,7 +559,14 @@ const unitOptions = [
 
 const categoryOptions = computed(() => normalizeReferenceOptions(props.references?.categories || [], ['name', 'label', 'code']));
 const subCategoryOptions = computed(() => normalizeReferenceOptions(props.references?.sub_categories || [], ['name', 'label', 'code']));
-const hsnOptions = computed(() => props.references?.hsn_codes || []);
+const hsnOptions = computed(() => {
+    const expectedCodeType = form.product_type === 'service' ? 'SAC' : 'HSN';
+
+    return (props.references?.hsn_codes || [])
+        .filter((hsn) => !hsn.code_type || hsn.code_type === expectedCodeType);
+});
+const selectedHsn = computed(() => hsnOptions.value.find((hsn) => String(hsn.id) === String(form.hsn_master_id)) || null);
+const hsnTaxLocked = computed(() => Boolean(selectedHsn.value));
 const brandOptions = computed(() => {
     const options = normalizeReferenceOptions(props.references?.brands || [], ['name', 'label', 'code']);
 
@@ -587,10 +592,12 @@ const gstRateOptions = [
     { value: '0', label: '0%' },
     { value: '0.1', label: '0.1%' },
     { value: '0.25', label: '0.25%' },
+    { value: '1', label: '1%' },
     { value: '1.5', label: '1.5%' },
     { value: '3', label: '3%' },
     { value: '5', label: '5%' },
     { value: '6', label: '6%' },
+    { value: '7.5', label: '7.5%' },
     { value: '12', label: '12%' },
     { value: '18', label: '18%' },
     { value: '28', label: '28%' },
@@ -788,6 +795,14 @@ watch(
     (productType) => {
         if (productType === 'service' && activeTab.value === 'inventory') {
             activeTab.value = 'basic';
+        }
+
+        const expectedCodeType = productType === 'service' ? 'SAC' : 'HSN';
+        const currentHsn = (props.references?.hsn_codes || []).find((hsn) => String(hsn.id) === String(form.hsn_master_id));
+        if (currentHsn?.code_type && currentHsn.code_type !== expectedCodeType) {
+            form.hsn_master_id = '';
+            form.hsn_code = '';
+            hsnSearch.value = '';
         }
     }
 );
@@ -1062,7 +1077,7 @@ const searchHsn = async () => {
     hsnSearching.value = true;
 
     try {
-        const results = await ProductApi.searchHsn(keyword);
+        const results = await ProductApi.searchHsn(keyword, form.product_type);
         hsnResults.value = results.length ? results : hsnResults.value;
     } finally {
         hsnSearching.value = false;
@@ -1095,8 +1110,8 @@ const validateBeforeSave = () => {
         }
     });
 
-    if (isTaxable.value && !form.hsn_code) {
-        errors.hsn_code = `${hsnSacLabel.value} is required for taxable products.`;
+    if (!form.hsn_master_id) {
+        errors.hsn_code = `Select a valid ${hsnSacLabel.value} from HSN/SAC Master.`;
         firstErrorTab ||= 'gst';
     }
 
@@ -1744,7 +1759,7 @@ const saveProduct = () => {
                                                 @click="selectHsn(hsn)"
                                             >
                                                 <strong>
-                                                    {{ hsn.hsn_code }}
+                                                    {{ hsn.code_type || hsnSacLabel }} {{ hsn.hsn_code }}
                                                 </strong>
 
                                                 <span>
@@ -1752,6 +1767,7 @@ const saveProduct = () => {
                                                 </span>
 
                                                 <small>
+                                                    {{ hsn.taxability || 'taxable' }} |
                                                     {{ Number(hsn.gst_rate || 0) }}%
                                                     GST
                                                 </small>
@@ -1766,7 +1782,18 @@ const saveProduct = () => {
                                         </span>
 
                                         <span class="field-hint">
-                                            Select the correct {{ hsnSacLabel }} for GST invoices and reports.
+                                            Select the correct {{ hsnSacLabel }} from HSN/SAC Master. The description is a tax classification, not the product name.
+                                        </span>
+                                    </div>
+
+                                    <div
+                                        v-if="selectedHsn"
+                                        class="field-help field-span-2"
+                                    >
+                                        <span class="help-icon">i</span>
+
+                                        <span>
+                                            Auto from HSN/SAC Master: {{ selectedHsn.code_type || hsnSacLabel }} {{ selectedHsn.hsn_code }} - {{ selectedHsn.description }}. One classification can be linked with many products.
                                         </span>
                                     </div>
 
@@ -1777,6 +1804,7 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="taxabilityOptions"
                                         select_name="Select taxability"
+                                        :disabled="hsnTaxLocked"
                                         hint="Taxable items charge GST. Exempt, nil-rated and non-GST items use a 0% GST rate."
                                         :req="true"
                                     />
@@ -1788,20 +1816,19 @@ const saveProduct = () => {
                                         cls="product-field"
                                         :options="gstRateOptions"
                                         select_name="Select GST rate"
-                                        :disabled="!canEditCurrentGstRate"
+                                        :disabled="hsnTaxLocked || !canEditCurrentGstRate"
                                         hint="This GST percentage is applied to the item amount during billing."
                                         :req="isTaxable"
                                     />
 
                                     <div
-                                        v-if="!canEditCurrentGstRate"
+                                        v-if="hsnTaxLocked || !canEditCurrentGstRate"
                                         class="field-help"
                                     >
                                         <span class="help-icon">i</span>
 
                                         <span>
-                                            GST rate is auto-filled from the
-                                            {{ hsnSacLabel }} master.
+                                            Auto from HSN/SAC Master.
                                         </span>
                                     </div>
 
@@ -1813,6 +1840,7 @@ const saveProduct = () => {
                                         placeholder="0"
                                         cls="product-field"
                                         right_box_text="%"
+                                        :disabled="hsnTaxLocked"
                                         hint="Optional compensation cess percentage applied in addition to GST."
                                     />
 

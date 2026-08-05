@@ -73,14 +73,14 @@ const purposeHint = computed(() => {
 
   const text = `${props.label || props.placeholder}`.toLowerCase();
   if (!text.trim()) return '';
-  if (props.type === 'date' || text.includes('date')) return 'Is date se record ledger, report aur workflow timeline mein place hota hai.';
-  if (props.number || props.type === 'number' || ['amount', 'price', 'rate', 'cost', 'qty', 'quantity', 'stock'].some((word) => text.includes(word))) return 'Ye number calculation, totals aur validation ke liye use hota hai.';
-  if (text.includes('branch')) return 'Branch se record us branch ke billing, stock aur reports mein link hota hai.';
-  if (text.includes('warehouse')) return 'Warehouse se stock location, transfer aur availability track hoti hai.';
-  if (text.includes('status')) return 'Status record ka workflow stage aur availability batata hai.';
-  if (text.includes('remark') || text.includes('note') || text.includes('description')) return 'Ye internal context aur audit note ke liye use hota hai.';
+  if (props.type === 'date' || text.includes('date')) return 'This date places the record in the correct ledger, report and workflow period.';
+  if (props.number || props.type === 'number' || ['amount', 'price', 'rate', 'cost', 'qty', 'quantity', 'stock'].some((word) => text.includes(word))) return 'This number is used for calculations, totals and validation.';
+  if (text.includes('branch')) return 'This links the record to the correct branch for billing, stock and reports.';
+  if (text.includes('warehouse')) return 'This tracks stock location, transfers and availability.';
+  if (text.includes('status')) return 'Status controls the record workflow stage and availability.';
+  if (text.includes('remark') || text.includes('note') || text.includes('description')) return 'Use this for internal context, audit notes or future reference.';
 
-  return 'Ye field record ko save, search aur report karne mein kaam aata hai.';
+  return 'This field helps save, search and report the record correctly.';
 });
 </script>
 

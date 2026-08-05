@@ -162,8 +162,21 @@ class ProductController extends Controller
         $this->authorizeProductView();
 
         $search = trim((string) $request->query('q'));
+        $productType = $request->query('product_type');
+        $codeType = $productType === 'service' ? 'SAC' : 'HSN';
+        $businessId = AppController::businessId();
 
         $hsnMaster = HsnMaster::where('status', 'active')
+            ->where(function ($query) use ($businessId) {
+                $query->whereNull('business_id')->orWhere('business_id', $businessId);
+            })
+            ->where('code_type', $codeType)
+            ->where(function ($query) {
+                $query->whereNull('effective_from')->orWhereDate('effective_from', '<=', now()->toDateString());
+            })
+            ->where(function ($query) {
+                $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', now()->toDateString());
+            })
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($innerQuery) use ($search) {
                     $innerQuery
@@ -176,10 +189,13 @@ class ProductController extends Controller
             ->get([
                 'id',
                 'hsn_code',
+                'code_type',
                 'description',
+                'taxability',
                 'gst_rate',
                 'cess_rate',
                 'effective_from',
+                'effective_to',
                 'notification_number',
                 'source_reference',
             ]);

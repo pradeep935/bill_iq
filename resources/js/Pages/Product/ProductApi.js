@@ -82,13 +82,14 @@ const ProductApi = {
         return response.data;
     },
 
-    async searchHsn(search = '', productType = 'goods') {
+    async searchHsn(search = '', productType = 'goods', extra = {}) {
         const response = await axios.get(
             '/app/inventory/hsn-search',
             {
                 params: {
                     q: search,
                     product_type: productType,
+                    ...extra,
                 },
             }
         );

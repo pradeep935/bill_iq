@@ -35,6 +35,7 @@ class Product extends Model
         'expiry_required' => 'boolean',
         'batch_required' => 'boolean',
         'serial_required' => 'boolean',
+        'tax_confirmed_at' => 'datetime',
     ];
 
     public function category()
@@ -60,6 +61,16 @@ class Product extends Model
     public function hsn()
     {
         return $this->belongsTo(HsnMaster::class, 'hsn_id');
+    }
+
+    public function hsnMaster()
+    {
+        return $this->belongsTo(HsnMaster::class, 'hsn_master_id');
+    }
+
+    public function hsnTaxRate()
+    {
+        return $this->belongsTo(HsnTaxRate::class, 'hsn_tax_rate_id');
     }
 
     public function barcodes()

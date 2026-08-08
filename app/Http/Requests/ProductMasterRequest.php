@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Http\Controllers\AppController;
 use App\Models\HsnMaster;
+use App\Models\HsnTaxRate;
 use App\Models\Product;
 use App\Models\ProductBarcode;
 use App\Models\ProductVariantItem;
@@ -22,7 +23,7 @@ class ProductMasterRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        foreach (['category_id', 'sub_category_id', 'brand_id', 'unit_id', 'hsn_master_id', 'hsn_id'] as $field) {
+        foreach (['category_id', 'sub_category_id', 'brand_id', 'unit_id', 'hsn_master_id', 'hsn_id', 'hsn_tax_rate_id'] as $field) {
             $value = $this->input($field);
 
             if ($value === '' || $value === null || !ctype_digit((string) $value)) {
@@ -96,6 +97,7 @@ class ProductMasterRequest extends FormRequest
             'unit_id' => ['nullable', 'integer', 'exists:units,id'],
             'hsn_master_id' => ['nullable', 'integer', 'exists:hsn_masters,id'],
             'hsn_id' => ['nullable', 'integer', 'exists:hsn_masters,id'],
+            'hsn_tax_rate_id' => ['nullable', 'integer', 'exists:hsn_tax_rates,id'],
             'category' => ['nullable', 'string', 'max:150'],
             'subcategory' => ['nullable', 'string', 'max:150'],
             'brand' => ['nullable', 'string', 'max:150'],
@@ -121,6 +123,9 @@ class ProductMasterRequest extends FormRequest
             'taxability' => ['required', Rule::in(['taxable', 'exempt', 'nil_rated', 'non_gst'])],
             'gst_rate' => [$isTaxable ? 'required' : 'nullable', 'numeric', 'min:0', 'max:100'],
             'cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'tax_source' => ['nullable', Rule::in(['verified_rule', 'manual_confirmation', 'override'])],
+            'tax_override_reason' => ['nullable', 'string', 'max:2000'],
+            'tax_override_reference' => ['nullable', 'string', 'max:255'],
             'reverse_charge' => ['required', Rule::in(['yes', 'no'])],
             'tax_inclusive' => ['nullable', 'boolean'],
             'invoice_description' => ['nullable', 'string', 'max:500'],
@@ -315,6 +320,30 @@ class ProductMasterRequest extends FormRequest
                     $validator->errors()->add('hsn_master_id', "Select a valid {$expectedCodeType} record for this product type.");
                 } elseif ($this->filled('hsn_code') && $this->input('hsn_code') !== $hsn->hsn_code) {
                     $validator->errors()->add('hsn_code', 'HSN code does not match selected HSN master.');
+                }
+
+                if ($this->filled('hsn_tax_rate_id')) {
+                    $rule = HsnTaxRate::query()
+                        ->where('hsn_id', $this->input('hsn_master_id'))
+                        ->where('status', 'active')
+                        ->where('verification_status', 'verified')
+                        ->find($this->input('hsn_tax_rate_id'));
+
+                    if (!$rule) {
+                        $validator->errors()->add('hsn_tax_rate_id', 'Selected GST rule is not a verified active rule for this HSN/SAC.');
+                    }
+                }
+            }
+
+            if ($this->input('tax_source') === 'override') {
+                $user = $this->user();
+
+                if (!$user || !($user->isSuperAdmin() || $user->isAdmin())) {
+                    $validator->errors()->add('tax_source', 'Only authorized users can override GST.');
+                }
+
+                if (!$this->filled('tax_override_reason')) {
+                    $validator->errors()->add('tax_override_reason', 'GST override reason is required.');
                 }
             }
 

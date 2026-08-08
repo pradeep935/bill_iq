@@ -12,6 +12,8 @@ class HsnMaster extends Model
     protected $casts = [
         'effective_from' => 'date',
         'effective_to' => 'date',
+        'classification_verified' => 'boolean',
+        'rate_verified' => 'boolean',
     ];
 
     public function taxRates()
@@ -25,6 +27,7 @@ class HsnMaster extends Model
 
         return $this->taxRates()
             ->where('status', 'active')
+            ->where('verification_status', 'verified')
             ->whereDate('effective_from', '<=', $date)
             ->where(function ($query) use ($date) {
                 $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $date);

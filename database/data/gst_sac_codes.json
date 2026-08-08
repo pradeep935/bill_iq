@@ -1,0 +1,5105 @@
+[
+  {
+    "code": "995411",
+    "description": "Construction services of single dwelling or multi dewlling or multi-storied residential buildings",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995412",
+    "description": "Construction services of other residential buildings such as old age homes, homeless shelters, hostels etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995413",
+    "description": "Construction services of industrial buildings such as buildings used for production activities (used for assembly line activities), workshops, storage buildings and other similar industrial buildings",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995414",
+    "description": "Construction services of commercial buildings such as office buildings, exhibition & marriage halls, malls, hotels, restaurants, airports, rail or road terminals, parking garages, petrol and service stations, theatres and other similar buildings.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995415",
+    "description": "Construction services of other non-residential buildings such as educational institutions, hospitals, clinics including vertinary clinics, religious establishments, courts, prisons, museums and other similar buildings",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995416",
+    "description": "Construction Services of other buildings n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995419",
+    "description": "Services involving Repair, alterations, additions, replacements, renovation, maintenance or remodelling of the buildings covered above.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995421",
+    "description": "General construction services of highways, streets, roads, railways and airfield runways, bridges and tunnels",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995422",
+    "description": "General construction services of harbours, waterways, dams, water mains and lines, irrigation and other waterworks",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995423",
+    "description": "General construction services of long-distance underground/overland/submarine pipelines, communication and electric power lines (cables); pumping stations and related works; transformer stations and related works.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995424",
+    "description": "General construction services of local water & sewage pipelines, electricity and communication cables & related works",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995425",
+    "description": "General construction services of mines and industrial plants",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995426",
+    "description": "General Construction services of Power Plants and its related infrastructure",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995427",
+    "description": "General construction services of outdoor sport and recreation facilities",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995428",
+    "description": "General construction services of other civil engineering works n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995429",
+    "description": "Services involving Repair, alterations, additions, replacements, renovation, maintenance or remodelling of the constructions covered above.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995431",
+    "description": "Demolition services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995432",
+    "description": "Site formation and clearance services including preparation services to make sites ready for subsequent construction work, test drilling & boring & core extraction, digging of trenches.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995433",
+    "description": "Excavating and earthmoving services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995434",
+    "description": "Water well drilling services and septic system installation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995435",
+    "description": "Other site preparation services n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995439",
+    "description": "Services involving Repair, alterations, additions, replacements, maintenance of the constructions covered above.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995441",
+    "description": "Installation, assembly and erection services of prefabricated buildings",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995442",
+    "description": "Installation, assembly and erection services of other prefabricated structures and constructions",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995443",
+    "description": "Installation services of all types of street furniture (e.g., bus shelters, benches, telephone booths, public toilets, etc.)",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995444",
+    "description": "Other assembly and erection services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995449",
+    "description": "Services involving Repair, alterations, additions, replacements, maintenance of the constructions covered above.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995451",
+    "description": "Pile driving and foundation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995452",
+    "description": "Building framing & Roof Framing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995453",
+    "description": "Roofing and waterproofing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995454",
+    "description": "Concrete services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995455",
+    "description": "Structural steel erection services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995456",
+    "description": "Masonry services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995457",
+    "description": "Scaffolding services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995458",
+    "description": "Other special trade construction services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995459",
+    "description": "Services involving Repair, alterations, additions, replacements, maintenance of the constructions covered above.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995461",
+    "description": "Electrical installation services including Electrical wiring & fitting services, fire alarm installation services, burglar alarm system installation services.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995462",
+    "description": "Water plumbing and drain laying services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995463",
+    "description": "Heating, ventilation and air conditioning equipment installation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995464",
+    "description": "Gas fitting installation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995465",
+    "description": "Insulation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995466",
+    "description": "Lift and escalator installation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995468",
+    "description": "Other installation services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995469",
+    "description": "Services involving Repair, alterations, additions, replacements, maintenance of the installations covered above.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995471",
+    "description": "Glazing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995472",
+    "description": "Plastering services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995473",
+    "description": "Painting services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995474",
+    "description": "Floor and wall tiling services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995475",
+    "description": "Other floor laying, wall covering and wall papering services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995476",
+    "description": "Joinery and carpentry services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995477",
+    "description": "Fencing and railing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995478",
+    "description": "Other building completion and finishing services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "995479",
+    "description": "Services involving Repair, alterations, additions, replacements, maintenance of the completion/finishing works covered above.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996111",
+    "description": "Services provided for a fee/commission or contract basis on wholesale trade",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996211",
+    "description": "Services provided for a fee/commission or contract basis on retail trade",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996311",
+    "description": "Room or unit accommodation services provided by Hotels, INN, Guest House, Club etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996312",
+    "description": "Camp site services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996313",
+    "description": "Recreational and vacation camp services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996321",
+    "description": "Room or unit accommodation services for students in student residences",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996322",
+    "description": "Room or unit accommodation services provided by Hostels, Camps, Paying Guest etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996329",
+    "description": "Other room or unit accommodation services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996331",
+    "description": "Services provided by Restaurants, Cafes and similar eating facilities including takeaway services, Room services and door delivery of food.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996332",
+    "description": "Services provided by Hotels, INN, Guest House, Club etc including Room services, takeaway services and door delivery of food.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996333",
+    "description": "Services provided in Canteen and other similar establishments",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996334",
+    "description": "Catering Services in Exhibition halls, Events, Marriage Halls and other outdoor/indoor functions.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996335",
+    "description": "Catering services in trains, flights etc.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996336",
+    "description": "Preparation and/or supply services of food, edible preparations, alchoholic & non-alchocholic beverages to airlines and other transportation operators",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996337",
+    "description": "Other contract food services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996339",
+    "description": "Other food, edible preparations, alchoholic & non-alchocholic beverages serving services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996411",
+    "description": "Local land transport services of passengers by railways, metro, monorail, bus, tramway, autos, three wheelers, scooters and other motor vehicles",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996412",
+    "description": "Taxi services including radio taxi & other similar services;",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996413",
+    "description": "Non-scheduled local bus and coach charter services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996414",
+    "description": "Other land transportation services of passengers.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996415",
+    "description": "Local water transport services of passengers by ferries, cruises etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996416",
+    "description": "Sightseeing transportation services by rail, land, water & air",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996419",
+    "description": "Other local transportation services of passengers n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996421",
+    "description": "Long-distance transport services of passengers through Rail network by Railways, Metro etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996422",
+    "description": "Long-distance transport services of passengers through Road by Bus, Car, non-scheduled long distance bus and coach services, stage carriage etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996423",
+    "description": "Taxi services including radio taxi & other similar services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996424",
+    "description": "Coastal and transoceanic (overseas) water transport services of passengers by Ferries, Cruise Ships etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996425",
+    "description": "Domestic/International Scheduled Air transport services of passengers",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996426",
+    "description": "Domestic/international non-scheduled air transport services of Passengers",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996427",
+    "description": "Space transport services of passengers",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996429",
+    "description": "Other long-distance transportation services of passengers n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996511",
+    "description": "Road transport services of Goods including letters, parcels, live animals, household & office furniture, containers etc by refrigerator vehicles, trucks, trailers, man or animal drawn vehicles or any other vehicles.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996512",
+    "description": "Railway transport services of Goods including letters, parcels, live animals, household & office furniture, intermodal containers, bulk cargo etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996513",
+    "description": "Transport services of petroleum & natural gas, water, sewerage and other goods via pipeline",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996519",
+    "description": "Other land transport services of goods n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996521",
+    "description": "Coastal and transoceanic (overseas) water transport services of goods by refrigerator vessels, tankers, bulk cargo vessels, container ships etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996522",
+    "description": "Inland water transport services of goods by refrigerator vessels, tankers and other vessels.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996531",
+    "description": "Air transport services of letters & parcels and other goods",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996532",
+    "description": "Space transport services of freight",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996601",
+    "description": "Rental services of road vehicles including buses, coaches, cars, trucks and other motor vehicles, with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996602",
+    "description": "Rental services of water vessels including passenger vessels, freight vessels etc with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996603",
+    "description": "Rental services of aircraft including passenger aircrafts, freight aircrafts etc with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996609",
+    "description": "Rental services of other transport vehicles n.e.c. with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996711",
+    "description": "Container handling services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996712",
+    "description": "Customs House Agent services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996713",
+    "description": "Clearing and forwarding services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996719",
+    "description": "Other cargo and baggage handling services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996721",
+    "description": "Refrigerated storage services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996722",
+    "description": "Bulk liquid or gas storage services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996729",
+    "description": "Other storage and warehousing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996731",
+    "description": "Railway pushing or towing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996739",
+    "description": "Other supporting services for railway transport n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996741",
+    "description": "Bus station services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996742",
+    "description": "Operation services of National Highways, State Highways, Expressways, Roads & streets; bridges and tunnel operation services.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996743",
+    "description": "Parking lot services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996744",
+    "description": "Towing services for commercial and private vehicles",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996749",
+    "description": "Other supporting services for road transport n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996751",
+    "description": "Port and waterway operation services (excl. cargo handling) such as operation services of ports, docks, light houses, light ships etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996752",
+    "description": "Pilotage and berthing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996753",
+    "description": "Vessel salvage and refloating services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996759",
+    "description": "Other supporting services for water transport n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996761",
+    "description": "Airport operation services (excl. cargo handling)",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996762",
+    "description": "Air traffic control services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996763",
+    "description": "Other supporting services for air transport",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996764",
+    "description": "Supporting services for space transport",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996791",
+    "description": "Goods transport agency services for road transport",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996792",
+    "description": "Goods transport agency services for other modes of transport",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996793",
+    "description": "Other goods transport services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996799",
+    "description": "Other supporting transport services n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996811",
+    "description": "Postal services including post office counter services, mail box rental services.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996812",
+    "description": "Courier services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996813",
+    "description": "Local delivery services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996819",
+    "description": "Other Delivery Services n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996911",
+    "description": "Electricity transmission services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996912",
+    "description": "Electricity distribution services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996913",
+    "description": "Gas distribution services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996921",
+    "description": "Water distribution services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996922",
+    "description": "Services involving distribution of steam, hot water and air conditioning supply etc.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "996929",
+    "description": "Other similar services.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997111",
+    "description": "Central banking services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997112",
+    "description": "Deposit services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997113",
+    "description": "Credit-granting services including stand-by commitment, guarantees & securities",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997114",
+    "description": "Financial leasing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997119",
+    "description": "Other financial services (except investment banking, insurance services and pension services)",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997120",
+    "description": "Investment banking services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997131",
+    "description": "pension services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997132",
+    "description": "Life insurance services  (excluding reinsurance services)",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997133",
+    "description": "Accident and health insurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997134",
+    "description": "Motor vehicle insurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997135",
+    "description": "Marine, aviation, and other transport insurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997136",
+    "description": "Freight insurance services & Travel insurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997137",
+    "description": "Other property insurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997139",
+    "description": "Other non-life insurance services (excluding reinsurance services)",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997141",
+    "description": "Life reinsurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997142",
+    "description": "Accident and health reinsurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997143",
+    "description": "Motor vehicle reinsurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997144",
+    "description": "Marine, aviation and other transport reinsurance ser",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997145",
+    "description": "services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997146",
+    "description": "Freight reinsurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997147",
+    "description": "Other property reinsurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997149",
+    "description": "Other non-life reinsurance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997151",
+    "description": "Services related to investment banking such as mergers & acquisition services, corporate finance & venture capital services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997152",
+    "description": "Brokerage and related securities and commodities services including commodity exchange services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997153",
+    "description": "Portfolio management services except pension funds",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997154",
+    "description": "Trust and custody services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997155",
+    "description": "Services related to the administration of financial markets",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997156",
+    "description": "Financial consultancy services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997157",
+    "description": "Foreign exchange services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997158",
+    "description": "Financial transactions processing and clearing house services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997159",
+    "description": "Other services auxiliary to financial services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997161",
+    "description": "Insurance brokerage and agency services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997162",
+    "description": "Insurance claims adjustment services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997163",
+    "description": "Actuarial services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997164",
+    "description": "Pension fund management services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997169",
+    "description": "Other services auxiliary to insurance and pensions",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997171",
+    "description": "Services of holding equity of subsidiary companies",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997172",
+    "description": "Services of holding securities and other assets of trusts and funds and similar financial entities",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997211",
+    "description": "Rental or leasing services involving own or leased residential property",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997212",
+    "description": "Rental or leasing services involving own or leased non-residential property",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997213",
+    "description": "Trade services of buildings",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997214",
+    "description": "Trade services of time-share properties",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997215",
+    "description": "Trade services of vacant and subdivided land",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997221",
+    "description": "Property management services on a fee/commission basis or contract basis",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997222",
+    "description": "Building sales on a fee/commission basis or contract basis",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997223",
+    "description": "Land sales on a fee/commission basis or contract basis",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997224",
+    "description": "Real estate appraisal services on a fee/commission basis or contract basis",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997311",
+    "description": "Leasing or rental services concerning transport equipments including containers, with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997312",
+    "description": "Leasing or rental services concerning agricultural machinery and equipment with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997313",
+    "description": "Leasing or rental services concerning construction machinery and equipment with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997314",
+    "description": "Leasing or rental services concerning office machinery and equipment (except computers) with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997315",
+    "description": "Leasing or rental services concerning computers with or without operators",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997316",
+    "description": "Leasing or rental services concerning telecommunications equipment with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997319",
+    "description": "Leasing or rental services concerning other machinery and equipments with or without operator",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997321",
+    "description": "Leasing or rental services concerning televisions, radios, video cassette recorders, projectors, audio systems and related equipment and accessories (Home entertainment equipment )",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997322",
+    "description": "Leasing or rental services concerning video tapes and disks (Home entertainment equipment )",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997323",
+    "description": "Leasing or rental services concerning furniture and other household appliances",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997324",
+    "description": "Leasing or rental services concerning pleasure and leisure equipment.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997325",
+    "description": "Leasing or rental services concerning household linen.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997326",
+    "description": "Leasing or rental services concerning textiles, clothing and footwear.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997327",
+    "description": "Leasing or rental services concerning do-it-yourself machinery and equipment",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997329",
+    "description": "Leasing or rental services concerning other goods",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997331",
+    "description": "Licensing services for the right to use computer software and databases.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997332",
+    "description": "Licensing services for the right to broadcast and show original films, sound recordings, radio and television programme etc.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997333",
+    "description": "Licensing services for the right to reproduce original art works",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997334",
+    "description": "Licensing services for the right to reprint and copy manuscripts, books, journals and periodicals.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997335",
+    "description": "Licensing services for the right to use R&D products",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997336",
+    "description": "Licensing services for the right to use trademarks and franchises",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997337",
+    "description": "Licensing services for the right to use minerals including its exploration and evaluation",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997338",
+    "description": "Licensing services for right to use other natural resources including telecommunication spectrum",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "997339",
+    "description": "Licensing services for the right to use other intellectual property products and other rescources n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998111",
+    "description": "Research and experimental development services in natural sciences",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998112",
+    "description": "Research and experimental development services in engineering and technology",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998113",
+    "description": "Research and experimental development services in medical sciences and pharmacy.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998114",
+    "description": "Research and experimental development services in agricultural sciences.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998121",
+    "description": "Research and experimental development services in social sciences.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998122",
+    "description": "Research and experimental development services in humanities",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998130",
+    "description": "Interdisciplinary research and experimental development services.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998141",
+    "description": "Research and development originals in pharmaceuticals",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998142",
+    "description": "Research and development originals in agriculture",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998143",
+    "description": "Research and development originals in biotechnology",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998144",
+    "description": "Research and development originals in computer related sciences",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998145",
+    "description": "Research and development originals in other fields n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998211",
+    "description": "Legal advisory and representation services concerning criminal law.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998212",
+    "description": "Legal advisory and representation services concerning other fields of law.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998213",
+    "description": "Legal documentation and certification services concerning patents, copyrights and other intellectual property rights.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998214",
+    "description": "Legal documentation and certification services concerning other documents.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998215",
+    "description": "Arbitration and conciliation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998216",
+    "description": "Other legal services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998221",
+    "description": "Financial auditing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998222",
+    "description": "Accounting and bookkeeping services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998223",
+    "description": "Payroll services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998224",
+    "description": "Other similar services n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998231",
+    "description": "Corporate tax consulting and preparation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998232",
+    "description": "Individual tax preparation and planning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998240",
+    "description": "Insolvency and receivership services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998311",
+    "description": "Management consulting and management services including financial, strategic, human resources, marketing, operations and supply chain management.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998312",
+    "description": "Business consulting services including pubic relations services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998313",
+    "description": "Information technology (IT) consulting and support services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998314",
+    "description": "Information technology (IT) design and development services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998315",
+    "description": "Hosting and information technology (IT) infrastructure provisioning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998316",
+    "description": "IT infrastructure and network management services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998319",
+    "description": "Other information technology services n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998321",
+    "description": "Architectural advisory services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998322",
+    "description": "Architectural services for residential building projects",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998323",
+    "description": "Architectural services for non-residential building projects",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998324",
+    "description": "Historical restoration architectural services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998325",
+    "description": "Urban planning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998326",
+    "description": "Rural land planning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998327",
+    "description": "Project site master planning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998328",
+    "description": "Landscape architectural services and advisory services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998331",
+    "description": "Engineering advisory services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998332",
+    "description": "Engineering services for building projects",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998333",
+    "description": "Engineering services for industrial and manufacturing projects",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998334",
+    "description": "Engineering services for transportation projects",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998335",
+    "description": "Engineering services for power projects",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998336",
+    "description": "Engineering services for telecommunications and broadcasting projects",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998337",
+    "description": "Engineering services for waste management projects (hazardous and non-hazardous), for water, sewerage and drainage projects.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998338",
+    "description": "Engineering services for other projects n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998339",
+    "description": "Project management services for construction projects",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998341",
+    "description": "Geological and geophysical consulting services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998342",
+    "description": "Subsurface surveying services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998343",
+    "description": "Mineral exploration and evaluation",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998344",
+    "description": "Surface surveying and map-making services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998345",
+    "description": "Weather forecasting and meteorological services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998346",
+    "description": "Technical testing and analysis services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998347",
+    "description": "Certification of ships, aircraft, dams, etc.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998348",
+    "description": "Certification and authentication of works of art",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998349",
+    "description": "Other technical and scientific services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998351",
+    "description": "Veterinary services for pet animals",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998352",
+    "description": "Veterinary services for livestock",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998359",
+    "description": "Other veterinary services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998361",
+    "description": "Advertising Services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998362",
+    "description": "Purchase or sale of advertising space or time, on commission",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998363",
+    "description": "Sale of advertising space in print media (except on commission)",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998364",
+    "description": "Sale of TV and radio advertising time",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998365",
+    "description": "Sale of Internet advertising space",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998366",
+    "description": "Sale of other advertising space or time (except on commission)",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998371",
+    "description": "Market research services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998372",
+    "description": "Public opinion polling services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998381",
+    "description": "Portrait photography services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998382",
+    "description": "Advertising and related photography services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998383",
+    "description": "Event photography and event videography services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998384",
+    "description": "Specialty photography services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998385",
+    "description": "Restoration and retouching services of photography",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998386",
+    "description": "Photographic & videographic processing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998387",
+    "description": "Other Photography & Videography and their processing services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998391",
+    "description": "Specialty design services including interior design, fashion design, industrial design and other specialty design services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998392",
+    "description": "Design originals",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998393",
+    "description": "Scientific and technical consulting services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998394",
+    "description": "Original compilations of facts/information",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998395",
+    "description": "Translation and interpretation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998396",
+    "description": "Trademarks and franchises",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998397",
+    "description": "Sponsorship Services & Brand Promotion Services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998399",
+    "description": "Other professional, technical and business services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998411",
+    "description": "Carrier services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998412",
+    "description": "Fixed telephony services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998413",
+    "description": "Mobile telecommunications services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998414",
+    "description": "Private network services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998415",
+    "description": "Data transmission services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998419",
+    "description": "Other telecommunications services including Fax services, Telex services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998421",
+    "description": "Internet backbone services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998422",
+    "description": "Internet access services in wired and wireless mode.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998423",
+    "description": "Fax, telephony over the Internet",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998424",
+    "description": "Audio conferencing and video conferencing over the Internet",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998429",
+    "description": "Other Internet telecommunications services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998431",
+    "description": "On-line text based information such as online books, newpapers, periodicals, directories etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998432",
+    "description": "On-line audio content",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998433",
+    "description": "On-line video content",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998434",
+    "description": "Software downloads",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998439",
+    "description": "Other on-line contents n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998441",
+    "description": "News agency services to newspapers and periodicals",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998442",
+    "description": "Services of independent journalists and press photographers",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998443",
+    "description": "News agency services to audiovisual media",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998451",
+    "description": "Library services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998452",
+    "description": "Operation services of public archives including digital archives",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998453",
+    "description": "Operation services of historical archives including digital archives",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998461",
+    "description": "Radio broadcast originals",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998462",
+    "description": "Television broadcast originals",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998463",
+    "description": "Radio channel programmes",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998464",
+    "description": "Television channel programmes",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998465",
+    "description": "Broadcasting services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998466",
+    "description": "Home programme distribution services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998511",
+    "description": "Executive/retained personnel search services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998512",
+    "description": "Permanent placement services, other than executive search services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998513",
+    "description": "Contract staffing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998514",
+    "description": "Temporary staffing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998515",
+    "description": "Long-term staffing (pay rolling) services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998516",
+    "description": "Temporary staffing-to-permanent placement services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998517",
+    "description": "Co-employment staffing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998519",
+    "description": "Other employment & labour supply services n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998521",
+    "description": "Investigation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998522",
+    "description": "Security consulting services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998523",
+    "description": "Security systems services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998524",
+    "description": "Armoured car services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998525",
+    "description": "Guard services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998526",
+    "description": "Training of guard dogs",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998527",
+    "description": "Polygraph services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998528",
+    "description": "Fingerprinting services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998529",
+    "description": "Other security services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998531",
+    "description": "Disinfecting and exterminating services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998532",
+    "description": "Window cleaning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998533",
+    "description": "General cleaning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998534",
+    "description": "Specialized cleaning services for reservoirs and tanks",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998535",
+    "description": "Sterilization of objects or premises (operating rooms)",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998536",
+    "description": "Furnace and chimney cleaning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998537",
+    "description": "Exterior cleaning of buildings of all types",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998538",
+    "description": "Cleaning of transportation equipment",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998539",
+    "description": "Other cleaning services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998540",
+    "description": "Packaging services of goods for others",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998541",
+    "description": "Parcel packing and gift wrapping",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998542",
+    "description": "Coin and currency packing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998549",
+    "description": "Other packaging services n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998551",
+    "description": "Reservation services for transportation",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998552",
+    "description": "Reservation services for accommodation, cruises and package tours",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998553",
+    "description": "Reservation services for convention centres, congress centres and exhibition halls",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998554",
+    "description": "Reservation services for event tickets, cinema halls, entertainment and recreational services and other reservation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998555",
+    "description": "Tour operator services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998556",
+    "description": "Tourist guide services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998557",
+    "description": "Tourism promotion and visitor information services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998559",
+    "description": "Other travel arrangement and related services n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998591",
+    "description": "Credit reporting & rating services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998592",
+    "description": "Collection agency services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998593",
+    "description": "Telephone-based support services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998594",
+    "description": "Combined office administrative services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998595",
+    "description": "Specialized office support services such as duplicating services, mailing services, document preparation etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998596",
+    "description": "Events, Exhibitions, Conventions and trade shows organisation and assistance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998597",
+    "description": "Landscape care and maintenance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998598",
+    "description": "Other information services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998599",
+    "description": "Other support services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998611",
+    "description": "Support services to crop production",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998612",
+    "description": "Animal husbandry services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998613",
+    "description": "Support services to hunting",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998614",
+    "description": "Support services to forestry and logging",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998615",
+    "description": "Support services to fishing",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998619",
+    "description": "Other support services to agriculture, hunting, forestry and fishing",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998621",
+    "description": "Support services to oil and gas extraction",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998622",
+    "description": "Support services to other mining n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998631",
+    "description": "Support services to electricity transmission and distribution",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998632",
+    "description": "Support services to gas distribution",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998633",
+    "description": "Support services to water distribution",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998634",
+    "description": "Support services to Distribution services of steam, hot water and air-conditioning supply",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998711",
+    "description": "Maintenance and repair services of fabricated metal products, except machinery and equipment.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998712",
+    "description": "Maintenance and repair services of office and accounting machinery",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998713",
+    "description": "Maintenance and repair services of computers and peripheral equipment",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998714",
+    "description": "Maintenance and repair services of transport machinery and equipment",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998715",
+    "description": "Maintenance and repair services of electrical household appliances",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998716",
+    "description": "Maintenance and repair services of telecommunication equipments and apparatus",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998717",
+    "description": "Maintenance and repair services of commercial and industrial machinery.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998718",
+    "description": "Maintenance and repair services of elevators and escalators",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998719",
+    "description": "Maintenance and repair services of other machinery and equipments",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998721",
+    "description": "Repair services of footwear and leather goods",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998722",
+    "description": "Repair services of watches, clocks and jewellery",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998723",
+    "description": "Repair services of garments and household textiles",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998724",
+    "description": "Repair services of furniture",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998725",
+    "description": "Repair services of bicycles",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998726",
+    "description": "Maintenance and repair services of musical instruments",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998727",
+    "description": "Repair services for photographic equipment and cameras",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998729",
+    "description": "Maintenance and repair services of other goods n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998731",
+    "description": "Installation services of fabricated metal products, except machinery and equipment.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998732",
+    "description": "Installation services of industrial, manufacturing and service industry machinery and equipment.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998733",
+    "description": "Installation services of office and accounting machinery and computers",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998734",
+    "description": "Installation services of radio, television and communications equipment and apparatus.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998735",
+    "description": "Installation services of professional medical machinery and equipment, and precision and optical instruments.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998736",
+    "description": "Installation services of electrical machinery and apparatus n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998739",
+    "description": "Installation services of other goods n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998811",
+    "description": "Meat processing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998812",
+    "description": "Fish processing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998813",
+    "description": "Fruit and vegetables processing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998814",
+    "description": "Vegetable and animal oil and fat manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998815",
+    "description": "Dairy product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998816",
+    "description": "Other food product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998817",
+    "description": "Prepared animal feeds manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998818",
+    "description": "Beverage manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998819",
+    "description": "Tobacco manufacturing services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998821",
+    "description": "Textile manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998822",
+    "description": "Wearing apparel manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998823",
+    "description": "Leather and leather product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998831",
+    "description": "Wood and wood product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998832",
+    "description": "Paper and paper product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998841",
+    "description": "Coke and refined petroleum product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998842",
+    "description": "Chemical product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998843",
+    "description": "Pharmaceutical product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998851",
+    "description": "Rubber and plastic product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998852",
+    "description": "Plastic product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998853",
+    "description": "Other non-metallic mineral product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998860",
+    "description": "Basic metal manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998871",
+    "description": "Structural metal product, tank, reservoir and steam generator manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998872",
+    "description": "Weapon and ammunition manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998873",
+    "description": "Other fabricated metal product manufacturing and metal treatment services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998874",
+    "description": "Computer, electronic and optical product manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998875",
+    "description": "Electrical equipment manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998876",
+    "description": "General-purpose machinery manufacturing services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998877",
+    "description": "Special-purpose machinery manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998881",
+    "description": "Motor vehicle and trailer manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998882",
+    "description": "Other transport equipment manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998891",
+    "description": "Furniture manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998892",
+    "description": "Jewellery manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998893",
+    "description": "Imitation jewellery manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998894",
+    "description": "Musical instrument manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998895",
+    "description": "Sports goods manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998896",
+    "description": "Game and toy manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998897",
+    "description": "Medical and dental instrument and supply manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998898",
+    "description": "Other manufacturing services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998911",
+    "description": "Publishing, on a fee or contract basis",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998912",
+    "description": "Printing and reproduction services of recorded media, on a fee or contract basis",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998920",
+    "description": "Moulding, pressing, stamping, extruding and similar plastic manufacturing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998931",
+    "description": "Iron and steel casting services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998932",
+    "description": "Non-ferrous metal casting services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998933",
+    "description": "Metal forging, pressing, stamping, roll forming and powder metallurgy services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998941",
+    "description": "Metal waste and scrap recovery (recycling) services, on a fee or contract basis",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "998942",
+    "description": "Non-metal waste and scrap recovery (recycling) services, on a fee or contract basis",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999111",
+    "description": "Overall Government public services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999112",
+    "description": "Public administrative services related to the provision of educational, health care, cultural and other social services, excluding social security service.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999113",
+    "description": "Public administrative services related to the more efficient operation of business.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999119",
+    "description": "Other administrative services of the government n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999121",
+    "description": "Public administrative services related to external affairs, diplomatic and consular services abroad.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999122",
+    "description": "Services related to foreign economic aid",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999123",
+    "description": "Services related to foreign military aid",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999124",
+    "description": "Military defence services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999125",
+    "description": "Civil defence services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999126",
+    "description": "Police and fire protection services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999127",
+    "description": "Public administrative services related to law courts",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999128",
+    "description": "Administrative services related to the detention or rehabilitation of criminals.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999129",
+    "description": "Public administrative services related to other public order and safety affairs n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999131",
+    "description": "Administrative services related to sickness, maternity or temporary disablement benefit schemes.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999133",
+    "description": "Administrative services related to unemployment compensation benefit schemes",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999134",
+    "description": "Administrative services related to family and child allowance programmes",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999210",
+    "description": "Pre-primary education services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999220",
+    "description": "Primary education services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999231",
+    "description": "Secondary education services, general",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999232",
+    "description": "Secondary education services, technical and vocational.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999241",
+    "description": "Higher education services, general",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999242",
+    "description": "Higher education services, technical",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999243",
+    "description": "Higher education services, vocational",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999249",
+    "description": "Other higher education services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999259",
+    "description": "Specialised education services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999291",
+    "description": "Cultural education services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999292",
+    "description": "Sports and recreation education services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999293",
+    "description": "Commercial training and coaching services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999294",
+    "description": "Other education and training services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999295",
+    "description": "services involving conduct of examination for admission to educational institutions",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999299",
+    "description": "Other Educational support services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999311",
+    "description": "Inpatient services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999312",
+    "description": "Medical and dental services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999313",
+    "description": "Childbirth and related services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999314",
+    "description": "Nursing and Physiotherapeutic services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999315",
+    "description": "Ambulance services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999316",
+    "description": "Medical Laboratory and Diagnostic-imaging services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999317",
+    "description": "Blood, sperm and organ bank services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999319",
+    "description": "Other human health services including homeopathy, unani, ayurveda, naturopathy, acupuncture etc.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999321",
+    "description": "Residential health-care services other than by hospitals",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999322",
+    "description": "Residential care services for the elderly and persons with disabilities",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999331",
+    "description": "Residential care services for children suffering from mental retardation, mental health illnesses or substance abuse",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999332",
+    "description": "Other social services with accommodation for children",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999333",
+    "description": "Residential care services for adults suffering from mental retardation, mental health illnesses or substance abuse",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999334",
+    "description": "Other social services with accommodation for adults",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999341",
+    "description": "Vocational rehabilitation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999349",
+    "description": "Other social services without accommodation for the elderly and disabled n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999351",
+    "description": "Child day-care services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999352",
+    "description": "Guidance and counseling services n.e.c. related to children",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999353",
+    "description": "Welfare services without accommodation",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999359",
+    "description": "Other social services without accommodation n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999411",
+    "description": "Sewerage and sewage treatment services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999412",
+    "description": "Septic tank emptying and cleaning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999421",
+    "description": "Collection services of hazardous waste",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999422",
+    "description": "Collection services of non-hazardous recyclable materials",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999423",
+    "description": "General waste collection services, residential",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999424",
+    "description": "General waste collection services, other n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999431",
+    "description": "Waste preparation, consolidation and storage services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999432",
+    "description": "Hazardous waste treatment and disposal services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999433",
+    "description": "Non-hazardous waste treatment and disposal services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999441",
+    "description": "Site remediation and clean-up services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999442",
+    "description": "Containment, control and monitoring services and other site remediation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999443",
+    "description": "Building remediation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999449",
+    "description": "Other remediation services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999451",
+    "description": "Sweeping and snow removal services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999459",
+    "description": "Other sanitation services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999490",
+    "description": "Other environmental protection services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999511",
+    "description": "Services furnished by business and employers organizations",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999512",
+    "description": "Services furnished by professional organizations",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999520",
+    "description": "Services furnished by trade unions",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999591",
+    "description": "Religious services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999592",
+    "description": "Services furnished by political organizations",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999593",
+    "description": "Services furnished by human rights organizations",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999594",
+    "description": "Cultural and recreational associations",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999595",
+    "description": "Services furnished by environmental advocacy groups",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999596",
+    "description": "Services provided by youth associations",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999597",
+    "description": "Other civic and social organizations",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999598",
+    "description": "Home owners associations",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999599",
+    "description": "Services provided by other membership organizations n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999611",
+    "description": "Sound recording services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999612",
+    "description": "Motion picture, videotape, television and radio programme production services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999613",
+    "description": "Audiovisual post-production services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999614",
+    "description": "Motion picture, videotape and television programme distribution services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999615",
+    "description": "Motion picture projection services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999621",
+    "description": "Performing arts event promotion and organization services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999622",
+    "description": "Performing arts event production and presentation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999623",
+    "description": "Performing arts facility operation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999629",
+    "description": "Other performing arts and live entertainment services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999631",
+    "description": "Services of performing artists including actors, readers, musicians, singers, dancers, TV personalities, independent models etc",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999632",
+    "description": "Services of authors, composers, sculptors and other artists, except performing artists",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999633",
+    "description": "Original works of authors, composers and other artists except performing artists, painters and sculptors",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999641",
+    "description": "Museum and preservation services of historical sites and buildings",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999642",
+    "description": "Botanical, zoological and nature reserve services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999651",
+    "description": "Sports and recreational sports event promotion and organization services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999652",
+    "description": "Sports and recreational sports facility operation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999659",
+    "description": "Other sports and recreational sports services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999661",
+    "description": "Services of athletes",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999662",
+    "description": "Support services related to sports and recreation",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999691",
+    "description": "Amusement park and similar attraction services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999692",
+    "description": "Gambling and betting services including similar online services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999693",
+    "description": "Coin-operated amusement machine services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999694",
+    "description": "Lottery services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999699",
+    "description": "Other recreation and amusement services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999711",
+    "description": "Coin-operated laundry services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999712",
+    "description": "Dry-cleaning services (including fur product cleaning services)",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999713",
+    "description": "Other textile cleaning services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999714",
+    "description": "Pressing services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999715",
+    "description": "Dyeing and colouring services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999719",
+    "description": "Other washing, cleaning and dyeing services n.e.c",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999721",
+    "description": "Hairdressing and barbers services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999722",
+    "description": "Cosmetic treatment (including cosmetic/plastic surgery), manicuring and pedicuring services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999723",
+    "description": "Physical well-being services including health club & fitness centre",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999729",
+    "description": "Other beauty treatment services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999731",
+    "description": "Cemeteries and cremation services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999732",
+    "description": "Undertaking services",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999791",
+    "description": "Services involving commercial use or exploitation of any event",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999792",
+    "description": "Agreeing to do an act",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999793",
+    "description": "Agreeing to refrain from doing an act",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999794",
+    "description": "Agreeing to tolerate an act",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999795",
+    "description": "Conduct of religious ceremonies/rituals by persons",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999799",
+    "description": "Other services n.e.c.",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999800",
+    "description": "Domestic services both part time & full time",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  },
+  {
+    "code": "999900",
+    "description": "Services provided by extraterritorial organizations and bodies",
+    "type": "service",
+    "code_type": "SAC",
+    "chapter_code": "99",
+    "search_keywords": null,
+    "source_reference": "CBIC - Classification Scheme for Services under GST"
+  }
+]

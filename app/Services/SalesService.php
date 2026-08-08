@@ -630,7 +630,9 @@ class SalesService
     private function syncItems(SalesVoucher $voucher, array $items): void
     {
         foreach ($items as $item) {
-            $product = Product::query()->with('hsn')->findOrFail($item['product_id']);
+            $product = Product::query()->with(['hsn', 'hsnMaster', 'hsnTaxRate'])->findOrFail($item['product_id']);
+            $productHsn = $product->hsnMaster ?: $product->hsn;
+            $taxRule = $product->hsnTaxRate;
             $scope = [
                 'business_id' => $voucher->business_id,
                 'branch_id' => $voucher->branch_id,
@@ -648,9 +650,14 @@ class SalesService
                 'barcode_snapshot' => $product->primary_barcode ?: $product->barcode,
                 'product_name_snapshot' => $product->invoice_description ?: $product->name,
                 'sku_snapshot' => $product->sku,
-                'hsn_code_snapshot' => $product->hsn_code ?: $product->hsn ?: optional($product->hsn)->hsn_code,
-                'hsn_code_type_snapshot' => optional($product->hsn)->code_type ?: ($product->product_type === 'service' ? 'SAC' : 'HSN'),
+                'hsn_code_snapshot' => $product->hsn_code ?: $product->hsn ?: optional($productHsn)->hsn_code,
+                'hsn_code_type_snapshot' => optional($productHsn)->code_type ?: ($product->product_type === 'service' ? 'SAC' : 'HSN'),
+                'hsn_description_snapshot' => optional($productHsn)->description,
+                'hsn_tax_rate_id' => $product->hsn_tax_rate_id,
                 'taxability_snapshot' => $product->taxability ?: (((float) $product->gst_rate > 0) ? 'taxable' : 'nil_rated'),
+                'tax_source' => $product->tax_source ?: 'manual_confirmation',
+                'notification_number' => optional($taxRule)->notification_number,
+                'tax_rule_description' => optional($taxRule)->rule_description ?: optional($taxRule)->rule_name,
                 'quantity' => $item['quantity'],
                 'free_quantity' => $item['free_quantity'] ?? 0,
                 'selling_rate' => $item['selling_rate'],
@@ -673,7 +680,49 @@ class SalesService
                 'salesperson_id' => $item['salesperson_id'] ?? $voucher->salesperson_id,
                 'remarks' => $item['remarks'] ?? null,
             ]);
+
+            $this->recordHsnUsage($voucher->business_id, $product);
         }
+    }
+
+    private function recordHsnUsage(int $businessId, Product $product): void
+    {
+        $hsnId = $product->hsn_master_id ?: $product->hsn_id;
+
+        if (!$hsnId || !Schema::hasTable('business_hsn_usage')) {
+            return;
+        }
+
+        $keys = [
+            'business_id' => $businessId,
+            'hsn_id' => $hsnId,
+        ];
+
+        if (Schema::hasColumn('business_hsn_usage', 'product_id')) {
+            $keys['product_id'] = $product->id;
+        }
+
+        $existing = DB::table('business_hsn_usage')->where($keys)->first();
+        $now = now();
+
+        if ($existing) {
+            DB::table('business_hsn_usage')
+                ->where('id', $existing->id)
+                ->update([
+                    'usage_count' => DB::raw('COALESCE(usage_count, 0) + 1'),
+                    'last_used_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+            return;
+        }
+
+        DB::table('business_hsn_usage')->insert(array_merge($keys, [
+            'usage_count' => 1,
+            'last_used_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]));
     }
 
     private function syncPayments(SalesVoucher $voucher, array $payments): void

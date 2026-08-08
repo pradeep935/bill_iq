@@ -12,6 +12,7 @@ class HsnTaxRate extends Model
     protected $casts = [
         'effective_from' => 'date',
         'effective_to' => 'date',
+        'rate_verified' => 'boolean',
     ];
 
     public function hsn()

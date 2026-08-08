@@ -65,10 +65,14 @@ const initialForm = () => ({
     primary_barcode: '',
 
     hsn_master_id: '',
+    hsn_tax_rate_id: '',
     hsn_code: '',
     taxability: 'taxable',
     gst_rate: '0',
     cess_rate: '0',
+    tax_source: 'manual_confirmation',
+    tax_override_reason: '',
+    tax_override_reference: '',
     reverse_charge: 'no',
     tax_inclusive: false,
     invoice_description: '',
@@ -102,6 +106,8 @@ const images = ref([]);
 const hsnSearch = ref('');
 const hsnResults = ref([]);
 const hsnSearching = ref(false);
+const selectedHsnRecord = ref(null);
+let hsnSearchTimer = null;
 const clientErrors = ref({});
 const attemptedSave = ref(false);
 const fillingForm = ref(false);
@@ -433,11 +439,31 @@ const applyHsn = (hsn) => {
     }
 
     form.hsn_master_id = hsn.id || '';
+    form.hsn_tax_rate_id = '';
     form.hsn_code = hsn.hsn_code || '';
     hsnSearch.value = hsn.hsn_code || '';
-    form.taxability = hsn.taxability || 'taxable';
-    form.gst_rate = String(hsn.gst_rate ?? '0');
-    form.cess_rate = String(hsn.cess_rate ?? '0');
+    selectedHsnRecord.value = hsn;
+
+    if (hsn.tax_resolution?.status === 'single_verified_rule' && hsn.tax_resolution.rule) {
+        const rule = hsn.tax_resolution.rule;
+        form.hsn_tax_rate_id = rule.id || '';
+        form.taxability = rule.taxability || 'taxable';
+        form.gst_rate = String(rule.gst_rate ?? '');
+        form.cess_rate = String(rule.cess_rate ?? '0');
+        form.tax_source = 'verified_rule';
+
+        return;
+    }
+
+    form.tax_source = hsn.tax_resolution?.status === 'multiple_verified_rules'
+        ? 'manual_confirmation'
+        : 'manual_confirmation';
+
+    if (hsn.rate_verified !== false && hsn.gst_rate !== null && hsn.gst_rate !== undefined) {
+        form.taxability = hsn.taxability || 'taxable';
+        form.gst_rate = String(hsn.gst_rate);
+        form.cess_rate = String(hsn.cess_rate ?? '0');
+    }
 };
 
 const findMatchingHsn = () => {
@@ -521,9 +547,6 @@ const fillSmartFields = (force = false) => {
     if (force || !form.invoice_description) form.invoice_description = form.short_name || normalizedProductName.value;
     applySuggestedBarcode(force);
 
-    if (force || !form.hsn_code) {
-        applyHsn(findMatchingHsn());
-    }
 };
 
 const productTypeOptions = [
@@ -565,8 +588,8 @@ const hsnOptions = computed(() => {
     return (props.references?.hsn_codes || [])
         .filter((hsn) => !hsn.code_type || hsn.code_type === expectedCodeType);
 });
-const selectedHsn = computed(() => hsnOptions.value.find((hsn) => String(hsn.id) === String(form.hsn_master_id)) || null);
-const hsnTaxLocked = computed(() => Boolean(selectedHsn.value));
+const selectedHsn = computed(() => selectedHsnRecord.value || hsnOptions.value.find((hsn) => String(hsn.id) === String(form.hsn_master_id)) || null);
+const hsnTaxLocked = computed(() => form.tax_source === 'verified_rule');
 const brandOptions = computed(() => {
     const options = normalizeReferenceOptions(props.references?.brands || [], ['name', 'label', 'code']);
 
@@ -588,20 +611,18 @@ const taxabilityOptions = [
     { value: 'non_gst', label: 'Non-Taxable' },
 ];
 
-const gstRateOptions = [
-    { value: '0', label: '0%' },
-    { value: '0.1', label: '0.1%' },
-    { value: '0.25', label: '0.25%' },
-    { value: '1', label: '1%' },
-    { value: '1.5', label: '1.5%' },
-    { value: '3', label: '3%' },
-    { value: '5', label: '5%' },
-    { value: '6', label: '6%' },
-    { value: '7.5', label: '7.5%' },
-    { value: '12', label: '12%' },
-    { value: '18', label: '18%' },
-    { value: '28', label: '28%' },
+const fallbackGstRateOptions = [
+    { value: '0', label: '0%', is_common: true },
+    { value: '5', label: '5%', is_common: true },
+    { value: '12', label: '12%', is_common: true },
+    { value: '18', label: '18%', is_common: true },
+    { value: '28', label: '28%', is_common: true },
 ];
+const gstRateOptions = computed(() => {
+    const slabs = props.references?.gst_rate_slabs || [];
+
+    return slabs.length ? slabs : fallbackGstRateOptions;
+});
 
 const reverseChargeOptions = [
     { value: 'no', label: 'No' },
@@ -650,10 +671,14 @@ const fillForm = (product = {}) => {
         primary_barcode: product?.primary_barcode || '',
 
         hsn_master_id: product?.hsn_master_id || '',
+        hsn_tax_rate_id: product?.hsn_tax_rate_id || '',
         hsn_code: product?.hsn_code || '',
         taxability: product?.taxability || 'taxable',
         gst_rate: String(product?.gst_rate ?? '0'),
         cess_rate: String(product?.cess_rate ?? '0'),
+        tax_source: product?.tax_source || 'manual_confirmation',
+        tax_override_reason: product?.tax_override_reason || '',
+        tax_override_reference: product?.tax_override_reference || '',
         reverse_charge: product?.reverse_charge || 'no',
         tax_inclusive: Boolean(product?.tax_inclusive),
         invoice_description:
@@ -685,6 +710,7 @@ const fillForm = (product = {}) => {
     images.value = normalizeImages(product);
     hsnSearch.value = product?.hsn_code || '';
     hsnResults.value = [];
+    selectedHsnRecord.value = (props.references?.hsn_codes || []).find((hsn) => String(hsn.id) === String(product?.hsn_master_id || product?.hsn_id)) || null;
     clientErrors.value = {};
     attemptedSave.value = false;
 
@@ -1059,6 +1085,11 @@ const searchHsn = async () => {
     const keyword = hsnSearch.value.trim();
     form.hsn_code = keyword;
     form.hsn_master_id = '';
+    selectedHsnRecord.value = null;
+
+    if (hsnSearchTimer) {
+        clearTimeout(hsnSearchTimer);
+    }
 
     if (keyword.length < 2) {
         hsnResults.value = [];
@@ -1074,14 +1105,20 @@ const searchHsn = async () => {
         })
         .slice(0, 8);
 
-    hsnSearching.value = true;
+    hsnSearchTimer = setTimeout(async () => {
+        hsnSearching.value = true;
 
-    try {
-        const results = await ProductApi.searchHsn(keyword, form.product_type);
-        hsnResults.value = results.length ? results : hsnResults.value;
-    } finally {
-        hsnSearching.value = false;
-    }
+        try {
+            const results = await ProductApi.searchHsn(keyword, form.product_type, {
+                product_name: form.name || form.product_name || '',
+                category_id: form.category_id || '',
+                limit: 20,
+            });
+            hsnResults.value = results.length ? results : hsnResults.value;
+        } finally {
+            hsnSearching.value = false;
+        }
+    }, 300);
 };
 
 const selectHsn = (hsn) => {
@@ -1793,7 +1830,7 @@ const saveProduct = () => {
                                         <span class="help-icon">i</span>
 
                                         <span>
-                                            Auto from HSN/SAC Master: {{ selectedHsn.code_type || hsnSacLabel }} {{ selectedHsn.hsn_code }} - {{ selectedHsn.description }}. One classification can be linked with many products.
+                                            {{ selectedHsn.code_type || hsnSacLabel }} {{ selectedHsn.hsn_code }} - {{ selectedHsn.description }}. One classification can be linked with many products.
                                         </span>
                                     </div>
 
@@ -1828,7 +1865,7 @@ const saveProduct = () => {
                                         <span class="help-icon">i</span>
 
                                         <span>
-                                            Auto from HSN/SAC Master.
+                                            {{ form.tax_source === 'verified_rule' ? 'Verified tax rule applied.' : 'Manual tax confirmation required.' }}
                                         </span>
                                     </div>
 

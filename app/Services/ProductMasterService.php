@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Http\Controllers\AppController;
 use App\Models\Brand;
+use App\Models\HsnTaxRate;
 use App\Models\Product;
 use App\Models\ProductBarcode;
 use App\Models\ProductBatch;
@@ -121,6 +122,8 @@ class ProductMasterService
             $this->setProductColumn($product, 'created_by', Auth::id());
             $product->save();
             $this->syncChildren($product, $data);
+            $this->recordHsnUsage($product);
+            $this->auditProductTaxChange($product, 'product_tax_configuration_created', [], $product->only(['hsn_master_id', 'hsn_id', 'hsn_tax_rate_id', 'gst_rate', 'cess_rate', 'taxability', 'tax_source']));
 
             return $this->freshProduct($product);
         });
@@ -129,9 +132,12 @@ class ProductMasterService
     public function update(Product $product, array $data): Product
     {
         return DB::transaction(function () use ($product, $data) {
+            $oldTax = $product->only(['hsn_master_id', 'hsn_id', 'hsn_tax_rate_id', 'gst_rate', 'cess_rate', 'taxability', 'tax_source']);
             $this->fillProduct($product, $data);
             $product->save();
             $this->syncChildren($product, $data);
+            $this->recordHsnUsage($product);
+            $this->auditProductTaxChange($product, 'product_tax_configuration_updated', $oldTax, $product->only(['hsn_master_id', 'hsn_id', 'hsn_tax_rate_id', 'gst_rate', 'cess_rate', 'taxability', 'tax_source']));
 
             return $this->freshProduct($product);
         });
@@ -226,6 +232,7 @@ class ProductMasterService
             'unit_id' => $product->unit_id,
             'hsn_id' => $product->hsn_id,
             'hsn_master_id' => $product->hsn_master_id ?: $product->hsn_id,
+            'hsn_tax_rate_id' => $product->hsn_tax_rate_id,
             'category' => $product->category,
             'subcategory' => $product->subcategory,
             'brand' => $product->brand,
@@ -239,6 +246,7 @@ class ProductMasterService
             'taxability' => $product->taxability ?: (((float) $product->gst_rate > 0) ? 'taxable' : 'nil_rated'),
             'gst_rate' => (float) $product->gst_rate,
             'cess_rate' => (float) ($product->cess_rate ?: 0),
+            'tax_source' => $product->tax_source,
             'reverse_charge' => $product->reverse_charge ?: 'no',
             'tax_inclusive' => (bool) $product->tax_inclusive,
             'invoice_description' => $product->invoice_description,
@@ -330,7 +338,7 @@ class ProductMasterService
 
     public function references(): array
     {
-        return app(MasterDataService::class)->references(['categories', 'sub_categories', 'brands', 'units', 'hsn_codes']);
+        return app(MasterDataService::class)->references(['categories', 'sub_categories', 'brands', 'units', 'hsn_codes', 'gst_rate_slabs']);
     }
 
     private function fillProduct(Product $product, array $data): void
@@ -388,12 +396,19 @@ class ProductMasterService
         $hsnCode = $hsn ? $hsn->hsn_code : $data['hsn_code'];
         $this->setProductColumn($product, 'hsn', $hsnCode);
         $this->setProductColumn($product, 'hsn_code', $hsnCode);
-        $taxability = $hsn?->taxability ?: $data['taxability'];
-        $gstRate = $hsn ? $hsn->gst_rate : $data['gst_rate'];
-        $cessRate = $hsn ? $hsn->cess_rate : ($data['cess_rate'] ?? 0);
+        [$taxRule, $taxSource] = $this->resolveProductTaxRule($hsn, $data);
+        $taxability = $taxRule ? $taxRule->taxability : $data['taxability'];
+        $gstRate = $taxRule ? $taxRule->gst_rate : $data['gst_rate'];
+        $cessRate = $taxRule ? $taxRule->cess_rate : ($data['cess_rate'] ?? 0);
+        $this->setProductColumn($product, 'hsn_tax_rate_id', $taxRule?->id);
         $this->setProductColumn($product, 'taxability', $taxability);
         $this->setProductColumn($product, 'gst_rate', $gstRate);
         $this->setProductColumn($product, 'cess_rate', $cessRate);
+        $this->setProductColumn($product, 'tax_source', $taxSource);
+        $this->setProductColumn($product, 'tax_confirmed_by', Auth::id());
+        $this->setProductColumn($product, 'tax_confirmed_at', now());
+        $this->setProductColumn($product, 'tax_override_reason', $data['tax_override_reason'] ?? null);
+        $this->setProductColumn($product, 'tax_override_reference', $data['tax_override_reference'] ?? null);
         $this->setProductColumn($product, 'reverse_charge', $data['reverse_charge']);
         $this->setProductColumn($product, 'tax_inclusive', (bool) ($data['tax_inclusive'] ?? false));
         $this->setProductColumn($product, 'invoice_description', $data['invoice_description'] ?? null);
@@ -433,6 +448,106 @@ class ProductMasterService
         if (Schema::hasColumn('products', $column)) {
             $product->{$column} = $value;
         }
+    }
+
+    private function resolveProductTaxRule(?HsnMaster $hsn, array $data): array
+    {
+        if (!$hsn || !Schema::hasTable('hsn_tax_rates') || !Schema::hasColumn('hsn_tax_rates', 'verification_status')) {
+            return [null, $data['tax_source'] ?? 'manual_confirmation'];
+        }
+
+        if (($data['tax_source'] ?? null) === 'override') {
+            return [null, 'override'];
+        }
+
+        $rules = HsnTaxRate::query()
+            ->where('hsn_id', $hsn->id)
+            ->where('status', 'active')
+            ->where('verification_status', 'verified')
+            ->whereDate('effective_from', '<=', now()->toDateString())
+            ->where(function (Builder $query) {
+                $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', now()->toDateString());
+            })
+            ->get();
+
+        if (!empty($data['hsn_tax_rate_id'])) {
+            $selectedRule = $rules->firstWhere('id', (int) $data['hsn_tax_rate_id']);
+
+            if ($selectedRule) {
+                return [$selectedRule, 'verified_rule'];
+            }
+        }
+
+        if ($rules->count() === 1) {
+            return [$rules->first(), 'verified_rule'];
+        }
+
+        return [null, $data['tax_source'] ?? 'manual_confirmation'];
+    }
+
+    private function recordHsnUsage(Product $product): void
+    {
+        $hsnId = $product->hsn_master_id ?: $product->hsn_id;
+
+        if (!$hsnId || !Schema::hasTable('business_hsn_usage')) {
+            return;
+        }
+
+        $businessId = (int) ($product->business_id ?: $product->company_id ?: $this->businessId());
+        $now = now();
+        $keys = [
+            'business_id' => $businessId,
+            'hsn_id' => $hsnId,
+        ];
+
+        if (Schema::hasColumn('business_hsn_usage', 'product_id')) {
+            $keys['product_id'] = $product->id;
+        }
+
+        $existing = DB::table('business_hsn_usage')->where($keys)->first();
+
+        if ($existing) {
+            DB::table('business_hsn_usage')
+                ->where('id', $existing->id)
+                ->update([
+                    'usage_count' => DB::raw('COALESCE(usage_count, 0) + 1'),
+                    'last_used_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+            return;
+        }
+
+        DB::table('business_hsn_usage')->insert(array_merge($keys, [
+            'usage_count' => 1,
+            'last_used_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]));
+    }
+
+    private function auditProductTaxChange(Product $product, string $event, array $oldValues, array $newValues): void
+    {
+        if (!Schema::hasTable('hsn_tax_audit_logs') || $oldValues == $newValues) {
+            return;
+        }
+
+        DB::table('hsn_tax_audit_logs')->insert(array_filter([
+            'business_id' => $product->business_id ?: $product->company_id ?: $this->businessId(),
+            'user_id' => Auth::id(),
+            'hsn_id' => $product->hsn_master_id ?: $product->hsn_id,
+            'hsn_tax_rate_id' => $product->hsn_tax_rate_id ?? null,
+            'auditable_type' => Product::class,
+            'auditable_id' => $product->id,
+            'event' => $event,
+            'action' => $event,
+            'old_values' => json_encode($oldValues),
+            'new_values' => json_encode($newValues),
+            'performed_by' => Auth::id(),
+            'performed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], fn ($value) => $value !== null));
     }
 
     private function syncChildren(Product $product, array $data): void

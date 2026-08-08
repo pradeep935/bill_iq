@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\ProductBulkStatusRequest;
 use App\Http\Requests\ProductMasterRequest;
-use App\Models\HsnMaster;
+use App\Services\HsnSacSearchService;
 use App\Services\ProductMasterService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -157,50 +157,13 @@ class ProductController extends Controller
         ]);
     }
 
-    public function hsnSearch(Request $request)
+    public function hsnSearch(Request $request, HsnSacSearchService $search)
     {
         $this->authorizeProductView();
 
-        $search = trim((string) $request->query('q'));
-        $productType = $request->query('product_type');
-        $codeType = $productType === 'service' ? 'SAC' : 'HSN';
-        $businessId = AppController::businessId();
+        $result = $search->search($request->query());
 
-        $hsnMaster = HsnMaster::where('status', 'active')
-            ->where(function ($query) use ($businessId) {
-                $query->whereNull('business_id')->orWhere('business_id', $businessId);
-            })
-            ->where('code_type', $codeType)
-            ->where(function ($query) {
-                $query->whereNull('effective_from')->orWhereDate('effective_from', '<=', now()->toDateString());
-            })
-            ->where(function ($query) {
-                $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', now()->toDateString());
-            })
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($innerQuery) use ($search) {
-                    $innerQuery
-                        ->where('hsn_code', 'like', $search . '%')
-                        ->orWhere('description', 'like', '%' . $search . '%');
-                });
-            })
-            ->orderBy('hsn_code')
-            ->limit(20)
-            ->get([
-                'id',
-                'hsn_code',
-                'code_type',
-                'description',
-                'taxability',
-                'gst_rate',
-                'cess_rate',
-                'effective_from',
-                'effective_to',
-                'notification_number',
-                'source_reference',
-            ]);
-
-        return response()->json($hsnMaster);
+        return response()->json($request->boolean('with_meta') ? $result : $result['data']);
     }
 
     private function authorizeProductView(): void

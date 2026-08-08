@@ -27,6 +27,7 @@ class MasterDataService
             'brands' => fn () => $this->brands($businessId),
             'units' => fn () => $this->units(),
             'hsn_codes' => fn () => $this->hsnCodes(),
+            'gst_rate_slabs' => fn () => $this->gstRateSlabs(),
         ];
 
         $keys = $only ?: array_keys($all);
@@ -136,7 +137,33 @@ class MasterDataService
                 $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', now()->toDateString());
             })
             ->orderBy('hsn_code')
-            ->get($this->columns('hsn_masters', ['id', 'hsn_code', 'code_type', 'description', 'taxability', 'gst_rate', 'cess_rate', 'effective_from', 'effective_to']));
+            ->limit(100)
+            ->get($this->columns('hsn_masters', ['id', 'hsn_code', 'code_type', 'description', 'taxability', 'classification_verified', 'rate_verified', 'gst_rate', 'cess_rate', 'effective_from', 'effective_to']));
+    }
+
+    public function gstRateSlabs()
+    {
+        if (!Schema::hasTable('gst_rate_slabs')) {
+            return collect();
+        }
+
+        return \DB::table('gst_rate_slabs')
+            ->where(function ($query) {
+                $query->whereNull('status')->orWhere('status', 'active')->orWhere('status', 1);
+            })
+            ->when(Schema::hasColumn('gst_rate_slabs', 'selectable'), fn ($query) => $query->where('selectable', 1))
+            ->orderByDesc(Schema::hasColumn('gst_rate_slabs', 'is_common') ? 'is_common' : 'rate')
+            ->orderBy(Schema::hasColumn('gst_rate_slabs', 'sort_order') ? 'sort_order' : 'rate')
+            ->get($this->columns('gst_rate_slabs', ['id', 'rate', 'label', 'is_common', 'selectable', 'notes']))
+            ->map(fn ($slab) => [
+                'id' => $slab->id,
+                'value' => (string) (float) $slab->rate,
+                'label' => $slab->label ?: rtrim(rtrim((string) $slab->rate, '0'), '.') . '%',
+                'is_common' => (bool) ($slab->is_common ?? false),
+                'selectable' => (bool) ($slab->selectable ?? true),
+                'notes' => $slab->notes ?? null,
+            ])
+            ->values();
     }
 
     public function ensureDefaultWarehouses(int $businessId): void

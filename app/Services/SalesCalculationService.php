@@ -46,8 +46,14 @@ class SalesCalculationService
         $discount = $this->calculateLineDiscount($gross, $item['discount_type'] ?? null, (float) ($item['discount_value'] ?? 0));
         $afterDiscount = max(0, $gross - $discount);
         $taxInclusive = (bool) ($item['tax_inclusive'] ?? false);
-        $gstRate = in_array($taxType, ['exempt', 'nil_rated'], true) || $invoiceType === 'bill_of_supply' ? 0 : (float) ($item['gst_rate'] ?? 0);
-        $cessRate = in_array($taxType, ['exempt', 'nil_rated'], true) || $invoiceType === 'bill_of_supply' ? 0 : (float) ($item['cess_rate'] ?? 0);
+        $taxSuppressed = in_array($taxType, ['exempt', 'nil_rated'], true) || $invoiceType === 'bill_of_supply';
+
+        if (!$taxSuppressed && (!array_key_exists('gst_rate', $item) || $item['gst_rate'] === null || $item['gst_rate'] === '')) {
+            throw ValidationException::withMessages(['gst_rate' => 'GST rate must be resolved or manually confirmed before billing.']);
+        }
+
+        $gstRate = $taxSuppressed ? 0 : (float) $item['gst_rate'];
+        $cessRate = $taxSuppressed ? 0 : (float) ($item['cess_rate'] ?? 0);
         $combinedRate = $gstRate + $cessRate;
         $inclusive = $taxInclusive ? $this->calculateInclusiveTax($afterDiscount, $combinedRate) : null;
         $taxable = $inclusive ? $inclusive['taxable_amount'] : $afterDiscount;

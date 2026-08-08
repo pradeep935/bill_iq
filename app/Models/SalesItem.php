@@ -30,6 +30,11 @@ class SalesItem extends Model
         'cost_rate' => 'decimal:2',
     ];
 
+    public function hsnTaxRate()
+    {
+        return $this->belongsTo(HsnTaxRate::class, 'hsn_tax_rate_id');
+    }
+
     public function voucher()
     {
         return $this->belongsTo(SalesVoucher::class, 'sales_voucher_id');

@@ -179,20 +179,14 @@ const tabs = [
   { key: 'hsn', label: 'HSN/SAC', singular: 'HSN/SAC', hint: 'Maintain HSN/SAC tax classifications and GST rates used by many products and services.', helpTitle: 'Where is this used?', helpPoints: ['One HSN/SAC classification can be linked with many products.', 'Product Master stores the actual product name separately from this tax description.', 'Provides stable tax snapshots for invoices, tax summaries and GST reports.'], columns: [{ key: 'hsn_code', label: 'Code' }, { key: 'code_type', label: 'Type' }, { key: 'taxability', label: 'Taxability' }, { key: 'gst_rate', label: 'GST %' }, { key: 'cess_rate', label: 'CESS %' }, { key: 'description', label: 'Description' }] },
 ];
 
-const gstRateOptions = [
+const fallbackGstRateOptions = [
   { value: '0', label: '0%' },
-  { value: '0.1', label: '0.1%' },
-  { value: '0.25', label: '0.25%' },
-  { value: '1', label: '1%' },
-  { value: '1.5', label: '1.5%' },
-  { value: '3', label: '3%' },
   { value: '5', label: '5%' },
-  { value: '6', label: '6%' },
-  { value: '7.5', label: '7.5%' },
   { value: '12', label: '12%' },
   { value: '18', label: '18%' },
   { value: '28', label: '28%' },
 ];
+const gstRateOptions = computed(() => references.gst_rate_slabs?.length ? references.gst_rate_slabs : fallbackGstRateOptions);
 
 const visibleTabs = computed(() => {
   if (props.page === 'branches') return tabs.filter((tab) => tab.key === 'branch');
@@ -207,7 +201,7 @@ const initialTab = computed(() => (
 ));
 const activeTab = ref(initialTab.value);
 const records = ref([]);
-const references = reactive({ branches: [], categories: [] });
+const references = reactive({ branches: [], categories: [], gst_rate_slabs: [] });
 const filters = reactive({ search: '', status: '' });
 const form = reactive({});
 const gstRateSelection = ref('0');
@@ -262,7 +256,7 @@ const openDrawer = (record = null) => {
       form[key] = record[key] ?? '';
     });
     form.status = record.status || 'active';
-    gstRateSelection.value = gstRateOptions.some((rate) => Number(rate.value) === Number(form.gst_rate))
+    gstRateSelection.value = gstRateOptions.value.some((rate) => Number(rate.value) === Number(form.gst_rate))
       ? String(Number(form.gst_rate))
       : 'custom';
   }
@@ -286,6 +280,7 @@ const loadReferences = async () => {
   const { data } = await axios.get('/app/setup/masters/references');
   references.branches = data.branches || [];
   references.categories = data.categories || [];
+  references.gst_rate_slabs = data.gst_rate_slabs || [];
 };
 
 const loadRecords = async () => {

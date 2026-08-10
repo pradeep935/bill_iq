@@ -150,7 +150,7 @@ class MasterDataService
             return collect();
         }
 
-        return \DB::table('gst_rate_slabs')
+        return DB::table('gst_rate_slabs')
             ->where(function ($query) {
                 $query->whereNull('status')->orWhere('status', 'active')->orWhere('status', 1);
             })

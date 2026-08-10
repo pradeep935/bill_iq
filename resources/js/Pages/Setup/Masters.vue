@@ -127,6 +127,10 @@
               </DrawerField>
               <DrawerField v-if="gstRateSelection === 'custom'" v-model="form.gst_rate" label="Custom GST Rate %" type="number" :min="0" :max="100" step="0.01" hint="Enter a custom GST percentage only when needed." number required />
               <DrawerField v-model="form.cess_rate" label="CESS Rate %" type="number" :min="0" :max="100" step="0.01" hint="Optional compensation cess percentage. Leave as 0 when not applicable." number />
+              <DrawerField v-model="form.verification_status" label="Verification" as="select" hint="Only verified active records are available in Product Master." required>
+                <option value="verified">Verified</option>
+                <option value="unverified">Unverified</option>
+              </DrawerField>
 
               <DrawerField v-model="form.effective_from" label="Effective From" type="date" hint="Required start date for this tax rate." required />
               <DrawerField v-model="form.effective_to" label="Effective To" type="date" hint="Optional end date. Leave blank while this rate is current." />
@@ -176,7 +180,7 @@ const tabs = [
   { key: 'subcategory', label: 'Sub Categories', singular: 'Sub Category', hint: 'Maintain sub categories under product categories for cleaner catalog grouping.', helpTitle: 'Where is this used?', helpPoints: ['Adds a more specific grouping under each product category.', 'Improves product filters, barcode labels and catalog organization.', 'Helps compare and report similar products together.'], columns: [{ key: 'name', label: 'Name' }, { key: 'parent_id', label: 'Category', type: 'category' }] },
   { key: 'brand', label: 'Brands', singular: 'Brand', hint: 'Maintain product brands used in Product Master, filters and reports.', helpTitle: 'Where is this used?', helpPoints: ['Tags products with the brand or manufacturer name.', 'Supports brand-wise sales, purchase and stock performance reporting.', 'Improves product search, filtering and billing selection.'], columns: [{ key: 'name', label: 'Name' }] },
   { key: 'unit', label: 'Units', singular: 'Unit', hint: 'Maintain units such as PCS, KG, LTR and BOX for billing and inventory quantities.', helpTitle: 'Where is this used?', helpPoints: ['Defines how quantities are entered in billing and inventory.', 'Keeps purchase and sales quantities in a consistent measurement format.', 'Improves accuracy in stock movement and valuation reports.'], columns: [{ key: 'code', label: 'Code' }, { key: 'name', label: 'Name' }] },
-  { key: 'hsn', label: 'HSN/SAC', singular: 'HSN/SAC', hint: 'Maintain HSN/SAC tax classifications and GST rates used by many products and services.', helpTitle: 'Where is this used?', helpPoints: ['One HSN/SAC classification can be linked with many products.', 'Product Master stores the actual product name separately from this tax description.', 'Provides stable tax snapshots for invoices, tax summaries and GST reports.'], columns: [{ key: 'hsn_code', label: 'Code' }, { key: 'code_type', label: 'Type' }, { key: 'taxability', label: 'Taxability' }, { key: 'gst_rate', label: 'GST %' }, { key: 'cess_rate', label: 'CESS %' }, { key: 'description', label: 'Description' }] },
+  { key: 'hsn', label: 'HSN/SAC', singular: 'HSN/SAC', hint: 'Maintain HSN/SAC tax classifications and GST rates used by many products and services.', helpTitle: 'Where is this used?', helpPoints: ['One HSN/SAC classification can be linked with many products.', 'Product Master stores the actual product name separately from this tax description.', 'Provides stable tax snapshots for invoices, tax summaries and GST reports.'], columns: [{ key: 'hsn_code', label: 'Code' }, { key: 'code_type', label: 'Type' }, { key: 'taxability', label: 'Taxability' }, { key: 'verification_status', label: 'Verification' }, { key: 'gst_rate', label: 'GST %' }, { key: 'cess_rate', label: 'CESS %' }, { key: 'description', label: 'Description' }] },
 ];
 
 const fallbackGstRateOptions = [
@@ -236,6 +240,7 @@ const defaults = () => ({
   chapter_code: '',
   gst_rate: 0,
   cess_rate: 0,
+  verification_status: 'verified',
   effective_from: new Date().toISOString().slice(0, 10),
   effective_to: '',
   status: 'active',
@@ -311,7 +316,7 @@ const payload = () => {
     subcategory: ['parent_id', 'name', 'status'],
     brand: ['name', 'status'],
     unit: ['code', 'name', 'status'],
-    hsn: ['hsn_code', 'code_type', 'taxability', 'description', 'chapter_code', 'gst_rate', 'cess_rate', 'effective_from', 'effective_to', 'status'],
+    hsn: ['hsn_code', 'code_type', 'taxability', 'description', 'chapter_code', 'gst_rate', 'cess_rate', 'verification_status', 'effective_from', 'effective_to', 'status'],
   }[activeTab.value];
 
   if (activeTab.value === 'hsn' && gstRateSelection.value !== 'custom') {
@@ -374,6 +379,9 @@ const valueFor = (record, column) => {
   }
   if (column.key === 'taxability') {
     return String(record[column.key] || '-').replace('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+  if (column.key === 'verification_status') {
+    return String(record[column.key] || 'verified').replace('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
   return record[column.key] || '-';
 };

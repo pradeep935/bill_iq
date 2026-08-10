@@ -163,7 +163,7 @@ class MasterDataController extends Controller
             ],
             'hsn' => [
                 'hsn_code' => ['required', 'string', 'max:12'],
-                'description' => ['required', 'string', 'max:255'],
+                'description' => ['required', 'string', 'max:5000'],
                 'code_type' => ['required', Rule::in(['HSN', 'SAC'])],
                 'taxability' => ['required', Rule::in(['taxable', 'exempt', 'nil_rated', 'non_gst'])],
                 'chapter_code' => ['nullable', 'string', 'max:8'],
@@ -171,6 +171,7 @@ class MasterDataController extends Controller
                 'cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
                 'effective_from' => ['required', 'date'],
                 'effective_to' => ['nullable', 'date', 'after_or_equal:effective_from'],
+                'verification_status' => ['nullable', Rule::in(['verified', 'unverified'])],
                 'status' => ['required', Rule::in(['active', 'inactive'])],
             ],
         });
@@ -202,9 +203,14 @@ class MasterDataController extends Controller
         if ($type === 'hsn') {
             $payload['cess_rate'] = $payload['cess_rate'] ?? 0;
             $payload['code_type'] = strtoupper($payload['code_type'] ?? 'HSN');
+            $payload['verification_status'] = $payload['verification_status'] ?? 'verified';
 
             if (in_array($payload['taxability'] ?? 'taxable', ['exempt', 'nil_rated', 'non_gst'], true)) {
                 $payload['gst_rate'] = 0;
+            }
+
+            if (($payload['verification_status'] ?? 'verified') !== 'verified') {
+                $payload['status'] = 'inactive';
             }
         }
 

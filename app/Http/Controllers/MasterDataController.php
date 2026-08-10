@@ -274,10 +274,31 @@ class MasterDataController extends Controller
         $table = (new $model())->getTable();
 
         if (Schema::hasColumn($table, 'business_id')) {
-            $query->where(function (Builder $inner) use ($businessId, $table) {
-                $inner->whereNull($table . '.business_id')->orWhere($table . '.business_id', $businessId);
+            $businessIds = $this->businessScopeIds($table, $businessId);
+
+            $query->where(function (Builder $inner) use ($businessIds, $table) {
+                $inner->whereNull($table . '.business_id')->orWhereIn($table . '.business_id', $businessIds);
             });
         }
+    }
+
+    private function businessScopeIds(string $table, int $businessId): array
+    {
+        $ids = [$businessId];
+
+        $knownIds = DB::table($table)
+            ->whereNotNull('business_id')
+            ->distinct()
+            ->pluck('business_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->values();
+
+        if ($knownIds->count() === 1) {
+            $ids[] = $knownIds->first();
+        }
+
+        return array_values(array_unique($ids));
     }
 
     private function scopeType(Builder $query, string $type): void

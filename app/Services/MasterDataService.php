@@ -10,6 +10,7 @@ use App\Models\ProductCategory;
 use App\Models\Unit;
 use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class MasterDataService
@@ -63,11 +64,12 @@ class MasterDataService
     public function categories(int $businessId, bool $subCategories = false)
     {
         $nameColumn = Schema::hasColumn('product_categories', 'category_name') ? 'category_name' : 'name';
+        $businessIds = $this->businessScopeIds('product_categories', $businessId);
 
         return ProductCategory::query()
             ->when(
                 Schema::hasColumn('product_categories', 'business_id'),
-                fn (Builder $query) => $query->where(fn (Builder $scope) => $scope->whereNull('business_id')->orWhere('business_id', $businessId))
+                fn (Builder $query) => $query->where(fn (Builder $scope) => $scope->whereNull('business_id')->orWhereIn('business_id', $businessIds))
             )
             ->when(
                 !Schema::hasColumn('product_categories', 'business_id') && Schema::hasColumn('product_categories', 'company_id'),
@@ -197,5 +199,24 @@ class MasterDataService
     public function columns(string $table, array $columns): array
     {
         return array_values(array_filter($columns, fn (string $column) => Schema::hasColumn($table, $column)));
+    }
+
+    private function businessScopeIds(string $table, int $businessId): array
+    {
+        $ids = [$businessId];
+
+        $knownIds = DB::table($table)
+            ->whereNotNull('business_id')
+            ->distinct()
+            ->pluck('business_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->values();
+
+        if ($knownIds->count() === 1) {
+            $ids[] = $knownIds->first();
+        }
+
+        return array_values(array_unique($ids));
     }
 }

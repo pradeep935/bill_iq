@@ -26,6 +26,9 @@ export default defineConfig(({ mode }) => {
 
     return {
         base: resolveViteBase(env),
+        build: {
+            emptyOutDir: false,
+        },
         plugins: [
             laravel({
                 input: ['resources/css/app.css', 'resources/js/app.js'],

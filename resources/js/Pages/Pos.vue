@@ -4,7 +4,6 @@ import Layout from './Layout.vue';
 import SalesApi from './Sales/SalesApi';
 import ActionFooter from '@/Components/Billing/ActionFooter.vue';
 import FilterCard from '@/Components/Billing/FilterCard.vue';
-import InvoiceHeader from '@/Components/Billing/InvoiceHeader.vue';
 import PaymentPanel from '@/Components/Billing/PaymentPanel.vue';
 import ProductTable from '@/Components/Billing/ProductTable.vue';
 import SummaryCard from '@/Components/Billing/SummaryCard.vue';
@@ -535,8 +534,6 @@ onUnmounted(() => {
         </template>
 
         <div class="pos-saas-page">
-            <InvoiceHeader title="POS Billing" subtitle="Fast counter billing with scanner-first product entry, live stock and payment posting." />
-
             <div v-if="message" class="pos-message" :class="messageTone">{{ message }}</div>
 
             <section class="pos-saas-layout">

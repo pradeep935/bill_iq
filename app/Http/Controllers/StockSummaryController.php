@@ -97,6 +97,11 @@ class StockSummaryController extends Controller
     {
         abort_unless(AppController::canOpen('stock-summary'), 403);
 
-        return response()->json($this->stock->productInventoryDetail($product, $request->only(['branch_id', 'warehouse_id'])));
+        return response()->json($this->stock->productInventoryDetail($product, $request->only([
+            'branch_id',
+            'warehouse_id',
+            'product_variant_id',
+            'batch_id',
+        ])));
     }
 }

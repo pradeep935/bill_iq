@@ -595,8 +595,12 @@ const productImage = (product) => {
 
     const normalizedPath = path.replace(/^\/+/, '');
 
-    if (normalizedPath.startsWith('storage/') || normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('upload/')) {
+    if (normalizedPath.startsWith('storage/')) {
         return `/${normalizedPath}`;
+    }
+
+    if (normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('upload/')) {
+        return `/storage/${normalizedPath}`;
     }
 
     return `/storage/${normalizedPath}`;

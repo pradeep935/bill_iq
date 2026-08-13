@@ -4,10 +4,21 @@ namespace App\Services;
 
 use App\Http\Controllers\AppController;
 use App\Models\Branch;
+use App\Models\DeliveryChallan;
+use App\Models\GoodsReceipt;
+use App\Models\LocationTransferVoucher;
+use App\Models\OpeningStockVoucher;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\ProductVariantItem;
+use App\Models\ProductionOrder;
+use App\Models\PurchaseReturnVoucher;
+use App\Models\PurchaseVoucher;
+use App\Models\SalesReturnVoucher;
+use App\Models\SalesVoucher;
+use App\Models\StockAdjustmentVoucher;
 use App\Models\StockLedger;
+use App\Models\StockTransferVoucher;
 use App\Models\Warehouse;
 use App\Models\WarehouseProductStock;
 use Illuminate\Database\Eloquent\Builder;
@@ -255,6 +266,8 @@ class StockService
             ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('stock_ledgers.branch_id', $filters['branch_id']))
             ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('stock_ledgers.warehouse_id', $filters['warehouse_id']))
             ->when(!empty($filters['product_id']), fn (Builder $q) => $q->where('stock_ledgers.product_id', $filters['product_id']))
+            ->when(array_key_exists('product_variant_id', $filters) && $filters['product_variant_id'] !== '', fn (Builder $q) => $q->where('stock_ledgers.product_variant_id', $filters['product_variant_id']))
+            ->when(array_key_exists('batch_id', $filters) && $filters['batch_id'] !== '', fn (Builder $q) => $q->where('stock_ledgers.batch_id', $filters['batch_id']))
             ->when(!empty($filters['category']), fn (Builder $q) => $q->where(fn (Builder $query) => $query->where('products.category_id', $filters['category'])->orWhere('products.category', $filters['category'])))
             ->when(!empty($filters['brand']), fn (Builder $q) => $q->where(fn (Builder $query) => $query->where('products.brand_id', $filters['brand'])->orWhere('products.brand', $filters['brand'])))
             ->when(!empty($filters['batch']), fn (Builder $q) => $q->where('product_batches.batch_no', 'like', '%' . $filters['batch'] . '%'))
@@ -439,7 +452,7 @@ class StockService
     public function productInventoryDetail(int $productId, array $filters = []): array
     {
         $businessId = AppController::businessId();
-        $rows = $this->summary(['product_id' => $productId, 'per_page' => 1000, 'view_mode' => 'detailed'])->getCollection();
+        $rows = $this->summary(array_merge($filters, ['product_id' => $productId, 'per_page' => 1000, 'view_mode' => 'detailed']))->getCollection();
         $product = Product::query()->with(['category', 'brand', 'images'])->where('id', $productId)->where(fn (Builder $query) => $this->scopeProductBusiness($query, $businessId))->firstOrFail();
 
         $ledger = StockLedger::query()
@@ -448,9 +461,14 @@ class StockService
             ->where('product_id', $productId)
             ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
             ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
+            ->when(array_key_exists('product_variant_id', $filters) && $filters['product_variant_id'] !== '', fn (Builder $q) => $q->where('product_variant_id', $filters['product_variant_id']))
+            ->when(array_key_exists('batch_id', $filters) && $filters['batch_id'] !== '', fn (Builder $q) => $q->where('batch_id', $filters['batch_id']))
             ->latest('transaction_date')
+            ->latest('id')
             ->limit(100)
             ->get();
+
+        $recentMovements = $this->recentStockMovements($productId, $filters, 100);
 
         return [
             'product' => [
@@ -505,7 +523,122 @@ class StockService
                 'unit_cost' => (float) $entry->unit_cost,
                 'value' => (float) $entry->stock_value,
             ])->values(),
+            'recent_movements' => $recentMovements,
         ];
+    }
+
+    private function recentStockMovements(int $productId, array $filters, int $limit = 100)
+    {
+        $businessId = AppController::businessId();
+        $entries = StockLedger::query()
+            ->with(['branch', 'warehouse'])
+            ->where('business_id', $businessId)
+            ->where('product_id', $productId)
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
+            ->when(array_key_exists('product_variant_id', $filters) && $filters['product_variant_id'] !== '', fn (Builder $q) => $q->where('product_variant_id', $filters['product_variant_id']))
+            ->when(array_key_exists('batch_id', $filters) && $filters['batch_id'] !== '', fn (Builder $q) => $q->where('batch_id', $filters['batch_id']))
+            ->orderBy('transaction_date')
+            ->orderBy('id')
+            ->get();
+
+        $references = $this->stockReferenceNumbers($entries);
+        $runningBalance = 0.0;
+
+        return $entries->map(function (StockLedger $entry) use (&$runningBalance, $references) {
+            $runningBalance += (float) $entry->quantity_in - (float) $entry->quantity_out;
+            $referenceKey = $entry->reference_type . ':' . $entry->reference_id;
+
+            return [
+                'id' => $entry->id,
+                'date_time' => optional($entry->transaction_date)->toDateTimeString(),
+                'transaction_type' => $entry->transaction_type,
+                'transaction_label' => $this->stockTransactionLabel($entry->transaction_type),
+                'reference_type' => class_basename((string) $entry->reference_type),
+                'reference_id' => $entry->reference_id,
+                'reference_number' => $references[$referenceKey] ?? (string) $entry->reference_id,
+                'stock_in' => (float) $entry->quantity_in,
+                'stock_out' => (float) $entry->quantity_out,
+                'running_balance' => round($runningBalance, 3),
+                'branch' => optional($entry->branch)->name,
+                'warehouse' => optional($entry->warehouse)->name,
+            ];
+        })->reverse()->take($limit)->values();
+    }
+
+    private function stockReferenceNumbers($entries): array
+    {
+        $map = [
+            OpeningStockVoucher::class => ['table' => 'opening_stock_vouchers', 'column' => 'voucher_number'],
+            PurchaseVoucher::class => ['table' => 'purchase_vouchers', 'column' => 'voucher_number'],
+            SalesVoucher::class => ['table' => 'sales_vouchers', 'column' => 'invoice_number', 'fallback' => 'voucher_number'],
+            PurchaseReturnVoucher::class => ['table' => 'purchase_return_vouchers', 'column' => 'voucher_number'],
+            SalesReturnVoucher::class => ['table' => 'sales_return_vouchers', 'column' => 'credit_note_number', 'fallback' => 'voucher_number'],
+            StockAdjustmentVoucher::class => ['table' => 'stock_adjustment_vouchers', 'column' => 'voucher_number'],
+            StockTransferVoucher::class => ['table' => 'stock_transfer_vouchers', 'column' => 'voucher_number'],
+            LocationTransferVoucher::class => ['table' => 'location_transfer_vouchers', 'column' => 'voucher_number'],
+            DeliveryChallan::class => ['table' => 'delivery_challans', 'column' => 'challan_number'],
+            GoodsReceipt::class => ['table' => 'goods_receipts', 'column' => 'grn_number'],
+            ProductionOrder::class => ['table' => 'production_orders', 'column' => 'order_number'],
+        ];
+        $references = [];
+
+        foreach ($entries->groupBy('reference_type') as $referenceType => $group) {
+            if (!isset($map[$referenceType])) {
+                continue;
+            }
+
+            $meta = $map[$referenceType];
+            $columns = ['id', $meta['column']];
+            if (!empty($meta['fallback']) && $meta['fallback'] !== $meta['column']) {
+                $columns[] = $meta['fallback'];
+            }
+
+            $rows = DB::table($meta['table'])
+                ->whereIn('id', $group->pluck('reference_id')->filter()->unique()->values())
+                ->get($columns);
+
+            foreach ($rows as $row) {
+                $number = $row->{$meta['column']} ?: ($row->{$meta['fallback'] ?? $meta['column']} ?? null);
+                $references[$referenceType . ':' . $row->id] = $number ?: (string) $row->id;
+            }
+        }
+
+        return $references;
+    }
+
+    private function stockTransactionLabel(string $type): string
+    {
+        return [
+            'opening_stock' => 'Opening Stock',
+            'opening_stock_reversal' => 'Opening Stock Reversal',
+            'purchase' => 'Purchase',
+            'sale' => 'Sale',
+            'purchase_return' => 'Purchase Return',
+            'sales_return' => 'Sales Return',
+            'stock_adjustment_in' => 'Adjustment In',
+            'stock_adjustment_out' => 'Adjustment Out',
+            'stock_transfer_in' => 'Transfer In',
+            'stock_transfer_out' => 'Transfer Out',
+            'batch_transfer_in' => 'Batch Transfer In',
+            'batch_transfer_out' => 'Batch Transfer Out',
+            'stock_in_transit_in' => 'Stock In Transit In',
+            'stock_in_transit_out' => 'Stock In Transit Out',
+            'damaged_stock' => 'Damage',
+            'expired_stock' => 'Expired Stock',
+            'lost_stock' => 'Lost Stock',
+            'theft_stock' => 'Theft Stock',
+            'stock_reclassification_in' => 'Reclassification In',
+            'stock_reclassification_out' => 'Reclassification Out',
+            'location_transfer' => 'Location Transfer',
+            'delivery_challan' => 'Delivery Challan',
+            'goods_receipt' => 'Goods Receipt',
+            'production_consumption' => 'Production Consumption',
+            'production_output' => 'Production Output',
+            'manufacturing_consumption' => 'Manufacturing Consumption',
+            'manufacturing_output' => 'Manufacturing Output',
+            'manufacturing_wastage' => 'Manufacturing Wastage',
+        ][$type] ?? str($type)->replace('_', ' ')->title()->toString();
     }
 
     private function createLedgerEntry(array $data, bool $validate = true): StockLedger

@@ -23,6 +23,8 @@ class MasterDataService
         $all = [
             'branches' => fn () => $this->branches($businessId),
             'warehouses' => fn () => $this->warehouses($businessId),
+            'states' => fn () => $this->states(),
+            'cities' => fn () => $this->cities(),
             'categories' => fn () => $this->categories($businessId, false),
             'sub_categories' => fn () => $this->categories($businessId, true),
             'brands' => fn () => $this->brands($businessId),
@@ -49,7 +51,53 @@ class MasterDataService
             ->where('business_id', $businessId)
             ->where('status', 'active')
             ->orderBy('name')
-            ->get($this->columns('branches', ['id', 'name', 'code', 'type', 'city', 'state']));
+            ->get($this->columns('branches', ['id', 'name', 'code', 'type', 'address', 'city', 'state', 'city_id', 'state_id']));
+    }
+
+    public function states()
+    {
+        if (!Schema::hasTable('states')) {
+            return collect();
+        }
+
+        return DB::table('states')
+            ->where(function ($query) {
+                $query->whereNull('status')->orWhere('status', 'active')->orWhere('status', 1);
+            })
+            ->orderBy('name')
+            ->get($this->columns('states', ['id', 'name', 'code', 'type']))
+            ->map(fn ($state) => [
+                'id' => $state->id,
+                'value' => (string) $state->id,
+                'label' => $state->name,
+                'name' => $state->name,
+                'code' => $state->code ?? null,
+                'type' => $state->type ?? null,
+            ])
+            ->values();
+    }
+
+    public function cities()
+    {
+        if (!Schema::hasTable('cities')) {
+            return collect();
+        }
+
+        return DB::table('cities')
+            ->where(function ($query) {
+                $query->whereNull('status')->orWhere('status', 'active')->orWhere('status', 1);
+            })
+            ->orderBy('name')
+            ->get($this->columns('cities', ['id', 'state_id', 'name', 'code']))
+            ->map(fn ($city) => [
+                'id' => $city->id,
+                'value' => (string) $city->id,
+                'label' => $city->name,
+                'name' => $city->name,
+                'state_id' => $city->state_id ?? null,
+                'code' => $city->code ?? null,
+            ])
+            ->values();
     }
 
     public function warehouses(int $businessId)
@@ -132,7 +180,7 @@ class MasterDataService
                 $query->where(fn (Builder $scope) => $scope->whereNull('business_id')->orWhere('business_id', $businessId));
             })
             ->where('status', 'active')
-            ->where('verification_status', 'verified')
+            ->whereIn('verification_status', ['verified', 'classification_verified', 'Classification Verified', 'rate_verified', 'Rate Verified'])
             ->where(function (Builder $query) {
                 $query->whereNull('effective_from')->orWhereDate('effective_from', '<=', now()->toDateString());
             })

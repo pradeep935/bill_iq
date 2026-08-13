@@ -158,10 +158,24 @@ class AppController extends Controller
             ? DB::table('companies')->orderBy('name')->get(['id', 'name', 'state', 'financial_year'])
             : collect();
         $business = Schema::hasTable('companies') ? DB::table('companies')->where('id', $businessId)->first() : null;
+        $branchColumns = ['id', 'name', 'code', 'state'];
+        if (Schema::hasTable('branches') && Schema::hasColumn('branches', 'state_id')) {
+            $branchColumns[] = 'state_id';
+        }
         $branches = Schema::hasTable('branches')
-            ? DB::table('branches')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code', 'state'])
+            ? DB::table('branches')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get($branchColumns)
             : collect();
         $branch = $branches->firstWhere('id', $branchId);
+        $businessStateId = null;
+        $branchStateId = null;
+        if (Schema::hasTable('states')) {
+            $businessStateId = $business && !empty($business->state)
+                ? DB::table('states')->where('name', $business->state)->value('id')
+                : null;
+            $branchStateId = $branch && property_exists($branch, 'state_id') && $branch->state_id
+                ? $branch->state_id
+                : ($branch && !empty($branch->state) ? DB::table('states')->where('name', $branch->state)->value('id') : null);
+        }
         $financialYears = Schema::hasTable('financial_years')
             ? DB::table('financial_years')->where('business_id', $businessId)->orderByDesc('id')->get()->map(fn ($year) => [
                 'id' => $year->id,
@@ -178,12 +192,14 @@ class AppController extends Controller
                 'id' => $businessId,
                 'name' => $business->name ?? 'BillIQ',
                 'state' => $business->state ?? null,
+                'state_id' => $businessStateId,
             ],
             'branch' => [
                 'id' => $branchId,
                 'name' => $branch->name ?? 'Primary Branch',
                 'code' => $branch->code ?? null,
                 'state' => $branch->state ?? null,
+                'state_id' => $branchStateId,
             ],
             'financial_year' => [
                 'id' => self::financialYearId(),

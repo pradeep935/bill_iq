@@ -197,6 +197,8 @@ const viewProduct = async (row, mode = 'view') => {
         selectedDetail.value = await InventoryApi.stockProductDetail(row.product_id, {
             branch_id: row.branch_id || '',
             warehouse_id: row.warehouse_id || '',
+            product_variant_id: row.product_variant_id || '',
+            batch_id: row.batch_id || '',
         });
     } finally {
         detailLoading.value = false;
@@ -259,6 +261,7 @@ const exportRows = (type = 'csv') => {
 const formatQty = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatDate = (value) => value ? new Date(value).toLocaleString('en-IN') : '-';
+const formatDateTime = (value) => value ? new Date(value).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '-';
 
 watch(filters, () => {
     clearTimeout(timer);
@@ -466,6 +469,34 @@ onMounted(async () => {
                         <h3>Warehouse-wise Stock</h3>
                         <div class="mini-row" v-for="(row, index) in selectedDetail.warehouse_stock" :key="index"><span>{{ row.branch }} / {{ row.warehouse }}</span><strong>{{ formatQty(row.quantity) }} | Rs. {{ formatMoney(row.value) }}</strong></div>
                     </template>
+                    <template v-if="detailMode === 'view' || detailMode === 'ledger'">
+                        <h3>Recent Stock Movements / Stock Ledger</h3>
+                        <div v-if="!selectedDetail.recent_movements?.length" class="detail-empty">No stock movements found.</div>
+                        <div v-else class="ledger-table-wrap">
+                            <table class="ledger-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date & Time</th>
+                                        <th>Type</th>
+                                        <th>Reference</th>
+                                        <th class="numeric">In</th>
+                                        <th class="numeric">Out</th>
+                                        <th class="numeric">Balance</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="row in selectedDetail.recent_movements" :key="row.id">
+                                        <td>{{ formatDateTime(row.date_time) }}</td>
+                                        <td>{{ row.transaction_label || row.transaction_type }}</td>
+                                        <td>{{ row.reference_number || '-' }}</td>
+                                        <td class="numeric">{{ Number(row.stock_in || 0) ? formatQty(row.stock_in) : '-' }}</td>
+                                        <td class="numeric">{{ Number(row.stock_out || 0) ? formatQty(row.stock_out) : '-' }}</td>
+                                        <td class="numeric">{{ formatQty(row.running_balance) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
                     <template v-if="detailMode === 'view' || detailMode === 'batch'">
                         <h3>Batch Details</h3>
                         <div v-if="!selectedDetail.batch_stock.length" class="detail-empty">No batch stock.</div>
@@ -475,10 +506,6 @@ onMounted(async () => {
                         <h3>Serial Numbers</h3>
                         <div v-if="!selectedDetail.serial_numbers.length" class="detail-empty">No serial numbers.</div>
                         <div class="mini-row" v-for="(row, index) in selectedDetail.serial_numbers" :key="index"><span>{{ row.serial_number }}</span><strong>{{ row.status }}</strong></div>
-                    </template>
-                    <template v-if="detailMode === 'ledger'">
-                        <h3>Stock Ledger</h3>
-                        <div class="mini-row" v-for="(row, index) in selectedDetail.ledger" :key="index"><span>{{ row.date }} | {{ row.type }} | {{ row.branch || '-' }} / {{ row.warehouse || 'Default' }}</span><strong>In {{ formatQty(row.in) }} / Out {{ formatQty(row.out) }} | Rs. {{ formatMoney(row.value) }}</strong></div>
                     </template>
                 </template>
             </div>
@@ -558,6 +585,28 @@ onMounted(async () => {
 .mini-row span { color: #536179; }
 .mini-row strong { color: #142139; }
 .detail-empty { color: #8490a2; padding: 12px 0; text-align: center; }
+.ledger-table-wrap { border: 1px solid #e1e7ef; border-radius: 8px; overflow-x: auto; }
+.ledger-table { border-collapse: collapse; min-width: 620px; width: 100%; }
+.ledger-table th {
+  background: #f8fafc;
+  border-bottom: 1px solid #e1e7ef;
+  color: #7b879c;
+  font-size: 10px;
+  font-weight: 850;
+  padding: 10px 12px;
+  text-align: left;
+  text-transform: uppercase;
+}
+.ledger-table td {
+  border-bottom: 1px solid #edf1f5;
+  color: #2d3a52;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 11px 12px;
+  vertical-align: top;
+}
+.ledger-table tr:last-child td { border-bottom: 0; }
+.ledger-table .numeric { text-align: right; white-space: nowrap; }
 @media (max-width: 1100px) { .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .listing-toolbar { flex-direction: column; } }
 @media (max-width: 720px) { .summary-grid, .detail-cards, .detail-grid { grid-template-columns: 1fr; } .filter-group > * { width: 100%; } }
 </style>

@@ -12,6 +12,7 @@ import SummaryCard from '@/Components/Billing/SummaryCard.vue';
 const props = defineProps({
     page: { type: String, default: 'pos' },
     title: { type: String, default: 'POS Billing' },
+    role_id: { type: [Number, String], default: 2 },
     endpoints: { type: Object, default: () => ({}) },
     context: { type: Object, default: () => ({}) },
     pos: { type: Object, default: () => ({ categories: [], recent_products: [], held_bills: [] }) },
@@ -36,6 +37,7 @@ const lastSale = ref(null);
 const invoiceStatus = ref('draft');
 const scannerFocused = ref(false);
 const highlightedRowKey = ref('');
+const canChangeCounterScope = computed(() => Number(props.role_id || 0) === 1);
 
 const form = reactive({
     id: null,
@@ -62,6 +64,8 @@ const customers = computed(() => references.value.customers || []);
 const paymentMethods = computed(() => references.value.payment_methods || []);
 const selectedCustomer = computed(() => customers.value.find((customer) => Number(customer.id) === Number(form.customer_id)));
 const priceType = computed(() => selectedCustomer.value?.price_type || 'retail');
+const selectedBranch = computed(() => references.value.branches.find((branch) => Number(branch.id) === Number(form.branch_id)));
+const selectedWarehouse = computed(() => references.value.warehouses.find((warehouse) => Number(warehouse.id) === Number(form.warehouse_id)));
 const filteredWarehouses = computed(() => {
     const all = references.value.warehouses || [];
     return form.branch_id ? all.filter((warehouse) => Number(warehouse.branch_id || 0) === Number(form.branch_id)) : all;
@@ -75,9 +79,17 @@ const line = (item) => {
         ? gross * Math.min(Number(item.discount_value || 0), 100) / 100
         : Math.min(gross, Number(item.discount_value || 0));
     const taxable = Math.max(0, gross - discount);
-    const tax = taxable * (Number(item.gst_rate || 0) + Number(item.cess_rate || 0)) / 100;
+    const rate = Number(item.gst_rate || 0) + Number(item.cess_rate || 0);
+    if (item.tax_inclusive && rate > 0) {
+        const inclusiveTaxable = taxable * 100 / (100 + rate);
+        const tax = taxable - inclusiveTaxable;
+        return { gross, discount, taxable: inclusiveTaxable, tax, total: taxable };
+    }
+    const tax = taxable * rate / 100;
     return { gross, discount, taxable, tax, total: taxable + tax };
 };
+
+const lineTaxAmount = (item) => line(item).tax;
 
 const totals = computed(() => {
     const subtotal = form.items.reduce((sum, item) => sum + line(item).gross, 0);
@@ -141,6 +153,19 @@ const ensureDefaultCounterScope = () => {
         form.warehouse_id = firstWarehouseForBranch(form.branch_id);
     }
 };
+const updateCustomerTaxTreatment = () => {
+    const customer = selectedCustomer.value;
+    if (!customer || customer.customer_type === 'walk_in') {
+        form.invoice_type = 'retail_invoice';
+        form.tax_type = 'intrastate';
+        return;
+    }
+    form.invoice_type = customer.gstin ? 'tax_invoice' : 'retail_invoice';
+    const sourceStateId = props.context?.branch?.state_id || props.context?.business?.state_id;
+    if (customer.state_id && sourceStateId) {
+        form.tax_type = Number(customer.state_id) === Number(sourceStateId) ? 'intrastate' : 'interstate';
+    }
+};
 const rowKey = (item) => `${item.product_id}-${item.product_variant_id || 0}-${item.batch_id || 0}`;
 const flashRow = (item) => {
     highlightedRowKey.value = rowKey(item);
@@ -149,6 +174,36 @@ const flashRow = (item) => {
     }, 1200);
 };
 const isStockItem = (item) => item.available_stock !== null && item.available_stock !== undefined;
+const validateCartStock = () => {
+    for (const item of form.items) {
+        if (isStockItem(item) && Number(item.quantity || 0) + Number(item.free_quantity || 0) > Number(item.available_stock || 0)) {
+            showToast(`Insufficient stock for ${item.product}. Available ${item.available_stock}.`, 'error');
+            focusScanner();
+            return false;
+        }
+        if (item.serial_required) {
+            showToast(`Serial number is required for ${item.product}.`, 'error');
+            focusScanner();
+            return false;
+        }
+    }
+    return true;
+};
+const validatePaymentBeforeSave = (status) => {
+    if (!['confirmed', 'approved'].includes(status)) return true;
+    const paid = Number(totals.value.paid.toFixed(2));
+    const grand = Number(totals.value.grand.toFixed(2));
+    if (paymentMode.value === 'credit') return true;
+    if (paymentMode.value === 'split' && paid !== grand) {
+        showToast('Split payment total must exactly match invoice total.', 'error');
+        return false;
+    }
+    if (paid < grand) {
+        showToast('Received amount is less than invoice total. Use Credit sale for outstanding.', 'error');
+        return false;
+    }
+    return true;
+};
 
 const loadReferences = async () => {
     references.value = await SalesApi.references();
@@ -217,6 +272,8 @@ const addProduct = (product, fromScan = false) => {
             cess_rate: product.cess_rate || '',
             batches: product.batches || [],
             available_stock: product.product_type === 'service' || product.item_type === 'non_stock' ? null : available,
+            tax_inclusive: product.tax_inclusive || false,
+            serial_required: Boolean(product.serial_required),
         };
         form.items.push(touched);
     }
@@ -262,8 +319,8 @@ const scan = async () => {
 const updateQty = (item, amount) => {
     const next = Math.max(1, Number(item.quantity || 0) + amount);
     if (isStockItem(item) && next > Number(item.available_stock || 0)) {
-        showToast('Insufficient stock', 'error');
         item.quantity = Number(item.available_stock || 1);
+        showToast(`Only ${item.available_stock} available for ${item.product}.`, 'error');
     } else {
         item.quantity = next;
     }
@@ -274,9 +331,18 @@ const normalizeQty = (item) => {
     item.quantity = Math.max(1, Number(item.quantity || 1));
     if (isStockItem(item) && Number(item.quantity || 0) > Number(item.available_stock || 0)) {
         item.quantity = Number(item.available_stock || 1);
-        showToast('Insufficient stock', 'error');
+        showToast(`Only ${item.available_stock} available for ${item.product}.`, 'error');
     }
+    flashRow(item);
     syncPaymentAmount();
+};
+const updateBatchStock = (item) => {
+    const selected = (item.batches || []).find((batch) => Number(batch.id) === Number(item.batch_id));
+    if (selected) {
+        item.available_stock = Number(selected.available_stock || 0);
+        normalizeQty(item);
+    }
+    focusScanner();
 };
 const removeItem = (index) => {
     form.items.splice(index, 1);
@@ -395,6 +461,8 @@ const payload = (status) => ({
 
 const save = async (status, options = {}) => {
     if (saving.value || !form.items.length) return null;
+    ensureDefaultCounterScope();
+    if (!validateCartStock() || !validatePaymentBeforeSave(status)) return null;
     saving.value = true;
     savingAction.value = status;
     message.value = '';
@@ -452,15 +520,28 @@ watch(() => form.branch_id, () => {
 watch(() => form.warehouse_id, () => {
     focusScanner();
 });
+watch(() => form.customer_id, () => {
+    updateCustomerTaxTreatment();
+    focusScanner();
+});
+
+const keepScannerReady = (event) => {
+    if (event.target?.closest?.('input, textarea, select, button')) return;
+    focusScanner();
+};
 
 onMounted(async () => {
     SalesApi.configure(props.endpoints);
     window.addEventListener('keydown', handleShortcut);
+    window.addEventListener('click', keepScannerReady);
     await loadReferences();
     scanInput.value?.focus();
 });
 
-onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleShortcut);
+    window.removeEventListener('click', keepScannerReady);
+});
 </script>
 
 <template>
@@ -481,14 +562,18 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
             <section class="pos-saas-layout">
                 <main class="pos-saas-main">
                     <FilterCard title="Counter Details" eyebrow="BILLING">
-                        <label class="bill-field">
+                        <div v-if="!canChangeCounterScope" class="pos-counter-scope">
+                            <span>{{ selectedBranch?.name || 'Default Branch' }}</span>
+                            <strong>{{ selectedWarehouse?.name || 'Default Warehouse' }}</strong>
+                        </div>
+                        <label v-if="canChangeCounterScope" class="bill-field">
                             <span>Branch</span>
                             <select v-model="form.branch_id" title="Select branch">
                                 <option value="">Select branch</option>
                                 <option v-for="branch in references.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
                             </select>
                         </label>
-                        <label class="bill-field">
+                        <label v-if="canChangeCounterScope" class="bill-field">
                             <span>Warehouse</span>
                             <select v-model="form.warehouse_id" title="Select warehouse">
                                 <option value="">Select warehouse</option>
@@ -508,7 +593,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
                             <select ref="customerSelect" v-model="form.customer_id" title="Select invoice customer">
                                 <option value="">Walk-in Customer</option>
                                 <option v-for="customer in customers" :key="customer.id" :value="customer.id">
-                                    {{ customer.customer_name }}{{ customer.mobile ? ` - ${customer.mobile}` : '' }}
+                                    {{ customer.customer_name }}{{ customer.gstin ? ` - ${customer.gstin}` : (customer.mobile ? ` - ${customer.mobile}` : '') }}
                                 </option>
                             </select>
                         </label>
@@ -532,7 +617,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
                                         <b v-else>{{ product.name.slice(0, 2).toUpperCase() }}</b>
                                     </span>
                                     <strong>{{ product.name }}</strong>
-                                    <small>{{ product.sku || product.barcode || 'No SKU' }} - Stock {{ product.available_stock ?? 'Service' }} - {{ formatMoney(product.selling_rate) }}</small>
+                                    <small>{{ product.sku || product.barcode || 'No SKU' }} - Stock {{ product.available_stock ?? 'Service' }} - GST {{ product.gst_rate || 0 }}% - {{ formatMoney(product.selling_rate) }}</small>
                                 </button>
                             </div>
                         </label>
@@ -557,6 +642,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
                         @remove="removeItem"
                         @change="syncPaymentAmount"
                         @quantity-change="normalizeQty"
+                        @batch-change="updateBatchStock"
                     />
 
                     <FilterCard title="Invoice Actions" eyebrow="HELD">
@@ -605,5 +691,5 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
 </template>
 
 <style scoped>
-.pos-saas-page{display:grid;gap:10px;padding-bottom:8px}.pos-message{padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-weight:850}.pos-message.success{border-color:#bbf7d0;background:#ecfdf5;color:#15803d}.pos-message.error{border-color:#fecdd3;background:#fff1f2;color:#be123c}.pos-saas-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;align-items:start}.pos-saas-main,.pos-saas-side{display:grid;gap:10px;min-width:0}.pos-saas-side{position:sticky;top:86px}.pos-customer-field{grid-column:span 2}.pos-category-row{display:flex;gap:6px;flex-wrap:wrap}.pos-category-row button{min-height:28px;padding:5px 9px;border:1px solid var(--bill-line);border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:850}.pos-category-row button.active{border-color:#9ec2ff;background:#e8f1ff;color:var(--bill-accent-dark)}.pos-scan-state{display:inline-flex;align-items:center;min-height:28px;padding:5px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:900}.pos-scan-state.ready{background:#dcfce7;color:#15803d}.pos-product-search{position:relative;grid-column:1 / -1}.pos-scan-input{min-height:56px!important;border:2px solid #9ec2ff!important;border-radius:12px!important;background:#fff!important;font-size:18px!important;font-weight:850;letter-spacing:.02em}.pos-scan-input:focus{border-color:#2457d6!important;box-shadow:0 0 0 4px rgba(36,87,214,.12);outline:0}.pos-autocomplete{position:absolute;top:82px;left:0;right:0;z-index:12;display:grid;max-height:260px;overflow:auto;border:1px solid var(--bill-line);border-radius:8px;background:#fff;box-shadow:0 18px 40px rgba(15,34,66,.14)}.pos-autocomplete button{display:grid;grid-template-columns:40px 1fr;column-gap:10px;align-items:center;justify-items:start;padding:9px 10px;border:0;border-bottom:1px solid #edf2f7;background:#fff;text-align:left;cursor:pointer}.pos-autocomplete small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-product-thumb{width:36px;height:36px;overflow:hidden;display:grid;place-items:center;border-radius:8px;background:#eef2ff;color:var(--bill-accent-dark);font-size:11px;font-weight:900}.pos-product-thumb img{width:100%;height:100%;object-fit:cover}.pos-recent-products{grid-column:1 / -1;display:flex;gap:8px;overflow:auto;padding-bottom:2px}.pos-recent-products button{min-width:140px;display:grid;grid-template-columns:36px 1fr;column-gap:8px;align-items:center;justify-items:start;padding:8px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-recent-products small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-held-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.pos-held-list button{display:grid;justify-items:start;gap:3px;padding:10px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-held-list span,.pos-held-list p{color:var(--bill-muted);font-size:11px}.pos-held-list p{margin:0}:deep(.bill-invoice-header){margin-bottom:2px}:deep(.bill-filter-grid){grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}:deep(.bill-filter-grid>.bill-field){grid-column:span 2}:deep(.bill-product-table-wrap){max-height:calc(100vh - 455px);min-height:250px}:deep(.bill-summary-card),:deep(.bill-payment-panel){position:static}@media(min-width:1500px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 360px}:deep(.bill-product-table-wrap){max-height:calc(100vh - 430px)}}@media(max-width:1366px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 315px}.pos-scan-input{min-height:52px!important;font-size:16px!important}:deep(.bill-filter-grid){grid-template-columns:repeat(4,minmax(0,1fr))}:deep(.bill-filter-grid>.bill-field){grid-column:span 1}.pos-customer-field{grid-column:span 2}}@media(max-width:1180px){.pos-saas-layout{grid-template-columns:1fr}.pos-saas-side{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}:deep(.bill-product-table-wrap){max-height:520px}}@media(max-width:760px){.pos-saas-side,.pos-held-list{grid-template-columns:1fr}.pos-recent-products{display:grid;grid-template-columns:1fr}.pos-recent-products button{min-width:0}:deep(.bill-filter-grid){grid-template-columns:1fr}:deep(.bill-filter-grid>.bill-field),.pos-customer-field{grid-column:auto}}
+.pos-saas-page{display:grid;gap:10px;padding-bottom:8px}.pos-message{padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-weight:850}.pos-message.success{border-color:#bbf7d0;background:#ecfdf5;color:#15803d}.pos-message.error{border-color:#fecdd3;background:#fff1f2;color:#be123c}.pos-saas-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;align-items:start}.pos-saas-main,.pos-saas-side{display:grid;gap:10px;min-width:0}.pos-saas-side{position:sticky;top:86px}.pos-counter-scope{grid-column:span 2;display:grid;gap:3px;min-height:54px;padding:10px 12px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc}.pos-counter-scope span{color:var(--bill-muted);font-size:11px;font-weight:850}.pos-counter-scope strong{color:#142139;font-size:13px}.pos-customer-field{grid-column:span 2}.pos-category-row{display:flex;gap:6px;flex-wrap:wrap}.pos-category-row button{min-height:28px;padding:5px 9px;border:1px solid var(--bill-line);border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:850}.pos-category-row button.active{border-color:#9ec2ff;background:#e8f1ff;color:var(--bill-accent-dark)}.pos-scan-state{display:inline-flex;align-items:center;min-height:28px;padding:5px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:900}.pos-scan-state.ready{background:#dcfce7;color:#15803d}.pos-product-search{position:relative;grid-column:1 / -1}.pos-scan-input{min-height:56px!important;border:2px solid #9ec2ff!important;border-radius:12px!important;background:#fff!important;font-size:18px!important;font-weight:850;letter-spacing:.02em}.pos-scan-input:focus{border-color:#2457d6!important;box-shadow:0 0 0 4px rgba(36,87,214,.12);outline:0}.pos-autocomplete{position:absolute;top:82px;left:0;right:0;z-index:12;display:grid;max-height:260px;overflow:auto;border:1px solid var(--bill-line);border-radius:8px;background:#fff;box-shadow:0 18px 40px rgba(15,34,66,.14)}.pos-autocomplete button{display:grid;grid-template-columns:40px 1fr;column-gap:10px;align-items:center;justify-items:start;padding:9px 10px;border:0;border-bottom:1px solid #edf2f7;background:#fff;text-align:left;cursor:pointer}.pos-autocomplete small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-product-thumb{width:36px;height:36px;overflow:hidden;display:grid;place-items:center;border-radius:8px;background:#eef2ff;color:var(--bill-accent-dark);font-size:11px;font-weight:900}.pos-product-thumb img{width:100%;height:100%;object-fit:cover}.pos-recent-products{grid-column:1 / -1;display:flex;gap:8px;overflow:auto;padding-bottom:2px}.pos-recent-products button{min-width:140px;display:grid;grid-template-columns:36px 1fr;column-gap:8px;align-items:center;justify-items:start;padding:8px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-recent-products small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-held-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.pos-held-list button{display:grid;justify-items:start;gap:3px;padding:10px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-held-list span,.pos-held-list p{color:var(--bill-muted);font-size:11px}.pos-held-list p{margin:0}:deep(.bill-invoice-header){margin-bottom:2px}:deep(.bill-filter-grid){grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}:deep(.bill-filter-grid>.bill-field){grid-column:span 2}:deep(.bill-product-table-wrap){max-height:calc(100vh - 455px);min-height:250px}:deep(.bill-summary-card),:deep(.bill-payment-panel){position:static}@media(min-width:1500px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 360px}:deep(.bill-product-table-wrap){max-height:calc(100vh - 430px)}}@media(max-width:1366px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 315px}.pos-scan-input{min-height:52px!important;font-size:16px!important}:deep(.bill-filter-grid){grid-template-columns:repeat(4,minmax(0,1fr))}:deep(.bill-filter-grid>.bill-field){grid-column:span 1}.pos-customer-field{grid-column:span 2}}@media(max-width:1180px){.pos-saas-layout{grid-template-columns:1fr}.pos-saas-side{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}:deep(.bill-product-table-wrap){max-height:520px}}@media(max-width:760px){.pos-saas-side,.pos-held-list{grid-template-columns:1fr}.pos-recent-products{display:grid;grid-template-columns:1fr}.pos-recent-products button{min-width:0}:deep(.bill-filter-grid){grid-template-columns:1fr}:deep(.bill-filter-grid>.bill-field),.pos-customer-field,.pos-counter-scope{grid-column:auto}}
 </style>

@@ -25,6 +25,18 @@ class HsnSacSearchService
         $limit = min(max((int) ($filters['limit'] ?? 20), 1), 50);
         $searchText = trim($queryText . ' ' . $productName);
         $tokens = $this->tokens($searchText);
+        $directCodeSearch = preg_match('/^\d{2,8}$/', $queryText) === 1;
+
+        if ($searchText !== '' && !$tokens && !$directCodeSearch) {
+            return [
+                'data' => [],
+                'meta' => [
+                    'page' => $page,
+                    'limit' => $limit,
+                    'total' => 0,
+                ],
+            ];
+        }
 
         $query = HsnMaster::query()
             ->where('code_type', $codeType)
@@ -36,12 +48,17 @@ class HsnSacSearchService
             });
 
         if ($searchText !== '') {
-            $query->where(function (Builder $scope) use ($searchText, $tokens) {
-                $scope->where('hsn_code', 'like', $searchText . '%')
-                    ->orWhere('description', 'like', '%' . $searchText . '%');
+            $query->where(function (Builder $scope) use ($searchText, $tokens, $directCodeSearch, $queryText) {
+                if ($directCodeSearch) {
+                    $scope->where('hsn_code', 'like', $queryText . '%');
+                }
 
-                if (Schema::hasColumn('hsn_masters', 'search_keywords')) {
-                    $scope->orWhere('search_keywords', 'like', '%' . $searchText . '%');
+                if (strlen($searchText) >= 3) {
+                    $scope->orWhere('description', 'like', '%' . $searchText . '%');
+
+                    if (Schema::hasColumn('hsn_masters', 'search_keywords')) {
+                        $scope->orWhere('search_keywords', 'like', '%' . $searchText . '%');
+                    }
                 }
 
                 foreach ($tokens as $token) {
@@ -53,8 +70,9 @@ class HsnSacSearchService
             });
         }
 
+        $candidateLimit = min(max($limit * 100, 300), 3000);
         $candidates = $query
-            ->limit($limit * 8)
+            ->limit($candidateLimit)
             ->get();
 
         $similar = $this->similarProductUsage($businessId, $codeType, $tokens);
@@ -78,14 +96,15 @@ class HsnSacSearchService
                     'similar_product_count' => (int) ($similar[$hsn->id] ?? 0),
                     'usage_count' => (int) ($usage[$hsn->id]['usage_count'] ?? 0),
                     'last_used_at' => $usage[$hsn->id]['last_used_at'] ?? null,
-                    'classification_verified' => (bool) ($hsn->classification_verified ?? false),
-                    'rate_verified' => (bool) ($hsn->rate_verified ?? false),
+                    'classification_verified' => $this->classificationVerified($hsn),
+                    'rate_verified' => $this->rateVerified($hsn),
                     'taxability' => $hsn->taxability,
                     'gst_rate' => $hsn->gst_rate !== null ? (float) $hsn->gst_rate : null,
                     'cess_rate' => $hsn->cess_rate !== null ? (float) $hsn->cess_rate : null,
                     'tax_resolution' => $this->taxResolution($hsn->id, $date),
                 ];
             })
+            ->filter(fn (array $row) => $row['score'] > 0)
             ->sortByDesc('score')
             ->values();
 
@@ -103,6 +122,10 @@ class HsnSacSearchService
 
     public function taxResolution(int $hsnId, ?string $date = null): array
     {
+        if (!Schema::hasTable('hsn_tax_rates')) {
+            return ['status' => 'no_verified_rule', 'rules' => []];
+        }
+
         $date ??= now()->toDateString();
 
         $rules = HsnTaxRate::query()
@@ -147,7 +170,7 @@ class HsnSacSearchService
         $code = strtolower((string) $hsn->hsn_code);
         $description = strtolower((string) $hsn->description);
         $keywords = strtolower((string) ($hsn->search_keywords ?? ''));
-        $search = strtolower($searchText);
+        $search = $this->normalizeSearchText($searchText);
         $score = 0;
 
         if ($search !== '' && $code === $search) {
@@ -163,18 +186,26 @@ class HsnSacSearchService
             $score += 450;
         }
 
+        if ($search !== '' && strlen($search) >= 5 && str_contains($description . ' ' . $keywords, $search)) {
+            $score += 520;
+        }
+
         if ($search !== '' && str_starts_with($description, $search)) {
             $score += 300;
         }
 
-        if ($search !== '' && str_contains($description, $search)) {
+        if ($search !== '' && strlen($search) >= 3 && $this->containsWords($description . ' ' . $keywords, $this->tokens($search))) {
             $score += 180;
         }
 
         foreach ($tokens as $token) {
-            if (str_contains($description, $token) || str_contains($keywords, $token)) {
-                $score += 40;
+            if ($this->containsWord($description, $token) || $this->containsWord($keywords, $token)) {
+                $score += 80;
             }
+        }
+
+        if ($hsn->gst_rate !== null) {
+            $score += 25;
         }
 
         $score += min(120, (int) ($usage[$hsn->id]['usage_count'] ?? 0) * 5);
@@ -200,6 +231,24 @@ class HsnSacSearchService
         }
 
         return 'classification_match';
+    }
+
+    private function classificationVerified(HsnMaster $hsn): bool
+    {
+        if (Schema::hasColumn('hsn_masters', 'classification_verified')) {
+            return (bool) $hsn->classification_verified;
+        }
+
+        return in_array(strtolower((string) $hsn->verification_status), ['verified', 'classification_verified', 'classification verified', 'rate_suggested', 'rate suggested', 'rate_verified', 'rate verified'], true);
+    }
+
+    private function rateVerified(HsnMaster $hsn): bool
+    {
+        if (Schema::hasColumn('hsn_masters', 'rate_verified')) {
+            return (bool) $hsn->rate_verified;
+        }
+
+        return in_array(strtolower((string) $hsn->verification_status), ['verified', 'rate_verified', 'rate verified'], true);
     }
 
     private function similarProductUsage(int $businessId, string $codeType, array $tokens): array
@@ -281,6 +330,7 @@ class HsnSacSearchService
 
     private function tokens(string $text): array
     {
+        $text = $this->normalizeSearchText($text);
         preg_match_all('/[a-z0-9]+/i', strtolower($text), $matches);
 
         return collect($matches[0] ?? [])
@@ -288,5 +338,26 @@ class HsnSacSearchService
             ->unique()
             ->values()
             ->all();
+    }
+
+    private function containsWords(string $text, array $tokens): bool
+    {
+        foreach ($tokens as $token) {
+            if (!$this->containsWord($text, $token)) {
+                return false;
+            }
+        }
+
+        return (bool) $tokens;
+    }
+
+    private function containsWord(string $text, string $token): bool
+    {
+        return preg_match('/(^|[^a-z0-9])' . preg_quote(strtolower($token), '/') . '([^a-z0-9]|$)/i', $text) === 1;
+    }
+
+    private function normalizeSearchText(string $text): string
+    {
+        return trim(preg_replace('/\s+/', ' ', str_ireplace(['musted', 'musturd'], 'mustard', strtolower($text))));
     }
 }

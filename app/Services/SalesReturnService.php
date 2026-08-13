@@ -825,6 +825,14 @@ class SalesReturnService
             return $path;
         }
 
+        if (is_file(public_path($path))) {
+            return asset($path);
+        }
+
+        if (is_file(storage_path('app/public/' . ltrim($path, '/')))) {
+            return asset('storage/' . ltrim($path, '/'));
+        }
+
         return asset($path);
     }
 }

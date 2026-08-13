@@ -111,9 +111,6 @@ class SalesCalculationService
         $roundOff = $this->calculateRoundOff($beforeRound);
         $grand = round($beforeRound + $roundOff, 2);
         $paid = collect($data['payments'] ?? [])->sum(fn ($payment) => (float) ($payment['amount'] ?? 0));
-        if ($paid > $grand) {
-            throw ValidationException::withMessages(['payments' => 'Total payment cannot exceed invoice grand total.']);
-        }
         $change = $this->calculateChangeReturned($grand, $paid);
         $paidForInvoice = min($paid, $grand);
 
@@ -166,10 +163,6 @@ class SalesCalculationService
     {
         if ($paidAmount <= 0) {
             return 'unpaid';
-        }
-
-        if ($paidAmount > $grandTotal) {
-            return 'overpaid';
         }
 
         return $paidAmount >= $grandTotal ? 'paid' : 'partial';

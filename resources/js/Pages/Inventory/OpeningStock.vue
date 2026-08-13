@@ -24,6 +24,7 @@ const errors = ref({});
 const highlightedRowUid = ref('');
 const fillingForm = ref(false);
 const viewingVoucher = ref(null);
+const detailVoucher = ref(null);
 const toast = ref({ show: false, title: '', message: '', type: 'info' });
 let toastTimer = null;
 const filters = reactive({
@@ -141,6 +142,14 @@ const voucherValueFor = (voucher, column) => {
     }
 
     return voucher[column.key] || '-';
+};
+
+const viewVoucher = (voucher) => {
+    detailVoucher.value = voucher;
+};
+
+const closeVoucherDetail = () => {
+    detailVoucher.value = null;
 };
 
 const loadReferences = async () => {
@@ -284,6 +293,39 @@ const editVoucher = (voucher) => {
 
     nextTick(() => {
         fillingForm.value = false;
+    });
+};
+
+const copyVoucherAsNew = (voucher) => {
+    closeVoucherDetail();
+    fillingForm.value = true;
+    form.id = null;
+    form.voucher_number = '';
+    form.branch_id = voucher.branch_id || '';
+    form.warehouse_id = voucher.warehouse_id || '';
+    form.opening_date = today;
+    form.remarks = voucher.voucher_number
+        ? `Correction against ${voucher.voucher_number}`
+        : 'Opening stock correction';
+    form.status = 'draft';
+    form.items = (voucher.items || []).map((item) => ({
+        ...item,
+        id: null,
+        product_name: item.product,
+        variants: [],
+        unit: item.unit || 'PCS',
+        current_stock: item.current_stock || 0,
+        serial_number_id: item.serial_number_id || '',
+        row_uid: makeRowUid(),
+    }));
+    errors.value = {};
+    productSearch.value = '';
+    productResults.value = [];
+    showMessage('Correction Draft Ready', 'Review the quantity and post the corrected opening stock voucher.', 'info');
+
+    nextTick(() => {
+        fillingForm.value = false;
+        focusQuantity(0);
     });
 };
 
@@ -436,6 +478,9 @@ const reverseVoucher = async (voucher) => {
     try {
         const response = await InventoryApi.reverseOpeningStock(voucher.id, remarks);
         showMessage('Opening Stock Cancelled', response.message || 'Opening stock cancelled.', 'success');
+        if (detailVoucher.value && Number(detailVoucher.value.id) === Number(voucher.id)) {
+            closeVoucherDetail();
+        }
         await loadVouchers(pagination.value.current_page || 1);
     } catch (error) {
         showMessage('Unable to Cancel Voucher', error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'Opening stock could not be cancelled.', 'error');
@@ -722,8 +767,9 @@ onMounted(async () => {
                     empty-text="No opening stock vouchers found."
                 >
                     <template #actions="{ row: voucher }">
-                        <button type="button" class="crud-action" @click="editVoucher(voucher)">View</button>
+                        <button type="button" class="crud-action" @click="viewVoucher(voucher)">View</button>
                         <button v-if="voucher.status === 'draft'" type="button" class="crud-action" @click="editVoucher(voucher)">Edit</button>
+                        <button v-if="voucher.status !== 'draft'" type="button" class="crud-action" @click="copyVoucherAsNew(voucher)">Copy New</button>
                         <button v-if="voucher.status !== 'draft'" type="button" class="crud-action" @click="printVoucher(voucher)">Print</button>
                         <button v-if="voucher.status === 'draft'" type="button" class="crud-action" @click="approveVoucher(voucher)">Post</button>
                         <button v-if="voucher.status === 'draft'" type="button" class="crud-action danger" @click="deleteVoucher(voucher)">Delete</button>
@@ -745,6 +791,73 @@ onMounted(async () => {
             :message="toast.message"
             :type="toast.type"
         />
+
+        <div v-if="detailVoucher" class="voucher-detail-backdrop" @click.self="closeVoucherDetail">
+            <section class="voucher-detail-panel" role="dialog" aria-modal="true" aria-label="Opening stock voucher detail">
+                <header class="voucher-detail-header">
+                    <div>
+                        <span>Opening Stock Voucher</span>
+                        <h3>{{ detailVoucher.voucher_number }}</h3>
+                    </div>
+                    <button type="button" class="detail-close" @click="closeVoucherDetail">x</button>
+                </header>
+
+                <div class="voucher-detail-grid">
+                    <div><span>Date</span><strong>{{ detailVoucher.opening_date || '-' }}</strong></div>
+                    <div><span>Status</span><strong>{{ detailVoucher.status || '-' }}</strong></div>
+                    <div><span>Branch</span><strong>{{ detailVoucher.branch || '-' }}</strong></div>
+                    <div><span>Warehouse</span><strong>{{ detailVoucher.warehouse || 'Default' }}</strong></div>
+                    <div><span>Items</span><strong>{{ detailVoucher.items_count || 0 }}</strong></div>
+                    <div><span>Quantity</span><strong>{{ Number(detailVoucher.total_quantity || 0).toFixed(3) }}</strong></div>
+                    <div><span>Value</span><strong>Rs. {{ formatMoney(detailVoucher.total_value) }}</strong></div>
+                    <div><span>Posted By</span><strong>{{ detailVoucher.posted_by || '-' }}</strong></div>
+                </div>
+
+                <div v-if="detailVoucher.remarks || detailVoucher.cancellation_reason" class="voucher-detail-note">
+                    <strong>{{ detailVoucher.status === 'cancelled' ? 'Cancellation Reason' : 'Remarks' }}</strong>
+                    <span>{{ detailVoucher.cancellation_reason || detailVoucher.remarks }}</span>
+                </div>
+
+                <div class="voucher-detail-table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Variant</th>
+                                <th>Batch</th>
+                                <th>Qty</th>
+                                <th>Cost</th>
+                                <th>MRP</th>
+                                <th>Location</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="item in detailVoucher.items || []" :key="item.id || item.product_id">
+                                <td>
+                                    <strong>{{ item.product || '-' }}</strong>
+                                    <span>{{ item.sku || '-' }}</span>
+                                </td>
+                                <td>{{ item.variant || 'Default' }}</td>
+                                <td>{{ item.batch_no || '-' }}</td>
+                                <td>{{ Number(item.quantity || 0).toFixed(3) }} {{ item.unit || 'PCS' }}</td>
+                                <td>Rs. {{ formatMoney(item.purchase_cost) }}</td>
+                                <td>{{ item.mrp !== null && item.mrp !== undefined ? `Rs. ${formatMoney(item.mrp)}` : '-' }}</td>
+                                <td>{{ item.warehouse_location || '-' }}</td>
+                                <td>Rs. {{ formatMoney(item.stock_value || Number(item.quantity || 0) * Number(item.purchase_cost || 0)) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <footer class="voucher-detail-actions">
+                    <button type="button" @click="copyVoucherAsNew(detailVoucher)">Copy New</button>
+                    <button type="button" @click="printVoucher(detailVoucher)">Print</button>
+                    <button v-if="detailVoucher.status === 'posted'" type="button" class="danger" @click="reverseVoucher(detailVoucher)">Cancel</button>
+                    <button type="button" class="primary" @click="closeVoucherDetail">Close</button>
+                </footer>
+            </section>
+        </div>
 
         <section v-if="printableVoucher" class="print-voucher">
             <header>
@@ -863,8 +976,32 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .listing-information { align-items: center; display: flex; justify-content: space-between; margin-bottom: 10px; }
 .listing-information strong { color: #344159; display: block; font-size: 12px; font-weight: 850; }
 .listing-information span { color: #7b879c; display: block; font-size: 11px; font-weight: 650; margin-top: 2px; }
+.voucher-detail-backdrop { align-items: center; background: rgba(15, 23, 42, .46); bottom: 0; display: flex; justify-content: center; left: 288px; padding: 22px 32px; position: fixed; right: 0; top: 0; z-index: 120; }
+.voucher-detail-panel { background: #fff; border: 1px solid #dfe6ef; border-radius: 12px; box-shadow: 0 24px 70px rgba(15, 23, 42, .24); max-height: min(760px, calc(100vh - 44px)); overflow: auto; padding: 20px; width: min(980px, 100%); }
+.voucher-detail-header { align-items: flex-start; border-bottom: 1px solid #edf1f5; display: flex; justify-content: space-between; gap: 16px; margin-bottom: 16px; padding-bottom: 14px; }
+.voucher-detail-header span { color: #2457d6; display: block; font-size: 10px; font-weight: 850; letter-spacing: 1px; text-transform: uppercase; }
+.voucher-detail-header h3 { color: #142139; font-size: 20px; font-weight: 850; margin: 3px 0 0; }
+.detail-close { align-items: center; background: #f1f5f9; border: 0; border-radius: 999px; color: #64748b; cursor: pointer; display: inline-flex; font-size: 12px; font-weight: 900; height: 30px; justify-content: center; width: 30px; }
+.voucher-detail-grid { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
+.voucher-detail-grid div { background: #f8fafc; border: 1px solid #e7ecf2; border-radius: 8px; padding: 10px 12px; }
+.voucher-detail-grid span { color: #7b879c; display: block; font-size: 10px; font-weight: 850; text-transform: uppercase; }
+.voucher-detail-grid strong { color: #1f2c44; display: block; font-size: 13px; font-weight: 850; margin-top: 4px; }
+.voucher-detail-note { background: #ffffbf; border: 1px solid #f5e68a; border-radius: 8px; color: #5c4a09; display: grid; gap: 4px; margin-bottom: 14px; padding: 10px 12px; }
+.voucher-detail-note strong { font-size: 11px; font-weight: 850; }
+.voucher-detail-note span { font-size: 12px; font-weight: 700; }
+.voucher-detail-table-wrap { border: 1px solid #e7ecf2; border-radius: 8px; overflow: auto; }
+.voucher-detail-table-wrap table { border-collapse: collapse; min-width: 860px; width: 100%; }
+.voucher-detail-table-wrap th { background: #f8fafc; border-bottom: 1px solid #e7ecf2; color: #738198; font-size: 10px; font-weight: 850; padding: 10px; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.voucher-detail-table-wrap td { border-bottom: 1px solid #edf1f5; color: #27344c; font-size: 12px; font-weight: 700; padding: 10px; white-space: nowrap; }
+.voucher-detail-table-wrap td strong { display: block; font-size: 12px; font-weight: 850; }
+.voucher-detail-table-wrap td span { color: #7a869a; display: block; font-size: 10px; margin-top: 2px; }
+.voucher-detail-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+.voucher-detail-actions button { background: #fff; border: 1px solid #d8e0eb; border-radius: 8px; color: #35435b; cursor: pointer; font-size: 11px; font-weight: 800; min-height: 38px; padding: 8px 14px; }
+.voucher-detail-actions .primary { background: #2457d6; border-color: #2457d6; color: #fff; }
+.voucher-detail-actions .danger { background: #fff3f4; border-color: #ffd6da; color: #d23f49; }
 @media (max-width: 1100px) { .opening-form-grid, .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 760px) { .listing-title, .listing-toolbar { align-items: stretch; flex-direction: column; } .opening-form-grid, .summary-grid { grid-template-columns: 1fr; } .field-span-2 { grid-column: span 1; } .filter-group { justify-content: stretch; } .filter-group select, .filter-group input { width: 100%; } }
+@media (max-width: 900px) { .voucher-detail-backdrop { left: 0; padding: 18px; } }
+@media (max-width: 760px) { .listing-title, .listing-toolbar { align-items: stretch; flex-direction: column; } .opening-form-grid, .summary-grid, .voucher-detail-grid { grid-template-columns: 1fr; } .field-span-2 { grid-column: span 1; } .filter-group { justify-content: stretch; } .filter-group select, .filter-group input { width: 100%; } .voucher-detail-actions { align-items: stretch; flex-direction: column; } }
 .print-voucher { display: none; }
 @media print {
     body * { visibility: hidden !important; }

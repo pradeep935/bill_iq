@@ -23,7 +23,7 @@ class BarcodeCenterService
             'products' => Product::query()->where(fn (Builder $q) => $this->scopeProduct($q, $businessId))->orderBy('name')->limit(300)->get($this->columns('products', ['id', 'name', 'sku', 'primary_barcode', 'barcode', 'selling_price', 'mrp'])),
             'formats' => ['CODE128', 'EAN-13', 'EAN-8', 'UPC-A', 'QR'],
             'types' => ['internal', 'manufacturer', 'supplier', 'variant', 'unit', 'batch', 'serial'],
-            'templates' => ['50x25', '40x30', '38x25', 'a4', 'custom'],
+            'templates' => ['50x25', '50x30', '100x50', '58x40', '75x50', 'a4', 'custom'],
         ];
     }
 
@@ -157,7 +157,12 @@ class BarcodeCenterService
     public function print(array $data): array
     {
         $product = $this->product((int) $data['product_id']);
-        $barcode = $data['barcode'] ?? $this->primaryBarcode($product);
+        $barcode = trim((string) ($data['barcode'] ?? $this->primaryBarcode($product)));
+
+        if ($barcode === '') {
+            throw ValidationException::withMessages(['barcode' => 'Product barcode is required before printing labels.']);
+        }
+
         BarcodeLabelPrint::query()->create(['business_id' => AppController::businessId(), 'product_id' => $product->id, 'product_barcode_id' => $data['product_barcode_id'] ?? null, 'barcode' => $barcode, 'template' => $data['template'] ?? '50x25', 'labels_count' => (int) ($data['labels_count'] ?? 1), 'settings' => $data, 'created_by' => Auth::id()]);
         return ['product' => $this->presentProduct($product), 'barcode' => $barcode, 'settings' => $data];
     }

@@ -13,6 +13,16 @@ class HandleInertiaRequests extends Middleware
 
     public function version(Request $request): ?string
     {
+        if ($version = config('app.asset_version')) {
+            return (string) $version;
+        }
+
+        $manifest = public_path('build/manifest.json');
+
+        if (is_file($manifest)) {
+            return md5_file($manifest) ?: (string) filemtime($manifest);
+        }
+
         return parent::version($request);
     }
 

@@ -415,7 +415,25 @@ class InventoryController extends Controller
     public function barcodePrint(Request $request, BarcodeCenterService $barcodes)
     {
         $this->authorizeInventoryPermission('barcode.print');
-        $data = $request->validate(['product_id' => ['required', 'integer'], 'product_barcode_id' => ['nullable', 'integer'], 'barcode' => ['nullable', 'string'], 'labels_count' => ['required', 'integer', 'min:1', 'max:1000'], 'template' => ['nullable', 'string', 'max:80']]);
+        $data = $request->validate([
+            'product_id' => ['required', 'integer'],
+            'product_barcode_id' => ['nullable', 'integer'],
+            'barcode' => ['nullable', 'string', 'max:120'],
+            'labels_count' => ['required', 'integer', 'min:1', 'max:1000'],
+            'template' => ['nullable', 'string', 'max:80'],
+            'paper_size' => ['nullable', 'in:A4,thermal'],
+            'width' => ['nullable', 'numeric', 'min:10', 'max:210'],
+            'height' => ['nullable', 'numeric', 'min:10', 'max:297'],
+            'columns' => ['nullable', 'integer', 'min:1', 'max:10'],
+            'margin' => ['nullable', 'numeric', 'min:0', 'max:50'],
+            'gap_x' => ['nullable', 'numeric', 'min:0', 'max:50'],
+            'gap_y' => ['nullable', 'numeric', 'min:0', 'max:50'],
+            'show_name' => ['nullable', 'boolean'],
+            'show_sku' => ['nullable', 'boolean'],
+            'show_price' => ['nullable', 'boolean'],
+            'show_mrp' => ['nullable', 'boolean'],
+            'show_business' => ['nullable', 'boolean'],
+        ]);
         return response()->json(['message' => 'Label print recorded.', 'print' => $barcodes->print($data)]);
     }
 

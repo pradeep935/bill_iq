@@ -357,8 +357,52 @@ class AccountingPostingService
     private function settings(int $businessId): BusinessAccountSetting
     {
         $settings = BusinessAccountSetting::query()->where('business_id', $businessId)->first();
-        if (!$settings) throw ValidationException::withMessages(['account_settings' => 'Business default accounts are not configured.']);
-        return $settings;
+        return $settings ?: $this->createDefaultSettings($businessId);
+    }
+
+    private function createDefaultSettings(int $businessId): BusinessAccountSetting
+    {
+        $account = function (string $code, string $name, string $type) use ($businessId): int {
+            return (int) Account::query()->firstOrCreate(
+                ['business_id' => $businessId, 'account_code' => $code],
+                [
+                    'account_name' => $name,
+                    'name' => $name,
+                    'account_type' => $type,
+                    'opening_balance' => 0,
+                    'opening_balance_type' => 'debit',
+                    'current_balance' => 0,
+                    'is_system' => true,
+                    'status' => 'active',
+                    'created_by' => Auth::id(),
+                ]
+            )->id;
+        };
+
+        return BusinessAccountSetting::query()->create([
+            'business_id' => $businessId,
+            'cash_account_id' => $account('CASH', 'Cash in Hand', 'cash'),
+            'default_bank_account_id' => $account('BANK', 'Default Bank', 'bank'),
+            'accounts_receivable_id' => $account('AR', 'Accounts Receivable', 'asset'),
+            'accounts_payable_id' => $account('AP', 'Accounts Payable', 'liability'),
+            'sales_account_id' => $account('SALES', 'Sales', 'income'),
+            'purchase_account_id' => $account('PURCHASE', 'Purchase', 'expense'),
+            'sales_return_account_id' => $account('SALES-RET', 'Sales Return', 'expense'),
+            'purchase_return_account_id' => $account('PUR-RET', 'Purchase Return', 'income'),
+            'inventory_account_id' => $account('INV', 'Inventory', 'asset'),
+            'cost_of_goods_sold_account_id' => $account('COGS', 'Cost of Goods Sold', 'expense'),
+            'output_cgst_account_id' => $account('OUT-CGST', 'Output CGST', 'liability'),
+            'output_sgst_account_id' => $account('OUT-SGST', 'Output SGST', 'liability'),
+            'output_igst_account_id' => $account('OUT-IGST', 'Output IGST', 'liability'),
+            'input_cgst_account_id' => $account('IN-CGST', 'Input CGST', 'asset'),
+            'input_sgst_account_id' => $account('IN-SGST', 'Input SGST', 'asset'),
+            'input_igst_account_id' => $account('IN-IGST', 'Input IGST', 'asset'),
+            'output_cess_account_id' => $account('OUT-CESS', 'Output CESS', 'liability'),
+            'input_cess_account_id' => $account('IN-CESS', 'Input CESS', 'asset'),
+            'round_off_account_id' => $account('ROUND', 'Round Off', 'expense'),
+            'shipping_income_account_id' => $account('SHIP-I', 'Shipping Income', 'income'),
+            'shipping_expense_account_id' => $account('SHIP-E', 'Shipping Expense', 'expense'),
+        ]);
     }
 
     private function alreadyPosted(string $type, int $id): bool

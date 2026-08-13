@@ -1,0 +1,187 @@
+[
+  {
+    "code_type": "HSN",
+    "prefix": "0101",
+    "gst_rate": 12,
+    "taxability": "taxable",
+    "description": "Live horses, asses, mules and hinnies.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "03",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Fish and crustaceans, molluscs and other aquatic invertebrates.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "04",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Dairy produce, birds eggs and edible natural products.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "1006",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Rice where taxable as pre-packaged/labelled supply; loose/unbranded cases may differ.",
+    "source_reference": "GST rate seed rule with condition. Verify supply condition before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "11",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Products of milling industry.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "1509",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Olive oil and its fractions.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "1512",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Sunflower, safflower or cotton-seed oil and fractions.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "1514",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Rape, colza or mustard oil and its fractions.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "1701",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Cane or beet sugar and chemically pure sucrose.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "2106",
+    "gst_rate": 18,
+    "taxability": "taxable",
+    "description": "Food preparations not elsewhere specified or included.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "3004",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Medicaments in measured doses or retail packing; special entries may differ.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "3304",
+    "gst_rate": 18,
+    "taxability": "taxable",
+    "description": "Beauty or make-up preparations and skin care preparations.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "3401",
+    "gst_rate": 18,
+    "taxability": "taxable",
+    "description": "Soap and organic surface-active products.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "4011",
+    "gst_rate": 18,
+    "taxability": "taxable",
+    "description": "New pneumatic tyres of rubber; selected cases may attract cess.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "6109",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "T-shirts, singlets and other vests; value conditions may differ.",
+    "source_reference": "GST rate seed rule with condition. Verify transaction value before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "6203",
+    "gst_rate": 5,
+    "taxability": "taxable",
+    "description": "Mens or boys suits, ensembles, jackets, trousers and similar apparel; value conditions may differ.",
+    "source_reference": "GST rate seed rule with condition. Verify transaction value before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "6403",
+    "gst_rate": 18,
+    "taxability": "taxable",
+    "description": "Footwear with outer soles of rubber/plastics/leather and uppers of leather; value conditions may differ.",
+    "source_reference": "GST rate seed rule with condition. Verify transaction value before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "7102",
+    "gst_rate": 1.5,
+    "taxability": "taxable",
+    "description": "Diamonds, whether or not worked, but not mounted or set.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "7108",
+    "gst_rate": 3,
+    "taxability": "taxable",
+    "description": "Gold, unwrought or in semi-manufactured forms, or in powder form.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "7113",
+    "gst_rate": 3,
+    "taxability": "taxable",
+    "description": "Articles of jewellery and parts thereof.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "8517",
+    "gst_rate": 18,
+    "taxability": "taxable",
+    "description": "Telephone sets, smartphones and other apparatus for transmission or reception of voice, images or data.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  },
+  {
+    "code_type": "HSN",
+    "prefix": "8703",
+    "gst_rate": 28,
+    "cess_rate": 1,
+    "taxability": "taxable",
+    "description": "Motor cars and other motor vehicles principally designed for transport of persons; cess varies by vehicle class.",
+    "source_reference": "GST rate seed rule with variable cess. Verify vehicle class before billing."
+  },
+  {
+    "code_type": "SAC",
+    "prefix": "99",
+    "gst_rate": 18,
+    "taxability": "taxable",
+    "description": "General taxable services; exemptions and specific service entries may differ.",
+    "source_reference": "GST rate seed rule. Verify with latest CBIC notification before billing."
+  }
+]

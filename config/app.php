@@ -56,6 +56,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend Asset Version
+    |--------------------------------------------------------------------------
+    |
+    | Bump ASSET_VERSION in .env when you want every browser to fetch the
+    | latest compiled JavaScript and CSS together. If empty, the Vite manifest
+    | hash is used automatically after each build.
+    |
+    */
+
+    'asset_version' => env('ASSET_VERSION'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

@@ -9,6 +9,7 @@ import InventoryTable from './Shared/InventoryTable.vue';
 import InventoryModal from './Shared/InventoryModal.vue';
 import BarcodePreview from './Shared/BarcodePreview.vue';
 import BarcodeScannerInput from './Shared/BarcodeScannerInput.vue';
+import { code128BarsHtml } from './Shared/barcodeRenderer';
 
 defineProps({ page: { type: String, default: 'inventory-barcode-center' }, title: { type: String, default: 'Barcode Center' } });
 
@@ -28,7 +29,7 @@ const errors = ref({});
 const activeReport = ref('product_barcodes');
 const filters = ref({ search: '', product_id: '', category_id: '', brand_id: '', barcode_type: '', has_barcode: '', active_status: '', per_page: 15 });
 const form = ref({ product_id: '', barcode: '', format: 'CODE128', barcode_type: 'internal', is_primary: true, is_active: true, quantity: 1 });
-const label = ref({ product_id: '', barcode: '', labels_count: 10, template: '50x25', paper_size: 'A4', width: 50, height: 25, columns: 3, margin: 5, gap_x: 3, gap_y: 3, show_name: true, show_sku: true, show_price: true, show_mrp: false, show_business: true });
+const label = ref({ product_id: '', barcode: '', labels_count: 10, template: '50x25', paper_size: 'A4', width: 50, height: 25, columns: 3, margin: 5, gap_x: 3, gap_y: 3, show_name: true, show_sku: true, show_price: true, show_mrp: false, show_business: false });
 let timer = null;
 
 const columns = [{ key: 'name', label: 'Product' }, { key: 'sku', label: 'SKU' }, { key: 'primary_barcode', label: 'Primary Barcode' }, { key: 'barcode_type', label: 'Barcode Type' }, { key: 'alternate_barcodes', label: 'Alternate Barcodes' }, { key: 'selling_price', label: 'Selling Price' }, { key: 'status', label: 'Status' }, { key: 'updated_at', label: 'Updated At' }];
@@ -42,6 +43,15 @@ const cards = computed(() => [
 ]);
 const reportRows = computed(() => reports.value?.[activeReport.value] || []);
 const selectedProduct = computed(() => refs.value.products.find((p) => Number(p.id) === Number(form.value.product_id || label.value.product_id)) || current.value || {});
+const labelTemplates = {
+    '50x25': { label: '50 x 25 mm', paper_size: 'A4', width: 50, height: 25, columns: 3, margin: 5, gap_x: 3, gap_y: 3 },
+    '50x30': { label: '50 x 30 mm', paper_size: 'A4', width: 50, height: 30, columns: 3, margin: 5, gap_x: 3, gap_y: 3 },
+    '100x50': { label: '100 x 50 mm', paper_size: 'thermal', width: 100, height: 50, columns: 1, margin: 0, gap_x: 0, gap_y: 0 },
+    '58x40': { label: '58 x 40 mm thermal', paper_size: 'thermal', width: 58, height: 40, columns: 1, margin: 0, gap_x: 0, gap_y: 0 },
+    '75x50': { label: '75 x 50 mm thermal', paper_size: 'thermal', width: 75, height: 50, columns: 1, margin: 0, gap_x: 0, gap_y: 0 },
+    a4: { label: 'A4 sheet custom', paper_size: 'A4', width: 50, height: 25, columns: 3, margin: 5, gap_x: 3, gap_y: 3 },
+    custom: { label: 'Custom', paper_size: label.value.paper_size || 'A4' },
+};
 const money = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const statusLabel = (v) => String(v || '-').replaceAll('_', ' ');
 const showToast = (message, type = 'success') => { toast.value = { title: 'Barcode Center', message, type }; };
@@ -66,7 +76,12 @@ const openAssign = (row = null) => {
     modal.value = 'assign';
 };
 const openManage = (row) => { current.value = row; modal.value = 'manage'; };
-const openPrint = (row) => { current.value = row; label.value = { ...label.value, product_id: row.id, barcode: row.primary_barcode }; modal.value = 'print'; };
+const applyLabelTemplate = (template) => {
+    const preset = labelTemplates[template];
+    if (!preset || template === 'custom') return;
+    label.value = { ...label.value, template, ...preset };
+};
+const openPrint = (row) => { current.value = row; label.value = { ...label.value, product_id: row.id, barcode: row.primary_barcode || row.barcode || '' }; applyLabelTemplate(label.value.template); modal.value = 'print'; };
 const saveBarcode = async () => {
     errors.value = {};
     saving.value = true;
@@ -88,17 +103,30 @@ const scan = async (barcode) => {
     showToast(response.result ? 'Barcode resolved.' : 'Barcode or serial not found.', response.result ? 'success' : 'error');
 };
 const recordPrint = async () => {
+    const product = current.value || selectedProduct.value;
+    if (!(label.value.barcode || product.primary_barcode)) {
+        showToast('Product barcode is required before printing.', 'error');
+        return;
+    }
     saving.value = true;
     try { await InventoryApi.printBarcode(label.value); showToast('Label print recorded.'); printLabels(); await load(); } catch (e) { showToast(e?.response?.data?.message || 'Print setup failed.', 'error'); } finally { saving.value = false; }
 };
 const printLabels = () => {
     const product = current.value || selectedProduct.value;
     const count = Number(label.value.labels_count || 1);
-    const cards = Array.from({ length: count }).map(() => `<article><strong>${label.value.show_name ? product.name || '' : ''}</strong><small>${label.value.show_sku ? product.sku || '' : ''}</small><div class="bars"></div><span>${label.value.barcode || product.primary_barcode || ''}</span><b>${label.value.show_price ? 'Rs. ' + money(product.selling_price) : ''}</b></article>`).join('');
+    const barcode = String(label.value.barcode || product.primary_barcode || '');
+    const barcodeBars = code128BarsHtml(barcode);
+    const price = label.value.show_mrp ? product.mrp : product.selling_price;
+    const priceText = label.value.show_mrp ? `MRP Rs. ${money(price)}` : `Rs. ${money(price)}`;
+    const cards = Array.from({ length: count }).map(() => `<article><strong>${label.value.show_name ? escapeHtml(product.name || '') : ''}</strong><small>${label.value.show_sku ? escapeHtml(product.sku || '') : ''}</small><div class="barcode" aria-label="Barcode ${escapeHtml(barcode)}">${barcodeBars}</div><span>${escapeHtml(barcode)}</span><b>${label.value.show_price || label.value.show_mrp ? priceText : ''}</b></article>`).join('');
     const win = window.open('', '_blank');
-    win.document.write(`<html><head><style>@media print{body{margin:${label.value.margin}mm}}body{font-family:Arial}.sheet{display:grid;grid-template-columns:repeat(${label.value.columns}, ${label.value.width}mm);gap:${label.value.gap_y}mm ${label.value.gap_x}mm}article{box-sizing:border-box;width:${label.value.width}mm;height:${label.value.height}mm;border:1px dashed #999;display:grid;align-content:center;justify-items:center;text-align:center;padding:2mm;overflow:hidden}strong{font-size:9px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}small{font-size:7px}.bars{height:8mm;width:90%;border-bottom:8mm repeating-linear-gradient(90deg,#111 0 1px,transparent 1px 2px,#111 2px 3px,transparent 3px 4px)}span{font-size:8px;font-weight:bold}b{font-size:8px}</style></head><body><div class="sheet">${cards}</div></body></html>`);
-    win.document.close(); win.print();
+    const thermal = label.value.paper_size === 'thermal';
+    const pageSize = thermal ? `${label.value.width}mm ${label.value.height}mm` : 'A4';
+    const sheetWidth = thermal ? `${label.value.width}mm` : 'auto';
+    win.document.write(`<html><head><title>Barcode Labels</title><style>@page{size:${pageSize};margin:${thermal ? 0 : Number(label.value.margin || 0)}mm}@media print{html,body{margin:0!important;padding:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}*{box-sizing:border-box}body{background:#fff;font-family:Arial,sans-serif;margin:${thermal ? 0 : Number(label.value.margin || 0)}mm}.sheet{display:grid;grid-template-columns:repeat(${thermal ? 1 : Number(label.value.columns || 1)}, ${Number(label.value.width)}mm);gap:${thermal ? 0 : Number(label.value.gap_y || 0)}mm ${thermal ? 0 : Number(label.value.gap_x || 0)}mm;width:${sheetWidth}}article{break-inside:avoid;page-break-inside:avoid;width:${Number(label.value.width)}mm;height:${Number(label.value.height)}mm;display:grid;grid-template-rows:auto auto 1fr auto auto;align-items:center;justify-items:center;text-align:center;padding:1.5mm 2mm;overflow:hidden}strong{font-size:${Number(label.value.height) <= 25 ? 7 : 10}px;font-weight:700;line-height:1.05;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}small{font-size:${Number(label.value.height) <= 25 ? 6 : 8}px;font-weight:700;line-height:1;color:#111}.barcode{background:#fff;display:flex;height:${Math.max(9, Math.min(24, Number(label.value.height) * 0.38))}mm;margin:.8mm 0;width:94%}.barcode i{min-width:1px}span{font-size:${Number(label.value.height) <= 25 ? 7 : 9}px;font-weight:700;letter-spacing:.2px;line-height:1}b{font-size:${Number(label.value.height) <= 25 ? 7 : 9}px;line-height:1}</style></head><body><div class="sheet">${cards}</div><script>setTimeout(function(){window.focus();window.print();},300);<\/script></body></html>`);
+    win.document.close();
 };
+const escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 const exportRows = (format) => {
     if (format === 'pdf') { window.print(); return; }
     const source = activeReport.value === 'product_barcodes' ? rows.value : reportRows.value;
@@ -157,8 +185,8 @@ onMounted(async () => { await loadRefs(); await load(); });
         </InventoryModal>
 
         <InventoryModal v-if="modal === 'print' && current" title="Print Labels" :subtitle="current.name" wide @close="modal = null">
-            <div class="form-grid"><input v-model.number="label.labels_count" type="number" min="1" /><select v-model="label.template"><option v-for="t in refs.templates" :key="t">{{ t }}</option></select><input v-model.number="label.width" type="number" /><input v-model.number="label.height" type="number" /><input v-model.number="label.columns" type="number" /><input v-model.number="label.margin" type="number" /><input v-model.number="label.gap_x" type="number" /><input v-model.number="label.gap_y" type="number" /><label><input v-model="label.show_name" type="checkbox" /> Name</label><label><input v-model="label.show_sku" type="checkbox" /> SKU</label><label><input v-model="label.show_price" type="checkbox" /> Price</label><label><input v-model="label.show_mrp" type="checkbox" /> MRP</label><label><input v-model="label.show_business" type="checkbox" /> Business</label></div>
-            <BarcodePreview :title="label.show_name ? current.name : ''" :subtitle="label.show_sku ? current.sku : ''" :value="label.barcode || current.primary_barcode" :price="label.show_price ? current.selling_price : ''" />
+            <div class="form-grid"><input v-model.number="label.labels_count" type="number" min="1" /><select v-model="label.template" @change="applyLabelTemplate(label.template)"><option v-for="t in refs.templates" :key="t" :value="t">{{ labelTemplates[t]?.label || t }}</option></select><select v-model="label.paper_size"><option value="A4">A4 Sheet</option><option value="thermal">Thermal Label Roll</option></select><input v-model.number="label.width" type="number" /><input v-model.number="label.height" type="number" /><input v-model.number="label.columns" type="number" :disabled="label.paper_size === 'thermal'" /><input v-model.number="label.margin" type="number" :disabled="label.paper_size === 'thermal'" /><input v-model.number="label.gap_x" type="number" :disabled="label.paper_size === 'thermal'" /><input v-model.number="label.gap_y" type="number" :disabled="label.paper_size === 'thermal'" /><label><input v-model="label.show_name" type="checkbox" /> Name</label><label><input v-model="label.show_sku" type="checkbox" /> SKU</label><label><input v-model="label.show_price" type="checkbox" /> Price</label><label><input v-model="label.show_mrp" type="checkbox" /> MRP</label></div>
+            <BarcodePreview :title="label.show_name ? current.name : ''" :subtitle="label.show_sku ? current.sku : ''" :value="label.barcode || current.primary_barcode" :price="label.show_mrp ? current.mrp : (label.show_price ? current.selling_price : '')" />
             <footer class="modal-actions"><button @click="modal = null">Cancel</button><button class="primary" :disabled="saving" @click="recordPrint">Print</button></footer>
         </InventoryModal>
     </Layout>

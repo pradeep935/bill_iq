@@ -344,9 +344,12 @@ class SalesService
             ->where(function (Builder $q) use ($search) {
                 $like = '%' . $search . '%';
                 $q->where('name', 'like', $like)
+                    ->orWhere('short_name', 'like', $like)
                     ->orWhere('sku', 'like', $like)
                     ->orWhere('barcode', 'like', $like)
                     ->orWhere('primary_barcode', 'like', $like)
+                    ->orWhere('hsn_code', 'like', $like)
+                    ->orWhere('hsn', 'like', $like)
                     ->orWhereHas('barcodes', fn (Builder $b) => $b->where('barcode', 'like', $like));
             })
             ->limit(20)
@@ -593,7 +596,7 @@ class SalesService
             'customer_id' => $data['customer_id'] ?? null,
             'invoice_date' => $data['invoice_date'],
             'due_date' => $data['due_date'] ?? $this->dueDate($customer, $data['invoice_date']),
-            'sale_type' => $data['sale_type'],
+            'sale_type' => $data['sale_type'] ?? 'cash',
             'invoice_type' => $data['invoice_type'],
             'tax_type' => $data['invoice_type'] === 'bill_of_supply' ? 'exempt' : $data['tax_type'],
             'place_of_supply_state_id' => $data['place_of_supply_state_id'] ?? null,
@@ -905,6 +908,14 @@ class SalesService
 
         if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '/')) {
             return $path;
+        }
+
+        if (is_file(public_path($path))) {
+            return asset($path);
+        }
+
+        if (is_file(storage_path('app/public/' . ltrim($path, '/')))) {
+            return asset('storage/' . ltrim($path, '/'));
         }
 
         return asset($path);

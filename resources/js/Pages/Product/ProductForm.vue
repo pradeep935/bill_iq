@@ -108,6 +108,7 @@ const hsnResults = ref([]);
 const hsnSearching = ref(false);
 const selectedHsnRecord = ref(null);
 let hsnSearchTimer = null;
+let hsnSuggestTimer = null;
 const clientErrors = ref({});
 const attemptedSave = ref(false);
 const fillingForm = ref(false);
@@ -441,7 +442,7 @@ const applyHsn = (hsn) => {
     form.hsn_master_id = hsn.id || '';
     form.hsn_tax_rate_id = '';
     form.hsn_code = hsn.hsn_code || '';
-    hsnSearch.value = hsn.hsn_code || '';
+    hsnSearch.value = `${hsn.hsn_code || ''} - ${hsn.description || ''}`.trim();
     selectedHsnRecord.value = hsn;
 
     if (hsn.tax_resolution?.status === 'single_verified_rule' && hsn.tax_resolution.rule) {
@@ -459,10 +460,11 @@ const applyHsn = (hsn) => {
         ? 'manual_confirmation'
         : 'manual_confirmation';
 
-    if (hsn.rate_verified !== false && hsn.gst_rate !== null && hsn.gst_rate !== undefined) {
+    if (hsn.gst_rate !== null && hsn.gst_rate !== undefined) {
         form.taxability = hsn.taxability || 'taxable';
         form.gst_rate = String(hsn.gst_rate);
         form.cess_rate = String(hsn.cess_rate ?? '0');
+        form.tax_source = hsn.rate_verified ? 'verified_rule' : 'master_suggested';
     }
 };
 
@@ -549,6 +551,14 @@ const fillSmartFields = (force = false) => {
 
 };
 
+const hsnSuggestionQuery = computed(() => [
+    normalizedProductName.value,
+    form.brand,
+    categoryLabel.value,
+    form.subcategory,
+    form.description,
+].filter(Boolean).join(' ').trim());
+
 const productTypeOptions = [
     {
         value: 'goods',
@@ -589,7 +599,7 @@ const hsnOptions = computed(() => {
         .filter((hsn) => !hsn.code_type || hsn.code_type === expectedCodeType);
 });
 const selectedHsn = computed(() => selectedHsnRecord.value || hsnOptions.value.find((hsn) => String(hsn.id) === String(form.hsn_master_id)) || null);
-const hsnTaxLocked = computed(() => form.tax_source === 'verified_rule');
+const hsnTaxLocked = computed(() => ['verified_rule', 'master_suggested'].includes(form.tax_source));
 const brandOptions = computed(() => {
     const options = normalizeReferenceOptions(props.references?.brands || [], ['name', 'label', 'code']);
 
@@ -829,7 +839,11 @@ watch(
             form.hsn_master_id = '';
             form.hsn_code = '';
             hsnSearch.value = '';
+            selectedHsnRecord.value = null;
+            form.tax_source = 'manual_confirmation';
         }
+
+        suggestHsnFromProduct();
     }
 );
 
@@ -885,6 +899,13 @@ watch(
     normalizedProductName,
     () => {
         fillSmartFields(false);
+    }
+);
+
+watch(
+    hsnSuggestionQuery,
+    () => {
+        suggestHsnFromProduct();
     }
 );
 
@@ -997,8 +1018,12 @@ const imagePreviewUrl = (image = {}) => {
 
     const normalizedPath = path.replace(/^\/+/, '');
 
-    if (normalizedPath.startsWith('storage/') || normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('upload/')) {
+    if (normalizedPath.startsWith('storage/')) {
         return `/${normalizedPath}`;
+    }
+
+    if (normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('upload/')) {
+        return `/storage/${normalizedPath}`;
     }
 
     return `/storage/${normalizedPath}`;
@@ -1083,15 +1108,18 @@ const openImage = (image = {}) => {
 
 const searchHsn = async () => {
     const keyword = hsnSearch.value.trim();
-    form.hsn_code = keyword;
+    const directCode = keyword.match(/^\d{2,8}/)?.[0] || keyword;
+    form.hsn_code = directCode;
     form.hsn_master_id = '';
     selectedHsnRecord.value = null;
+    form.tax_source = 'manual_confirmation';
 
     if (hsnSearchTimer) {
         clearTimeout(hsnSearchTimer);
     }
 
-    if (keyword.length < 2) {
+    const isCodeSearch = /^\d{2,8}$/.test(keyword);
+    if (!isCodeSearch && keyword.length < 3) {
         hsnResults.value = [];
 
         return;
@@ -1110,7 +1138,7 @@ const searchHsn = async () => {
 
         try {
             const results = await ProductApi.searchHsn(keyword, form.product_type, {
-                product_name: form.name || form.product_name || '',
+                product_name: hsnSuggestionQuery.value || form.name || form.product_name || '',
                 category_id: form.category_id || '',
                 limit: 20,
             });
@@ -1119,6 +1147,41 @@ const searchHsn = async () => {
             hsnSearching.value = false;
         }
     }, 300);
+};
+
+const suggestHsnFromProduct = () => {
+    if (fillingForm.value || form.hsn_master_id) {
+        return;
+    }
+
+    if (hsnSuggestTimer) {
+        clearTimeout(hsnSuggestTimer);
+    }
+
+    const keyword = hsnSuggestionQuery.value;
+    if (keyword.length < 3) {
+        hsnResults.value = [];
+        return;
+    }
+
+    hsnSuggestTimer = setTimeout(async () => {
+        hsnSearching.value = true;
+
+        try {
+            const results = await ProductApi.searchHsn(keyword, form.product_type, {
+                product_name: keyword,
+                category_id: form.category_id || '',
+                limit: 12,
+            });
+
+            hsnResults.value = results;
+            if (!hsnSearch.value || hsnSearch.value === form.hsn_code) {
+                hsnSearch.value = keyword;
+            }
+        } finally {
+            hsnSearching.value = false;
+        }
+    }, 450);
 };
 
 const selectHsn = (hsn) => {
@@ -1775,8 +1838,9 @@ const saveProduct = () => {
                                             v-model="hsnSearch"
                                             type="text"
                                             :class="['form-control', { 'is-invalid': fieldError('hsn_code') }]"
-                                            :placeholder="`Search ${hsnSacLabel} by code or description`"
+                                            :placeholder="`Type product name or ${hsnSacLabel}`"
                                             @input="searchHsn"
+                                            @focus="suggestHsnFromProduct"
                                             />
 
                                             <span
@@ -1805,8 +1869,9 @@ const saveProduct = () => {
 
                                                 <small>
                                                     {{ hsn.taxability || 'taxable' }} |
-                                                    {{ Number(hsn.gst_rate || 0) }}%
-                                                    GST
+                                                    {{ hsn.gst_rate === null || hsn.gst_rate === undefined ? 'Rate pending' : `${Number(hsn.gst_rate || 0)}% GST` }}
+                                                    <template v-if="hsn.rate_verified"> | Verified</template>
+                                                    <template v-else-if="hsn.gst_rate !== null && hsn.gst_rate !== undefined"> | Suggested</template>
                                                 </small>
                                             </button>
                                         </div>
@@ -1819,7 +1884,7 @@ const saveProduct = () => {
                                         </span>
 
                                         <span class="field-hint">
-                                            Select the correct {{ hsnSacLabel }} from HSN/SAC Master. The description is a tax classification, not the product name.
+                                            Product name/category se HSN/SAC Master suggestions aayenge. Select karte hi GST rate auto-fill ho jayega.
                                         </span>
                                     </div>
 
@@ -1831,6 +1896,7 @@ const saveProduct = () => {
 
                                         <span>
                                             {{ selectedHsn.code_type || hsnSacLabel }} {{ selectedHsn.hsn_code }} - {{ selectedHsn.description }}. One classification can be linked with many products.
+                                            <template v-if="form.tax_source === 'master_suggested'"> GST rate is suggested from master and can be verified from HSN/SAC Master.</template>
                                         </span>
                                     </div>
 
@@ -1865,7 +1931,7 @@ const saveProduct = () => {
                                         <span class="help-icon">i</span>
 
                                         <span>
-                                            {{ form.tax_source === 'verified_rule' ? 'Verified tax rule applied.' : 'Manual tax confirmation required.' }}
+                                            {{ form.tax_source === 'verified_rule' ? 'Verified tax rule applied.' : (form.tax_source === 'master_suggested' ? 'GST rate filled from HSN/SAC Master suggestion.' : 'Manual tax confirmation required.') }}
                                         </span>
                                     </div>
 

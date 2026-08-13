@@ -123,7 +123,7 @@ class ProductMasterRequest extends FormRequest
             'taxability' => ['required', Rule::in(['taxable', 'exempt', 'nil_rated', 'non_gst'])],
             'gst_rate' => [$isTaxable ? 'required' : 'nullable', 'numeric', 'min:0', 'max:100'],
             'cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'tax_source' => ['nullable', Rule::in(['verified_rule', 'manual_confirmation', 'override'])],
+            'tax_source' => ['nullable', Rule::in(['verified_rule', 'master_suggested', 'manual_confirmation', 'override'])],
             'tax_override_reason' => ['nullable', 'string', 'max:2000'],
             'tax_override_reference' => ['nullable', 'string', 'max:255'],
             'reverse_charge' => ['required', Rule::in(['yes', 'no'])],

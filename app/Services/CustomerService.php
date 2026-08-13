@@ -131,12 +131,14 @@ class CustomerService
 
         $customer = Customer::withTrashed()->firstOrCreate(
             ['business_id' => $businessId, 'customer_type' => 'walk_in', 'customer_code' => 'WALK-IN'],
-            [
+            array_filter([
+                'company_id' => \Illuminate\Support\Facades\Schema::hasColumn('customers', 'company_id') ? $businessId : null,
                 'customer_name' => 'Walk-in Customer',
+                'name' => \Illuminate\Support\Facades\Schema::hasColumn('customers', 'name') ? 'Walk-in Customer' : null,
                 'status' => 'active',
                 'opening_balance' => 0,
                 'created_by' => Auth::id(),
-            ]
+            ], fn ($value) => $value !== null)
         );
 
         if ($customer->trashed()) {

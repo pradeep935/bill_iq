@@ -89,8 +89,6 @@ const line = (item) => {
     return { gross, discount, taxable, tax, total: taxable + tax };
 };
 
-const lineTaxAmount = (item) => line(item).tax;
-
 const totals = computed(() => {
     const subtotal = form.items.reduce((sum, item) => sum + line(item).gross, 0);
     const lineDiscount = form.items.reduce((sum, item) => sum + line(item).discount, 0);
@@ -98,8 +96,10 @@ const totals = computed(() => {
     const voucherDiscount = form.voucher_discount_type === 'percentage'
         ? taxableBeforeVoucher * Math.min(Number(form.voucher_discount_value || 0), 100) / 100
         : Math.min(taxableBeforeVoucher, Number(form.voucher_discount_value || 0));
-    const tax = form.items.reduce((sum, item) => sum + line(item).tax, 0);
-    const beforeRound = Math.max(0, subtotal - lineDiscount - voucherDiscount + tax + Number(form.shipping_amount || 0) + Number(form.other_charges || 0));
+    const taxableAfterVoucher = Math.max(0, taxableBeforeVoucher - voucherDiscount);
+    const taxRatio = taxableBeforeVoucher > 0 ? taxableAfterVoucher / taxableBeforeVoucher : 1;
+    const tax = form.items.reduce((sum, item) => sum + line(item).tax, 0) * taxRatio;
+    const beforeRound = Math.max(0, taxableAfterVoucher + tax + Number(form.shipping_amount || 0) + Number(form.other_charges || 0));
     const grand = Math.round(beforeRound);
     const paid = form.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
     return {
@@ -123,10 +123,11 @@ const paymentStatus = computed(() => {
     return 'draft';
 });
 const statusLabel = computed(() => ({ draft: 'Draft', hold: 'Hold', paid: 'Paid', partial: 'Partial', cancelled: 'Cancelled' }[paymentStatus.value] || 'Draft'));
+const hasInclusiveTax = computed(() => form.items.some((item) => item.tax_inclusive && (Number(item.gst_rate || 0) + Number(item.cess_rate || 0)) > 0));
 const summaryRows = computed(() => [
     { label: 'Subtotal', value: formatMoney(totals.value.subtotal) },
     { label: 'Discount', value: formatMoney(totals.value.discount) },
-    { label: 'Tax', value: formatMoney(totals.value.tax) },
+    { label: hasInclusiveTax.value ? 'Tax (included)' : 'Tax', value: formatMoney(totals.value.tax) },
     { label: 'Round-off', value: formatMoney(totals.value.roundOff) },
     { label: 'Grand Total', value: formatMoney(totals.value.grand), grand: true },
 ]);

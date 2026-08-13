@@ -144,7 +144,6 @@ const showToast = (text, tone = 'info') => {
     message.value = text;
     messageTone.value = tone;
 };
-const focusScanner = () => nextTick(() => scanInput.value?.focus());
 const firstWarehouseForBranch = (branchId = form.branch_id) => {
     const warehouses = references.value.warehouses || [];
     if (!warehouses.length) return '';
@@ -185,12 +184,10 @@ const validateCartStock = () => {
     for (const item of form.items) {
         if (isStockItem(item) && Number(item.quantity || 0) + Number(item.free_quantity || 0) > Number(item.available_stock || 0)) {
             showToast(`Insufficient stock for ${item.product}. Available ${item.available_stock}.`, 'error');
-            focusScanner();
             return false;
         }
         if (item.serial_required) {
             showToast(`Serial number is required for ${item.product}.`, 'error');
-            focusScanner();
             return false;
         }
     }
@@ -217,7 +214,6 @@ const loadReferences = async () => {
     ensureDefaultCounterScope();
     form.customer_id = customers.value.find((customer) => customer.customer_type === 'walk_in')?.id || customers.value[0]?.id || '';
     setPaymentMode('cash');
-    focusScanner();
 };
 
 const searchProducts = async () => {
@@ -239,12 +235,10 @@ const addProduct = (product, fromScan = false) => {
     const available = Number(batch?.available_stock ?? product.available_stock ?? 0);
     if (product.serial_required) {
         showToast('Serial-number products require serial selection before billing.', 'error');
-        focusScanner();
         return false;
     }
     if (product.product_type !== 'service' && product.item_type !== 'non_stock' && available <= 0) {
         showToast('Insufficient stock', 'error');
-        focusScanner();
         return false;
     }
     const variantId = product.product_variant_id || '';
@@ -254,7 +248,6 @@ const addProduct = (product, fromScan = false) => {
     if (existing) {
         if (isStockItem(existing) && Number(existing.quantity || 0) + 1 > Number(existing.available_stock || 0)) {
             showToast('Insufficient stock', 'error');
-            focusScanner();
             return false;
         }
         existing.quantity = Number(existing.quantity || 0) + 1;
@@ -288,7 +281,6 @@ const addProduct = (product, fromScan = false) => {
     if (fromScan) showToast('Product added to cart.', 'success');
     flashRow(touched);
     syncPaymentAmount();
-    focusScanner();
     return true;
 };
 
@@ -300,7 +292,6 @@ const scan = async () => {
         search.value = '';
         productResults.value = [];
         showToast('Please select branch and warehouse before scanning.', 'error');
-        focusScanner();
         return;
     }
     scanning.value = true;
@@ -318,7 +309,6 @@ const scan = async () => {
         scanning.value = false;
         search.value = '';
         productResults.value = [];
-        focusScanner();
     }
 };
 
@@ -348,7 +338,6 @@ const updateBatchStock = (item) => {
         item.available_stock = Number(selected.available_stock || 0);
         normalizeQty(item);
     }
-    focusScanner();
 };
 const removeItem = (index) => {
     form.items.splice(index, 1);
@@ -410,7 +399,6 @@ const newBill = () => {
     message.value = '';
     messageTone.value = 'info';
     setPaymentMode('cash');
-    nextTick(() => scanInput.value?.focus());
 };
 
 const recallBill = async (bill) => {
@@ -490,7 +478,6 @@ const save = async (status, options = {}) => {
     } finally {
         saving.value = false;
         savingAction.value = '';
-        nextTick(() => scanInput.value?.focus());
     }
 };
 
@@ -521,32 +508,19 @@ const handleShortcut = (event) => {
 watch(() => totals.value.grand, syncPaymentAmount);
 watch(() => form.branch_id, () => {
     form.warehouse_id = firstWarehouseForBranch(form.branch_id);
-    focusScanner();
-});
-watch(() => form.warehouse_id, () => {
-    focusScanner();
 });
 watch(() => form.customer_id, () => {
     updateCustomerTaxTreatment();
-    focusScanner();
 });
-
-const keepScannerReady = (event) => {
-    if (event.target?.closest?.('input, textarea, select, button')) return;
-    focusScanner();
-};
 
 onMounted(async () => {
     SalesApi.configure(props.endpoints);
     window.addEventListener('keydown', handleShortcut);
-    window.addEventListener('click', keepScannerReady);
     await loadReferences();
-    scanInput.value?.focus();
 });
 
 onUnmounted(() => {
     window.removeEventListener('keydown', handleShortcut);
-    window.removeEventListener('click', keepScannerReady);
 });
 </script>
 

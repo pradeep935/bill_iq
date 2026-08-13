@@ -644,7 +644,7 @@ onUnmounted(() => {
                         @batch-change="updateBatchStock"
                     />
 
-                    <FilterCard title="Invoice Actions" eyebrow="HELD">
+                    <FilterCard v-if="heldBills.length" title="Held Bills" eyebrow="RECALL">
                         <template #actions>
                             <span class="bill-status-badge hold">{{ heldBills.length }} held</span>
                         </template>
@@ -653,7 +653,6 @@ onUnmounted(() => {
                                 <strong>{{ bill.invoice_number }}</strong>
                                 <span>{{ bill.customer }} - {{ formatMoney(bill.grand_total) }}</span>
                             </button>
-                            <p v-if="!heldBills.length">No held invoices in this branch.</p>
                         </div>
                     </FilterCard>
                 </main>

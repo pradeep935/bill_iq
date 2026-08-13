@@ -26,7 +26,6 @@ const productResults = ref([]);
 const references = ref({ customers: [], branches: [], warehouses: [], payment_methods: [] });
 const heldBills = ref([...(props.pos.held_bills || [])]);
 const recentProducts = ref([...(props.pos.recent_products || [])]);
-const activeCategory = ref('');
 const paymentMode = ref('cash');
 const saving = ref(false);
 const savingAction = ref('');
@@ -57,7 +56,6 @@ const form = reactive({
     payments: [],
 });
 
-const categories = computed(() => props.pos.categories || []);
 const contextSettings = computed(() => props.context?.settings || {});
 const currencySymbol = computed(() => contextSettings.value.currency_symbol || 'Rs. ');
 const customers = computed(() => references.value.customers || []);
@@ -224,7 +222,6 @@ const searchProducts = async () => {
         branch_id: form.branch_id,
         warehouse_id: form.warehouse_id,
         price_type: priceType.value,
-        category_id: activeCategory.value || undefined,
     });
 };
 
@@ -601,13 +598,6 @@ onUnmounted(() => {
                     </FilterCard>
 
                     <FilterCard title="Scan Product" eyebrow="BARCODE">
-                        <template #actions>
-                            <span class="pos-scan-state" :class="{ ready: scannerFocused }">{{ scannerFocused ? 'Ready to Scan' : 'Click barcode field' }}</span>
-                            <div class="pos-category-row">
-                                <button type="button" :class="{ active: !activeCategory }" title="Show all categories" @click="activeCategory = ''; searchProducts()">All</button>
-                                <button v-for="category in categories" :key="category.id" type="button" :class="{ active: Number(activeCategory) === Number(category.id) }" :title="`Filter ${category.name}`" @click="activeCategory = category.id; searchProducts()">{{ category.name }}</button>
-                            </div>
-                        </template>
                         <label class="bill-field pos-product-search">
                             <span>Barcode Search</span>
                             <input ref="scanInput" v-model="search" class="pos-scan-input" type="search" placeholder="Scan barcode or search product" @focus="scannerFocused = true" @blur="scannerFocused = false" @keyup.enter="scan" @input="searchProducts" />

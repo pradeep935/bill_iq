@@ -100,6 +100,7 @@ class PosController extends Controller
                     'mrp' => $product->mrp !== null ? (float) $product->mrp : null,
                     'gst_rate' => (float) $product->gst_rate,
                     'cess_rate' => (float) $product->cess_rate,
+                    'tax_inclusive' => (bool) $product->tax_inclusive,
                     'product_type' => $product->product_type,
                     'item_type' => $product->item_type,
                     'available_stock' => $product->product_type === 'service' ? null : $stock->getCurrentStock([

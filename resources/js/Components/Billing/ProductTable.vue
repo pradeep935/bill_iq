@@ -12,11 +12,15 @@
         <thead>
           <tr>
             <th>Product</th>
-            <th>Stock</th>
+            <th>HSN/SAC</th>
             <th>Batch</th>
             <th>Qty</th>
+            <th>Unit</th>
             <th>Rate</th>
             <th>Discount</th>
+            <th>Taxable</th>
+            <th>GST %</th>
+            <th>GST Amt</th>
             <th>Total</th>
             <th></th>
           </tr>
@@ -32,10 +36,13 @@
                 <div>
                   <strong>{{ item.product }}</strong>
                   <small>{{ item.sku || 'No SKU' }} <span v-if="item.barcode">- {{ item.barcode }}</span></small>
+                  <small v-if="item.previous_purchase" class="bill-previous-purchase">
+                    Last purchased at Rs. {{ money(item.previous_purchase.selling_rate) }} on {{ dateText(item.previous_purchase.invoice_date) }}
+                  </small>
                 </div>
               </div>
             </td>
-            <td><span class="bill-stock-pill">{{ item.available_stock ?? 'Service' }}</span></td>
+            <td><span class="bill-stock-pill">{{ item.hsn_code || '-' }}</span></td>
             <td>
               <select class="bill-row-select" v-model="item.batch_id" title="Select batch" @change="$emit('batch-change', item)">
                 <option value="">Batch</option>
@@ -49,13 +56,17 @@
                 <button type="button" title="Increase quantity" @mousedown.prevent @click.prevent.stop="$emit('increment', item)">+</button>
               </div>
             </td>
+            <td><span class="bill-unit-pill">{{ item.unit || 'PCS' }}</span></td>
             <td><input class="bill-row-input" v-model.number="item.selling_rate" type="number" min="0" placeholder="Rate" @input="$emit('change')" /></td>
             <td><input class="bill-row-input" v-model.number="item.discount_value" type="number" min="0" placeholder="Discount" @input="$emit('change')" /></td>
-            <td><strong class="bill-line-total">{{ lineTotal(item) }}</strong></td>
+            <td><strong class="bill-line-total">{{ lineDetails(item).taxable }}</strong></td>
+            <td><span class="bill-gst-pill">{{ money(item.gst_rate) }}%</span></td>
+            <td><strong class="bill-line-total">{{ lineDetails(item).gstAmount }}</strong></td>
+            <td><strong class="bill-line-total">{{ lineDetails(item).total }}</strong></td>
             <td><button class="bill-delete-button" type="button" title="Remove product" @click="$emit('remove', index)">Remove</button></td>
           </tr>
           <tr v-if="!items.length">
-            <td colspan="8" class="bill-empty-row">Scan barcode or search a product to add invoice lines.</td>
+            <td colspan="12" class="bill-empty-row">Scan barcode or search a product to add invoice lines.</td>
           </tr>
         </tbody>
       </table>
@@ -64,9 +75,10 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   items: { type: Array, default: () => [] },
   lineTotal: { type: Function, required: true },
+  lineDetails: { type: Function, default: null },
   highlightKey: { type: String, default: '' },
 });
 
@@ -74,11 +86,17 @@ defineEmits(['increment', 'decrement', 'remove', 'change', 'quantity-change', 'b
 
 const initials = (name = '') => String(name).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'BI';
 const rowKey = (item) => `${item.product_id}-${item.product_variant_id || 0}-${item.batch_id || 0}`;
+const money = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dateText = (value) => value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+const lineDetails = (item) => {
+  if (typeof props.lineDetails === 'function') return props.lineDetails(item);
+  return { taxable: props.lineTotal(item), gstAmount: 'Rs. 0.00', total: props.lineTotal(item) };
+};
 </script>
 
 <style scoped>
 .bill-product-table {
-  min-width: 980px;
+  min-width: 1280px;
 }
 
 .bill-product-table th,
@@ -113,6 +131,11 @@ const rowKey = (item) => `${item.product_id}-${item.product_variant_id || 0}-${i
   word-break: break-word;
 }
 
+.bill-previous-purchase {
+  color: #2457d6 !important;
+  font-weight: 800;
+}
+
 .bill-product-image {
   width: 42px;
   height: 42px;
@@ -142,6 +165,20 @@ const rowKey = (item) => `${item.product_id}-${item.product_variant_id || 0}-${i
   color: #2457d6;
   font-size: 13px;
   font-weight: 900;
+}
+
+.bill-unit-pill,
+.bill-gst-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .bill-row-select,

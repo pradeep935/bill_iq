@@ -23,6 +23,21 @@ const SalesApi = {
         return response.data;
     },
 
+    async lookupCustomerByMobile(mobile = '') {
+        const response = await axios.get('/app/sales/customers/lookup', { params: { mobile } });
+        return response.data;
+    },
+
+    async quickCreateCustomer(payload) {
+        const response = await axios.post('/app/sales/customers/quick-create', payload);
+        return response.data;
+    },
+
+    async customerInsight(id) {
+        const response = await axios.get(`/app/sales/customers/${id}/insight`);
+        return response.data;
+    },
+
     async saveCustomer(payload, id = null) {
         const response = id
             ? await axios.patch(`/app/sales/customers/${id}`, payload)
@@ -100,6 +115,11 @@ const SalesApi = {
         return response.data;
     },
 
+    async productLastPurchase(customerId, productId) {
+        const response = await axios.get(url('productLastPurchase', '/invoices/products/last-purchase'), { params: { customer_id: customerId, product_id: productId } });
+        return response.data;
+    },
+
     async saveSale(payload, id = null) {
         const response = id
             ? await axios.put(withId('update', '/invoices/__ID__', id), payload)
@@ -143,6 +163,10 @@ const SalesApi = {
     },
 
     printUrl(id) { return withId('print', '/invoices/__ID__/print', id); },
+    async whatsappShare(id, payload = {}) {
+        const response = await axios.post(withId('whatsapp', '/invoices/__ID__/whatsapp', id), payload);
+        return response.data;
+    },
     exportUrl(params = {}) {
         const target = new URL(url('export', '/invoices/export'), window.location.origin);
         Object.entries(params).forEach(([key, value]) => { if (value !== '' && value !== null && value !== undefined) target.searchParams.set(key, value); });

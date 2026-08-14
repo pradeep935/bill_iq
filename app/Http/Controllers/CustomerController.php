@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\CustomerRequest;
 use App\Models\Customer;
+use App\Services\CustomerAnalyticsService;
 use App\Services\CustomerService;
+use App\Services\MobileNumberService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class CustomerController extends Controller
@@ -66,6 +69,93 @@ class CustomerController extends Controller
         abort_unless(AppController::canOpen('customers') || AppController::canOpen('sales') || AppController::canOpen('pos'), 403);
 
         return response()->json($this->customers->search(trim((string) $request->query('q'))));
+    }
+
+    public function lookupByMobile(Request $request, MobileNumberService $mobileNumbers, CustomerAnalyticsService $analytics)
+    {
+        abort_unless(AppController::canOpen('customers') || AppController::canOpen('sales') || AppController::canOpen('pos'), 403);
+
+        $mobile = trim((string) $request->query('mobile'));
+        $normalized = $mobileNumbers->normalize($mobile);
+
+        if (!$mobileNumbers->isValidIndianMobile($mobile)) {
+            return response()->json([
+                'status' => 'invalid',
+                'normalized_mobile' => $normalized,
+                'message' => 'Enter a valid 10-digit mobile number.',
+            ], 422);
+        }
+
+        $matches = Customer::query()
+            ->where('business_id', AppController::businessId())
+            ->where('status', 'active')
+            ->where('normalized_mobile', $normalized)
+            ->limit(5)
+            ->get();
+
+        if ($matches->count() > 1) {
+            return response()->json([
+                'status' => 'multiple',
+                'normalized_mobile' => $normalized,
+                'customers' => $matches->map(fn (Customer $customer) => $this->customers->present($customer))->values(),
+                'message' => 'Multiple customers found for this mobile number. Please select manually.',
+            ]);
+        }
+
+        if ($matches->count() === 1) {
+            $customer = $matches->first();
+
+            return response()->json([
+                'status' => 'found',
+                'normalized_mobile' => $normalized,
+                'customer' => $this->customers->present($customer),
+                'insight' => $analytics->insight($customer),
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'new',
+            'normalized_mobile' => $normalized,
+            'message' => 'No customer found. You can quick-create this customer.',
+        ]);
+    }
+
+    public function quickCreate(Request $request)
+    {
+        abort_unless(AppController::canOpen('customers') || AppController::canOpen('sales') || AppController::canOpen('pos'), 403);
+
+        $data = $request->validate([
+            'customer_name' => ['required', 'string', 'max:255'],
+            'mobile' => ['required', 'string', 'max:30'],
+            'whatsapp_number' => ['nullable', 'string', 'max:30'],
+            'whatsapp_same_as_mobile' => ['nullable', 'boolean'],
+            'gstin' => ['nullable', 'regex:/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'billing_address' => ['nullable', 'string', 'max:2000'],
+            'shipping_address' => ['nullable', 'string', 'max:2000'],
+            'customer_type' => ['nullable', Rule::in(['retail', 'wholesale', 'dealer', 'distributor', 'corporate', 'government', 'export', 'other'])],
+        ]);
+
+        $customer = $this->customers->create(array_merge([
+            'customer_type' => 'retail',
+            'status' => 'active',
+            'opening_balance' => 0,
+            'opening_balance_type' => 'debit',
+            'price_type' => 'retail',
+        ], $data));
+
+        return response()->json([
+            'message' => 'Customer created successfully.',
+            'customer' => $this->customers->present($customer),
+            'insight' => app(CustomerAnalyticsService::class)->insight($customer),
+        ], 201);
+    }
+
+    public function insight(int $customer, CustomerAnalyticsService $analytics)
+    {
+        abort_unless(AppController::canOpen('customers') || AppController::canOpen('sales') || AppController::canOpen('pos'), 403);
+
+        return response()->json($analytics->insight($this->customer($customer)));
     }
 
     public function store(CustomerRequest $request)

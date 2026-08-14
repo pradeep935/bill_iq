@@ -36,6 +36,10 @@ const OrderApi = {
         const response = await axios.post(`${salesBase}/quotations/${id}/convert`);
         return response.data;
     },
+    async shareQuotationWhatsApp(id, payload = {}) {
+        const response = await axios.post(`${salesBase}/quotations/${id}/whatsapp`, payload);
+        return response.data;
+    },
     async salesOrders(params = {}) {
         const response = await axios.get(`${salesBase}/orders/list`, { params });
         return response.data;

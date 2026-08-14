@@ -13,6 +13,7 @@ const status = ref('');
 const type = ref('');
 const stateId = ref('');
 const priceType = ref('');
+const crmStatus = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const importing = ref(false);
@@ -24,18 +25,18 @@ let timer = null;
 
 const form = reactive({
     id: null, customer_code: '', customer_name: '', customer_type: 'retail', contact_person: '',
-    mobile: '', phone: '', email: '', gstin: '', pan: '', billing_address: '', shipping_address: '',
+    mobile: '', whatsapp_number: '', whatsapp_same_as_mobile: true, phone: '', email: '', gstin: '', pan: '', billing_address: '', shipping_address: '',
     state_id: '', city: '', pincode: '', opening_balance: 0, opening_balance_type: 'debit',
     credit_limit: '', credit_days: '', price_type: 'retail', status: 'active', blocked_reason: '',
 });
 
 const sameAsBilling = ref(false);
-const queryParams = computed(() => ({ page: pagination.value.current_page, search: search.value, status: status.value, type: type.value, state_id: stateId.value, price_type: priceType.value }));
+const queryParams = computed(() => ({ page: pagination.value.current_page, search: search.value, status: status.value, type: type.value, state_id: stateId.value, price_type: priceType.value, crm_status: crmStatus.value }));
 
 const reset = () => {
     Object.assign(form, {
         id: null, customer_code: '', customer_name: '', customer_type: 'retail', contact_person: '',
-        mobile: '', phone: '', email: '', gstin: '', pan: '', billing_address: '', shipping_address: '',
+        mobile: '', whatsapp_number: '', whatsapp_same_as_mobile: true, phone: '', email: '', gstin: '', pan: '', billing_address: '', shipping_address: '',
         state_id: '', city: '', pincode: '', opening_balance: 0, opening_balance_type: 'debit',
         credit_limit: '', credit_days: '', price_type: 'retail', status: 'active', blocked_reason: '',
     });
@@ -136,15 +137,18 @@ const importCustomers = async (event) => {
 };
 
 const exportCustomers = () => { window.location.href = SalesApi.customerExportUrl(queryParams.value); };
-const clearFilters = () => { search.value = ''; status.value = ''; type.value = ''; stateId.value = ''; priceType.value = ''; loadCustomers(1); };
+const clearFilters = () => { search.value = ''; status.value = ''; type.value = ''; stateId.value = ''; priceType.value = ''; crmStatus.value = ''; loadCustomers(1); };
 const createInvoice = (customer) => { window.location.href = `/app/sales/invoices/create?customer_id=${customer.id}`; };
 const createReturn = (customer) => { window.location.href = `/app/sales/returns/create?customer_id=${customer.id}`; };
 const receivePayment = (customer) => { window.location.href = `/app/accounting/vouchers?type=receipt&customer_id=${customer.id}`; };
-const formatMoney = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const openInvoicePrint = (id) => { window.open(`/app/sales/invoices/${id}/print`, '_blank', 'noopener'); };
+const formatMoney = (value) => `Rs. ${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 watch(sameAsBilling, (checked) => { if (checked) form.shipping_address = form.billing_address; });
 watch(() => form.billing_address, (value) => { if (sameAsBilling.value) form.shipping_address = value; });
-watch([search, status, type, stateId, priceType], () => {
+watch(() => form.whatsapp_same_as_mobile, (checked) => { if (checked) form.whatsapp_number = form.mobile; });
+watch(() => form.mobile, (value) => { if (form.whatsapp_same_as_mobile) form.whatsapp_number = value; });
+watch([search, status, type, stateId, priceType, crmStatus], () => {
     clearTimeout(timer);
     timer = setTimeout(() => loadCustomers(1), 300);
 });
@@ -174,6 +178,8 @@ onMounted(async () => { await loadReferences(); await loadCustomers(); });
                     <label>Customer Type *<select v-model="form.customer_type"><option v-for="item in references.customer_types" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
                     <label>Contact Person<input v-model="form.contact_person" placeholder="Contact Person" /></label>
                     <label>Mobile<input v-model="form.mobile" placeholder="9876543210" /></label>
+                    <label class="check"><input v-model="form.whatsapp_same_as_mobile" type="checkbox" /> WhatsApp same as mobile</label>
+                    <label v-if="!form.whatsapp_same_as_mobile">WhatsApp<input v-model="form.whatsapp_number" placeholder="9876543210" /></label>
                     <label>Phone<input v-model="form.phone" placeholder="Phone" /></label>
                     <label>Email<input v-model="form.email" placeholder="Email" /></label>
                     <label>GSTIN<input v-model="form.gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
@@ -201,19 +207,20 @@ onMounted(async () => { await loadReferences(); await loadCustomers(); });
                     <input v-model="search" placeholder="Search name, code, phone, email, GSTIN" />
                     <select v-model="type"><option value="">All Types</option><option v-for="item in references.customer_types" :key="item.value" :value="item.value">{{ item.label }}</option></select>
                     <select v-model="status"><option value="">All Status</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="blocked">Blocked</option><option value="deleted">Deleted</option></select>
+                    <select v-model="crmStatus"><option value="">All CRM Status</option><option value="new">New</option><option value="repeat">Repeat</option><option value="regular">Regular</option><option value="inactive">Inactive</option></select>
                     <select v-model="stateId"><option value="">All States</option><option v-for="state in references.states" :key="state.id" :value="state.id">{{ state.name }}</option></select>
                     <select v-model="priceType"><option value="">All Price Lists</option><option v-for="item in references.price_types" :key="item.value" :value="item.value">{{ item.label }}</option></select>
                     <button type="button" @click="clearFilters">Clear Filters</button>
                 </div>
                 <div class="table-wrapper">
                     <table>
-                        <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>GSTIN</th><th>Mobile</th><th>Outstanding</th><th>Available Credit</th><th>Credit Limit</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>Code</th><th>Name</th><th>Type</th><th>GSTIN</th><th>Mobile</th><th>WhatsApp</th><th>CRM</th><th>Orders</th><th>Lifetime</th><th>Last Purchase</th><th>Outstanding</th><th>Status</th><th>Actions</th></tr></thead>
                         <tbody>
                             <tr v-for="customer in customers" :key="customer.id">
-                                <td>{{ customer.customer_code }}</td><td>{{ customer.customer_name }}</td><td>{{ customer.customer_type }}</td><td>{{ customer.gstin || '-' }}</td><td>{{ customer.mobile || customer.phone || '-' }}</td><td>{{ formatMoney(customer.current_outstanding) }}</td><td>{{ customer.available_credit === null ? '-' : formatMoney(customer.available_credit) }}</td><td>{{ formatMoney(customer.credit_limit) }}</td><td>{{ customer.price_type || '-' }}</td><td><span class="badge" :class="customer.deleted_at ? 'deleted' : customer.status">{{ customer.deleted_at ? 'deleted' : customer.status }}</span></td>
+                                <td>{{ customer.customer_code }}</td><td>{{ customer.customer_name }}</td><td>{{ customer.customer_type }}</td><td>{{ customer.gstin || '-' }}</td><td>{{ customer.mobile || customer.phone || '-' }}</td><td>{{ customer.whatsapp_number || customer.mobile || '-' }}</td><td><span class="badge crm" :class="customer.crm_summary?.customer_status">{{ customer.crm_summary?.customer_status_label || '-' }}</span></td><td>{{ customer.crm_summary?.total_orders || 0 }}</td><td>{{ formatMoney(customer.crm_summary?.lifetime_sales) }}</td><td>{{ customer.crm_summary?.last_purchase_date || '-' }}</td><td>{{ formatMoney(customer.current_outstanding) }}</td><td><span class="badge" :class="customer.deleted_at ? 'deleted' : customer.status">{{ customer.deleted_at ? 'deleted' : customer.status }}</span></td>
                                 <td><div class="row-actions"><button v-if="!customer.deleted_at" @click="viewCustomer(customer)">View</button><button v-if="!customer.deleted_at" @click="editCustomer(customer)">Edit</button><button v-if="!customer.deleted_at" @click="viewLedger(customer)">Ledger</button><button v-if="!customer.deleted_at" @click="viewOutstanding(customer)">Outstanding</button><button v-if="!customer.deleted_at" @click="receivePayment(customer)">Receive</button><button v-if="!customer.deleted_at" @click="createInvoice(customer)">Invoice</button><button v-if="!customer.deleted_at" @click="createReturn(customer)">Return</button><button v-if="!customer.deleted_at" @click="toggleStatus(customer)">{{ customer.status === 'active' ? 'Deactivate' : 'Activate' }}</button><button v-if="!customer.deleted_at && customer.customer_type !== 'walk_in'" class="danger" @click="deleteCustomer(customer)">Delete</button><button v-if="customer.deleted_at" @click="restoreCustomer(customer)">Restore</button></div></td>
                             </tr>
-                            <tr v-if="!customers.length && !loading"><td colspan="11" class="empty">No customers found for the selected filters.</td></tr>
+                            <tr v-if="!customers.length && !loading"><td colspan="13" class="empty">No customers found for the selected filters.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -221,8 +228,10 @@ onMounted(async () => { await loadReferences(); await loadCustomers(); });
             </section>
 
             <section v-if="detail" class="panel detail-panel">
-                <div class="detail-head"><div><span>CUSTOMER DETAIL</span><h2>{{ detail.customer_name }}</h2><p>{{ detail.customer_code }} | {{ detail.mobile || '-' }} | {{ detail.gstin || '-' }}</p></div><button type="button" @click="detail = null; ledger = []; outstanding = []">Close</button></div>
-                <div class="summary-grid"><span>Outstanding <b>{{ formatMoney(detail.current_outstanding) }}</b></span><span>Credit Limit <b>{{ formatMoney(detail.credit_limit) }}</b></span><span>Available Credit <b>{{ detail.available_credit === null ? '-' : formatMoney(detail.available_credit) }}</b></span><span>Credit Days <b>{{ detail.credit_days || 0 }}</b></span></div>
+                <div class="detail-head"><div><span>CUSTOMER DETAIL</span><h2>{{ detail.customer_name }}</h2><p>{{ detail.customer_code }} | {{ detail.mobile || '-' }} | WhatsApp {{ detail.whatsapp_number || detail.mobile || '-' }} | {{ detail.gstin || '-' }}</p></div><button type="button" @click="detail = null; ledger = []; outstanding = []">Close</button></div>
+                <div class="summary-grid"><span>CRM Status <b>{{ detail.crm_summary?.customer_status_label || '-' }}</b></span><span>Total Orders <b>{{ detail.crm_summary?.total_orders || 0 }}</b></span><span>Lifetime Sales <b>{{ formatMoney(detail.crm_summary?.lifetime_sales) }}</b></span><span>Average Order <b>{{ formatMoney(detail.crm_summary?.average_order_value) }}</b></span><span>Outstanding <b>{{ formatMoney(detail.current_outstanding) }}</b></span><span>Total Paid <b>{{ formatMoney(detail.crm_summary?.total_paid) }}</b></span><span>First Purchase <b>{{ detail.crm_summary?.first_purchase_date || '-' }}</b></span><span>Last Purchase <b>{{ detail.crm_summary?.last_purchase_date || '-' }}</b></span></div>
+                <div v-if="detail.recent_sales?.length" class="table-wrapper"><table><thead><tr><th>Invoice</th><th>Date</th><th>Total</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in detail.recent_sales" :key="row.id"><td>{{ row.invoice_number }}</td><td>{{ row.invoice_date }}</td><td>{{ formatMoney(row.grand_total) }}</td><td>{{ row.payment_status }}</td><td>{{ row.status }}</td><td><div class="row-actions"><a :href="`/app/sales/invoices/${row.id}/print`" target="_blank">Print</a><button @click="openInvoicePrint(row.id)">View</button></div></td></tr></tbody></table></div>
+                <div v-if="detail.product_history?.length" class="table-wrapper"><table><thead><tr><th>Product</th><th>Total Qty</th><th>Purchases</th><th>Last Purchase</th><th>Last Price</th><th>Avg Price</th></tr></thead><tbody><tr v-for="row in detail.product_history" :key="row.product_id"><td>{{ row.product }}</td><td>{{ row.total_quantity }}</td><td>{{ row.purchase_count }}</td><td>{{ row.last_purchase_date || '-' }}</td><td>{{ formatMoney(row.last_selling_price) }}</td><td>{{ formatMoney(row.average_selling_price) }}</td></tr></tbody></table></div>
                 <div v-if="ledger.length" class="table-wrapper"><table><thead><tr><th>Date</th><th>Voucher</th><th>Reference</th><th>Debit</th><th>Credit</th><th>Running</th><th>Branch</th><th>Narration</th></tr></thead><tbody><tr v-for="(row,index) in ledger" :key="index"><td>{{ row.date }}</td><td>{{ row.voucher_type }}</td><td>{{ row.reference }}</td><td>{{ formatMoney(row.debit) }}</td><td>{{ formatMoney(row.credit) }}</td><td>{{ formatMoney(row.running_balance) }}</td><td>{{ row.branch || '-' }}</td><td>{{ row.narration || '-' }}</td></tr></tbody></table></div>
                 <div v-if="outstanding.length" class="table-wrapper"><table><thead><tr><th>Invoice</th><th>Date</th><th>Due Date</th><th>Total</th><th>Paid</th><th>Balance</th><th>Overdue</th><th>Ageing</th></tr></thead><tbody><tr v-for="row in outstanding" :key="row.invoice_number"><td>{{ row.invoice_number }}</td><td>{{ row.invoice_date }}</td><td>{{ row.due_date }}</td><td>{{ formatMoney(row.invoice_total) }}</td><td>{{ formatMoney(row.paid) }}</td><td>{{ formatMoney(row.balance) }}</td><td>{{ row.days_overdue }}</td><td>{{ row.ageing_bucket }}</td></tr></tbody></table></div>
                 <p v-if="!ledger.length && !outstanding.length" class="empty">Select Ledger or Outstanding to view financial details.</p>

@@ -52,35 +52,79 @@ class ProductMasterService
                 });
             })
             ->when(!empty($filters['category']), function (Builder $query) use ($filters) {
-                $query->where(function (Builder $inner) use ($filters) {
+                $category = $filters['category'];
+                $categoryLabel = null;
+
+                if (is_numeric($category) && Schema::hasTable('product_categories')) {
+                    $nameColumn = Schema::hasColumn('product_categories', 'category_name') ? 'category_name' : 'name';
+                    $categoryLabel = DB::table('product_categories')
+                        ->where('id', (int) $category)
+                        ->value($nameColumn);
+                }
+
+                $query->where(function (Builder $inner) use ($category, $categoryLabel) {
                     if (Schema::hasColumn('products', 'category')) {
-                        $inner->where('category', $filters['category']);
+                        $inner->where('category', $category);
+
+                        if ($categoryLabel) {
+                            $inner->orWhere('category', $categoryLabel);
+                        }
                     }
 
-                    if (is_numeric($filters['category']) && Schema::hasColumn('products', 'category_id')) {
-                        $inner->orWhere('category_id', (int) $filters['category']);
+                    if (is_numeric($category) && Schema::hasColumn('products', 'category_id')) {
+                        $inner->orWhere('category_id', (int) $category);
                     }
                 });
             })
             ->when(!empty($filters['brand']), function (Builder $query) use ($filters) {
-                $query->where(function (Builder $inner) use ($filters) {
+                $brand = $filters['brand'];
+                $brandName = is_numeric($brand) && Schema::hasTable('brands')
+                    ? Brand::query()->where('id', (int) $brand)->value('name')
+                    : null;
+
+                $query->where(function (Builder $inner) use ($brand, $brandName) {
                     if (Schema::hasColumn('products', 'brand')) {
-                        $inner->where('brand', $filters['brand']);
+                        $inner->where('brand', $brand);
+
+                        if ($brandName) {
+                            $inner->orWhere('brand', $brandName);
+                        }
                     }
 
-                    if (is_numeric($filters['brand']) && Schema::hasColumn('products', 'brand_id')) {
-                        $inner->orWhere('brand_id', (int) $filters['brand']);
+                    if (is_numeric($brand) && Schema::hasColumn('products', 'brand_id')) {
+                        $inner->orWhere('brand_id', (int) $brand);
                     }
                 });
             })
             ->when(!empty($filters['unit']), function (Builder $query) use ($filters) {
-                $query->where(function (Builder $inner) use ($filters) {
+                $unit = $filters['unit'];
+                $unitLabels = [];
+
+                if (is_numeric($unit) && Schema::hasTable('units')) {
+                    $unitRow = DB::table('units')
+                        ->where('id', (int) $unit)
+                        ->first(array_values(array_filter(
+                            ['code', 'name', 'symbol'],
+                            fn (string $column) => Schema::hasColumn('units', $column)
+                        )));
+                    $unitLabels = array_filter([
+                        $unitRow->code ?? null,
+                        $unitRow->name ?? null,
+                        $unitRow->symbol ?? null,
+                    ]);
+                }
+
+                $query->where(function (Builder $inner) use ($unit, $unitLabels) {
                     if (Schema::hasColumn('products', 'unit')) {
-                        $inner->where('unit', $filters['unit']);
+                        $inner->where('unit', $unit);
+
+                        foreach ($unitLabels as $unitLabel) {
+                            $inner->orWhere('unit', $unitLabel);
+                        }
                     }
 
-                    if (is_numeric($filters['unit']) && Schema::hasColumn('products', 'unit_id')) {
-                        $inner->orWhere('unit_id', (int) $filters['unit']);
+                    if (is_numeric($unit) && Schema::hasColumn('products', 'unit_id')) {
+                        $inner->orWhere('unit_id', (int) $unit);
                     }
                 });
             })
@@ -338,7 +382,14 @@ class ProductMasterService
 
     public function references(): array
     {
-        return app(MasterDataService::class)->references(['categories', 'sub_categories', 'brands', 'units', 'hsn_codes', 'gst_rate_slabs']);
+        $references = app(MasterDataService::class)->references(['hsn_codes', 'gst_rate_slabs']);
+
+        return array_merge($references, [
+            'categories' => $this->categoryOptions(null),
+            'sub_categories' => $this->categoryOptions('sub'),
+            'brands' => $this->brandOptions(),
+            'units' => $this->unitOptions(),
+        ]);
     }
 
     private function fillProduct(Product $product, array $data): void
@@ -886,12 +937,13 @@ class ProductMasterService
         $defaults = $scope === 'sub'
             ? ['Android Phones', 'Feature Phones', 'Chargers', 'Cables', 'Consumables', 'Spare Parts', 'Services', 'Other']
             : ['Electronics', 'Mobile Accessories', 'Grocery', 'Stationery', 'Hardware', 'Services', 'Other'];
+        $options = collect();
 
         if (Schema::hasTable('product_categories')) {
             $nameColumn = Schema::hasColumn('product_categories', 'category_name') ? 'category_name' : 'name';
             $businessColumn = Schema::hasColumn('product_categories', 'business_id') ? 'business_id' : 'company_id';
 
-            return DB::table('product_categories')
+            $options = $options->merge(DB::table('product_categories')
                 ->where(function ($query) use ($businessId, $businessColumn) {
                     $query->whereNull($businessColumn)->orWhere($businessColumn, $businessId);
                 })
@@ -903,36 +955,34 @@ class ProductMasterService
                 ->when(Schema::hasColumn('product_categories', 'status'), fn ($query) => $query->where('status', 'active'))
                 ->orderBy($nameColumn)
                 ->get(['id', $nameColumn . ' as label'])
-                ->map(fn ($row) => ['value' => (string) $row->label, 'label' => $row->label, 'id' => $row->id])
-                ->values()
-                ->all();
+                ->map(fn ($row) => ['value' => (string) $row->id, 'label' => $row->label, 'id' => $row->id, 'name' => $row->label])
+                ->values());
         }
 
         $column = $scope === 'sub' ? 'subcategory' : 'category';
 
-        if (!Schema::hasColumn('products', $column)) {
-            return collect($defaults)
-                ->map(fn ($value) => ['value' => $value, 'label' => $value])
-                ->all();
+        if (Schema::hasColumn('products', $column)) {
+            $options = $options->merge(DB::table('products')
+                ->where($this->productBusinessColumn(), $businessId)
+                ->whereNotNull($column)
+                ->where($column, '<>', '')
+                ->distinct()
+                ->orderBy($column)
+                ->pluck($column)
+                ->map(fn ($value) => ['value' => (string) $value, 'label' => (string) $value, 'name' => (string) $value])
+                ->values());
         }
 
-        $options = DB::table('products')
-            ->where($this->productBusinessColumn(), $businessId)
-            ->whereNotNull($column)
-            ->where($column, '<>', '')
-            ->distinct()
-            ->orderBy($column)
-            ->pluck($column)
-            ->map(fn ($value) => ['value' => (string) $value, 'label' => (string) $value])
+        if ($options->isEmpty()) {
+            $options = collect($defaults)
+                ->map(fn ($value) => ['value' => $value, 'label' => $value, 'name' => $value]);
+        }
+
+        return $options
+            ->filter(fn ($option) => !empty($option['label']) && !empty($option['value']))
+            ->unique(fn ($option) => strtolower((string) $option['label']))
+            ->sortBy('label')
             ->values()
-            ->all();
-
-        if ($options) {
-            return $options;
-        }
-
-        return collect($defaults)
-            ->map(fn ($value) => ['value' => $value, 'label' => $value])
             ->all();
     }
 
@@ -977,6 +1027,74 @@ class ProductMasterService
         return $options
             ->filter(fn ($option) => !empty($option['label']))
             ->unique(fn ($option) => strtolower((string) $option['label']))
+            ->sortBy('label')
+            ->values()
+            ->all();
+    }
+
+    private function unitOptions(): array
+    {
+        $businessId = $this->businessId();
+        $options = collect();
+
+        if (Schema::hasTable('units')) {
+            $columns = array_values(array_filter(
+                ['id', 'code', 'name', 'symbol'],
+                fn (string $column) => Schema::hasColumn('units', $column)
+            ));
+
+            $options = $options->merge(DB::table('units')
+                ->when(Schema::hasColumn('units', 'status'), fn ($query) => $query->where('status', 'active'))
+                ->orderBy(Schema::hasColumn('units', 'code') ? 'code' : 'name')
+                ->get($columns)
+                ->map(function ($unit) {
+                    $code = trim((string) ($unit->code ?? ''));
+                    $name = trim((string) ($unit->name ?? ''));
+                    $symbol = trim((string) ($unit->symbol ?? ''));
+                    $value = $code ?: ($symbol ?: ($name ?: (string) $unit->id));
+                    $detail = $name && strcasecmp($name, $value) !== 0 ? " ({$value})" : '';
+
+                    return [
+                        'id' => $unit->id ?? null,
+                        'value' => (string) $value,
+                        'label' => ($name ?: $value) . $detail,
+                        'name' => $name ?: $value,
+                        'code' => $code ?: null,
+                        'symbol' => $symbol ?: null,
+                    ];
+                }));
+        }
+
+        if (Schema::hasColumn('products', 'unit')) {
+            $options = $options->merge(DB::table('products')
+                ->where($this->productBusinessColumn(), $businessId)
+                ->whereNotNull('unit')
+                ->where('unit', '<>', '')
+                ->distinct()
+                ->orderBy('unit')
+                ->pluck('unit')
+                ->map(fn ($value) => [
+                    'value' => (string) $value,
+                    'label' => (string) $value,
+                    'name' => (string) $value,
+                    'code' => (string) $value,
+                ])
+                ->values());
+        }
+
+        if ($options->isEmpty()) {
+            $options = collect(['PCS', 'NOS', 'BOX', 'PKT', 'SET', 'PAIR', 'KG', 'GM', 'LTR', 'ML', 'MTR', 'HRS'])
+                ->map(fn (string $value) => [
+                    'value' => $value,
+                    'label' => $value,
+                    'name' => $value,
+                    'code' => $value,
+                ]);
+        }
+
+        return $options
+            ->filter(fn ($option) => !empty($option['label']) && !empty($option['value']))
+            ->unique(fn ($option) => strtolower((string) $option['value']))
             ->sortBy('label')
             ->values()
             ->all();

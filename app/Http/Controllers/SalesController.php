@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\OpeningStockReverseRequest;
 use App\Http\Requests\SalesVoucherRequest;
+use App\Models\Customer;
 use App\Models\SalesVoucher;
+use App\Services\CustomerAnalyticsService;
+use App\Services\InvoiceDocumentRenderer;
 use App\Services\ReservedStockService;
 use App\Services\SalesService;
 use App\Services\StockOutwardService;
+use App\Services\WhatsAppShareService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Route;
@@ -340,12 +344,42 @@ class SalesController extends Controller
         return response()->json(['message' => 'Payment added successfully.', 'sale' => $this->sales->present($voucher)]);
     }
 
-    public function print(int $sale)
+    public function productLastPurchase(Request $request, CustomerAnalyticsService $analytics)
+    {
+        abort_unless(AppController::canOpen('sales') || AppController::canOpen('pos'), 403);
+
+        $data = $request->validate([
+            'customer_id' => ['required', 'integer'],
+            'product_id' => ['required', 'integer'],
+        ]);
+
+        $customer = Customer::query()
+            ->where('business_id', AppController::businessId())
+            ->where('id', $data['customer_id'])
+            ->firstOrFail();
+
+        return response()->json([
+            'last_purchase' => $analytics->lastProductPurchase($customer, (int) $data['product_id']),
+        ]);
+    }
+
+    public function whatsappShare(Request $request, int $sale, WhatsAppShareService $whatsApp)
+    {
+        abort_unless(AppController::canOpen('sales') || AppController::canOpen('pos'), 403);
+
+        $data = $request->validate([
+            'whatsapp_number' => ['nullable', 'string', 'max:30'],
+        ]);
+
+        return response()->json($whatsApp->salesInvoiceShare($this->voucher($sale), $data['whatsapp_number'] ?? null));
+    }
+
+    public function print(int $sale, InvoiceDocumentRenderer $renderer)
     {
         $voucher = $this->voucher($sale);
         $saleData = $this->sales->present($voucher, AppController::roleId() === 1);
 
-        return response($this->printHtml($saleData));
+        return response($renderer->renderSalesInvoice($saleData));
     }
 
     public function export(Request $request)
@@ -380,6 +414,7 @@ class SalesController extends Controller
             'references' => 'app.sales.invoices.references',
             'productSearch' => 'app.sales.invoices.products.search',
             'productScan' => 'app.sales.invoices.products.scan',
+            'productLastPurchase' => 'app.sales.invoices.products.last-purchase',
             'reports' => 'app.sales.invoices.reports',
             'store' => 'app.sales.invoices.store',
             'export' => 'app.sales.invoices.export',
@@ -399,6 +434,7 @@ class SalesController extends Controller
                 'reverse' => route('app.sales.invoices.reverse', ['sale' => '__ID__'], false),
                 'print' => route('app.sales.invoices.print', ['sale' => '__ID__'], false),
                 'pdf' => route('app.sales.invoices.pdf', ['sale' => '__ID__'], false),
+                'whatsapp' => route('app.sales.invoices.whatsapp', ['sale' => '__ID__'], false),
                 'paymentStore' => route('app.sales.invoices.payments.store', ['sale' => '__ID__'], false),
             ])
             ->all();

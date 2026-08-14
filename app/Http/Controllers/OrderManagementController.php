@@ -8,7 +8,9 @@ use App\Http\Requests\PurchaseOrderRequest;
 use App\Http\Requests\PurchaseRequisitionRequest;
 use App\Http\Requests\QuotationRequest;
 use App\Http\Requests\SalesOrderRequest;
+use App\Models\Quotation;
 use App\Services\OrderManagementService;
+use App\Services\WhatsAppShareService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -98,6 +100,15 @@ class OrderManagementController extends Controller
         $order = $this->orders->convertQuotation($quotation);
 
         return response()->json(['message' => 'Quotation converted to sales order.', 'sales_order' => $order], 201);
+    }
+
+    public function shareQuotationWhatsApp(Request $request, int $quotation, WhatsAppShareService $whatsApp)
+    {
+        abort_unless(AppController::canOpen('sales'), 403);
+        $data = $request->validate(['whatsapp_number' => ['nullable', 'string', 'max:30']]);
+        $row = Quotation::query()->where('business_id', AppController::businessId())->with(['customer', 'branch', 'items.product'])->findOrFail($quotation);
+
+        return response()->json($whatsApp->quotationShare($row, $data['whatsapp_number'] ?? null));
     }
 
     public function salesOrders(Request $request)

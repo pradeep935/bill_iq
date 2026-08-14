@@ -89,6 +89,26 @@ const run = async (callback) => {
 
 const saveQuotation = (status) => run(() => OrderApi.saveQuotation({ ...quotation, status, items: quotation.items.map((i) => ({ ...i })) }));
 const convertQuotation = (row) => run(() => OrderApi.convertQuotation(row.id));
+const canShareQuotation = (row) => ['sent', 'viewed', 'accepted'].includes(row.status);
+const shareQuotationWhatsApp = (row) => run(async () => {
+    if (!canShareQuotation(row)) {
+        errors.value = { form: ['Only sent, viewed or accepted quotations can be shared on WhatsApp.'] };
+        return;
+    }
+    const shareWindow = window.open('about:blank', '_blank');
+    try {
+        const response = await OrderApi.shareQuotationWhatsApp(row.id);
+        if (shareWindow) {
+            shareWindow.opener = null;
+            shareWindow.location.href = response.url;
+        } else {
+            window.location.href = response.url;
+        }
+    } catch (error) {
+        if (shareWindow) shareWindow.close();
+        throw error;
+    }
+});
 const saveSalesOrder = (status) => run(() => OrderApi.saveSalesOrder({ ...salesOrder, order_status: status, items: salesOrder.items.map((i) => ({ ...i })) }));
 const approveSalesOrder = (row) => run(() => OrderApi.approveSalesOrder(row.id));
 const saveChallan = (status) => run(() => OrderApi.saveDeliveryChallan({ ...challan, status, items: challan.items.map((i) => ({ ...i })) }));
@@ -138,7 +158,7 @@ onMounted(load);
                 <div class="form-grid"><select v-model="quotation.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="quotation.customer_id"><option value="">Customer</option><option v-for="c in refs.customers" :key="c.id" :value="c.id">{{ c.customer_name }}</option></select><input v-model="quotation.quotation_date" type="date" /><input v-model="quotation.valid_until" type="date" /><select v-model="quotation.discount_type"><option>amount</option><option>percentage</option></select><input v-model.number="quotation.discount_value" type="number" step="0.01" placeholder="Discount" /><input v-model.number="quotation.shipping_amount" type="number" step="0.01" placeholder="Shipping" /><textarea v-model="quotation.notes" placeholder="Notes"></textarea></div>
                 <div v-for="(item, i) in quotation.items" :key="i" class="line-grid"><select v-model="item.product_id" @change="productChanged(item, 'unit_price')"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }} - {{ p.sku }}</option></select><input v-model.number="item.quantity" type="number" step="0.001" /><input v-model.number="item.unit_price" type="number" step="0.01" /><input v-model.number="item.discount" type="number" step="0.01" /><input v-model.number="item.gst_rate" type="number" step="0.01" /><button @click="quotation.items.splice(i,1)" :disabled="quotation.items.length === 1">Remove</button></div>
                 <div class="actions"><button @click="addRow(quotation.items, { product_id: '', quantity: 1, unit_price: 0, discount: 0, gst_rate: 0 })">Add Item</button><button :disabled="saving" @click="saveQuotation('draft')">Save Draft</button><button :disabled="saving" @click="saveQuotation('sent')">Send</button></div>
-                <div class="table-wrapper"><table><thead><tr><th>No.</th><th>Customer</th><th>Date</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody><tr v-for="q in quotations" :key="q.id"><td>{{ q.quotation_number }}</td><td>{{ q.customer?.customer_name }}</td><td>{{ q.quotation_date }}</td><td>Rs. {{ money(q.grand_total) }}</td><td>{{ q.status }}</td><td><button @click="printDoc('Quotation', q.quotation_number)">Print</button><button v-if="!q.converted_sales_order_id" @click="convertQuotation(q)">Convert</button></td></tr></tbody></table></div>
+                <div class="table-wrapper"><table><thead><tr><th>No.</th><th>Customer</th><th>Date</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody><tr v-for="q in quotations" :key="q.id"><td>{{ q.quotation_number }}</td><td>{{ q.customer?.customer_name }}</td><td>{{ q.quotation_date }}</td><td>Rs. {{ money(q.grand_total) }}</td><td>{{ q.status }}</td><td><button @click="printDoc('Quotation', q.quotation_number)">Print</button><button :disabled="!canShareQuotation(q)" :title="canShareQuotation(q) ? 'Share quotation on WhatsApp' : 'Send quotation first'" @click="shareQuotationWhatsApp(q)">WhatsApp</button><button v-if="!q.converted_sales_order_id" @click="convertQuotation(q)">Convert</button></td></tr></tbody></table></div>
             </section>
 
             <section v-if="tab === 'sales-orders'" class="panel">

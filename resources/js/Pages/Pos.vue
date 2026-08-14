@@ -35,7 +35,24 @@ const lastSale = ref(null);
 const invoiceStatus = ref('draft');
 const scannerFocused = ref(false);
 const highlightedRowKey = ref('');
+const customerMobileLookup = ref('');
+const customerLookup = ref({ status: '', message: '', normalized_mobile: '' });
+const customerInsight = ref(null);
+const showQuickCustomer = ref(false);
+const sharingWhatsApp = ref(false);
 const canChangeCounterScope = computed(() => Number(props.role_id || 0) === 1);
+let customerLookupTimer = null;
+
+const quickCustomer = reactive({
+    customer_name: '',
+    mobile: '',
+    whatsapp_number: '',
+    whatsapp_same_as_mobile: true,
+    gstin: '',
+    email: '',
+    billing_address: '',
+    shipping_address: '',
+});
 
 const form = reactive({
     id: null,
@@ -60,6 +77,14 @@ const currencySymbol = computed(() => contextSettings.value.currency_symbol || '
 const customers = computed(() => references.value.customers || []);
 const paymentMethods = computed(() => references.value.payment_methods || []);
 const selectedCustomer = computed(() => customers.value.find((customer) => Number(customer.id) === Number(form.customer_id)));
+const selectedIsWalkIn = computed(() => !selectedCustomer.value || selectedCustomer.value.customer_type === 'walk_in');
+const hasCustomerGstin = computed(() => Boolean(selectedCustomer.value?.gstin));
+const invoicePartyType = computed(() => form.invoice_type === 'bill_of_supply' ? 'BOS' : (form.invoice_type === 'tax_invoice' ? 'B2B' : 'B2C'));
+const invoicePartyLabel = computed(() => {
+    if (invoicePartyType.value === 'BOS') return 'Bill of Supply';
+    if (invoicePartyType.value === 'B2B' && !hasCustomerGstin.value) return 'B2B (GSTIN Required)';
+    return invoicePartyType.value === 'B2B' ? 'B2B (With GSTIN)' : 'B2C (Without GSTIN)';
+});
 const priceType = computed(() => selectedCustomer.value?.price_type || 'retail');
 const selectedBranch = computed(() => references.value.branches.find((branch) => Number(branch.id) === Number(form.branch_id)));
 const selectedWarehouse = computed(() => references.value.warehouses.find((warehouse) => Number(warehouse.id) === Number(form.warehouse_id)));
@@ -76,7 +101,7 @@ const line = (item) => {
         ? gross * Math.min(Number(item.discount_value || 0), 100) / 100
         : Math.min(gross, Number(item.discount_value || 0));
     const taxable = Math.max(0, gross - discount);
-    const rate = Number(item.gst_rate || 0) + Number(item.cess_rate || 0);
+    const rate = form.invoice_type === 'bill_of_supply' ? 0 : Number(item.gst_rate || 0) + Number(item.cess_rate || 0);
     if (item.tax_inclusive && rate > 0) {
         const inclusiveTaxable = taxable * 100 / (100 + rate);
         const tax = taxable - inclusiveTaxable;
@@ -139,10 +164,19 @@ const footerState = computed(() => {
 
 const formatMoney = (value) => `${currencySymbol.value}${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const productLineTotal = (item) => formatMoney(line(item).total);
+const productLineDetails = (item) => {
+    const detail = line(item);
+    return {
+        taxable: formatMoney(detail.taxable),
+        gstAmount: formatMoney(detail.tax),
+        total: formatMoney(detail.total),
+    };
+};
 const showToast = (text, tone = 'info') => {
     message.value = text;
     messageTone.value = tone;
 };
+const formatDate = (value) => value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 const firstWarehouseForBranch = (branchId = form.branch_id) => {
     const warehouses = references.value.warehouses || [];
     if (!warehouses.length) return '';
@@ -194,6 +228,10 @@ const validateCartStock = () => {
 };
 const validatePaymentBeforeSave = (status) => {
     if (!['confirmed', 'approved'].includes(status)) return true;
+    if (form.invoice_type === 'tax_invoice' && !hasCustomerGstin.value) {
+        showToast('B2B Tax Invoice requires customer GSTIN. Select B2C Retail or add GSTIN to customer.', 'error');
+        return false;
+    }
     const paid = Number(totals.value.paid.toFixed(2));
     const grand = Number(totals.value.grand.toFixed(2));
     if (paymentMode.value === 'credit') return true;
@@ -215,6 +253,101 @@ const loadReferences = async () => {
     setPaymentMode('cash');
 };
 
+const addOrReplaceCustomerReference = (customer) => {
+    const index = references.value.customers.findIndex((item) => Number(item.id) === Number(customer.id));
+    if (index >= 0) {
+        references.value.customers.splice(index, 1, customer);
+        return;
+    }
+
+    references.value.customers.push(customer);
+};
+
+const resetQuickCustomer = (mobile = customerMobileLookup.value) => {
+    Object.assign(quickCustomer, {
+        customer_name: '',
+        mobile,
+        whatsapp_number: mobile,
+        whatsapp_same_as_mobile: true,
+        gstin: '',
+        email: '',
+        billing_address: '',
+        shipping_address: '',
+    });
+};
+
+const lookupCustomerByMobile = async () => {
+    const mobile = customerMobileLookup.value.trim();
+
+    if (mobile.replace(/\D+/g, '').length < 10) {
+        customerLookup.value = { status: '', message: '', normalized_mobile: '' };
+        return;
+    }
+
+    customerLookup.value = { status: 'searching', message: 'Searching customer...', normalized_mobile: '' };
+
+    try {
+        const response = await SalesApi.lookupCustomerByMobile(mobile);
+        customerLookup.value = response;
+
+        if (response.status === 'found' && response.customer) {
+            addOrReplaceCustomerReference(response.customer);
+            form.customer_id = response.customer.id;
+            customerInsight.value = response.insight || null;
+            showQuickCustomer.value = false;
+            showToast('Customer found and selected.', 'success');
+            return;
+        }
+
+        if (response.status === 'new') {
+            resetQuickCustomer(response.normalized_mobile || mobile);
+            showQuickCustomer.value = true;
+        }
+    } catch (error) {
+        customerLookup.value = {
+            status: 'invalid',
+            message: error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'Invalid mobile number.',
+            normalized_mobile: '',
+        };
+    }
+};
+
+const quickCreateCustomer = async () => {
+    try {
+        const response = await SalesApi.quickCreateCustomer({
+            ...quickCustomer,
+            shipping_address: quickCustomer.shipping_address || quickCustomer.billing_address,
+        });
+        addOrReplaceCustomerReference(response.customer);
+        form.customer_id = response.customer.id;
+        customerInsight.value = response.insight || null;
+        customerLookup.value = { status: 'found', message: 'Customer created and selected.', normalized_mobile: response.customer.normalized_mobile };
+        showQuickCustomer.value = false;
+        showToast(response.message || 'Customer created.', 'success');
+    } catch (error) {
+        showToast(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'Customer could not be created.', 'error');
+    }
+};
+
+const loadCustomerInsight = async () => {
+    if (!form.customer_id || selectedIsWalkIn.value) {
+        customerInsight.value = null;
+        return;
+    }
+
+    try {
+        customerInsight.value = await SalesApi.customerInsight(form.customer_id);
+    } catch (error) {
+        customerInsight.value = null;
+    }
+};
+
+const openCustomerHistory = () => {
+    if (!customerInsight.value?.customer) return;
+    const query = customerInsight.value.customer.mobile || customerInsight.value.customer.customer_name || '';
+    window.location.href = `/app/sales/customers?search=${encodeURIComponent(query)}`;
+};
+
 const searchProducts = async () => {
     const q = search.value.trim();
     if (q.length < 2) {
@@ -228,7 +361,7 @@ const searchProducts = async () => {
     });
 };
 
-const addProduct = (product, fromScan = false) => {
+const addProduct = async (product, fromScan = false) => {
     const batch = (product.batches || []).find((item) => Number(item.id || 0) === Number(product.batch_id || 0))
         || (product.batches || []).find((item) => Number(item.available_stock || 0) > 0);
     const available = Number(batch?.available_stock ?? product.available_stock ?? 0);
@@ -260,6 +393,8 @@ const addProduct = (product, fromScan = false) => {
             product_variant_id: variantId,
             batch_id: batchId,
             unit_id: product.unit_id || '',
+            unit: product.unit || 'PCS',
+            hsn_code: product.hsn_code || '',
             quantity: 1,
             free_quantity: 0,
             selling_rate: product.selling_rate || '',
@@ -272,6 +407,7 @@ const addProduct = (product, fromScan = false) => {
             available_stock: product.product_type === 'service' || product.item_type === 'non_stock' ? null : available,
             tax_inclusive: product.tax_inclusive || false,
             serial_required: Boolean(product.serial_required),
+            previous_purchase: null,
         };
         form.items.push(touched);
     }
@@ -279,6 +415,14 @@ const addProduct = (product, fromScan = false) => {
     productResults.value = [];
     if (fromScan) showToast('Product added to cart.', 'success');
     flashRow(touched);
+    if (form.customer_id && !selectedIsWalkIn.value) {
+        try {
+            const response = await SalesApi.productLastPurchase(form.customer_id, product.id);
+            touched.previous_purchase = response.last_purchase;
+        } catch (error) {
+            touched.previous_purchase = null;
+        }
+    }
     syncPaymentAmount();
     return true;
 };
@@ -300,7 +444,7 @@ const scan = async () => {
             warehouse_id: form.warehouse_id,
             price_type: priceType.value,
         });
-        addProduct(product, true);
+        await addProduct(product, true);
     } catch (error) {
         const serverMessage = error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || '';
         showToast(serverMessage.includes('Insufficient stock') ? 'Insufficient stock' : serverMessage || 'Product not found', 'error');
@@ -394,9 +538,12 @@ const newBill = () => {
     });
     invoiceStatus.value = 'draft';
     paymentMode.value = 'cash';
-    lastSale.value = null;
     message.value = '';
     messageTone.value = 'info';
+    customerMobileLookup.value = '';
+    customerLookup.value = { status: '', message: '', normalized_mobile: '' };
+    customerInsight.value = null;
+    showQuickCustomer.value = false;
     setPaymentMode('cash');
 };
 
@@ -422,6 +569,8 @@ const recallBill = async (bill) => {
             product_variant_id: item.product_variant_id || '',
             batch_id: item.batch_id || '',
             unit_id: item.unit_id || '',
+            unit: item.unit || 'PCS',
+            hsn_code: item.hsn_code_snapshot || item.hsn_code || '',
             quantity: item.quantity,
             free_quantity: item.free_quantity || 0,
             selling_rate: item.selling_rate,
@@ -488,6 +637,33 @@ const printInvoice = (sale = lastSale.value) => {
     window.open(SalesApi.printUrl(sale.id), '_blank');
 };
 
+const shareLastSaleWhatsApp = async () => {
+    if (!lastSale.value?.id) {
+        showToast('Complete or save a posted invoice before WhatsApp sharing.', 'error');
+        return;
+    }
+
+    const shareWindow = window.open('about:blank', '_blank');
+    sharingWhatsApp.value = true;
+    try {
+        const response = await SalesApi.whatsappShare(lastSale.value.id, {
+            whatsapp_number: selectedCustomer.value?.whatsapp_number || selectedCustomer.value?.mobile || lastSale.value.customer_mobile,
+        });
+        if (shareWindow) {
+            shareWindow.opener = null;
+            shareWindow.location.href = response.url;
+        } else {
+            window.location.href = response.url;
+        }
+        showToast('WhatsApp opened. Share status logged as initiated.', 'success');
+    } catch (error) {
+        if (shareWindow) shareWindow.close();
+        showToast(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'WhatsApp share could not be prepared.', 'error');
+    } finally {
+        sharingWhatsApp.value = false;
+    }
+};
+
 const printAndNew = async () => {
     const sale = await save('approved', { print: true });
     if (sale) newBill();
@@ -510,6 +686,26 @@ watch(() => form.branch_id, () => {
 });
 watch(() => form.customer_id, () => {
     updateCustomerTaxTreatment();
+    loadCustomerInsight();
+});
+watch(() => form.invoice_type, (type) => {
+    if (type === 'bill_of_supply') {
+        form.tax_type = 'exempt';
+        return;
+    }
+    if (form.tax_type === 'exempt') {
+        form.tax_type = 'intrastate';
+    }
+});
+watch(() => quickCustomer.whatsapp_same_as_mobile, (checked) => {
+    if (checked) quickCustomer.whatsapp_number = quickCustomer.mobile;
+});
+watch(() => quickCustomer.mobile, (mobile) => {
+    if (quickCustomer.whatsapp_same_as_mobile) quickCustomer.whatsapp_number = mobile;
+});
+watch(customerMobileLookup, () => {
+    clearTimeout(customerLookupTimer);
+    customerLookupTimer = setTimeout(lookupCustomerByMobile, 450);
 });
 
 onMounted(async () => {
@@ -539,6 +735,13 @@ onUnmounted(() => {
             <section class="pos-saas-layout">
                 <main class="pos-saas-main">
                     <FilterCard title="Counter Details" eyebrow="BILLING">
+                        <div class="pos-print-preview">
+                            <div>
+                                <strong>TAX INVOICE</strong>
+                                <span>{{ invoicePartyLabel }}</span>
+                            </div>
+                            <small>{{ selectedCustomer?.customer_name || 'Walk-in Customer' }} | {{ selectedCustomer?.gstin || (invoicePartyType === 'B2B' ? 'GSTIN required' : 'No GSTIN') }}</small>
+                        </div>
                         <div v-if="!canChangeCounterScope" class="pos-counter-scope">
                             <span>{{ selectedBranch?.name || 'Default Branch' }}</span>
                             <strong>{{ selectedWarehouse?.name || 'Default Warehouse' }}</strong>
@@ -565,6 +768,18 @@ onUnmounted(() => {
                             <span>Status</span>
                             <span class="bill-status-badge" :class="paymentStatus">{{ statusLabel }}</span>
                         </label>
+                        <label class="bill-field">
+                            <span>Bill Type</span>
+                            <select v-model="form.invoice_type" title="Select B2B, B2C or bill of supply">
+                                <option value="retail_invoice">B2C Retail</option>
+                                <option value="tax_invoice">B2B Tax Invoice</option>
+                                <option value="bill_of_supply">Bill of Supply</option>
+                            </select>
+                        </label>
+                        <label class="bill-field">
+                            <span>Tax Type</span>
+                            <span class="bill-status-badge" :class="form.tax_type">{{ form.tax_type }}</span>
+                        </label>
                         <label class="bill-field pos-customer-field">
                             <span>Customer</span>
                             <select ref="customerSelect" v-model="form.customer_id" title="Select invoice customer">
@@ -574,6 +789,30 @@ onUnmounted(() => {
                                 </option>
                             </select>
                         </label>
+                        <label class="bill-field pos-customer-field">
+                            <span>Mobile / WhatsApp Lookup</span>
+                            <input v-model="customerMobileLookup" type="search" placeholder="Enter mobile number" />
+                        </label>
+                        <div v-if="customerLookup.status" class="pos-customer-lookup" :class="customerLookup.status">
+                            {{ customerLookup.message || (customerLookup.status === 'searching' ? 'Searching customer...' : '') }}
+                        </div>
+                        <div v-if="customerInsight" class="pos-customer-insight">
+                            <strong>{{ customerInsight.customer.customer_name }}</strong>
+                            <span>{{ customerInsight.summary.customer_status_label }}</span>
+                            <small>{{ customerInsight.summary.total_orders }} Orders | {{ formatMoney(customerInsight.summary.lifetime_sales) }} Lifetime Purchase</small>
+                            <small>Last Purchase: {{ formatDate(customerInsight.summary.last_purchase_date) }} | Outstanding: {{ formatMoney(customerInsight.summary.outstanding) }}</small>
+                            <button type="button" @click="openCustomerHistory">View Purchase History</button>
+                        </div>
+                        <div v-if="showQuickCustomer" class="pos-quick-customer">
+                            <label><span>Name</span><input v-model="quickCustomer.customer_name" placeholder="Customer name" /></label>
+                            <label><span>Mobile</span><input v-model="quickCustomer.mobile" placeholder="9876543210" /></label>
+                            <label class="check"><input v-model="quickCustomer.whatsapp_same_as_mobile" type="checkbox" /> WhatsApp same as mobile</label>
+                            <label v-if="!quickCustomer.whatsapp_same_as_mobile"><span>WhatsApp</span><input v-model="quickCustomer.whatsapp_number" placeholder="WhatsApp number" /></label>
+                            <label><span>GSTIN</span><input v-model="quickCustomer.gstin" maxlength="15" placeholder="Optional GSTIN" /></label>
+                            <label><span>Email</span><input v-model="quickCustomer.email" placeholder="Optional email" /></label>
+                            <label class="wide"><span>Address</span><input v-model="quickCustomer.billing_address" placeholder="Billing address" /></label>
+                            <button type="button" @click="quickCreateCustomer">Create & Select</button>
+                        </div>
                     </FilterCard>
 
                     <FilterCard title="Scan Product" eyebrow="BARCODE">
@@ -587,7 +826,7 @@ onUnmounted(() => {
                                         <b v-else>{{ product.name.slice(0, 2).toUpperCase() }}</b>
                                     </span>
                                     <strong>{{ product.name }}</strong>
-                                    <small>{{ product.sku || product.barcode || 'No SKU' }} - Stock {{ product.available_stock ?? 'Service' }} - GST {{ product.gst_rate || 0 }}% - {{ formatMoney(product.selling_rate) }}</small>
+                                    <small>{{ product.sku || product.barcode || 'No SKU' }} - HSN {{ product.hsn_code || '-' }} - Stock {{ product.available_stock ?? 'Service' }} - GST {{ product.gst_rate || 0 }}% - {{ formatMoney(product.selling_rate) }}</small>
                                 </button>
                             </div>
                         </label>
@@ -606,6 +845,7 @@ onUnmounted(() => {
                     <ProductTable
                         :items="form.items"
                         :line-total="productLineTotal"
+                        :line-details="productLineDetails"
                         :highlight-key="highlightedRowKey"
                         @increment="updateQty($event, 1)"
                         @decrement="updateQty($event, -1)"
@@ -661,6 +901,7 @@ onUnmounted(() => {
                     </div>
                     <div class="pos-footer-group">
                         <button v-if="lastSale" class="pos-action print" type="button" title="Print last completed or saved invoice" @click="printInvoice()">Print Last Bill</button>
+                        <button v-if="lastSale" class="pos-action print" type="button" title="Share last posted invoice through WhatsApp" :disabled="sharingWhatsApp" @click="shareLastSaleWhatsApp">{{ sharingWhatsApp ? 'Opening...' : 'WhatsApp' }}</button>
                         <button class="pos-action print" type="button" title="Complete sale, print invoice and start a new bill" :disabled="saving || !hasCartItems" @click="printAndNew">Print & New</button>
                         <button class="pos-action complete primary" type="button" title="Complete sale and post invoice" :disabled="saving || !hasCartItems" @click="save('approved', { reset: true })">
                             <span>{{ saving && savingAction === 'approved' ? 'Completing...' : 'Complete Sale' }}</span>
@@ -674,6 +915,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.pos-saas-page{display:grid;gap:10px;padding-bottom:8px}.pos-message{padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-weight:850}.pos-message.success{border-color:#bbf7d0;background:#ecfdf5;color:#15803d}.pos-message.error{border-color:#fecdd3;background:#fff1f2;color:#be123c}.pos-saas-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;align-items:start}.pos-saas-main,.pos-saas-side{display:grid;gap:10px;min-width:0}.pos-saas-side{position:sticky;top:86px}.pos-counter-scope{grid-column:span 2;display:grid;gap:3px;min-height:54px;padding:10px 12px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc}.pos-counter-scope span{color:var(--bill-muted);font-size:11px;font-weight:850}.pos-counter-scope strong{color:#142139;font-size:13px}.pos-customer-field{grid-column:span 2}.pos-category-row{display:flex;gap:6px;flex-wrap:wrap}.pos-category-row button{min-height:28px;padding:5px 9px;border:1px solid var(--bill-line);border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:850}.pos-category-row button.active{border-color:#9ec2ff;background:#e8f1ff;color:var(--bill-accent-dark)}.pos-scan-state{display:inline-flex;align-items:center;min-height:28px;padding:5px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:900}.pos-scan-state.ready{background:#dcfce7;color:#15803d}.pos-product-search{position:relative;grid-column:1 / -1}.pos-scan-input{min-height:56px!important;border:2px solid #9ec2ff!important;border-radius:12px!important;background:#fff!important;font-size:18px!important;font-weight:850;letter-spacing:.02em}.pos-scan-input:focus{border-color:#2457d6!important;box-shadow:0 0 0 4px rgba(36,87,214,.12);outline:0}.pos-autocomplete{position:absolute;top:82px;left:0;right:0;z-index:12;display:grid;max-height:260px;overflow:auto;border:1px solid var(--bill-line);border-radius:8px;background:#fff;box-shadow:0 18px 40px rgba(15,34,66,.14)}.pos-autocomplete button{display:grid;grid-template-columns:40px 1fr;column-gap:10px;align-items:center;justify-items:start;padding:9px 10px;border:0;border-bottom:1px solid #edf2f7;background:#fff;text-align:left;cursor:pointer}.pos-autocomplete small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-product-thumb{width:36px;height:36px;overflow:hidden;display:grid;place-items:center;border-radius:8px;background:#eef2ff;color:var(--bill-accent-dark);font-size:11px;font-weight:900}.pos-product-thumb img{width:100%;height:100%;object-fit:cover}.pos-recent-products{grid-column:1 / -1;display:flex;gap:8px;overflow:auto;padding-bottom:2px}.pos-recent-products button{min-width:140px;display:grid;grid-template-columns:36px 1fr;column-gap:8px;align-items:center;justify-items:start;padding:8px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-recent-products small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-held-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}.pos-held-list button{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"number amount" "meta amount";align-items:center;gap:3px 10px;padding:10px 12px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-held-list button:hover{border-color:#9ec2ff;background:#eef6ff}.pos-held-number{grid-area:number;color:#142139;font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pos-held-meta{grid-area:meta;color:var(--bill-muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pos-held-list strong{grid-area:amount;color:#173b77;font-size:12px;white-space:nowrap}:deep(.bill-invoice-header){margin-bottom:2px}:deep(.bill-filter-grid){grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}:deep(.bill-filter-grid>.bill-field){grid-column:span 2}:deep(.bill-product-table-wrap){max-height:calc(100vh - 455px);min-height:250px}:deep(.bill-summary-card),:deep(.bill-payment-panel){position:static}@media(min-width:1500px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 360px}:deep(.bill-product-table-wrap){max-height:calc(100vh - 430px)}}@media(max-width:1366px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 315px}.pos-scan-input{min-height:52px!important;font-size:16px!important}:deep(.bill-filter-grid){grid-template-columns:repeat(4,minmax(0,1fr))}:deep(.bill-filter-grid>.bill-field){grid-column:span 1}.pos-customer-field{grid-column:span 2}}@media(max-width:1180px){.pos-saas-layout{grid-template-columns:1fr}.pos-saas-side{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}:deep(.bill-product-table-wrap){max-height:520px}}@media(max-width:760px){.pos-saas-side,.pos-held-list{grid-template-columns:1fr}.pos-recent-products{display:grid;grid-template-columns:1fr}.pos-recent-products button{min-width:0}:deep(.bill-filter-grid){grid-template-columns:1fr}:deep(.bill-filter-grid>.bill-field),.pos-customer-field,.pos-counter-scope{grid-column:auto}}
+.pos-saas-page{display:grid;gap:10px;padding-bottom:8px}.pos-message{padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-weight:850}.pos-message.success{border-color:#bbf7d0;background:#ecfdf5;color:#15803d}.pos-message.error{border-color:#fecdd3;background:#fff1f2;color:#be123c}.pos-saas-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;align-items:start}.pos-saas-main,.pos-saas-side{display:grid;gap:10px;min-width:0}.pos-saas-side{position:sticky;top:86px}.pos-print-preview{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:62px;padding:10px 12px;border:1px solid #bedfd5;border-radius:8px;background:linear-gradient(90deg,#e9fbf5,#fff)}.pos-print-preview strong{display:inline-flex;align-items:center;min-height:36px;padding:6px 14px;border-radius:8px;background:#082747;color:#fff;font-size:15px;font-weight:950}.pos-print-preview span{display:inline-flex;margin-left:8px;padding:6px 10px;border-radius:0 0 8px 8px;background:#d9f7ed;color:#075f4a;font-size:11px;font-weight:900}.pos-print-preview small{color:#475569;font-size:12px;font-weight:850;text-align:right}.pos-counter-scope{grid-column:span 2;display:grid;gap:3px;min-height:54px;padding:10px 12px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc}.pos-counter-scope span{color:var(--bill-muted);font-size:11px;font-weight:850}.pos-counter-scope strong{color:#142139;font-size:13px}.pos-customer-field{grid-column:span 2}.pos-customer-lookup,.pos-customer-insight,.pos-quick-customer{grid-column:1 / -1;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc}.pos-customer-lookup{padding:9px 10px;color:#536179;font-size:12px;font-weight:850}.pos-customer-lookup.found{border-color:#bbf7d0;background:#ecfdf5;color:#15803d}.pos-customer-lookup.new{border-color:#bfdbfe;background:#eff6ff;color:#1e40af}.pos-customer-lookup.invalid,.pos-customer-lookup.multiple{border-color:#fecdd3;background:#fff1f2;color:#be123c}.pos-customer-insight{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:10px 12px}.pos-customer-insight strong{color:#142139;font-size:13px}.pos-customer-insight span{color:#2457d6;font-size:11px;font-weight:900}.pos-customer-insight small{color:#64748b;font-size:11px}.pos-customer-insight button{grid-row:1 / span 3;grid-column:2;align-self:center;min-height:32px;padding:6px 10px;border:1px solid #d8e0eb;border-radius:8px;background:#fff;color:#344159;font-size:11px;font-weight:850}.pos-quick-customer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}.pos-quick-customer label{display:grid;gap:4px;color:#64748b;font-size:11px;font-weight:850}.pos-quick-customer input{min-height:36px}.pos-quick-customer .wide{grid-column:span 2}.pos-quick-customer .check{display:flex;align-items:center;gap:7px}.pos-quick-customer .check input{min-height:auto;width:auto}.pos-quick-customer button{min-height:36px;border:1px solid #2457d6;border-radius:8px;background:#2457d6;color:#fff;font-size:11px;font-weight:900}.pos-category-row{display:flex;gap:6px;flex-wrap:wrap}.pos-category-row button{min-height:28px;padding:5px 9px;border:1px solid var(--bill-line);border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:850}.pos-category-row button.active{border-color:#9ec2ff;background:#e8f1ff;color:var(--bill-accent-dark)}.pos-scan-state{display:inline-flex;align-items:center;min-height:28px;padding:5px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:900}.pos-scan-state.ready{background:#dcfce7;color:#15803d}.pos-product-search{position:relative;grid-column:1 / -1}.pos-scan-input{min-height:56px!important;border:2px solid #9ec2ff!important;border-radius:12px!important;background:#fff!important;font-size:18px!important;font-weight:850;letter-spacing:.02em}.pos-scan-input:focus{border-color:#2457d6!important;box-shadow:0 0 0 4px rgba(36,87,214,.12);outline:0}.pos-autocomplete{position:absolute;top:82px;left:0;right:0;z-index:12;display:grid;max-height:260px;overflow:auto;border:1px solid var(--bill-line);border-radius:8px;background:#fff;box-shadow:0 18px 40px rgba(15,34,66,.14)}.pos-autocomplete button{display:grid;grid-template-columns:40px 1fr;column-gap:10px;align-items:center;justify-items:start;padding:9px 10px;border:0;border-bottom:1px solid #edf2f7;background:#fff;text-align:left;cursor:pointer}.pos-autocomplete small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-product-thumb{width:36px;height:36px;overflow:hidden;display:grid;place-items:center;border-radius:8px;background:#eef2ff;color:var(--bill-accent-dark);font-size:11px;font-weight:900}.pos-product-thumb img{width:100%;height:100%;object-fit:cover}.pos-recent-products{grid-column:1 / -1;display:flex;gap:8px;overflow:auto;padding-bottom:2px}.pos-recent-products button{min-width:140px;display:grid;grid-template-columns:36px 1fr;column-gap:8px;align-items:center;justify-items:start;padding:8px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-recent-products small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-held-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}.pos-held-list button{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"number amount" "meta amount";align-items:center;gap:3px 10px;padding:10px 12px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-held-list button:hover{border-color:#9ec2ff;background:#eef6ff}.pos-held-number{grid-area:number;color:#142139;font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pos-held-meta{grid-area:meta;color:var(--bill-muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pos-held-list strong{grid-area:amount;color:#173b77;font-size:12px;white-space:nowrap}:deep(.bill-invoice-header){margin-bottom:2px}:deep(.bill-filter-grid){grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}:deep(.bill-filter-grid>.bill-field){grid-column:span 2}:deep(.bill-product-table-wrap){max-height:calc(100vh - 455px);min-height:250px}:deep(.bill-summary-card),:deep(.bill-payment-panel){position:static}@media(min-width:1500px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 360px}:deep(.bill-product-table-wrap){max-height:calc(100vh - 430px)}}@media(max-width:1366px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 315px}.pos-scan-input{min-height:52px!important;font-size:16px!important}:deep(.bill-filter-grid){grid-template-columns:repeat(4,minmax(0,1fr))}:deep(.bill-filter-grid>.bill-field){grid-column:span 1}.pos-customer-field{grid-column:span 2}}@media(max-width:1180px){.pos-saas-layout{grid-template-columns:1fr}.pos-saas-side{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}:deep(.bill-product-table-wrap){max-height:520px}}@media(max-width:760px){.pos-saas-side,.pos-held-list{grid-template-columns:1fr}.pos-print-preview{align-items:stretch;flex-direction:column}.pos-print-preview small{text-align:left}.pos-recent-products{display:grid;grid-template-columns:1fr}.pos-recent-products button{min-width:0}.pos-quick-customer{grid-template-columns:1fr}.pos-quick-customer .wide{grid-column:auto}.pos-customer-insight{grid-template-columns:1fr}.pos-customer-insight button{grid-row:auto;grid-column:auto}:deep(.bill-filter-grid){grid-template-columns:1fr}:deep(.bill-filter-grid>.bill-field),.pos-customer-field,.pos-counter-scope{grid-column:auto}}
 :deep(.bill-action-footer){display:grid;grid-template-columns:minmax(190px,260px) 1fr;gap:12px;align-items:center}.pos-footer-total{display:grid;gap:2px;min-height:54px;padding:8px 12px;border:1px solid #dbeafe;border-radius:8px;background:#eff6ff}.pos-footer-total span{color:#47607d;font-size:11px;font-weight:850}.pos-footer-total strong{color:#173b77;font-size:22px;line-height:1}.pos-footer-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap}.pos-footer-group{display:flex;gap:8px;flex-wrap:wrap}.pos-action{min-height:44px;padding:9px 13px;border:1px solid #d8e0eb;border-radius:8px;background:#fff;color:#344159;font-size:12px;font-weight:900;cursor:pointer}.pos-action.secondary{background:#f8fafc}.pos-action.print{color:#24446f}.pos-action.complete{display:grid;grid-template-columns:auto auto;gap:10px;align-items:center;min-width:210px;padding:9px 16px;border-color:#2457d6;background:#2457d6;color:#fff}.pos-action.complete strong{font-size:14px}.pos-action:disabled{cursor:not-allowed;opacity:.52}.pos-action.print:disabled{background:#f8fafc;color:#94a3b8}@media(max-width:980px){:deep(.bill-action-footer){grid-template-columns:1fr}.pos-footer-actions{justify-content:stretch}.pos-footer-group,.pos-action{flex:1 1 auto}.pos-action.complete{grid-template-columns:1fr;justify-items:center;min-width:0}}@media(max-width:640px){.pos-footer-actions,.pos-footer-group{display:grid;grid-template-columns:1fr}.pos-action{width:100%}}
 </style>

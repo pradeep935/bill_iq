@@ -336,7 +336,7 @@ class SalesService
         $priceType = $scope['price_type'] ?? 'retail';
 
         return Product::query()
-            ->with(['barcodes', 'variantItems', 'images', 'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderBy('expiry_date')])
+            ->with(['barcodes', 'variantItems', 'images', 'unit', 'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderBy('expiry_date')])
             ->where(function (Builder $q) use ($businessId) {
                 $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
             })
@@ -387,6 +387,7 @@ class SalesService
                 'barcodes' => fn ($q) => $q->where('business_id', $businessId)->where('is_active', 1)->where(fn ($query) => $query->whereNull('status')->orWhere('status', 'active')),
                 'variantItems',
                 'images',
+                'unit',
                 'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderBy('expiry_date'),
             ])
             ->where(function (Builder $q) use ($businessId) {
@@ -497,6 +498,7 @@ class SalesService
     {
         return [
             'id' => $voucher->id,
+            'business_id' => $voucher->business_id,
             'voucher_number' => $voucher->voucher_number,
             'invoice_number' => $voucher->invoice_number,
             'invoice_date' => optional($voucher->invoice_date)->format('Y-m-d'),
@@ -504,8 +506,12 @@ class SalesService
             'customer_id' => $voucher->customer_id,
             'customer' => $voucher->customer_name_snapshot ?: optional($voucher->customer)->customer_name,
             'customer_mobile' => $voucher->customer_mobile_snapshot,
+            'customer_gstin' => $voucher->customer_gstin_snapshot ?: optional($voucher->customer)->gstin,
+            'billing_address' => $voucher->billing_address_snapshot ?: optional($voucher->customer)->billing_address,
+            'shipping_address' => $voucher->shipping_address_snapshot ?: optional($voucher->customer)->shipping_address,
             'branch_id' => $voucher->branch_id,
             'branch' => optional($voucher->branch)->name,
+            'branch_address' => optional($voucher->branch)->address,
             'warehouse_id' => $voucher->warehouse_id,
             'warehouse' => optional($voucher->warehouse)->name,
             'sale_type' => $voucher->sale_type,
@@ -544,6 +550,7 @@ class SalesService
                     'product_variant_id' => $item->product_variant_id,
                     'batch_id' => $item->batch_id,
                     'unit_id' => $item->unit_id,
+                    'unit' => optional($item->unit)->name ?: optional($item->unit)->unit_name ?: 'PCS',
                     'barcode_snapshot' => $item->barcode_snapshot,
                     'sku_snapshot' => $item->sku_snapshot,
                     'hsn_code_snapshot' => $item->hsn_code_snapshot,
@@ -877,6 +884,8 @@ class SalesService
             'barcode' => $scannedBarcode ?: ($product->primary_barcode ?: $product->barcode),
             'image_url' => $this->imageUrl(optional($product->images->sortByDesc('is_primary')->first())->image_path),
             'unit_id' => $product->unit_id,
+            'unit' => optional($product->unit)->name ?: optional($product->unit)->unit_name ?: 'PCS',
+            'hsn_code' => $product->hsn_code ?: $product->hsn,
             'selling_rate' => (float) ($product->{$priceField} ?: $product->selling_price ?: $product->sale_price ?: $product->default_selling_price),
             'mrp' => $product->mrp !== null ? (float) $product->mrp : null,
             'gst_rate' => (float) $product->gst_rate,

@@ -7,6 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use App\Services\MobileNumberService;
 
 class CustomerRequest extends FormRequest
 {
@@ -28,6 +29,8 @@ class CustomerRequest extends FormRequest
             'customer_type' => ['required', Rule::in(['retail', 'wholesale', 'dealer', 'distributor', 'corporate', 'government', 'export', 'walk_in', 'other'])],
             'contact_person' => ['nullable', 'string', 'max:255'],
             'mobile' => ['nullable', 'regex:/^[6-9][0-9]{9}$/'],
+            'whatsapp_number' => ['nullable', 'regex:/^[6-9][0-9]{9}$/'],
+            'whatsapp_same_as_mobile' => ['nullable', 'boolean'],
             'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'gstin' => ['nullable', 'regex:/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', Rule::unique('customers')->where('business_id', $businessId)->ignore($customerId)],
@@ -49,23 +52,20 @@ class CustomerRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $mobile = $this->input('mobile');
-        if ($mobile !== null) {
-            $digits = preg_replace('/\D+/', '', (string) $mobile);
-            if (strlen($digits) === 12 && str_starts_with($digits, '91')) {
-                $digits = substr($digits, 2);
-            }
-            if (strlen($digits) === 11 && str_starts_with($digits, '0')) {
-                $digits = substr($digits, 1);
-            }
-            $mobile = $digits ?: null;
-        }
+        $normalizer = app(MobileNumberService::class);
+        $mobile = $this->input('mobile') !== null ? $normalizer->normalize((string) $this->input('mobile')) : null;
+        $sameAsMobile = filter_var($this->input('whatsapp_same_as_mobile', true), FILTER_VALIDATE_BOOLEAN);
+        $whatsapp = $sameAsMobile
+            ? $mobile
+            : ($this->input('whatsapp_number') !== null ? $normalizer->normalize((string) $this->input('whatsapp_number')) : null);
 
         $this->merge([
             'customer_code' => $this->filled('customer_code') ? trim((string) $this->input('customer_code')) : null,
             'customer_name' => trim((string) $this->input('customer_name')),
             'contact_person' => $this->filled('contact_person') ? trim((string) $this->input('contact_person')) : null,
             'mobile' => $mobile,
+            'whatsapp_number' => $whatsapp,
+            'whatsapp_same_as_mobile' => $sameAsMobile,
             'email' => $this->filled('email') ? strtolower(trim((string) $this->input('email'))) : null,
             'gstin' => $this->filled('gstin') ? strtoupper(trim((string) $this->input('gstin'))) : null,
             'pan' => $this->filled('pan') ? strtoupper(trim((string) $this->input('pan'))) : null,

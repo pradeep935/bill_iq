@@ -19,6 +19,12 @@ use Illuminate\Validation\ValidationException;
 
 class CustomerService
 {
+    public function __construct(
+        private MobileNumberService $mobileNumbers,
+        private CustomerAnalyticsService $analytics
+    ) {
+    }
+
     public function list(array $filters = [])
     {
         $perPage = min(max((int) ($filters['per_page'] ?? 15), 1), 100);
@@ -150,14 +156,17 @@ class CustomerService
 
     public function search(string $search)
     {
+        $normalized = $this->mobileNumbers->normalize($search);
+
         return Customer::query()
             ->where('business_id', AppController::businessId())
             ->where('status', 'active')
-            ->where(function (Builder $q) use ($search) {
+            ->where(function (Builder $q) use ($search, $normalized) {
                 $like = '%' . $search . '%';
                 $q->where('customer_name', 'like', $like)
                     ->orWhere('customer_code', 'like', $like)
                     ->orWhere('mobile', 'like', $like)
+                    ->when($normalized, fn (Builder $query) => $query->orWhere('normalized_mobile', $normalized)->orWhere('whatsapp_number', $normalized))
                     ->orWhere('phone', 'like', $like)
                     ->orWhere('email', 'like', $like)
                     ->orWhere('gstin', 'like', $like);
@@ -203,7 +212,9 @@ class CustomerService
 
         return array_merge($presented, [
             'financial_summary' => $this->financialSummary($customer),
+            'crm_summary' => $this->analytics->summary($customer),
             'recent_sales' => $this->sales($customer, ['per_page' => 5])['sales'],
+            'product_history' => $this->analytics->productHistory($customer),
             'recent_returns' => $this->returns($customer, 5),
             'recent_payments' => $this->payments($customer, 5),
             'ledger_preview' => $this->ledger($customer, ['limit' => 10])['entries'],
@@ -413,6 +424,9 @@ class CustomerService
             'customer_type' => $data['customer_type'],
             'contact_person' => $data['contact_person'] ?? null,
             'mobile' => $data['mobile'] ?? null,
+            'normalized_mobile' => $data['normalized_mobile'] ?? null,
+            'whatsapp_number' => $data['whatsapp_number'] ?? null,
+            'whatsapp_same_as_mobile' => (bool) ($data['whatsapp_same_as_mobile'] ?? true),
             'phone' => $data['phone'] ?? null,
             'email' => $data['email'] ?? null,
             'gstin' => $data['gstin'] ?? null,
@@ -465,7 +479,7 @@ class CustomerService
 
     private function normalize(array $data): array
     {
-        foreach (['customer_code', 'customer_name', 'contact_person', 'mobile', 'phone', 'email', 'gstin', 'pan', 'city', 'pincode'] as $field) {
+        foreach (['customer_code', 'customer_name', 'contact_person', 'mobile', 'whatsapp_number', 'phone', 'email', 'gstin', 'pan', 'city', 'pincode'] as $field) {
             if (array_key_exists($field, $data) && $data[$field] !== null) {
                 $data[$field] = trim((string) $data[$field]);
             }
@@ -476,32 +490,32 @@ class CustomerService
         $data['email'] = !empty($data['email']) ? strtolower($data['email']) : null;
         $data['gstin'] = !empty($data['gstin']) ? strtoupper($data['gstin']) : null;
         $data['pan'] = !empty($data['pan']) ? strtoupper($data['pan']) : null;
-        $data['mobile'] = $this->normalizeMobile($data['mobile'] ?? null);
+        $data['mobile'] = $this->mobileNumbers->normalize($data['mobile'] ?? null);
+        $data['normalized_mobile'] = $data['mobile'];
+        $data['whatsapp_same_as_mobile'] = filter_var($data['whatsapp_same_as_mobile'] ?? true, FILTER_VALIDATE_BOOLEAN);
+        $data['whatsapp_number'] = $data['whatsapp_same_as_mobile']
+            ? $data['mobile']
+            : $this->mobileNumbers->normalize($data['whatsapp_number'] ?? null);
         $data['opening_balance_type'] = $data['opening_balance_type'] ?? 'debit';
         $data['status'] = $data['status'] ?? 'active';
 
         return $data;
     }
 
-    private function normalizeMobile(?string $mobile): ?string
-    {
-        if (blank($mobile)) {
-            return null;
-        }
-
-        $digits = preg_replace('/\D+/', '', $mobile);
-        if (strlen($digits) === 12 && str_starts_with($digits, '91')) {
-            $digits = substr($digits, 2);
-        }
-        if (strlen($digits) === 11 && str_starts_with($digits, '0')) {
-            $digits = substr($digits, 1);
-        }
-
-        return $digits;
-    }
-
     private function validateDuplicatePolicy(int $businessId, array $data, ?int $ignoreId = null): void
     {
+        if (!empty($data['normalized_mobile'])) {
+            $exists = Customer::withTrashed()
+                ->where('business_id', $businessId)
+                ->where('normalized_mobile', $data['normalized_mobile'])
+                ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                ->exists();
+
+            if ($exists) {
+                throw ValidationException::withMessages(['mobile' => 'Another customer already uses this mobile number.']);
+            }
+        }
+
         if (!empty($data['gstin'])) {
             $exists = Customer::withTrashed()->where('business_id', $businessId)->where('gstin', $data['gstin'])->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))->exists();
             if ($exists) {
@@ -523,6 +537,9 @@ class CustomerService
                     if (!empty($data[$field])) {
                         $q->orWhere($field, $data[$field]);
                     }
+                }
+                if (!empty($data['normalized_mobile'])) {
+                    $q->orWhere('normalized_mobile', $data['normalized_mobile']);
                 }
                 if (!empty($data['customer_name'])) {
                     $q->orWhere(function (Builder $name) use ($data) {
@@ -591,6 +608,7 @@ class CustomerService
             ->when(!empty($filters['type']), fn (Builder $q) => $q->where('customer_type', $filters['type']))
             ->when(!empty($filters['state_id']), fn (Builder $q) => $q->where('state_id', $filters['state_id']))
             ->when(!empty($filters['price_type']), fn (Builder $q) => $q->where('price_type', $filters['price_type']))
+            ->when(!empty($filters['crm_status']), fn (Builder $q) => $q->whereIn('id', $this->crmCustomerIds($businessId, $filters['crm_status'])))
             ->when(!empty($filters['created_from']), fn (Builder $q) => $q->whereDate('created_at', '>=', $filters['created_from']))
             ->when(!empty($filters['created_to']), fn (Builder $q) => $q->whereDate('created_at', '<=', $filters['created_to']))
             ->when(!empty($filters['search']), function (Builder $q) use ($filters) {
@@ -600,6 +618,8 @@ class CustomerService
                         ->orWhere('customer_code', 'like', $search)
                         ->orWhere('contact_person', 'like', $search)
                         ->orWhere('mobile', 'like', $search)
+                        ->orWhere('whatsapp_number', 'like', $search)
+                        ->orWhere('normalized_mobile', 'like', $search)
                         ->orWhere('phone', 'like', $search)
                         ->orWhere('email', 'like', $search)
                         ->orWhere('gstin', 'like', $search)
@@ -623,6 +643,18 @@ class CustomerService
         return ['column' => $map[$key] ?? 'customer_name', 'direction' => ($filters['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc'];
     }
 
+    private function crmCustomerIds(int $businessId, string $status): array
+    {
+        $classifier = app(CustomerClassificationService::class);
+
+        return Customer::query()
+            ->where('business_id', $businessId)
+            ->get(['id', 'business_id'])
+            ->filter(fn (Customer $customer) => $classifier->classify($customer) === $status)
+            ->pluck('id')
+            ->all();
+    }
+
     public function present(Customer $customer): array
     {
         $summary = $this->financialSummary($customer);
@@ -634,6 +666,9 @@ class CustomerService
             'customer_type' => $customer->customer_type,
             'contact_person' => $customer->contact_person,
             'mobile' => $customer->mobile,
+            'normalized_mobile' => $customer->normalized_mobile ?? null,
+            'whatsapp_number' => $customer->whatsapp_number ?? null,
+            'whatsapp_same_as_mobile' => (bool) ($customer->whatsapp_same_as_mobile ?? true),
             'phone' => $customer->phone,
             'email' => $customer->email,
             'gstin' => $customer->gstin,
@@ -656,6 +691,7 @@ class CustomerService
             'current_outstanding' => $summary['current_outstanding'],
             'available_credit' => $summary['available_credit'],
             'last_sale_date' => $summary['last_sale_date'],
+            'crm_summary' => $this->analytics->summary($customer),
         ];
     }
 

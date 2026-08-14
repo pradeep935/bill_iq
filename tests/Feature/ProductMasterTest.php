@@ -189,6 +189,98 @@ class ProductMasterTest extends TestCase
             ->assertJsonPath('products.0.status', 'inactive');
     }
 
+    public function test_product_list_searches_product_name_and_filters_by_dropdown_values(): void
+    {
+        $businessId = DB::table('companies')->insertGetId([
+            'name' => 'ABC Retail Pvt Ltd',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $categoryId = DB::table('product_categories')->insertGetId([
+            'business_id' => $businessId,
+            'name' => 'Grocery',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $brandId = DB::table('brands')->insertGetId([
+            'business_id' => $businessId,
+            'name' => 'Harvest',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Product::query()->create([
+            'company_id' => $businessId,
+            'business_id' => $businessId,
+            'name' => 'Plain Rice',
+            'product_name' => 'Golden Basmati Rice',
+            'category' => 'Grocery',
+            'brand' => 'Harvest',
+            'product_type' => 'goods',
+            'item_type' => 'stock',
+            'unit' => 'PCS',
+            'sku' => 'RICE-01',
+            'hsn_code' => '1006',
+            'hsn' => '1006',
+            'taxability' => 'taxable',
+            'gst_rate' => 5,
+            'selling_price' => 100,
+            'sale_price' => 100,
+            'tracking_type' => 'none',
+            'status' => 'active',
+        ]);
+        Product::query()->create([
+            'company_id' => $businessId,
+            'business_id' => $businessId,
+            'name' => 'Desk Lamp',
+            'product_name' => 'Desk Lamp',
+            'category_id' => $categoryId,
+            'brand_id' => $brandId,
+            'category' => 'Grocery',
+            'brand' => 'Harvest',
+            'product_type' => 'goods',
+            'item_type' => 'stock',
+            'unit' => 'PCS',
+            'sku' => 'LAMP-01',
+            'hsn_code' => '9405',
+            'hsn' => '9405',
+            'taxability' => 'taxable',
+            'gst_rate' => 18,
+            'selling_price' => 400,
+            'sale_price' => 400,
+            'tracking_type' => 'none',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['business_id' => $businessId])
+            ->getJson('/app/inventory/products/list?search=Golden')
+            ->assertOk()
+            ->assertJsonCount(1, 'products')
+            ->assertJsonPath('products.0.sku', 'RICE-01');
+
+        $this->actingAs($user)
+            ->withSession(['business_id' => $businessId])
+            ->getJson('/app/inventory/products/list?category=' . $categoryId)
+            ->assertOk()
+            ->assertJsonCount(2, 'products');
+
+        $this->actingAs($user)
+            ->withSession(['business_id' => $businessId])
+            ->getJson('/app/inventory/products/list?brand=' . $brandId)
+            ->assertOk()
+            ->assertJsonCount(2, 'products');
+
+        $this->actingAs($user)
+            ->withSession(['business_id' => $businessId])
+            ->getJson('/app/inventory/products/list?unit=PCS')
+            ->assertOk()
+            ->assertJsonCount(2, 'products');
+    }
+
     public function test_sku_and_barcode_are_unique_per_business(): void
     {
         $firstBusinessId = DB::table('companies')->insertGetId([

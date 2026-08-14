@@ -16,6 +16,7 @@ class Customer extends Model
         'opening_balance' => 'decimal:2',
         'credit_limit' => 'decimal:2',
         'credit_days' => 'integer',
+        'whatsapp_same_as_mobile' => 'boolean',
     ];
 
     public function sales()

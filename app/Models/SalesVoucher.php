@@ -30,6 +30,8 @@ class SalesVoucher extends Model
         'paid_amount' => 'decimal:2',
         'balance_amount' => 'decimal:2',
         'change_returned' => 'decimal:2',
+        'public_share_enabled' => 'boolean',
+        'public_token_created_at' => 'datetime',
     ];
 
     public function customer()
@@ -75,5 +77,10 @@ class SalesVoucher extends Model
     public function salesperson()
     {
         return $this->belongsTo(User::class, 'salesperson_id');
+    }
+
+    public function shareLogs()
+    {
+        return $this->hasMany(DocumentShareLog::class, 'sales_voucher_id');
     }
 }

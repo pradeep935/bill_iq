@@ -18,6 +18,7 @@ use App\Http\Controllers\OrderManagementController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\PublicInvoiceController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\ReportsController;
@@ -34,6 +35,8 @@ Route::get('/', [UserController::class, 'login'])->name('login');
 Route::post('/login', [UserController::class, 'postLogin']);
 Route::get('/logout', [UserController::class, 'logout']);
 Route::post('/uploads-new/file', [GeneralController::class, 'uploadFile']);
+Route::get('/i/{token}', [PublicInvoiceController::class, 'show'])->name('public.invoice.show');
+Route::get('/q/{token}', [PublicInvoiceController::class, 'quotation'])->name('public.quotation.show');
 
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [UserController::class, 'logout'])->name('logout');
@@ -174,6 +177,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/invoices/references', [SalesController::class, 'references'])->name('invoices.references');
             Route::get('/invoices/products/search', [SalesController::class, 'searchProducts'])->name('invoices.products.search');
             Route::get('/invoices/products/scan', [SalesController::class, 'scanProduct'])->name('invoices.products.scan');
+            Route::get('/invoices/products/last-purchase', [SalesController::class, 'productLastPurchase'])->name('invoices.products.last-purchase');
             Route::get('/invoices/reports', [SalesController::class, 'reports'])->name('invoices.reports');
             Route::get('/invoices/export', [SalesController::class, 'export'])->name('invoices.export');
             Route::post('/invoices', [SalesController::class, 'store'])->name('invoices.store');
@@ -189,6 +193,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/invoices/{sale}/reverse', [SalesController::class, 'reverse'])->name('invoices.reverse');
             Route::get('/invoices/{sale}/print', [SalesController::class, 'print'])->name('invoices.print');
             Route::get('/invoices/{sale}/pdf', [SalesController::class, 'print'])->name('invoices.pdf');
+            Route::post('/invoices/{sale}/whatsapp', [SalesController::class, 'whatsappShare'])->name('invoices.whatsapp');
             Route::post('/invoices/{sale}/payments', [SalesController::class, 'addPayment'])->name('invoices.payments.store');
             Route::get('/returns', [SalesReturnController::class, 'index'])->name('returns');
             Route::get('/returns/create', [SalesReturnController::class, 'create'])->name('returns.create');
@@ -216,6 +221,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/customers/list', [CustomerController::class, 'list'])->name('customers.list');
             Route::get('/customers/references', [CustomerController::class, 'references'])->name('customers.references');
             Route::get('/customers/search', [CustomerController::class, 'search'])->name('customers.search');
+            Route::get('/customers/lookup', [CustomerController::class, 'lookupByMobile'])->name('customers.lookup');
+            Route::post('/customers/quick-create', [CustomerController::class, 'quickCreate'])->name('customers.quick-create');
             Route::get('/customers/export', [CustomerController::class, 'export'])->name('customers.export');
             Route::post('/customers/import', [CustomerController::class, 'import'])->name('customers.import');
             Route::get('/customers/import-template', [CustomerController::class, 'importTemplate'])->name('customers.import-template');
@@ -223,6 +230,7 @@ Route::middleware('auth')->group(function () {
             Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
             Route::patch('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.patch');
             Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+            Route::get('/customers/{customer}/insight', [CustomerController::class, 'insight'])->name('customers.insight');
             Route::get('/customers/{customer}/edit', [CustomerController::class, 'edit'])->name('customers.edit');
             Route::post('/customers/{customer}/activate', [CustomerController::class, 'activate'])->name('customers.activate');
             Route::post('/customers/{customer}/deactivate', [CustomerController::class, 'deactivate'])->name('customers.deactivate');
@@ -240,6 +248,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/quotations/list', [OrderManagementController::class, 'quotations'])->name('quotations.list');
             Route::post('/quotations', [OrderManagementController::class, 'saveQuotation'])->name('quotations.store');
             Route::put('/quotations/{quotation}', [OrderManagementController::class, 'saveQuotation'])->name('quotations.update');
+            Route::post('/quotations/{quotation}/whatsapp', [OrderManagementController::class, 'shareQuotationWhatsApp'])->name('quotations.whatsapp');
             Route::post('/quotations/{quotation}/convert', [OrderManagementController::class, 'convertQuotation'])->name('quotations.convert');
             Route::get('/orders/list', [OrderManagementController::class, 'salesOrders'])->name('orders.list');
             Route::post('/orders', [OrderManagementController::class, 'saveSalesOrder'])->name('orders.store');

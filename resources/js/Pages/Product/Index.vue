@@ -46,6 +46,9 @@ const serverErrors = ref({});
 const references = ref({
     categories: [],
     sub_categories: [],
+    brands: [],
+    units: [],
+    gst_rate_slabs: [],
 });
 
 const search = ref('');
@@ -165,6 +168,77 @@ const productValueFor = (product, column) => {
     return values[column.key] ?? product[column.key] ?? '-';
 };
 
+const normalizeReferenceOptions = (options = [], labelKeys = ['label', 'name', 'code']) => {
+    return (options || [])
+        .map((option) => {
+            const label = labelKeys
+                .map((key) => option?.[key])
+                .find((value) => String(value ?? '').trim());
+            const value = option?.value ?? option?.id ?? label;
+
+            return {
+                ...option,
+                value: value === undefined || value === null ? '' : String(value),
+                label: String(label ?? value ?? '').trim(),
+            };
+        })
+        .filter((option) => option.value !== '' && option.label !== '');
+};
+
+const uniqueOptions = (options = []) => {
+    const seen = new Set();
+
+    return options.filter((option) => {
+        const key = String(option.label || option.value).toLowerCase();
+
+        if (!key || seen.has(key)) {
+            return false;
+        }
+
+        seen.add(key);
+        return true;
+    });
+};
+
+const optionsFromProducts = (field) => {
+    return products.value
+        .map((product) => product?.[field])
+        .filter((value) => String(value ?? '').trim())
+        .map((value) => ({
+            value: String(value),
+            label: String(value),
+        }));
+};
+
+const categoryFilterOptions = computed(() => uniqueOptions([
+    ...normalizeReferenceOptions(references.value.categories || [], ['label', 'name', 'code']),
+    ...optionsFromProducts('category'),
+]));
+
+const brandFilterOptions = computed(() => uniqueOptions([
+    ...normalizeReferenceOptions(references.value.brands || [], ['label', 'name', 'code']),
+    ...optionsFromProducts('brand'),
+]));
+
+const unitFilterOptions = computed(() => uniqueOptions([
+    ...normalizeReferenceOptions(references.value.units || [], ['label', 'name', 'code', 'symbol']),
+    ...optionsFromProducts('unit'),
+]));
+
+const fallbackGstRateOptions = [
+    { value: '0', label: '0%' },
+    { value: '5', label: '5%' },
+    { value: '12', label: '12%' },
+    { value: '18', label: '18%' },
+    { value: '28', label: '28%' },
+];
+
+const gstRateFilterOptions = computed(() => {
+    const slabs = normalizeReferenceOptions(references.value.gst_rate_slabs || [], ['label', 'rate']);
+
+    return slabs.length ? slabs : fallbackGstRateOptions;
+});
+
 const pageTotal = computed(() => pagination.value.total || products.value.length);
 
 const activeProductsCount = computed(() => {
@@ -261,6 +335,9 @@ const loadReferences = async () => {
         references.value = {
             categories: [],
             sub_categories: [],
+            brands: [],
+            units: [],
+            gst_rate_slabs: [],
         };
     }
 };
@@ -730,7 +807,7 @@ onMounted(() => {
                         <input
                             v-model="search"
                             type="text"
-                            placeholder="Search product, SKU, barcode, HSN..."
+                            placeholder="Search by product name, SKU, barcode, HSN..."
                         />
                     </div>
 
@@ -754,31 +831,49 @@ onMounted(() => {
                             <option value="deleted">Deleted</option>
                         </select>
 
-                        <input
-                            v-model="categoryFilter"
-                            type="text"
-                            placeholder="Category"
-                        />
+                        <select v-model="categoryFilter">
+                            <option value="">All Categories</option>
+                            <option
+                                v-for="option in categoryFilterOptions"
+                                :key="`category-${option.value}`"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select>
 
-                        <input
-                            v-model="brandFilter"
-                            type="text"
-                            placeholder="Brand"
-                        />
+                        <select v-model="brandFilter">
+                            <option value="">All Brands</option>
+                            <option
+                                v-for="option in brandFilterOptions"
+                                :key="`brand-${option.value}`"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select>
 
-                        <input
-                            v-model="unitFilter"
-                            type="text"
-                            placeholder="Unit"
-                        />
+                        <select v-model="unitFilter">
+                            <option value="">All Units</option>
+                            <option
+                                v-for="option in unitFilterOptions"
+                                :key="`unit-${option.value}`"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select>
 
-                        <input
-                            v-model="gstRateFilter"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="GST %"
-                        />
+                        <select v-model="gstRateFilter">
+                            <option value="">All GST</option>
+                            <option
+                                v-for="option in gstRateFilterOptions"
+                                :key="`gst-${option.value}`"
+                                :value="option.value"
+                            >
+                                {{ option.label }}
+                            </option>
+                        </select>
 
                         <button
                             v-if="hasFilters"

@@ -7,21 +7,18 @@
             <input type="checkbox" :checked="allSelected" @change="$emit('toggle-select-all')" />
           </th>
           <th v-for="column in columns" :key="column.key" :class="column.class">
-            <span class="crud-heading" :title="columnHint(column)">
+            <span class="crud-heading">
               {{ column.label }}
-              <span class="crud-heading-hint" aria-hidden="true">?</span>
             </span>
           </th>
           <th v-if="showStatus">
-            <span class="crud-heading" title="Current record state, for example active, draft, posted or cancelled.">
+            <span class="crud-heading">
               Status
-              <span class="crud-heading-hint" aria-hidden="true">?</span>
             </span>
           </th>
           <th v-if="showActions" class="crud-action-column">
-            <span class="crud-heading" title="Available row actions such as edit, view, delete, print or workflow updates.">
+            <span class="crud-heading">
               Actions
-              <span class="crud-heading-hint" aria-hidden="true">?</span>
             </span>
           </th>
         </tr>
@@ -108,8 +105,6 @@ const keyFor = (row, index) => {
   return row?.[props.rowKey] ?? index;
 };
 
-const columnHint = (column) => column?.hint || `${column?.label || 'This'} column value.`;
-
 const statusLabel = (status) => String(status).charAt(0).toUpperCase() + String(status).slice(1);
 </script>
 
@@ -145,22 +140,6 @@ const statusLabel = (status) => String(status).charAt(0).toUpperCase() + String(
   align-items: center;
   display: inline-flex;
   gap: 5px;
-}
-
-.crud-heading-hint {
-  align-items: center;
-  background: #eef3ff;
-  border: 1px solid #d4def8;
-  border-radius: 50%;
-  color: #4562a8;
-  display: inline-flex;
-  font-size: 9px;
-  font-weight: 900;
-  height: 15px;
-  justify-content: center;
-  line-height: 1;
-  text-transform: none;
-  width: 15px;
 }
 
 .crud-table td {

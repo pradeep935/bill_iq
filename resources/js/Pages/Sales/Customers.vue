@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 import SalesApi from './SalesApi';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 defineProps({ page: { type: String, default: 'customers' }, title: { type: String, default: 'Customers' } });
 
@@ -17,6 +18,7 @@ const crmStatus = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const importing = ref(false);
+const openActionMenuId = ref(null);
 const errors = ref({});
 const detail = ref(null);
 const ledger = ref([]);
@@ -138,6 +140,8 @@ const importCustomers = async (event) => {
 
 const exportCustomers = () => { window.location.href = SalesApi.customerExportUrl(queryParams.value); };
 const clearFilters = () => { search.value = ''; status.value = ''; type.value = ''; stateId.value = ''; priceType.value = ''; crmStatus.value = ''; loadCustomers(1); };
+const toggleActionMenu = (customer) => { openActionMenuId.value = openActionMenuId.value === customer.id ? null : customer.id; };
+const closeActionMenu = () => { openActionMenuId.value = null; };
 const createInvoice = (customer) => { window.location.href = `/app/sales/invoices/create?customer_id=${customer.id}`; };
 const createReturn = (customer) => { window.location.href = `/app/sales/returns/create?customer_id=${customer.id}`; };
 const receivePayment = (customer) => { window.location.href = `/app/accounting/vouchers?type=receipt&customer_id=${customer.id}`; };
@@ -218,7 +222,27 @@ onMounted(async () => { await loadReferences(); await loadCustomers(); });
                         <tbody>
                             <tr v-for="customer in customers" :key="customer.id">
                                 <td>{{ customer.customer_code }}</td><td>{{ customer.customer_name }}</td><td>{{ customer.customer_type }}</td><td>{{ customer.gstin || '-' }}</td><td>{{ customer.mobile || customer.phone || '-' }}</td><td>{{ customer.whatsapp_number || customer.mobile || '-' }}</td><td><span class="badge crm" :class="customer.crm_summary?.customer_status">{{ customer.crm_summary?.customer_status_label || '-' }}</span></td><td>{{ customer.crm_summary?.total_orders || 0 }}</td><td>{{ formatMoney(customer.crm_summary?.lifetime_sales) }}</td><td>{{ customer.crm_summary?.last_purchase_date || '-' }}</td><td>{{ formatMoney(customer.current_outstanding) }}</td><td><span class="badge" :class="customer.deleted_at ? 'deleted' : customer.status">{{ customer.deleted_at ? 'deleted' : customer.status }}</span></td>
-                                <td><div class="row-actions"><button v-if="!customer.deleted_at" @click="viewCustomer(customer)">View</button><button v-if="!customer.deleted_at" @click="editCustomer(customer)">Edit</button><button v-if="!customer.deleted_at" @click="viewLedger(customer)">Ledger</button><button v-if="!customer.deleted_at" @click="viewOutstanding(customer)">Outstanding</button><button v-if="!customer.deleted_at" @click="receivePayment(customer)">Receive</button><button v-if="!customer.deleted_at" @click="createInvoice(customer)">Invoice</button><button v-if="!customer.deleted_at" @click="createReturn(customer)">Return</button><button v-if="!customer.deleted_at" @click="toggleStatus(customer)">{{ customer.status === 'active' ? 'Deactivate' : 'Activate' }}</button><button v-if="!customer.deleted_at && customer.customer_type !== 'walk_in'" class="danger" @click="deleteCustomer(customer)">Delete</button><button v-if="customer.deleted_at" @click="restoreCustomer(customer)">Restore</button></div></td>
+                                <td>
+                                    <div class="row-actions">
+                                        <RowActionMenu
+                                            v-if="!customer.deleted_at"
+                                            :open="openActionMenuId === customer.id"
+                                            view-title="View customer details"
+                                            @view="viewCustomer(customer); closeActionMenu()"
+                                            @toggle="toggleActionMenu(customer)"
+                                        >
+                                            <button type="button" @click="editCustomer(customer); closeActionMenu()">Edit</button>
+                                            <button type="button" @click="viewLedger(customer); closeActionMenu()">Ledger</button>
+                                            <button type="button" @click="viewOutstanding(customer); closeActionMenu()">Outstanding</button>
+                                            <button type="button" @click="receivePayment(customer); closeActionMenu()">Receive</button>
+                                            <button type="button" @click="createInvoice(customer); closeActionMenu()">Invoice</button>
+                                            <button type="button" @click="createReturn(customer); closeActionMenu()">Return</button>
+                                            <button type="button" @click="toggleStatus(customer); closeActionMenu()">{{ customer.status === 'active' ? 'Deactivate' : 'Activate' }}</button>
+                                            <button v-if="customer.customer_type !== 'walk_in'" type="button" class="danger" @click="deleteCustomer(customer); closeActionMenu()">Delete</button>
+                                        </RowActionMenu>
+                                        <button v-else type="button" @click="restoreCustomer(customer)">Restore</button>
+                                    </div>
+                                </td>
                             </tr>
                             <tr v-if="!customers.length && !loading"><td colspan="13" class="empty">No customers found for the selected filters.</td></tr>
                         </tbody>

@@ -8,7 +8,7 @@
       <slot name="badge" />
     </div>
     <div class="bill-summary-list">
-      <div v-for="row in rows" :key="row.label" class="bill-summary-row" :class="{ grand: row.grand }">
+      <div v-for="row in rows" :key="row.label" class="bill-summary-row" :class="{ grand: row.grand, saving: row.saving, divider: row.divider }">
         <span>{{ row.label }}</span>
         <strong>{{ row.value }}</strong>
       </div>

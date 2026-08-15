@@ -1,5 +1,5 @@
 <template>
-  <section class="bill-ui-card bill-product-table-card">
+  <section class="bill-ui-card bill-product-table-card" :class="{ 'is-empty': !items.length }">
     <div class="bill-ui-card-head">
       <div>
         <span>PRODUCTS</span>
@@ -16,11 +16,11 @@
             <th>Batch</th>
             <th>Qty</th>
             <th>Unit</th>
+            <th>MRP</th>
             <th>Rate</th>
-            <th>Discount</th>
-            <th>Taxable</th>
+            <th>Saving</th>
+            <th>Disc.</th>
             <th>GST %</th>
-            <th>GST Amt</th>
             <th>Total</th>
             <th></th>
           </tr>
@@ -35,7 +35,8 @@
                 </div>
                 <div>
                   <strong>{{ item.product }}</strong>
-                  <small>{{ item.sku || 'No SKU' }} <span v-if="item.barcode">- {{ item.barcode }}</span></small>
+                  <small>SKU: {{ item.sku || 'No SKU' }} <span v-if="item.barcode">- {{ item.barcode }}</span></small>
+                  <small v-if="item.available_stock !== null && item.available_stock !== undefined" class="bill-stock-text">In Stock: {{ item.available_stock }}</small>
                   <small v-if="item.previous_purchase" class="bill-previous-purchase">
                     Last purchased at Rs. {{ money(item.previous_purchase.selling_rate) }} on {{ dateText(item.previous_purchase.invoice_date) }}
                   </small>
@@ -57,19 +58,22 @@
               </div>
             </td>
             <td><span class="bill-unit-pill">{{ item.unit || 'PCS' }}</span></td>
-            <td><input class="bill-row-input" v-model.number="item.selling_rate" type="number" min="0" placeholder="Rate" @input="$emit('change')" /></td>
+            <td><span class="bill-mrp-text" :class="{ muted: !Number(item.mrp || 0) }">{{ priceText(item.mrp || item.selling_rate) }}</span></td>
+            <td><input class="bill-row-input rate-input" v-model.number="item.selling_rate" type="number" min="0" placeholder="Rate" @input="$emit('change')" /></td>
+            <td><span class="bill-saving-text">{{ savingText(item) }}</span><small v-if="savingPercent(item)" class="bill-saving-percent">({{ savingPercent(item) }}%)</small></td>
             <td><input class="bill-row-input" v-model.number="item.discount_value" type="number" min="0" placeholder="Discount" @input="$emit('change')" /></td>
-            <td><strong class="bill-line-total">{{ lineDetails(item).taxable }}</strong></td>
             <td><span class="bill-gst-pill">{{ money(item.gst_rate) }}%</span></td>
-            <td><strong class="bill-line-total">{{ lineDetails(item).gstAmount }}</strong></td>
             <td><strong class="bill-line-total">{{ lineDetails(item).total }}</strong></td>
-            <td><button class="bill-delete-button" type="button" title="Remove product" @click="$emit('remove', index)">Remove</button></td>
+            <td><button class="bill-delete-button" type="button" title="Remove product" @click="$emit('remove', index)">×</button></td>
           </tr>
           <tr v-if="!items.length">
             <td colspan="12" class="bill-empty-row">Scan barcode or search a product to add invoice lines.</td>
           </tr>
         </tbody>
       </table>
+    </div>
+    <div class="bill-product-table-footer">
+      <slot name="footer" />
     </div>
   </section>
 </template>
@@ -87,6 +91,15 @@ defineEmits(['increment', 'decrement', 'remove', 'change', 'quantity-change', 'b
 const initials = (name = '') => String(name).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'BI';
 const rowKey = (item) => `${item.product_id}-${item.product_variant_id || 0}-${item.batch_id || 0}`;
 const money = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const priceText = (value) => `₹${money(value)}`;
+const savingAmount = (item) => Math.max(0, (Number(item.mrp || 0) - Number(item.selling_rate || 0)) * Number(item.quantity || 0));
+const savingText = (item) => savingAmount(item) > 0 ? `₹${money(savingAmount(item))}` : '-';
+const savingPercent = (item) => {
+  const mrp = Number(item.mrp || 0);
+  if (mrp <= 0) return '';
+  const percent = Math.max(0, (mrp - Number(item.selling_rate || 0)) / mrp * 100);
+  return percent > 0 ? percent.toFixed(2) : '';
+};
 const dateText = (value) => value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 const lineDetails = (item) => {
   if (typeof props.lineDetails === 'function') return props.lineDetails(item);
@@ -96,8 +109,22 @@ const lineDetails = (item) => {
 
 <style scoped>
 .bill-product-table {
-  min-width: 1280px;
+  min-width: 960px;
+  table-layout: fixed;
 }
+
+.bill-product-table th:nth-child(1) { width: 300px; }
+.bill-product-table th:nth-child(2) { width: 86px; }
+.bill-product-table th:nth-child(3) { width: 62px; }
+.bill-product-table th:nth-child(4) { width: 148px; }
+.bill-product-table th:nth-child(5) { width: 64px; }
+.bill-product-table th:nth-child(6) { width: 84px; }
+.bill-product-table th:nth-child(7) { width: 88px; }
+.bill-product-table th:nth-child(8) { width: 92px; }
+.bill-product-table th:nth-child(9) { width: 76px; }
+.bill-product-table th:nth-child(10) { width: 62px; }
+.bill-product-table th:nth-child(11) { width: 92px; }
+.bill-product-table th:nth-child(12) { width: 42px; }
 
 .bill-product-table th,
 .bill-product-table td {
@@ -105,7 +132,7 @@ const lineDetails = (item) => {
 }
 
 .bill-product-cell {
-  min-width: 260px;
+  min-width: 0;
 }
 
 .bill-product-info {
@@ -129,6 +156,13 @@ const lineDetails = (item) => {
   font-size: 12px;
   line-height: 1.25;
   word-break: break-word;
+}
+
+.bill-stock-text,
+.bill-saving-text,
+.bill-saving-percent {
+  color: #078044 !important;
+  font-weight: 900;
 }
 
 .bill-previous-purchase {
@@ -184,27 +218,54 @@ const lineDetails = (item) => {
 .bill-row-select,
 .bill-row-input {
   width: 100%;
-  min-height: 42px;
+  min-height: 38px;
+}
+
+.rate-input {
+  max-width: none;
+  font-weight: 900;
+}
+
+.bill-mrp-text {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: line-through;
+}
+
+.bill-mrp-text.muted {
+  text-decoration: none;
+}
+
+.bill-saving-text,
+.bill-saving-percent {
+  display: block;
+  white-space: nowrap;
+}
+
+.bill-saving-percent {
+  margin-top: 2px;
+  font-size: 10px;
 }
 
 .bill-qty-control {
   display: grid;
-  grid-template-columns: 42px 70px 42px;
-  gap: 6px;
+  grid-template-columns: 34px 56px 34px;
+  gap: 4px;
   align-items: center;
 }
 
 .bill-qty-control button {
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 38px;
   border-radius: 8px;
   font-size: 18px;
   font-weight: 900;
 }
 
 .bill-qty-control input {
-  width: 70px;
-  min-height: 42px;
+  width: 56px;
+  min-height: 38px;
   text-align: center;
   font-size: 16px;
   font-weight: 900;
@@ -216,8 +277,19 @@ const lineDetails = (item) => {
 }
 
 .bill-delete-button {
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 30px;
+  width: 30px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.bill-product-table-footer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
 }
 
 .scan-highlight td {

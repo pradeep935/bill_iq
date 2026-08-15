@@ -113,6 +113,11 @@ const line = (item) => {
 
 const totals = computed(() => {
     const subtotal = form.items.reduce((sum, item) => sum + line(item).gross, 0);
+    const mrpTotal = form.items.reduce((sum, item) => {
+        const mrp = Number(item.mrp || 0);
+        const rate = Number(item.selling_rate || 0);
+        return sum + Number(item.quantity || 0) * (mrp > 0 ? mrp : rate);
+    }, 0);
     const lineDiscount = form.items.reduce((sum, item) => sum + line(item).discount, 0);
     const taxableBeforeVoucher = form.items.reduce((sum, item) => sum + line(item).taxable, 0);
     const voucherDiscount = form.voucher_discount_type === 'percentage'
@@ -126,6 +131,8 @@ const totals = computed(() => {
     const paid = form.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
     return {
         subtotal,
+        mrpTotal,
+        priceSaving: Math.max(0, mrpTotal - subtotal),
         discount: lineDiscount + voucherDiscount,
         tax,
         roundOff: grand - beforeRound,
@@ -135,6 +142,9 @@ const totals = computed(() => {
         change: Math.max(0, paid - grand),
     };
 });
+
+const totalQuantity = computed(() => form.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0));
+const savingPercent = computed(() => totals.value.mrpTotal > 0 ? (totals.value.priceSaving / totals.value.mrpTotal) * 100 : 0);
 
 const paymentStatus = computed(() => {
     if (invoiceStatus.value === 'cancelled') return 'cancelled';
@@ -147,9 +157,12 @@ const paymentStatus = computed(() => {
 const statusLabel = computed(() => ({ draft: 'Draft', hold: 'Hold', paid: 'Paid', partial: 'Partial', cancelled: 'Cancelled' }[paymentStatus.value] || 'Draft'));
 const hasInclusiveTax = computed(() => form.items.some((item) => item.tax_inclusive && (Number(item.gst_rate || 0) + Number(item.cess_rate || 0)) > 0));
 const summaryRows = computed(() => [
-    { label: 'Subtotal', value: formatMoney(totals.value.subtotal) },
-    { label: 'Discount', value: formatMoney(totals.value.discount) },
-    { label: hasInclusiveTax.value ? 'Tax (included)' : 'Tax', value: formatMoney(totals.value.tax) },
+    { label: 'MRP Total', value: formatMoney(totals.value.mrpTotal) },
+    { label: 'Price Saving (MRP - Rate)', value: `-${formatMoney(totals.value.priceSaving)}`, saving: true },
+    { label: 'Selling Price Total', value: formatMoney(totals.value.subtotal), divider: true },
+    { label: 'Additional Discount', value: formatMoney(totals.value.discount) },
+    { label: 'Taxable Value', value: formatMoney(Math.max(0, totals.value.subtotal - totals.value.discount)) },
+    { label: hasInclusiveTax.value ? 'Tax (included)' : 'Total Tax', value: formatMoney(totals.value.tax) },
     { label: 'Round-off', value: formatMoney(totals.value.roundOff) },
     { label: 'Grand Total', value: formatMoney(totals.value.grand), grand: true },
 ]);
@@ -815,10 +828,9 @@ onUnmounted(() => {
                         </div>
                     </FilterCard>
 
-                    <FilterCard title="Scan Product" eyebrow="BARCODE">
-                        <label class="bill-field pos-product-search">
-                            <span>Barcode Search</span>
-                            <input ref="scanInput" v-model="search" class="pos-scan-input" type="search" placeholder="Scan barcode or search product" @focus="scannerFocused = true" @blur="scannerFocused = false" @keyup.enter="scan" @input="searchProducts" />
+	                    <FilterCard>
+	                        <label class="bill-field pos-product-search">
+	                            <input ref="scanInput" v-model="search" class="pos-scan-input" type="search" placeholder="Scan barcode or search product" @focus="scannerFocused = true" @blur="scannerFocused = false" @keyup.enter="scan" @input="searchProducts" />
                             <div v-if="productResults.length" class="pos-autocomplete">
                                 <button v-for="product in productResults" :key="product.id" type="button" :title="`Add ${product.name}`" @click="addProduct(product)">
                                     <span class="pos-product-thumb">
@@ -842,18 +854,24 @@ onUnmounted(() => {
                         </div>
                     </FilterCard>
 
-                    <ProductTable
-                        :items="form.items"
-                        :line-total="productLineTotal"
+	                    <ProductTable
+	                        :items="form.items"
+	                        :line-total="productLineTotal"
                         :line-details="productLineDetails"
                         :highlight-key="highlightedRowKey"
                         @increment="updateQty($event, 1)"
                         @decrement="updateQty($event, -1)"
                         @remove="removeItem"
                         @change="syncPaymentAmount"
-                        @quantity-change="normalizeQty"
-                        @batch-change="updateBatchStock"
-                    />
+	                        @quantity-change="normalizeQty"
+	                        @batch-change="updateBatchStock"
+	                    >
+	                        <template #footer>
+	                            <button type="button" class="pos-manual-product-button" @click="showToast('Manual product entry is available through product search for now.', 'info')">+ Add Manual Product</button>
+	                            <span class="pos-table-items">{{ form.items.length }} Items</span>
+	                            <button type="button" class="pos-clear-cart-button" :disabled="!hasCartItems" @click="form.items = []; syncPaymentAmount()">Clear Cart</button>
+	                        </template>
+	                    </ProductTable>
 
                     <FilterCard v-if="heldBills.length" title="Held Bills" eyebrow="RECALL">
                         <template #actions>
@@ -889,12 +907,21 @@ onUnmounted(() => {
                 </aside>
             </section>
 
-            <ActionFooter>
-                <div class="pos-footer-total">
-                    <span>{{ footerState }}</span>
-                    <strong>{{ formatMoney(totals.grand) }}</strong>
-                </div>
-                <div class="pos-footer-actions">
+	            <ActionFooter>
+	                <div class="pos-footer-cart">
+	                    <div class="pos-footer-cart-icon">▣</div>
+	                    <div>
+	                        <strong>{{ form.items.length }} Items in Cart</strong>
+	                        <span>You Saved {{ formatMoney(totals.priceSaving) }} ({{ savingPercent.toFixed(2) }}%)</span>
+	                    </div>
+	                </div>
+	                <div class="pos-footer-metrics">
+	                    <div><span>Total Quantity</span><strong>{{ totalQuantity }} Pcs</strong></div>
+	                    <div><span>Taxable Value</span><strong>{{ formatMoney(Math.max(0, totals.subtotal - totals.discount)) }}</strong></div>
+	                    <div><span>Total Tax</span><strong>{{ formatMoney(totals.tax) }}</strong></div>
+	                    <div class="grand"><span>Grand Total</span><strong>{{ formatMoney(totals.grand) }}</strong></div>
+	                </div>
+	                <div class="pos-footer-actions">
                     <div class="pos-footer-group">
                         <button class="pos-action secondary" type="button" title="Save invoice as draft" :disabled="saving || !hasCartItems" @click="save('draft')">{{ saving && savingAction === 'draft' ? 'Saving...' : 'Save Draft' }}</button>
                         <button class="pos-action secondary" type="button" title="Hold invoice for later recall" :disabled="saving || !hasCartItems" @click="save('hold')">{{ saving && savingAction === 'hold' ? 'Holding...' : 'Hold Bill' }}</button>
@@ -915,6 +942,704 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.pos-saas-page{display:grid;gap:10px;padding-bottom:8px}.pos-message{padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e40af;font-weight:850}.pos-message.success{border-color:#bbf7d0;background:#ecfdf5;color:#15803d}.pos-message.error{border-color:#fecdd3;background:#fff1f2;color:#be123c}.pos-saas-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:12px;align-items:start}.pos-saas-main,.pos-saas-side{display:grid;gap:10px;min-width:0}.pos-saas-side{position:sticky;top:86px}.pos-print-preview{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:62px;padding:10px 12px;border:1px solid #bedfd5;border-radius:8px;background:linear-gradient(90deg,#e9fbf5,#fff)}.pos-print-preview strong{display:inline-flex;align-items:center;min-height:36px;padding:6px 14px;border-radius:8px;background:#082747;color:#fff;font-size:15px;font-weight:950}.pos-print-preview span{display:inline-flex;margin-left:8px;padding:6px 10px;border-radius:0 0 8px 8px;background:#d9f7ed;color:#075f4a;font-size:11px;font-weight:900}.pos-print-preview small{color:#475569;font-size:12px;font-weight:850;text-align:right}.pos-counter-scope{grid-column:span 2;display:grid;gap:3px;min-height:54px;padding:10px 12px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc}.pos-counter-scope span{color:var(--bill-muted);font-size:11px;font-weight:850}.pos-counter-scope strong{color:#142139;font-size:13px}.pos-customer-field{grid-column:span 2}.pos-customer-lookup,.pos-customer-insight,.pos-quick-customer{grid-column:1 / -1;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc}.pos-customer-lookup{padding:9px 10px;color:#536179;font-size:12px;font-weight:850}.pos-customer-lookup.found{border-color:#bbf7d0;background:#ecfdf5;color:#15803d}.pos-customer-lookup.new{border-color:#bfdbfe;background:#eff6ff;color:#1e40af}.pos-customer-lookup.invalid,.pos-customer-lookup.multiple{border-color:#fecdd3;background:#fff1f2;color:#be123c}.pos-customer-insight{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:10px 12px}.pos-customer-insight strong{color:#142139;font-size:13px}.pos-customer-insight span{color:#2457d6;font-size:11px;font-weight:900}.pos-customer-insight small{color:#64748b;font-size:11px}.pos-customer-insight button{grid-row:1 / span 3;grid-column:2;align-self:center;min-height:32px;padding:6px 10px;border:1px solid #d8e0eb;border-radius:8px;background:#fff;color:#344159;font-size:11px;font-weight:850}.pos-quick-customer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px}.pos-quick-customer label{display:grid;gap:4px;color:#64748b;font-size:11px;font-weight:850}.pos-quick-customer input{min-height:36px}.pos-quick-customer .wide{grid-column:span 2}.pos-quick-customer .check{display:flex;align-items:center;gap:7px}.pos-quick-customer .check input{min-height:auto;width:auto}.pos-quick-customer button{min-height:36px;border:1px solid #2457d6;border-radius:8px;background:#2457d6;color:#fff;font-size:11px;font-weight:900}.pos-category-row{display:flex;gap:6px;flex-wrap:wrap}.pos-category-row button{min-height:28px;padding:5px 9px;border:1px solid var(--bill-line);border-radius:999px;background:#f8fafc;color:#475569;font-size:11px;font-weight:850}.pos-category-row button.active{border-color:#9ec2ff;background:#e8f1ff;color:var(--bill-accent-dark)}.pos-scan-state{display:inline-flex;align-items:center;min-height:28px;padding:5px 10px;border-radius:999px;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:900}.pos-scan-state.ready{background:#dcfce7;color:#15803d}.pos-product-search{position:relative;grid-column:1 / -1}.pos-scan-input{min-height:56px!important;border:2px solid #9ec2ff!important;border-radius:12px!important;background:#fff!important;font-size:18px!important;font-weight:850;letter-spacing:.02em}.pos-scan-input:focus{border-color:#2457d6!important;box-shadow:0 0 0 4px rgba(36,87,214,.12);outline:0}.pos-autocomplete{position:absolute;top:82px;left:0;right:0;z-index:12;display:grid;max-height:260px;overflow:auto;border:1px solid var(--bill-line);border-radius:8px;background:#fff;box-shadow:0 18px 40px rgba(15,34,66,.14)}.pos-autocomplete button{display:grid;grid-template-columns:40px 1fr;column-gap:10px;align-items:center;justify-items:start;padding:9px 10px;border:0;border-bottom:1px solid #edf2f7;background:#fff;text-align:left;cursor:pointer}.pos-autocomplete small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-product-thumb{width:36px;height:36px;overflow:hidden;display:grid;place-items:center;border-radius:8px;background:#eef2ff;color:var(--bill-accent-dark);font-size:11px;font-weight:900}.pos-product-thumb img{width:100%;height:100%;object-fit:cover}.pos-recent-products{grid-column:1 / -1;display:flex;gap:8px;overflow:auto;padding-bottom:2px}.pos-recent-products button{min-width:140px;display:grid;grid-template-columns:36px 1fr;column-gap:8px;align-items:center;justify-items:start;padding:8px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-recent-products small{grid-column:2;color:var(--bill-muted);font-size:11px}.pos-held-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}.pos-held-list button{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"number amount" "meta amount";align-items:center;gap:3px 10px;padding:10px 12px;border:1px solid var(--bill-line);border-radius:8px;background:#f8fafc;text-align:left;cursor:pointer}.pos-held-list button:hover{border-color:#9ec2ff;background:#eef6ff}.pos-held-number{grid-area:number;color:#142139;font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pos-held-meta{grid-area:meta;color:var(--bill-muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pos-held-list strong{grid-area:amount;color:#173b77;font-size:12px;white-space:nowrap}:deep(.bill-invoice-header){margin-bottom:2px}:deep(.bill-filter-grid){grid-template-columns:repeat(6,minmax(0,1fr));gap:9px}:deep(.bill-filter-grid>.bill-field){grid-column:span 2}:deep(.bill-product-table-wrap){max-height:calc(100vh - 455px);min-height:250px}:deep(.bill-summary-card),:deep(.bill-payment-panel){position:static}@media(min-width:1500px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 360px}:deep(.bill-product-table-wrap){max-height:calc(100vh - 430px)}}@media(max-width:1366px){.pos-saas-layout{grid-template-columns:minmax(0,1fr) 315px}.pos-scan-input{min-height:52px!important;font-size:16px!important}:deep(.bill-filter-grid){grid-template-columns:repeat(4,minmax(0,1fr))}:deep(.bill-filter-grid>.bill-field){grid-column:span 1}.pos-customer-field{grid-column:span 2}}@media(max-width:1180px){.pos-saas-layout{grid-template-columns:1fr}.pos-saas-side{position:static;grid-template-columns:repeat(2,minmax(0,1fr))}:deep(.bill-product-table-wrap){max-height:520px}}@media(max-width:760px){.pos-saas-side,.pos-held-list{grid-template-columns:1fr}.pos-print-preview{align-items:stretch;flex-direction:column}.pos-print-preview small{text-align:left}.pos-recent-products{display:grid;grid-template-columns:1fr}.pos-recent-products button{min-width:0}.pos-quick-customer{grid-template-columns:1fr}.pos-quick-customer .wide{grid-column:auto}.pos-customer-insight{grid-template-columns:1fr}.pos-customer-insight button{grid-row:auto;grid-column:auto}:deep(.bill-filter-grid){grid-template-columns:1fr}:deep(.bill-filter-grid>.bill-field),.pos-customer-field,.pos-counter-scope{grid-column:auto}}
-:deep(.bill-action-footer){display:grid;grid-template-columns:minmax(190px,260px) 1fr;gap:12px;align-items:center}.pos-footer-total{display:grid;gap:2px;min-height:54px;padding:8px 12px;border:1px solid #dbeafe;border-radius:8px;background:#eff6ff}.pos-footer-total span{color:#47607d;font-size:11px;font-weight:850}.pos-footer-total strong{color:#173b77;font-size:22px;line-height:1}.pos-footer-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap}.pos-footer-group{display:flex;gap:8px;flex-wrap:wrap}.pos-action{min-height:44px;padding:9px 13px;border:1px solid #d8e0eb;border-radius:8px;background:#fff;color:#344159;font-size:12px;font-weight:900;cursor:pointer}.pos-action.secondary{background:#f8fafc}.pos-action.print{color:#24446f}.pos-action.complete{display:grid;grid-template-columns:auto auto;gap:10px;align-items:center;min-width:210px;padding:9px 16px;border-color:#2457d6;background:#2457d6;color:#fff}.pos-action.complete strong{font-size:14px}.pos-action:disabled{cursor:not-allowed;opacity:.52}.pos-action.print:disabled{background:#f8fafc;color:#94a3b8}@media(max-width:980px){:deep(.bill-action-footer){grid-template-columns:1fr}.pos-footer-actions{justify-content:stretch}.pos-footer-group,.pos-action{flex:1 1 auto}.pos-action.complete{grid-template-columns:1fr;justify-items:center;min-width:0}}@media(max-width:640px){.pos-footer-actions,.pos-footer-group{display:grid;grid-template-columns:1fr}.pos-action{width:100%}}
+.pos-saas-page {
+    display: grid;
+    gap: 12px;
+    padding-bottom: 92px;
+}
+
+.pos-message {
+    padding: 10px 12px;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #1e40af;
+    font-weight: 850;
+}
+
+.pos-message.success { border-color: #bbf7d0; background: #ecfdf5; color: #15803d; }
+.pos-message.error { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
+
+.pos-saas-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 18px;
+    align-items: start;
+}
+
+.pos-saas-main,
+.pos-saas-side {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+}
+
+.pos-saas-side {
+    position: sticky;
+    top: 86px;
+}
+
+.pos-print-preview {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 66px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #e6edf5;
+    background: #ffffff;
+}
+
+.pos-print-preview strong {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 7px 16px;
+    border-radius: 7px;
+    background: #082747;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 950;
+}
+
+.pos-print-preview span {
+    display: inline-flex;
+    margin-left: 8px;
+    padding: 7px 12px;
+    border: 1px solid #bae6d4;
+    border-radius: 7px;
+    background: #e9fbf3;
+    color: #047857;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.pos-print-preview small {
+    color: #0f5de8;
+    font-size: 12px;
+    font-weight: 900;
+    text-align: right;
+}
+
+.pos-counter-scope {
+    grid-column: span 2;
+    display: grid;
+    gap: 3px;
+    min-height: 54px;
+    padding: 10px 12px;
+    border: 1px solid var(--bill-line);
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.pos-counter-scope span,
+.pos-counter-scope strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pos-counter-scope span { color: var(--bill-muted); font-size: 11px; font-weight: 850; }
+.pos-counter-scope strong { color: #142139; font-size: 13px; }
+.pos-customer-field { grid-column: span 2; }
+
+.pos-customer-lookup,
+.pos-customer-insight,
+.pos-quick-customer {
+    grid-column: 1 / -1;
+    border: 1px solid var(--bill-line);
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.pos-customer-lookup {
+    padding: 9px 10px;
+    color: #536179;
+    font-size: 12px;
+    font-weight: 850;
+}
+
+.pos-customer-lookup.found { border-color: #bbf7d0; background: #ecfdf5; color: #15803d; }
+.pos-customer-lookup.new { border-color: #bfdbfe; background: #eff6ff; color: #1e40af; }
+.pos-customer-lookup.invalid,
+.pos-customer-lookup.multiple { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
+
+.pos-customer-insight {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 12px;
+    padding: 10px 12px;
+}
+
+.pos-customer-insight strong { color: #142139; font-size: 13px; }
+.pos-customer-insight span { color: #2457d6; font-size: 11px; font-weight: 900; }
+.pos-customer-insight small { color: #64748b; font-size: 11px; }
+
+.pos-customer-insight button,
+.pos-quick-customer button,
+.pos-manual-product-button,
+.pos-clear-cart-button {
+    min-height: 36px;
+    padding: 7px 11px;
+    border: 1px solid #d8e0eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #2457d6;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.pos-customer-insight button {
+    grid-row: 1 / span 3;
+    grid-column: 2;
+    align-self: center;
+}
+
+.pos-quick-customer {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+}
+
+.pos-quick-customer label {
+    display: grid;
+    gap: 4px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 850;
+}
+
+.pos-quick-customer input { min-height: 36px; }
+.pos-quick-customer .wide { grid-column: span 2; }
+.pos-quick-customer .check { display: flex; align-items: center; gap: 7px; }
+.pos-quick-customer .check input { min-height: auto; width: auto; }
+.pos-quick-customer button { border-color: #2457d6; background: #2457d6; color: #fff; }
+
+.pos-product-search {
+    position: relative;
+    grid-column: 1 / -1;
+    display: block;
+    width: 100%;
+}
+
+.pos-scan-input {
+    display: block;
+    width: 100% !important;
+    min-height: 56px !important;
+    border: 2px solid #2f6bff !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    font-size: 17px !important;
+    font-weight: 650;
+}
+
+.pos-scan-input:focus {
+    border-color: #1457ff !important;
+    box-shadow: 0 0 0 4px rgba(36, 87, 214, .12);
+    outline: 0;
+}
+
+.pos-autocomplete {
+    position: absolute;
+    top: 82px;
+    left: 0;
+    right: 0;
+    z-index: 12;
+    display: grid;
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--bill-line);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 18px 40px rgba(15, 34, 66, .14);
+}
+
+.pos-autocomplete button {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    column-gap: 10px;
+    align-items: center;
+    justify-items: start;
+    padding: 9px 10px;
+    border: 0;
+    border-bottom: 1px solid #edf2f7;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pos-autocomplete small { grid-column: 2; color: var(--bill-muted); font-size: 11px; }
+
+.pos-product-thumb {
+    width: 36px;
+    height: 36px;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: #eef2ff;
+    color: var(--bill-accent-dark);
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.pos-product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.pos-recent-products { display: none; }
+
+.pos-held-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 8px;
+}
+
+.pos-held-list button {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "number amount" "meta amount";
+    align-items: center;
+    gap: 3px 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--bill-line);
+    border-radius: 8px;
+    background: #f8fafc;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pos-held-list button:hover { border-color: #9ec2ff; background: #eef6ff; }
+.pos-held-number { grid-area: number; color: #142139; font-size: 12px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pos-held-meta { grid-area: meta; color: var(--bill-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pos-held-list strong { grid-area: amount; color: #173b77; font-size: 12px; white-space: nowrap; }
+
+.pos-manual-product-button { justify-self: start; }
+.pos-clear-cart-button { color: #ef4444; }
+.pos-clear-cart-button:disabled { opacity: .45; cursor: not-allowed; }
+.pos-table-items { color: #64748b; font-size: 12px; font-weight: 850; }
+
+:deep(.bill-ui-card) {
+    border-color: #dfe7f1;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 14px 34px rgba(15, 23, 42, .05);
+}
+
+:deep(.bill-filter-card:first-child) {
+    padding: 0;
+    overflow: hidden;
+}
+
+:deep(.bill-filter-card:first-child .bill-ui-card-head) {
+    display: none;
+}
+
+:deep(.bill-filter-grid) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px 16px;
+}
+
+:deep(.bill-filter-card:first-child .bill-filter-grid) {
+    padding: 0 14px 14px;
+}
+
+:deep(.bill-filter-card:nth-of-type(2) .bill-filter-grid) {
+    display: block;
+}
+
+:deep(.bill-filter-card:nth-of-type(2)) {
+    padding: 12px 14px;
+}
+
+:deep(.bill-filter-grid > .bill-field) {
+    grid-column: span 1;
+}
+
+:deep(.bill-field > span) {
+    color: #334155;
+    font-size: 11px;
+}
+
+:deep(.bill-ui-card input),
+:deep(.bill-ui-card select) {
+    min-height: 40px;
+}
+
+:deep(.bill-product-table-wrap) {
+    max-height: calc(100vh - 420px);
+    min-height: 230px;
+    border: 1px solid #dfe7f1;
+    border-radius: 8px;
+    margin: 0 14px;
+}
+
+:deep(.bill-product-table-card.is-empty .bill-product-table-wrap) {
+    min-height: 170px;
+}
+
+:deep(.bill-product-table-card.is-empty .bill-empty-row) {
+    height: 118px;
+}
+
+:deep(.bill-product-table) {
+    min-width: 960px;
+}
+
+:deep(.bill-product-table th) {
+    background: #f8fafc;
+    color: #475569;
+}
+
+:deep(.bill-product-table td) {
+    padding: 12px 10px;
+}
+
+:deep(.bill-product-table-footer) {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px 14px;
+}
+
+:deep(.bill-summary-card),
+:deep(.bill-payment-panel) {
+    position: static;
+}
+
+:deep(.bill-summary-row) {
+    padding: 8px 0;
+    font-size: 12px;
+}
+
+:deep(.bill-summary-row.divider),
+:deep(.bill-summary-row:nth-child(3)) {
+    margin-top: 6px;
+    padding-top: 13px;
+    border-top: 1px dashed #b8c4d6;
+}
+
+:deep(.bill-summary-row strong) {
+    color: #0f172a;
+}
+
+:deep(.bill-summary-row.saving strong) {
+    color: #078044;
+}
+
+:deep(.bill-summary-row.grand strong),
+:deep(.bill-payment-total) {
+    color: #155ee8;
+    font-size: 25px;
+}
+
+:deep(.bill-payment-methods) {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid #dfe7f1;
+    border-radius: 8px;
+}
+
+:deep(.bill-payment-methods button) {
+    border: 0;
+    border-right: 1px solid #dfe7f1;
+    border-radius: 0;
+    min-height: 38px;
+    padding: 6px 4px;
+    font-size: 11px;
+}
+
+:deep(.bill-payment-methods button:last-child) {
+    border-right: 0;
+}
+
+:deep(.bill-payment-methods button.active) {
+    background: #eff6ff;
+    color: #155ee8;
+}
+
+:deep(.bill-payment-line) {
+    grid-template-columns: 1fr 120px;
+}
+
+:deep(.bill-payment-balance div:first-child) {
+    background: #effaf4;
+}
+
+:deep(.bill-payment-balance div:nth-child(2)) {
+    background: #fff7ed;
+}
+
+:deep(.bill-payment-balance div:nth-child(3)) {
+    background: #f5f8ff;
+}
+
+:deep(.bill-action-footer) {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: minmax(230px, 1.1fr) minmax(360px, 2.2fr) auto;
+    gap: 18px;
+    align-items: center;
+    padding: 14px 20px;
+    border-top: 1px solid #dfe7f1;
+    background: #ffffff;
+    box-shadow: 0 -18px 44px rgba(15, 23, 42, .12);
+}
+
+.pos-footer-cart {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+}
+
+.pos-footer-cart-icon {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border: 1px solid #d8e3f1;
+    border-radius: 8px;
+    color: #155ee8;
+    font-size: 22px;
+}
+
+.pos-footer-cart strong,
+.pos-footer-cart span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pos-footer-cart strong {
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 950;
+}
+
+.pos-footer-cart span {
+    margin-top: 4px;
+    color: #078044;
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.pos-footer-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+}
+
+.pos-footer-metrics div {
+    min-width: 0;
+    padding: 0 18px;
+    border-left: 1px solid #e2e8f0;
+}
+
+.pos-footer-metrics span {
+    display: block;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.pos-footer-metrics strong {
+    display: block;
+    margin-top: 4px;
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 950;
+    text-align: center;
+}
+
+.pos-footer-metrics .grand strong {
+    color: #155ee8;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.pos-footer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    flex-wrap: nowrap;
+}
+
+.pos-footer-group {
+    display: flex;
+    gap: 10px;
+}
+
+.pos-action {
+    min-height: 52px;
+    padding: 9px 16px;
+    border: 1px solid #d8e0eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #344159;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.pos-action.secondary { background: #ffffff; }
+.pos-action.print { color: #24446f; }
+
+.pos-action.complete {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 12px;
+    align-items: center;
+    min-width: 226px;
+    border-color: #155ee8;
+    background: #155ee8;
+    color: #fff;
+}
+
+.pos-action.complete strong {
+    font-size: 14px;
+}
+
+.pos-action:disabled {
+    cursor: not-allowed;
+    opacity: .52;
+}
+
+.pos-action.print:disabled {
+    background: #f8fafc;
+    color: #94a3b8;
+}
+
+@media (min-width: 1500px) {
+    .pos-saas-layout {
+        grid-template-columns: minmax(0, 1fr) 390px;
+    }
+}
+
+@media (max-width: 1366px) {
+    .pos-saas-layout {
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 14px;
+    }
+
+    .pos-scan-input {
+        min-height: 52px !important;
+        font-size: 15px !important;
+    }
+
+    :deep(.bill-filter-grid) {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    :deep(.bill-action-footer) {
+        grid-template-columns: minmax(210px, .9fr) minmax(340px, 1.4fr) auto;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .pos-footer-metrics div {
+        padding: 0 12px;
+    }
+
+    .pos-action {
+        padding-inline: 14px;
+    }
+}
+
+@media (max-width: 1180px) {
+    .pos-saas-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .pos-saas-side {
+        position: static;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    :deep(.bill-product-table-wrap) {
+        max-height: 520px;
+    }
+
+    :deep(.bill-action-footer) {
+        grid-template-columns: 1fr;
+    }
+
+    .pos-footer-actions,
+    .pos-footer-group {
+        justify-content: stretch;
+    }
+
+    .pos-action {
+        flex: 1 1 auto;
+    }
+}
+
+@media (max-width: 760px) {
+    .pos-saas-page {
+        padding-bottom: 180px;
+    }
+
+    .pos-saas-side,
+    .pos-held-list {
+        grid-template-columns: 1fr;
+    }
+
+    .pos-print-preview {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .pos-print-preview small {
+        text-align: left;
+    }
+
+    .pos-quick-customer,
+    .pos-footer-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .pos-quick-customer .wide,
+    :deep(.bill-filter-grid > .bill-field),
+    .pos-customer-field,
+    .pos-counter-scope {
+        grid-column: auto;
+    }
+
+    .pos-customer-insight {
+        grid-template-columns: 1fr;
+    }
+
+    .pos-customer-insight button {
+        grid-row: auto;
+        grid-column: auto;
+    }
+
+    :deep(.bill-filter-grid) {
+        grid-template-columns: 1fr;
+    }
+
+    .pos-footer-actions,
+    .pos-footer-group {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .pos-action {
+        width: 100%;
+    }
+}
 </style>

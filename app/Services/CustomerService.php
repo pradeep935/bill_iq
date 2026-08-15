@@ -38,11 +38,21 @@ class CustomerService
             $businessId = AppController::businessId();
             $data = $this->normalize($data);
             $this->validateDuplicatePolicy($businessId, $data);
-            $customer = Customer::query()->create(array_merge($this->attributes($data), [
+            $customerPayload = array_merge($this->attributes($data), [
                 'business_id' => $businessId,
                 'customer_code' => ($data['customer_code'] ?? '') ?: $this->nextCode($businessId),
                 'created_by' => Auth::id(),
-            ]));
+            ]);
+
+            if (Schema::hasColumn('customers', 'company_id')) {
+                $customerPayload['company_id'] = $businessId;
+            }
+
+            if (Schema::hasColumn('customers', 'name')) {
+                $customerPayload['name'] = $data['customer_name'];
+            }
+
+            $customer = Customer::query()->create($customerPayload);
 
             $this->postOpeningBalance($customer);
 

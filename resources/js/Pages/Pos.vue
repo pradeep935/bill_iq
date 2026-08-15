@@ -7,6 +7,7 @@ import FilterCard from '@/Components/Billing/FilterCard.vue';
 import PaymentPanel from '@/Components/Billing/PaymentPanel.vue';
 import ProductTable from '@/Components/Billing/ProductTable.vue';
 import SummaryCard from '@/Components/Billing/SummaryCard.vue';
+import AppToast from '@/Components/Common/AppToast.vue';
 
 const props = defineProps({
     page: { type: String, default: 'pos' },
@@ -42,6 +43,7 @@ const showQuickCustomer = ref(false);
 const sharingWhatsApp = ref(false);
 const canChangeCounterScope = computed(() => Number(props.role_id || 0) === 1);
 let customerLookupTimer = null;
+let toastTimer = null;
 
 const quickCustomer = reactive({
     customer_name: '',
@@ -186,8 +188,13 @@ const productLineDetails = (item) => {
     };
 };
 const showToast = (text, tone = 'info') => {
+    if (toastTimer) clearTimeout(toastTimer);
     message.value = text;
     messageTone.value = tone;
+    toastTimer = window.setTimeout(() => {
+        message.value = '';
+        toastTimer = null;
+    }, tone === 'error' ? 5200 : 3600);
 };
 const formatDate = (value) => value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 const firstWarehouseForBranch = (branchId = form.branch_id) => {
@@ -747,6 +754,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
     window.removeEventListener('keydown', handleShortcut);
+    if (toastTimer) clearTimeout(toastTimer);
 });
 </script>
 
@@ -761,7 +769,12 @@ onUnmounted(() => {
         </template>
 
         <div class="pos-saas-page">
-            <div v-if="message" class="pos-message" :class="messageTone">{{ message }}</div>
+	            <AppToast
+	                :show="Boolean(message)"
+	                title="POS Billing"
+	                :message="message"
+	                :type="messageTone"
+	            />
 
             <section class="pos-saas-layout">
                 <main class="pos-saas-main">
@@ -965,18 +978,6 @@ onUnmounted(() => {
     gap: 12px;
     padding-bottom: 92px;
 }
-
-.pos-message {
-    padding: 10px 12px;
-    border: 1px solid #bfdbfe;
-    border-radius: 8px;
-    background: #eff6ff;
-    color: #1e40af;
-    font-weight: 850;
-}
-
-.pos-message.success { border-color: #bbf7d0; background: #ecfdf5; color: #15803d; }
-.pos-message.error { border-color: #fecdd3; background: #fff1f2; color: #be123c; }
 
 .pos-saas-layout {
     display: grid;

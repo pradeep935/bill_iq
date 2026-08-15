@@ -533,7 +533,8 @@ const syncPaymentAmount = () => {
     }
 };
 
-const newBill = () => {
+const newBill = (options = {}) => {
+    const previousSale = lastSale.value;
     Object.assign(form, {
         id: null,
         customer_id: customers.value.find((customer) => customer.customer_type === 'walk_in')?.id || customers.value[0]?.id || '',
@@ -557,6 +558,7 @@ const newBill = () => {
     customerLookup.value = { status: '', message: '', normalized_mobile: '' };
     customerInsight.value = null;
     showQuickCustomer.value = false;
+    lastSale.value = options.keepLastSale ? previousSale : null;
     setPaymentMode('cash');
 };
 
@@ -630,8 +632,8 @@ const save = async (status, options = {}) => {
         if (status === 'hold') {
             heldBills.value = [{ id: response.sale.id, invoice_number: response.sale.invoice_number, customer: response.sale.customer, grand_total: response.sale.grand_total, created_at: response.sale.invoice_date }, ...heldBills.value.filter((bill) => bill.id !== response.sale.id)].slice(0, 10);
         }
-        if (options.print) printInvoice(response.sale);
-        if (options.reset) newBill();
+        if (options.print) printInvoice(response.sale, options.printWindow || null);
+        if (options.reset) newBill({ keepLastSale: options.keepLastSale });
         return response.sale;
     } catch (error) {
         showToast(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'POS sale could not be saved.', 'error');
@@ -642,12 +644,19 @@ const save = async (status, options = {}) => {
     }
 };
 
-const printInvoice = (sale = lastSale.value) => {
+const printInvoice = (sale = lastSale.value, targetWindow = null) => {
     if (!sale?.id) {
+        if (targetWindow) targetWindow.close();
         showToast('Complete or save a sale before printing.', 'error');
         return;
     }
-    window.open(SalesApi.printUrl(sale.id), '_blank');
+    const printUrl = SalesApi.printUrl(sale.id);
+    if (targetWindow) {
+        targetWindow.opener = null;
+        targetWindow.location.href = printUrl;
+        return;
+    }
+    window.open(printUrl, '_blank', 'noopener');
 };
 
 const shareLastSaleWhatsApp = async () => {
@@ -659,8 +668,15 @@ const shareLastSaleWhatsApp = async () => {
     const shareWindow = window.open('about:blank', '_blank');
     sharingWhatsApp.value = true;
     try {
+        let whatsappNumber = selectedCustomer.value?.whatsapp_number
+            || selectedCustomer.value?.mobile
+            || customerMobileLookup.value
+            || lastSale.value.customer_mobile;
+        if (!whatsappNumber) {
+            whatsappNumber = window.prompt('Enter WhatsApp mobile number for this invoice') || '';
+        }
         const response = await SalesApi.whatsappShare(lastSale.value.id, {
-            whatsapp_number: selectedCustomer.value?.whatsapp_number || selectedCustomer.value?.mobile || lastSale.value.customer_mobile,
+            whatsapp_number: whatsappNumber,
         });
         if (shareWindow) {
             shareWindow.opener = null;
@@ -678,8 +694,10 @@ const shareLastSaleWhatsApp = async () => {
 };
 
 const printAndNew = async () => {
-    const sale = await save('approved', { print: true });
-    if (sale) newBill();
+    const printWindow = window.open('about:blank', '_blank');
+    const sale = await save('approved', { print: true, printWindow });
+    if (!sale && printWindow) printWindow.close();
+    if (sale) newBill({ keepLastSale: true });
 };
 
 const handleShortcut = (event) => {
@@ -930,7 +948,7 @@ onUnmounted(() => {
                         <button v-if="lastSale" class="pos-action print" type="button" title="Print last completed or saved invoice" @click="printInvoice()">Print Last Bill</button>
                         <button v-if="lastSale" class="pos-action print" type="button" title="Share last posted invoice through WhatsApp" :disabled="sharingWhatsApp" @click="shareLastSaleWhatsApp">{{ sharingWhatsApp ? 'Opening...' : 'WhatsApp' }}</button>
                         <button class="pos-action print" type="button" title="Complete sale, print invoice and start a new bill" :disabled="saving || !hasCartItems" @click="printAndNew">Print & New</button>
-                        <button class="pos-action complete primary" type="button" title="Complete sale and post invoice" :disabled="saving || !hasCartItems" @click="save('approved', { reset: true })">
+	                        <button class="pos-action complete primary" type="button" title="Complete sale and post invoice" :disabled="saving || !hasCartItems" @click="save('approved', { reset: true, keepLastSale: true })">
                             <span>{{ saving && savingAction === 'approved' ? 'Completing...' : 'Complete Sale' }}</span>
                             <strong>{{ formatMoney(totals.grand) }}</strong>
                         </button>

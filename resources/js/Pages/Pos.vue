@@ -1287,7 +1287,14 @@ onUnmounted(() => {
 }
 
 :deep(.bill-product-table) {
-    min-width: 960px;
+    min-width: 860px;
+}
+
+:deep(.bill-product-table th:nth-child(9)),
+:deep(.bill-product-table td:nth-child(9)),
+:deep(.bill-product-table th:nth-child(10)),
+:deep(.bill-product-table td:nth-child(10)) {
+    display: none;
 }
 
 :deep(.bill-product-table th) {

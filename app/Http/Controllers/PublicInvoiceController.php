@@ -19,4 +19,11 @@ class PublicInvoiceController extends Controller
     {
         return response($renderer->renderQuotation($shares->resolveQuotation($token)));
     }
+
+    public function pdf(string $token, PublicDocumentShareService $shares, SalesService $sales, InvoiceDocumentRenderer $renderer)
+    {
+        $voucher = $shares->resolveSalesInvoice($token);
+
+        return $renderer->salesInvoicePdf($sales->present($voucher, true));
+    }
 }

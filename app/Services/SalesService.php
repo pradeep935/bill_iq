@@ -502,6 +502,7 @@ class SalesService
             'voucher_number' => $voucher->voucher_number,
             'invoice_number' => $voucher->invoice_number,
             'invoice_date' => optional($voucher->invoice_date)->format('Y-m-d'),
+            'invoice_datetime' => optional($voucher->approved_at ?: $voucher->created_at)->format('Y-m-d H:i'),
             'due_date' => optional($voucher->due_date)->format('Y-m-d'),
             'customer_id' => $voucher->customer_id,
             'customer' => $voucher->customer_name_snapshot ?: optional($voucher->customer)->customer_name,

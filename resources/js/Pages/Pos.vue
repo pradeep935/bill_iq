@@ -76,6 +76,14 @@ const form = reactive({
 
 const contextSettings = computed(() => props.context?.settings || {});
 const currencySymbol = computed(() => contextSettings.value.currency_symbol || 'Rs. ');
+const printSettings = computed(() => ({
+    defaultFormat: ['a4', 'thermal'].includes(contextSettings.value.default_print_format) ? contextSettings.value.default_print_format : 'a4',
+    autoPrint: Boolean(contextSettings.value.auto_print_after_payment),
+    showThermalLogo: contextSettings.value.show_logo_on_thermal_receipt !== false,
+    thermalPaperWidth: contextSettings.value.thermal_paper_width || '80mm',
+}));
+const defaultPrintFormat = computed(() => printSettings.value.defaultFormat);
+const primaryPrintLabel = computed(() => defaultPrintFormat.value === 'thermal' ? 'Print Receipt' : 'Print A4 Invoice');
 const customers = computed(() => references.value.customers || []);
 const paymentMethods = computed(() => references.value.payment_methods || []);
 const selectedCustomer = computed(() => customers.value.find((customer) => Number(customer.id) === Number(form.customer_id)));
@@ -639,7 +647,8 @@ const save = async (status, options = {}) => {
         if (status === 'hold') {
             heldBills.value = [{ id: response.sale.id, invoice_number: response.sale.invoice_number, customer: response.sale.customer, grand_total: response.sale.grand_total, created_at: response.sale.invoice_date }, ...heldBills.value.filter((bill) => bill.id !== response.sale.id)].slice(0, 10);
         }
-        if (options.print) printInvoice(response.sale, options.printWindow || null);
+        if (options.print) printInvoice(response.sale, options.printWindow || null, options.printFormat || defaultPrintFormat.value);
+        if (status === 'approved' && printSettings.value.autoPrint && !options.print) printInvoice(response.sale, null, defaultPrintFormat.value);
         if (options.reset) newBill({ keepLastSale: options.keepLastSale });
         return response.sale;
     } catch (error) {
@@ -651,13 +660,13 @@ const save = async (status, options = {}) => {
     }
 };
 
-const printInvoice = (sale = lastSale.value, targetWindow = null) => {
+const printInvoice = (sale = lastSale.value, targetWindow = null, format = defaultPrintFormat.value) => {
     if (!sale?.id) {
         if (targetWindow) targetWindow.close();
         showToast('Complete or save a sale before printing.', 'error');
         return;
     }
-    const printUrl = SalesApi.printUrl(sale.id);
+    const printUrl = SalesApi.printUrl(sale.id, format);
     if (targetWindow) {
         targetWindow.opener = null;
         targetWindow.location.href = printUrl;
@@ -702,7 +711,7 @@ const shareLastSaleWhatsApp = async () => {
 
 const printAndNew = async () => {
     const printWindow = window.open('about:blank', '_blank');
-    const sale = await save('approved', { print: true, printWindow });
+    const sale = await save('approved', { print: true, printWindow, printFormat: defaultPrintFormat.value });
     if (!sale && printWindow) printWindow.close();
     if (sale) newBill({ keepLastSale: true });
 };
@@ -775,6 +784,20 @@ onUnmounted(() => {
 	                :message="message"
 	                :type="messageTone"
 	            />
+
+            <section v-if="lastSale" class="pos-payment-success">
+                <div>
+                    <span>Payment Successful</span>
+                    <strong>Invoice {{ lastSale.invoice_number }}</strong>
+                    <small>Grand Total: {{ formatMoney(lastSale.grand_total) }}</small>
+                </div>
+                <div class="pos-payment-success-actions">
+                    <button type="button" class="primary" @click="printInvoice(lastSale, null, defaultPrintFormat)">{{ primaryPrintLabel }}</button>
+                    <button type="button" @click="printInvoice(lastSale, null, 'thermal')">Print Receipt</button>
+                    <button type="button" @click="printInvoice(lastSale, null, 'a4')">Print A4 Invoice</button>
+                    <button type="button" @click="newBill()">New Sale</button>
+                </div>
+            </section>
 
             <section class="pos-saas-layout">
                 <main class="pos-saas-main">
@@ -958,7 +981,9 @@ onUnmounted(() => {
                         <button class="pos-action secondary" type="button" title="Hold invoice for later recall" :disabled="saving || !hasCartItems" @click="save('hold')">{{ saving && savingAction === 'hold' ? 'Holding...' : 'Hold Bill' }}</button>
                     </div>
                     <div class="pos-footer-group">
-                        <button v-if="lastSale" class="pos-action print" type="button" title="Print last completed or saved invoice" @click="printInvoice()">Print Last Bill</button>
+                        <button v-if="lastSale" class="pos-action print" type="button" title="Print last completed or saved invoice" @click="printInvoice(lastSale, null, defaultPrintFormat)">{{ primaryPrintLabel }}</button>
+                        <button v-if="lastSale" class="pos-action print" type="button" title="Print 80mm thermal receipt" @click="printInvoice(lastSale, null, 'thermal')">80mm</button>
+                        <button v-if="lastSale" class="pos-action print" type="button" title="Print A4 GST invoice" @click="printInvoice(lastSale, null, 'a4')">A4</button>
                         <button v-if="lastSale" class="pos-action print" type="button" title="Share last posted invoice through WhatsApp" :disabled="sharingWhatsApp" @click="shareLastSaleWhatsApp">{{ sharingWhatsApp ? 'Opening...' : 'WhatsApp' }}</button>
                         <button class="pos-action print" type="button" title="Complete sale, print invoice and start a new bill" :disabled="saving || !hasCartItems" @click="printAndNew">Print & New</button>
 	                        <button class="pos-action complete primary" type="button" title="Complete sale and post invoice" :disabled="saving || !hasCartItems" @click="save('approved', { reset: true, keepLastSale: true })">
@@ -984,6 +1009,58 @@ onUnmounted(() => {
     grid-template-columns: minmax(0, 1fr) 360px;
     gap: 18px;
     align-items: start;
+}
+
+.pos-payment-success {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 14px;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    background: #f0fdf4;
+}
+
+.pos-payment-success span,
+.pos-payment-success small {
+    display: block;
+    color: #15803d;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.pos-payment-success strong {
+    display: block;
+    margin: 3px 0;
+    color: #0f172a;
+    font-size: 16px;
+    font-weight: 950;
+}
+
+.pos-payment-success-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.pos-payment-success-actions button {
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid #bbd1f4;
+    border-radius: 8px;
+    background: #fff;
+    color: #24446f;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.pos-payment-success-actions .primary {
+    border-color: #155ee8;
+    background: #155ee8;
+    color: #fff;
 }
 
 .pos-saas-main,
@@ -1622,6 +1699,19 @@ onUnmounted(() => {
     .pos-saas-side,
     .pos-held-list {
         grid-template-columns: 1fr;
+    }
+
+    .pos-payment-success {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .pos-payment-success-actions {
+        justify-content: stretch;
+    }
+
+    .pos-payment-success-actions button {
+        flex: 1 1 auto;
     }
 
     .pos-print-preview {

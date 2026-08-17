@@ -27,9 +27,10 @@ class WhatsAppShareService
         }
 
         $publicUrl = $this->publicShares->salesInvoiceUrl($voucher);
+        $pdfUrl = $this->publicShares->salesInvoicePdfUrl($voucher);
         $businessName = $voucher->branch?->name ?: 'BillIQ';
         $customerName = $voucher->customer_name_snapshot ?: $voucher->customer?->customer_name ?: 'Customer';
-        $message = $this->salesInvoiceMessage($customerName, $businessName, $voucher, $publicUrl);
+        $message = $this->salesInvoiceMessage($customerName, $businessName, $voucher, $pdfUrl);
         $url = 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($message);
 
         DocumentShareLog::query()->create([
@@ -42,7 +43,7 @@ class WhatsAppShareService
             'status' => 'initiated',
             'sent_by' => Auth::id(),
             'message' => $message,
-            'provider' => 'deep_link',
+            'provider' => 'deep_link_pdf',
         ]);
 
         return [
@@ -50,8 +51,10 @@ class WhatsAppShareService
             'recipient' => $waNumber,
             'message' => $message,
             'public_url' => $publicUrl,
+            'attachment_url' => $pdfUrl,
+            'attachment_filename' => $this->invoiceFilename($voucher),
             'status' => 'initiated',
-            'provider' => 'deep_link',
+            'provider' => 'deep_link_pdf',
         ];
     }
 
@@ -93,15 +96,22 @@ class WhatsAppShareService
         ];
     }
 
-    private function salesInvoiceMessage(string $customerName, string $businessName, SalesVoucher $voucher, string $publicUrl): string
+    private function salesInvoiceMessage(string $customerName, string $businessName, SalesVoucher $voucher, string $pdfUrl): string
     {
         return "Hi {$customerName},\n\n"
             . "Thank you for your purchase from {$businessName}.\n\n"
             . "Invoice: {$voucher->invoice_number}\n"
             . 'Date: ' . optional($voucher->invoice_date)->format('d M Y') . "\n"
             . 'Amount: Rs. ' . number_format((float) $voucher->grand_total, 2) . "\n\n"
-            . "View / Download Invoice:\n{$publicUrl}\n\n"
+            . "Download Invoice PDF:\n{$pdfUrl}\n\n"
             . "Thank you,\n{$businessName}";
+    }
+
+    private function invoiceFilename(SalesVoucher $voucher): string
+    {
+        $number = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $voucher->invoice_number) ?: 'invoice';
+
+        return $number . '.pdf';
     }
 
     private function quotationMessage(string $customerName, string $businessName, Quotation $quotation, string $publicUrl): string

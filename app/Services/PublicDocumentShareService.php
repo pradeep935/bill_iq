@@ -37,6 +37,11 @@ class PublicDocumentShareService
         return url('/i/' . $this->ensureSalesInvoiceToken($voucher));
     }
 
+    public function salesInvoicePdfUrl(SalesVoucher $voucher): string
+    {
+        return url('/i/' . $this->ensureSalesInvoiceToken($voucher) . '/pdf');
+    }
+
     public function resolveSalesInvoice(string $token): SalesVoucher
     {
         return SalesVoucher::query()

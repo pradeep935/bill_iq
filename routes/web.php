@@ -36,6 +36,7 @@ Route::post('/login', [UserController::class, 'postLogin']);
 Route::get('/logout', [UserController::class, 'logout']);
 Route::post('/uploads-new/file', [GeneralController::class, 'uploadFile']);
 Route::get('/i/{token}', [PublicInvoiceController::class, 'show'])->name('public.invoice.show');
+Route::get('/i/{token}/pdf', [PublicInvoiceController::class, 'pdf'])->name('public.invoice.pdf');
 Route::get('/q/{token}', [PublicInvoiceController::class, 'quotation'])->name('public.quotation.show');
 
 Route::middleware('auth')->group(function () {
@@ -192,7 +193,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/invoices/{sale}/cancel', [SalesController::class, 'cancel'])->name('invoices.cancel');
             Route::post('/invoices/{sale}/reverse', [SalesController::class, 'reverse'])->name('invoices.reverse');
             Route::get('/invoices/{sale}/print', [SalesController::class, 'print'])->name('invoices.print');
-            Route::get('/invoices/{sale}/pdf', [SalesController::class, 'print'])->name('invoices.pdf');
+            Route::get('/invoices/{sale}/pdf', [SalesController::class, 'pdf'])->name('invoices.pdf');
             Route::post('/invoices/{sale}/whatsapp', [SalesController::class, 'whatsappShare'])->name('invoices.whatsapp');
             Route::post('/invoices/{sale}/payments', [SalesController::class, 'addPayment'])->name('invoices.payments.store');
             Route::get('/returns', [SalesReturnController::class, 'index'])->name('returns');

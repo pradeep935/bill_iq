@@ -84,13 +84,16 @@ class CustomerCrmWhatsappTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('provider', 'deep_link');
+            ->assertJsonPath('provider', 'deep_link_pdf')
+            ->assertJsonPath('attachment_filename', 'INV-003.pdf');
 
         $invoice->refresh();
 
         $this->assertNotNull($invoice->public_token);
         $this->assertTrue((bool) $invoice->public_share_enabled);
         $this->assertStringContainsString('https://wa.me/919876543210?text=', $response->json('url'));
+        $this->assertStringEndsWith('/pdf', $response->json('attachment_url'));
+        $this->assertStringContainsString('/i/' . $invoice->public_token . '/pdf', urldecode($response->json('url')));
         $this->assertDatabaseHas('document_share_logs', [
             'business_id' => $businessId,
             'customer_id' => $customer->id,
@@ -98,10 +101,13 @@ class CustomerCrmWhatsappTest extends TestCase
             'channel' => 'whatsapp',
             'recipient' => '919876543210',
             'status' => 'initiated',
-            'provider' => 'deep_link',
+            'provider' => 'deep_link_pdf',
         ]);
 
         $this->get('/i/not-a-real-token')->assertNotFound();
+        $this->get('/i/' . $invoice->public_token . '/pdf')
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
     }
 
     private function businessAndUser(): array

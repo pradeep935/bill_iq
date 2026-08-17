@@ -214,6 +214,10 @@ class AppController extends Controller
                 'locale' => $setting('locale', config('app.locale', 'en-IN')),
                 'tax_label' => $setting('tax_label', config('app.tax_label', 'GST')),
                 'invoice_prefix' => $setting('invoice_prefix', config('app.invoice_prefix', 'INV')),
+                'default_print_format' => $setting('default_print_format', config('invoice.default_print_format', 'a4')),
+                'thermal_paper_width' => $setting('thermal_paper_width', config('invoice.thermal_paper_width', '80mm')),
+                'auto_print_after_payment' => (bool) $setting('auto_print_after_payment', config('invoice.auto_print_after_payment', false)),
+                'show_logo_on_thermal_receipt' => (bool) $setting('show_logo_on_thermal_receipt', config('invoice.show_logo_on_thermal_receipt', false)),
             ],
         ];
     }

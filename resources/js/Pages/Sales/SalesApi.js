@@ -162,7 +162,12 @@ const SalesApi = {
         return response.data;
     },
 
-    printUrl(id) { return withId('print', '/invoices/__ID__/print', id); },
+    printUrl(id, format = 'a4') {
+        const target = new URL(withId('print', '/invoices/__ID__/print', id), window.location.origin);
+        if (format && format !== 'a4') target.searchParams.set('format', format);
+        return target.pathname + target.search;
+    },
+    receiptUrl(id) { return this.printUrl(id, 'thermal'); },
     async whatsappShare(id, payload = {}) {
         const response = await axios.post(withId('whatsapp', '/invoices/__ID__/whatsapp', id), payload);
         return response.data;

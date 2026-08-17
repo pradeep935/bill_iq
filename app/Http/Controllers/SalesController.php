@@ -374,12 +374,23 @@ class SalesController extends Controller
         return response()->json($whatsApp->salesInvoiceShare($this->voucher($sale), $data['whatsapp_number'] ?? null));
     }
 
-    public function print(int $sale, InvoiceDocumentRenderer $renderer)
+    public function print(Request $request, int $sale, InvoiceDocumentRenderer $renderer)
     {
         $voucher = $this->voucher($sale);
         $saleData = $this->sales->present($voucher, AppController::roleId() === 1);
 
+        if ($request->query('format') === 'thermal') {
+            return response($renderer->renderThermalReceipt($saleData));
+        }
+
         return response($renderer->renderSalesInvoice($saleData));
+    }
+
+    public function pdf(int $sale, InvoiceDocumentRenderer $renderer)
+    {
+        $voucher = $this->voucher($sale);
+
+        return $renderer->salesInvoicePdf($this->sales->present($voucher, AppController::roleId() === 1));
     }
 
     public function export(Request $request)

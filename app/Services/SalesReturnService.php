@@ -105,7 +105,7 @@ class SalesReturnService
             $this->assertBusiness($voucher);
 
             if ($this->hasStockPosting($voucher)) {
-                throw ValidationException::withMessages(['status' => 'Stock ledger already posted for this sales return.']);
+                return $this->fresh($voucher);
             }
 
             if ($voucher->status !== 'draft') {

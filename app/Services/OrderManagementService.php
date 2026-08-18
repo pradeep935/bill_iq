@@ -164,7 +164,8 @@ class OrderManagementService
             $reserved = $partial = 0;
             foreach ($order->items as $item) {
                 $qty = (float) $item->ordered_quantity - (float) $item->cancelled_quantity;
-                $available = $this->stock->getCurrentStock(['business_id' => $order->business_id, 'branch_id' => $order->branch_id, 'warehouse_id' => $order->warehouse_id, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id]);
+                $scope = ['business_id' => $order->business_id, 'branch_id' => $order->branch_id, 'warehouse_id' => $order->warehouse_id, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id];
+                $available = $this->stock->getAvailableToSell($scope, $order->id, true);
                 $reserve = min($available, $qty);
                 if ($reserve > 0) {
                     StockReservation::query()->create(['business_id' => $order->business_id, 'branch_id' => $order->branch_id, 'warehouse_id' => $order->warehouse_id, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id, 'reference_type' => SalesOrder::class, 'reference_id' => $order->id, 'reserved_quantity' => $reserve, 'status' => 'active', 'created_by' => Auth::id()]);

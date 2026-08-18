@@ -124,9 +124,7 @@ class SalesController extends Controller
 
     public function reservedStockDispatch(int $reservation)
     {
-        $challan = $this->reservedStock->dispatch($reservation);
-
-        return response()->json(['message' => 'Draft dispatch document created in Stock Outward. No physical stock was deducted by Reserved Stock.', 'challan_number' => $challan->challan_number]);
+        abort(422, 'Reserved Stock is allocation only. Create dispatch documents from Stock Outward or the source order workflow.');
     }
 
     public function reservedStockCancel(Request $request, int $reservation)
@@ -492,7 +490,6 @@ class SalesController extends Controller
             ->merge([
                 'releaseReservation' => Route::has('inventory.reserved-stock.release') ? route('inventory.reserved-stock.release', ['reservation' => '__ID__'], false) : null,
                 'extendReservation' => Route::has('inventory.reserved-stock.extend') ? route('inventory.reserved-stock.extend', ['reservation' => '__ID__'], false) : null,
-                'dispatchReservation' => Route::has('inventory.reserved-stock.dispatch') ? route('inventory.reserved-stock.dispatch', ['reservation' => '__ID__'], false) : null,
                 'cancelReservation' => Route::has('inventory.reserved-stock.cancel') ? route('inventory.reserved-stock.cancel', ['reservation' => '__ID__'], false) : null,
             ])
             ->filter()

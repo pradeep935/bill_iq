@@ -9,6 +9,7 @@ use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\ProductVariantItem;
+use App\Models\SalesOrder;
 use App\Models\SalesVoucher;
 use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
@@ -174,7 +175,7 @@ class SalesService
             $this->assertBusiness($voucher);
 
             if ($this->hasStockPosting($voucher)) {
-                throw ValidationException::withMessages(['status' => 'Stock ledger already posted for this sale.']);
+                return $this->fresh($voucher);
             }
 
             $voucher->load(['items.product']);
@@ -185,6 +186,16 @@ class SalesService
                 }
 
                 $quantity = (float) $item->quantity + (float) $item->free_quantity;
+                $scope = [
+                    'business_id' => $voucher->business_id,
+                    'branch_id' => $voucher->branch_id,
+                    'warehouse_id' => $voucher->warehouse_id,
+                    'product_id' => $item->product_id,
+                    'product_variant_id' => $item->product_variant_id,
+                    'batch_id' => $item->batch_id,
+                ];
+                $customerReserved = $this->customerReservedQuantity($voucher, $scope, true);
+                $this->stock->validateAvailableToSell($scope, max(0, $quantity - $customerReserved), null, true);
                 $this->stock->decreaseStock([
                     'business_id' => $voucher->business_id,
                     'branch_id' => $voucher->branch_id,
@@ -207,6 +218,7 @@ class SalesService
                     'transaction_date' => $voucher->invoice_date,
                     'remarks' => 'Sale ' . $voucher->invoice_number,
                 ]);
+                $this->consumeCustomerReservations($voucher, $item, $quantity);
             }
 
             $voucher->update([
@@ -804,14 +816,16 @@ class SalesService
             }
 
             if ($product->product_type !== 'service' && $product->item_type !== 'non_stock' && (bool) ($product->track_inventory ?? true) && in_array($data['status'], ['confirmed', 'approved'], true)) {
-                $this->stock->validateAvailableStock([
+                $scope = [
                     'business_id' => $businessId,
                     'branch_id' => $data['branch_id'],
                     'warehouse_id' => $data['warehouse_id'],
                     'product_id' => $product->id,
                     'product_variant_id' => $item['product_variant_id'] ?? null,
                     'batch_id' => $item['batch_id'] ?? null,
-                ], (float) $item['quantity'] + (float) ($item['free_quantity'] ?? 0));
+                ];
+                $customerReserved = $this->customerReservedQuantityForData($businessId, $data, $scope);
+                $this->stock->validateAvailableToSell($scope, max(0, (float) $item['quantity'] + (float) ($item['free_quantity'] ?? 0) - $customerReserved));
             }
         }
 
@@ -876,7 +890,7 @@ class SalesService
             ];
         })->filter(fn ($batch) => (float) $batch['available_stock'] > 0 || (int) $batch['id'] === (int) $batchId)->values();
         $selectedBatchId = $batchId ?: ($batches->first()['id'] ?? null);
-        $availableStock = $product->product_type === 'service' ? null : $this->stock->getCurrentStock($selectedBatchId ? array_merge($stockScope, ['batch_id' => $selectedBatchId]) : $stockScope);
+        $availableStock = $product->product_type === 'service' ? null : $this->stock->getAvailableToSell($selectedBatchId ? array_merge($stockScope, ['batch_id' => $selectedBatchId]) : $stockScope);
 
         return [
             'id' => $product->id,
@@ -948,6 +962,92 @@ class SalesService
             ->where('reference_id', $voucher->id)
             ->where('transaction_type', 'sale')
             ->exists();
+    }
+
+    private function customerReservedQuantity(SalesVoucher $voucher, array $scope, bool $lock = false): float
+    {
+        if (!$voucher->customer_id) {
+            return 0.0;
+        }
+
+        return (float) $this->customerReservationQuery($voucher->business_id, $voucher->customer_id, $scope, $lock)
+            ->selectRaw('COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity), 0) as quantity')
+            ->value('quantity');
+    }
+
+    private function customerReservedQuantityForData(int $businessId, array $data, array $scope): float
+    {
+        if (empty($data['customer_id'])) {
+            return 0.0;
+        }
+
+        return (float) $this->customerReservationQuery($businessId, (int) $data['customer_id'], $scope)
+            ->selectRaw('COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity), 0) as quantity')
+            ->value('quantity');
+    }
+
+    private function consumeCustomerReservations(SalesVoucher $voucher, $item, float $quantity): void
+    {
+        if (!$voucher->customer_id || $quantity <= 0) {
+            return;
+        }
+
+        $scope = [
+            'business_id' => $voucher->business_id,
+            'branch_id' => $voucher->branch_id,
+            'warehouse_id' => $voucher->warehouse_id,
+            'product_id' => $item->product_id,
+            'product_variant_id' => $item->product_variant_id,
+            'batch_id' => $item->batch_id,
+        ];
+
+        $remaining = $quantity;
+        $reservations = $this->customerReservationQuery($voucher->business_id, $voucher->customer_id, $scope, true)
+            ->orderBy('stock_reservations.expires_at')
+            ->orderBy('stock_reservations.id')
+            ->get(['stock_reservations.id', 'stock_reservations.reserved_quantity', 'stock_reservations.fulfilled_quantity', 'stock_reservations.released_quantity']);
+
+        foreach ($reservations as $reservation) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $open = max(0, (float) $reservation->reserved_quantity - (float) $reservation->fulfilled_quantity - (float) $reservation->released_quantity);
+            $consume = min($open, $remaining);
+            if ($consume <= 0) {
+                continue;
+            }
+
+            DB::table('stock_reservations')
+                ->where('id', $reservation->id)
+                ->increment('fulfilled_quantity', $consume, ['updated_at' => now()]);
+            $remaining = round($remaining - $consume, 3);
+        }
+    }
+
+    private function customerReservationQuery(int $businessId, int $customerId, array $scope, bool $lock = false)
+    {
+        $query = DB::table('stock_reservations')
+            ->join('sales_orders', function ($join) use ($businessId, $customerId) {
+                $join->on('sales_orders.id', '=', 'stock_reservations.reference_id')
+                    ->where('stock_reservations.reference_type', SalesOrder::class)
+                    ->where('sales_orders.business_id', $businessId)
+                    ->where('sales_orders.customer_id', $customerId);
+            })
+            ->where('stock_reservations.business_id', $businessId)
+            ->where('stock_reservations.status', 'active')
+            ->where('stock_reservations.product_id', $scope['product_id'])
+            ->whereRaw('(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity) > 0')
+            ->when(array_key_exists('branch_id', $scope), fn ($q) => $q->where('stock_reservations.branch_id', $scope['branch_id']))
+            ->when(array_key_exists('warehouse_id', $scope), fn ($q) => $q->where('stock_reservations.warehouse_id', $scope['warehouse_id']))
+            ->when(array_key_exists('product_variant_id', $scope), fn ($q) => $q->where('stock_reservations.product_variant_id', $scope['product_variant_id']))
+            ->when(array_key_exists('batch_id', $scope), fn ($q) => $q->where('stock_reservations.batch_id', $scope['batch_id']));
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return $query;
     }
 
     private function assertBusiness(SalesVoucher $voucher): void

@@ -149,7 +149,7 @@ class StockOutwardService
 
         $mapped = $rows->map(function ($row) use ($tab) {
             if ($tab === 'reserved') {
-                return [$row->reservation_number, $row->source_type, $row->source_number, $row->customer_name, $row->warehouse_name, $row->reserved_quantity, $row->dispatched_quantity, $row->remaining_quantity, $row->expiry, $row->status];
+                return [$row->reservation_number, $row->source_type, $row->source_number, $row->customer_name, $row->warehouse_name, $row->reserved_quantity, $row->consumed_quantity, $row->remaining_quantity, $row->expiry, $row->status];
             }
             if ($tab === 'ledger') {
                 return [$row->date, $row->product_name, $row->sku, $row->variant_name, $row->batch_number, $row->branch_name, $row->warehouse_name, $row->quantity_out, $row->unit_cost, $row->value, $row->transaction_type, trim($row->reference_type . ' ' . $row->reference_number)];
@@ -185,6 +185,10 @@ class StockOutwardService
             ->when($this->allowedBranchIds(), fn ($q) => $q->whereIn('branch_id', $this->allowedBranchIds()))
             ->findOrFail($challanId);
         $this->assertChallanIsNotSaleLinked($challan);
+
+        if (!in_array($challan->status, ['packed'], true)) {
+            throw ValidationException::withMessages(['status' => 'Only packed manual outward documents can be dispatched.']);
+        }
 
         $posted = app(OrderManagementService::class)->dispatchChallan($challan->id);
         AuditLogger::record([
@@ -226,6 +230,16 @@ class StockOutwardService
 
         if (!$target) {
             throw ValidationException::withMessages(['action' => 'Unknown dispatch action.']);
+        }
+
+        $allowedTransitions = [
+            'pick' => ['draft', 'ready', 'ready_to_pick', 'pending'],
+            'pack' => ['picking'],
+            'deliver' => ['dispatched'],
+        ];
+
+        if (!in_array($challan->status, $allowedTransitions[$action] ?? [], true)) {
+            throw ValidationException::withMessages(['status' => 'Invalid dispatch status transition.']);
         }
 
         if ($target === 'delivered' && !in_array($challan->status, ['dispatched', 'delivered'], true)) {
@@ -452,7 +466,7 @@ class StockOutwardService
             ->leftJoin('warehouses', 'warehouses.id', '=', 'stock_reservations.warehouse_id')
             ->leftJoin('products', 'products.id', '=', 'stock_reservations.product_id')
             ->where('stock_reservations.business_id', AppController::businessId())
-            ->selectRaw("stock_reservations.reference_id as id, CONCAT('RSV-', stock_reservations.reference_id) as reservation_number, MIN(stock_reservations.created_at) as reserved_date, stock_reservations.reference_type as source_type, COALESCE(sales_orders.order_number, stock_reservations.reference_id) as source_number, customers.customer_name, branches.name as branch_name, warehouses.name as warehouse_name, COUNT(DISTINCT stock_reservations.product_id) as product_lines, COALESCE(SUM(stock_reservations.reserved_quantity),0) as reserved_quantity, COALESCE(SUM(stock_reservations.fulfilled_quantity),0) as dispatched_quantity, COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity),0) as remaining_quantity, MAX(stock_reservations.expires_at) as expiry, CASE WHEN COALESCE(SUM(stock_reservations.released_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity),0) THEN 'released' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity),0) THEN 'fully_dispatched' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) > 0 THEN 'partially_dispatched' ELSE 'active' END as status")
+            ->selectRaw("stock_reservations.reference_id as id, CONCAT('RSV-', stock_reservations.reference_id) as reservation_number, MIN(stock_reservations.created_at) as reserved_date, stock_reservations.reference_type as source_type, COALESCE(sales_orders.order_number, stock_reservations.reference_id) as source_number, customers.customer_name, branches.name as branch_name, warehouses.name as warehouse_name, COUNT(DISTINCT stock_reservations.product_id) as product_lines, COALESCE(SUM(stock_reservations.reserved_quantity),0) as reserved_quantity, COALESCE(SUM(stock_reservations.fulfilled_quantity),0) as consumed_quantity, COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity),0) as remaining_quantity, MAX(stock_reservations.expires_at) as expiry, CASE WHEN COALESCE(SUM(stock_reservations.released_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity),0) THEN 'released' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity),0) THEN 'consumed' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) > 0 THEN 'partially_consumed' ELSE 'active' END as status")
             ->groupBy('stock_reservations.reference_id', 'stock_reservations.reference_type', 'sales_orders.order_number', 'customers.customer_name', 'branches.name', 'warehouses.name');
         AppController::applyTenantScope($query, 'stock_reservations');
 

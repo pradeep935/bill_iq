@@ -25,7 +25,7 @@ const props = defineProps({
 });
 
 const reservedMode = computed(() => props.page === 'inventory-reserved' || props.module === 'reserved-stock');
-const tabs = computed(() => props.references?.tabs || (reservedMode.value ? ['active', 'expiring', 'dispatched', 'released', 'ledger'] : ['sale_dispatch', 'manual_outward', 'ledger']));
+const tabs = computed(() => props.references?.tabs || (reservedMode.value ? ['active', 'expiring', 'consumed', 'released', 'ledger'] : ['sale_dispatch', 'manual_outward', 'ledger']));
 const activeTab = computed(() => tabs.value.includes(filterForm.tab) ? filterForm.tab : (reservedMode.value ? 'active' : 'sale_dispatch'));
 const loading = ref(false);
 const message = ref('');
@@ -64,14 +64,14 @@ const filteredWarehouses = computed(() => (props.references?.warehouses || []).f
 const qty = (value) => Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 3 });
 const money = (value) => Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const urlWithId = (template, id) => template?.replace('__ID__', id);
-const tabLabel = (tab) => ({ sale_dispatch: 'Sale Dispatch', manual_outward: 'Manual Outward', active: 'Active', expiring: 'Expiring', dispatched: 'Fulfilled', released: 'Released', ledger: 'History' }[tab] || tab.replaceAll('_', ' '));
+const tabLabel = (tab) => ({ sale_dispatch: 'Sale Dispatch', manual_outward: 'Manual Outward', active: 'Active', expiring: 'Expiring', consumed: 'Consumed', released: 'Released', ledger: 'History' }[tab] || tab.replaceAll('_', ' '));
 
 const summaryCards = computed(() => reservedMode.value ? [
   { label: 'Active Reservations', value: props.summary?.active_reservations || 0, tab: 'active' },
   { label: 'Reserved Qty', value: qty(props.summary?.reserved_quantity || 0), tab: 'active' },
   { label: 'Reserved Value', value: `Rs. ${money(props.summary?.reserved_value || 0)}`, tab: 'active' },
   { label: 'Expiring Soon', value: props.summary?.expiring_soon || 0, tab: 'expiring' },
-  { label: 'Fulfilled', value: props.summary?.dispatched_reservations || 0, tab: 'dispatched' },
+  { label: 'Consumed', value: props.summary?.consumed_reservations || 0, tab: 'consumed' },
   { label: 'Released', value: props.summary?.released_reservations || 0, tab: 'released' },
 ] : [
   { label: 'Sale-Linked Dispatch', value: props.summary?.sale_linked_dispatch || 0, tab: 'sale_dispatch', status: '' },
@@ -105,6 +105,7 @@ const reservedColumns = [
   { key: 'warehouse_name', label: 'Warehouse' },
   { key: 'product_lines', label: 'Total Items' },
   { key: 'reserved_quantity', label: 'Reserved Qty' },
+  { key: 'consumed_quantity', label: 'Consumed Qty' },
   { key: 'released_quantity', label: 'Released Qty' },
   { key: 'remaining_quantity', label: 'ATS Held Qty' },
   { key: 'reserved_value', label: 'Reserved Value' },
@@ -124,7 +125,19 @@ const ledgerColumns = [
   { key: 'reference_number', label: 'Reference' },
   { key: 'created_by_name', label: 'Created By' },
 ];
-const tableColumns = computed(() => activeTab.value === 'ledger' ? ledgerColumns : (activeTab.value === 'reserved' ? reservedColumns : dispatchColumns));
+const reservationLedgerColumns = [
+  { key: 'date', label: 'Date' },
+  { key: 'reservation_number', label: 'Reservation No' },
+  { key: 'product_name', label: 'Product' },
+  { key: 'batch_number', label: 'Batch' },
+  { key: 'warehouse_name', label: 'Warehouse' },
+  { key: 'action', label: 'Action' },
+  { key: 'quantity', label: 'Quantity' },
+  { key: 'new_remaining', label: 'Remaining Qty' },
+  { key: 'reference', label: 'Reference' },
+  { key: 'performed_by', label: 'User' },
+];
+const tableColumns = computed(() => activeTab.value === 'ledger' ? (reservedMode.value ? reservationLedgerColumns : ledgerColumns) : (reservedMode.value || activeTab.value === 'reserved' ? reservedColumns : dispatchColumns));
 
 const params = (extra = {}) => Object.fromEntries(Object.entries({ ...filterForm, ...extra }).filter(([, value]) => value !== '' && value !== null && value !== undefined));
 const navigate = (extra = {}, preserveScroll = true) => {
@@ -202,20 +215,6 @@ const extendReservation = async (row) => {
     refresh();
   } catch (error) {
     message.value = error?.response?.data?.message || Object.values(error?.response?.data?.errors || {})[0]?.[0] || 'Unable to extend reservation.';
-  } finally {
-    loading.value = false;
-  }
-};
-const dispatchReservation = async (row) => {
-  const url = urlWithId(props.endpoints.dispatchReservation, row.id);
-  if (!url) return;
-  loading.value = true;
-  try {
-    await axios.post(url);
-    message.value = 'Draft dispatch document created in Stock Outward. Reserved Stock did not deduct physical stock.';
-    refresh();
-  } catch (error) {
-    message.value = error?.response?.data?.message || 'Unable to send reservation to Stock Outward.';
   } finally {
     loading.value = false;
   }
@@ -302,9 +301,11 @@ watch(() => [filterForm.per_page, filterForm.date_from, filterForm.date_to, filt
         <DispatchTable :columns="tableColumns" :rows="currentRows" :empty-text="reservedMode ? 'No reserved stock records found for the selected filters.' : 'No dispatch records found for the selected filters.'" @open="openDrawer">
           <template #cell-total_quantity="{ value }">{{ qty(value) }}</template>
           <template #cell-reserved_quantity="{ value }">{{ qty(value) }}</template>
-          <template #cell-dispatched_quantity="{ value }">{{ qty(value) }}</template>
+          <template #cell-consumed_quantity="{ value }">{{ qty(value) }}</template>
           <template #cell-released_quantity="{ value }">{{ qty(value) }}</template>
           <template #cell-remaining_quantity="{ value }">{{ qty(value) }}</template>
+          <template #cell-quantity="{ value }">{{ qty(value) }}</template>
+          <template #cell-new_remaining="{ value }">{{ qty(value) }}</template>
           <template #cell-reserved_value="{ value }">Rs. {{ money(value) }}</template>
           <template #cell-quantity_out="{ value }">{{ qty(value) }}</template>
           <template #cell-dispatch_status="{ value }"><StatusBadge :status="value" /></template>
@@ -313,12 +314,11 @@ watch(() => [filterForm.per_page, filterForm.date_from, filterForm.date_to, filt
           <template #actions="{ row }">
             <div class="row-actions">
               <button v-if="!reservedMode" type="button" title="Open dispatch details" @click="openDrawer(row)">Details</button>
-              <button v-if="reservedMode && ['active','expiring'].includes(activeTab)" type="button" title="Create draft Stock Outward document without posting stock" @click="dispatchReservation(row)">Send to Outward</button>
               <button v-if="reservedMode && ['active','expiring'].includes(activeTab)" type="button" title="Extend reservation expiry" @click="extendReservation(row)">Extend</button>
               <button v-if="reservedMode && ['active','expiring'].includes(activeTab)" type="button" title="Release reservation" @click="releaseReservation(row)">Release</button>
               <button v-if="!reservedMode && row.row_type === 'challan' && ['draft','ready','ready_to_pick','pending'].includes(row.dispatch_status)" type="button" title="Start picking" @click="postWorkflow(row, 'pick', 'Picking started.')">Pick</button>
               <button v-if="!reservedMode && row.row_type === 'challan' && ['picking'].includes(row.dispatch_status)" type="button" title="Mark packed" @click="postWorkflow(row, 'pack', 'Packing completed.')">Pack</button>
-              <button v-if="!reservedMode && row.row_type === 'challan' && ['packed','draft','ready','ready_to_pick','pending'].includes(row.dispatch_status)" type="button" title="Post manual stock outward" @click="postWorkflow(row, 'dispatch', 'Manual stock outward posted.')">Post Outward</button>
+              <button v-if="!reservedMode && row.row_type === 'challan' && row.dispatch_status === 'packed'" type="button" title="Post manual stock outward" @click="postWorkflow(row, 'dispatch', 'Manual stock outward posted.')">Post Outward</button>
               <button v-if="!reservedMode && row.row_type === 'challan' && row.dispatch_status === 'dispatched'" type="button" title="Mark delivered" @click="postWorkflow(row, 'deliver', 'Delivery completed.')">Deliver</button>
               <button v-if="!reservedMode && row.row_type === 'challan' && !['dispatched','delivered','cancelled'].includes(row.dispatch_status)" type="button" class="danger" title="Cancel dispatch" @click="postWorkflow(row, 'cancel', 'Dispatch cancelled.')">Cancel</button>
             </div>

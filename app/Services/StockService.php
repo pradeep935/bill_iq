@@ -65,6 +65,35 @@ class StockService
         return $this->quantityQuery($scope)->value('available_quantity') ?: 0.0;
     }
 
+    public function getActiveReservedQuantity(array $scope, ?int $excludeReferenceId = null, bool $lock = false): float
+    {
+        $query = DB::table('stock_reservations')
+            ->where('business_id', (int) ($scope['business_id'] ?? AppController::businessId()))
+            ->where('status', 'active')
+            ->where('product_id', $scope['product_id'])
+            ->when(array_key_exists('branch_id', $scope), fn ($q) => $q->where('branch_id', $scope['branch_id']))
+            ->when(array_key_exists('warehouse_id', $scope), fn ($q) => $q->where('warehouse_id', $scope['warehouse_id']))
+            ->when(array_key_exists('product_variant_id', $scope), fn ($q) => $q->where('product_variant_id', $scope['product_variant_id']))
+            ->when(array_key_exists('batch_id', $scope), fn ($q) => $q->where('batch_id', $scope['batch_id']))
+            ->when($excludeReferenceId, fn ($q) => $q->where('reference_id', '!=', $excludeReferenceId));
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        return (float) $query
+            ->selectRaw('COALESCE(SUM(reserved_quantity - fulfilled_quantity - released_quantity), 0) as quantity')
+            ->value('quantity');
+    }
+
+    public function getAvailableToSell(array $scope, ?int $excludeReservationReferenceId = null, bool $lockReservations = false): float
+    {
+        return round(
+            $this->getCurrentStock($scope) - $this->getActiveReservedQuantity($scope, $excludeReservationReferenceId, $lockReservations),
+            3
+        );
+    }
+
     public function getBranchStock(int $businessId, int $branchId, int $productId): float
     {
         return $this->getCurrentStock([
@@ -137,6 +166,23 @@ class StockService
         if ($available < $requiredQuantity) {
             throw ValidationException::withMessages([
                 'quantity' => 'Insufficient stock available.',
+            ]);
+        }
+    }
+
+    public function validateAvailableToSell(array $scope, float $requiredQuantity, ?int $excludeReservationReferenceId = null, bool $lockReservations = false): void
+    {
+        $product = $this->productForScope($scope);
+
+        if ((bool) ($product->allow_negative_stock ?? false)) {
+            return;
+        }
+
+        $available = $this->getAvailableToSell($scope, $excludeReservationReferenceId, $lockReservations);
+
+        if ($available < $requiredQuantity) {
+            throw ValidationException::withMessages([
+                'quantity' => 'Insufficient available-to-sell quantity after active reservations.',
             ]);
         }
     }

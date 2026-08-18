@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 class ReservedStockService
 {
-    private const TABS = ['active', 'expiring', 'dispatched', 'released', 'ledger'];
+    private const TABS = ['active', 'expiring', 'consumed', 'released', 'ledger'];
     private const PER_PAGE = [10, 25, 50, 100];
     private const SORTS = ['number', 'date', 'customer', 'warehouse', 'remaining_quantity', 'reserved_value', 'expiry', 'status', 'created_at'];
     private const EXPIRY_WARNING_DAYS = 3;
@@ -32,7 +32,7 @@ class ReservedStockService
             'rows' => [
                 'active' => $filters['tab'] === 'active' ? $this->reservations($filters) : $this->emptyPage($filters),
                 'expiring' => $filters['tab'] === 'expiring' ? $this->reservations($filters) : $this->emptyPage($filters),
-                'dispatched' => $filters['tab'] === 'dispatched' ? $this->reservations($filters) : $this->emptyPage($filters),
+                'consumed' => $filters['tab'] === 'consumed' ? $this->reservations($filters) : $this->emptyPage($filters),
                 'released' => $filters['tab'] === 'released' ? $this->reservations($filters) : $this->emptyPage($filters),
                 'ledger' => $filters['tab'] === 'ledger' ? $this->ledger($filters) : $this->emptyPage($filters),
             ],
@@ -78,7 +78,7 @@ class ReservedStockService
         $filters = $this->filters($input);
         $active = $this->reservationQuery(array_merge($filters, ['tab' => 'active']))->get();
         $expiring = $this->reservationQuery(array_merge($filters, ['tab' => 'expiring']))->count();
-        $dispatched = $this->reservationQuery(array_merge($filters, ['tab' => 'dispatched']))->count();
+        $consumed = $this->reservationQuery(array_merge($filters, ['tab' => 'consumed']))->count();
         $unallocated = (clone $this->lineBaseQuery($filters))->whereNull('stock_reservations.batch_id')->where('stock_reservations.status', 'active')->count();
 
         return [
@@ -86,9 +86,9 @@ class ReservedStockService
             'reserved_quantity' => round((float) $active->sum('remaining_quantity'), 3),
             'reserved_value' => round((float) $active->sum('reserved_value'), 2),
             'expiring_soon' => $expiring,
-            'pending_dispatch' => $active->where('remaining_quantity', '>', 0)->count(),
+            'pending_consumption' => $active->where('remaining_quantity', '>', 0)->count(),
             'unallocated_reservations' => $unallocated,
-            'dispatched_reservations' => $dispatched,
+            'consumed_reservations' => $consumed,
             'released_reservations' => $this->reservationQuery(array_merge($filters, ['tab' => 'released']))->count(),
         ];
     }
@@ -101,7 +101,7 @@ class ReservedStockService
         return [
             'tabs' => self::TABS,
             'per_page' => self::PER_PAGE,
-            'statuses' => ['active', 'partially_dispatched', 'fully_dispatched', 'released', 'expired', 'cancelled'],
+            'statuses' => ['active', 'partially_consumed', 'consumed', 'released', 'expired', 'cancelled'],
             'source_types' => ['sales_order', 'manual_reservation', 'transfer_request'],
             'expiry_statuses' => ['expires_today', 'expiring_soon', 'expired'],
             'customers' => Schema::hasTable('customers')
@@ -157,9 +157,9 @@ class ReservedStockService
 
         return [
             'filename' => 'reserved-stock-' . now()->toDateString() . '.csv',
-            'headers' => ['Reservation number', 'Reservation date', 'Source type', 'Source number', 'Customer', 'Branch', 'Warehouse', 'Product count', 'Reserved quantity', 'Dispatched quantity', 'Released quantity', 'Remaining quantity', 'Reserved value', 'Expiry date', 'Status', 'Created by'],
+            'headers' => ['Reservation number', 'Reservation date', 'Source type', 'Source number', 'Customer', 'Branch', 'Warehouse', 'Product count', 'Reserved quantity', 'Consumed quantity', 'Released quantity', 'Remaining quantity', 'Reserved value', 'Expiry date', 'Status', 'Created by'],
             'rows' => $this->reservationQuery($filters)->orderBy('reserved_date')->limit(5000)->get()->map(fn ($row) => [
-                $row->reservation_number, $row->reserved_date, $row->source_type, $row->source_number, $row->customer_name, $row->branch_name, $row->warehouse_name, $row->product_lines, $row->reserved_quantity, $row->dispatched_quantity, $row->released_quantity, $row->remaining_quantity, $row->reserved_value, $row->expiry, $row->status, $row->created_by_name,
+                $row->reservation_number, $row->reserved_date, $row->source_type, $row->source_number, $row->customer_name, $row->branch_name, $row->warehouse_name, $row->product_lines, $row->reserved_quantity, $row->consumed_quantity, $row->released_quantity, $row->remaining_quantity, $row->reserved_value, $row->expiry, $row->status, $row->created_by_name,
             ])->all(),
         ];
     }
@@ -260,7 +260,7 @@ class ReservedStockService
             'status' => $input['status'] ?? null,
             'expiry_status' => $input['expiry_status'] ?? null,
             'source_type' => $input['source_type'] ?? null,
-            'dispatch_status' => $input['dispatch_status'] ?? null,
+            'dispatch_status' => null,
             'sort' => $input['sort'] ?? 'date',
             'direction' => strtolower((string) ($input['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc',
         ];
@@ -274,9 +274,9 @@ class ReservedStockService
         $warning = now()->addDays(self::EXPIRY_WARNING_DAYS)->toDateString();
 
         return $query
-            ->when($filters['tab'] === 'active', fn ($q) => $q->where('remaining_quantity', '>', 0)->whereNotIn('status', ['released', 'fully_dispatched', 'expired', 'cancelled']))
+            ->when($filters['tab'] === 'active', fn ($q) => $q->where('remaining_quantity', '>', 0)->whereNotIn('status', ['released', 'consumed', 'expired', 'cancelled']))
             ->when($filters['tab'] === 'expiring', fn ($q) => $q->where('remaining_quantity', '>', 0)->whereNotNull('expiry')->whereDate('expiry', '<=', $warning))
-            ->when($filters['tab'] === 'dispatched', fn ($q) => $q->where('dispatched_quantity', '>', 0))
+            ->when($filters['tab'] === 'consumed', fn ($q) => $q->where('consumed_quantity', '>', 0))
             ->when($filters['tab'] === 'released', fn ($q) => $q->where(fn ($released) => $released->whereIn('status', ['released', 'expired', 'cancelled'])->orWhere('released_quantity', '>', 0)))
             ->when(!empty($filters['status']), fn ($q) => $q->where('status', $filters['status']))
             ->when(($filters['expiry_status'] ?? null) === 'expires_today', fn ($q) => $q->whereDate('expiry', $today))
@@ -293,7 +293,7 @@ class ReservedStockService
                     ->whereRaw('COALESCE(sales_order_items.product_variant_id, 0) = COALESCE(stock_reservations.product_variant_id, 0)')
                     ->whereRaw('COALESCE(sales_order_items.batch_id, 0) = COALESCE(stock_reservations.batch_id, 0)');
             })
-            ->selectRaw("stock_reservations.reference_id as id, CONCAT('RSV-', stock_reservations.reference_id) as reservation_number, MIN(stock_reservations.created_at) as reserved_date, MIN(stock_reservations.created_at) as created_at, 'Sales Order' as source_type, COALESCE(sales_orders.order_number, stock_reservations.reference_id) as source_number, sales_orders.customer_id, customers.customer_name, customers.customer_code, customers.mobile, stock_reservations.branch_id, branches.name as branch_name, stock_reservations.warehouse_id, warehouses.name as warehouse_name, stock_reservations.created_by, users.name as created_by_name, COUNT(DISTINCT stock_reservations.product_id) as product_lines, COALESCE(SUM(stock_reservations.reserved_quantity), 0) as reserved_quantity, COALESCE(SUM(stock_reservations.fulfilled_quantity), 0) as dispatched_quantity, COALESCE(SUM(stock_reservations.released_quantity), 0) as released_quantity, COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity), 0) as remaining_quantity, COALESCE(SUM((stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity) * COALESCE(sales_order_items.unit_price, 0)), 0) as reserved_value, MAX(stock_reservations.expires_at) as expiry, sales_orders.dispatch_status, 'Available-to-sell only' as stock_effect, MAX(stock_reservations.updated_at) as updated_at, CASE WHEN MAX(stock_reservations.status) = 'released' THEN 'released' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.released_quantity),0) AND COALESCE(SUM(stock_reservations.reserved_quantity),0) > 0 THEN 'fully_dispatched' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) > 0 THEN 'partially_dispatched' WHEN MAX(stock_reservations.expires_at) IS NOT NULL AND MAX(stock_reservations.expires_at) < CURRENT_DATE THEN 'expired' ELSE 'active' END as status")
+            ->selectRaw("stock_reservations.reference_id as id, CONCAT('RSV-', stock_reservations.reference_id) as reservation_number, MIN(stock_reservations.created_at) as reserved_date, MIN(stock_reservations.created_at) as created_at, 'Sales Order' as source_type, COALESCE(sales_orders.order_number, stock_reservations.reference_id) as source_number, sales_orders.customer_id, customers.customer_name, customers.customer_code, customers.mobile, stock_reservations.branch_id, branches.name as branch_name, stock_reservations.warehouse_id, warehouses.name as warehouse_name, stock_reservations.created_by, users.name as created_by_name, COUNT(DISTINCT stock_reservations.product_id) as product_lines, COALESCE(SUM(stock_reservations.reserved_quantity), 0) as reserved_quantity, COALESCE(SUM(stock_reservations.fulfilled_quantity), 0) as consumed_quantity, COALESCE(SUM(stock_reservations.released_quantity), 0) as released_quantity, COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity), 0) as remaining_quantity, COALESCE(SUM((stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity) * COALESCE(sales_order_items.unit_price, 0)), 0) as reserved_value, MAX(stock_reservations.expires_at) as expiry, NULL as dispatch_status, 'Available-to-sell only' as stock_effect, MAX(stock_reservations.updated_at) as updated_at, CASE WHEN MAX(stock_reservations.status) = 'released' THEN 'released' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.released_quantity),0) AND COALESCE(SUM(stock_reservations.reserved_quantity),0) > 0 THEN 'consumed' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) > 0 THEN 'partially_consumed' WHEN MAX(stock_reservations.expires_at) IS NOT NULL AND MAX(stock_reservations.expires_at) < CURRENT_DATE THEN 'expired' ELSE 'active' END as status")
             ->groupBy('stock_reservations.reference_id', 'sales_orders.order_number', 'sales_orders.customer_id', 'customers.customer_name', 'customers.customer_code', 'customers.mobile', 'stock_reservations.branch_id', 'branches.name', 'stock_reservations.warehouse_id', 'warehouses.name', 'stock_reservations.created_by', 'users.name', 'sales_orders.dispatch_status');
 
         return $query;
@@ -323,7 +323,7 @@ class ReservedStockService
     private function ledgerQuery(array $filters): Builder
     {
         $query = $this->lineBaseQuery($filters)
-            ->selectRaw("stock_reservations.id, stock_reservations.updated_at as date, CONCAT('RSV-', stock_reservations.reference_id) as reservation_number, products.name as product_name, product_variant_items.sku as variant_name, COALESCE(product_batches.batch_no, product_batches.batch_number) as batch_number, warehouses.name as warehouse_name, CASE WHEN stock_reservations.released_quantity > 0 THEN 'Released' WHEN stock_reservations.fulfilled_quantity > 0 THEN 'Dispatched' WHEN stock_reservations.status = 'released' THEN 'Released' ELSE 'Reserved' END as action, CASE WHEN stock_reservations.released_quantity > 0 THEN stock_reservations.released_quantity WHEN stock_reservations.fulfilled_quantity > 0 THEN stock_reservations.fulfilled_quantity ELSE stock_reservations.reserved_quantity END as quantity, stock_reservations.reserved_quantity as previous_remaining, (stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity) as new_remaining, COALESCE(sales_orders.order_number, stock_reservations.reference_id) as reference, users.name as performed_by");
+            ->selectRaw("stock_reservations.id, stock_reservations.updated_at as date, CONCAT('RSV-', stock_reservations.reference_id) as reservation_number, products.name as product_name, product_variant_items.sku as variant_name, COALESCE(product_batches.batch_no, product_batches.batch_number) as batch_number, warehouses.name as warehouse_name, CASE WHEN stock_reservations.released_quantity > 0 THEN 'Released' WHEN stock_reservations.fulfilled_quantity > 0 THEN 'Consumed' WHEN stock_reservations.status = 'released' THEN 'Released' ELSE 'Reserved' END as action, CASE WHEN stock_reservations.released_quantity > 0 THEN stock_reservations.released_quantity WHEN stock_reservations.fulfilled_quantity > 0 THEN stock_reservations.fulfilled_quantity ELSE stock_reservations.reserved_quantity END as quantity, stock_reservations.reserved_quantity as previous_remaining, (stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity) as new_remaining, COALESCE(sales_orders.order_number, stock_reservations.reference_id) as reference, users.name as performed_by");
 
         return $query
             ->when(!empty($filters['status']), fn ($q) => $q->where('stock_reservations.status', $filters['status']));
@@ -344,7 +344,6 @@ class ReservedStockService
             ->when(!empty($filters['date_from']), fn ($q) => $q->whereDate('stock_reservations.created_at', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn ($q) => $q->whereDate('stock_reservations.created_at', '<=', $filters['date_to']))
             ->when(!empty($filters['source_type']) && $filters['source_type'] === 'sales_order', fn ($q) => $q->where('stock_reservations.reference_type', SalesOrder::class))
-            ->when(!empty($filters['dispatch_status']), fn ($q) => $q->where('sales_orders.dispatch_status', $filters['dispatch_status']))
             ->when(!empty($filters['search']), function ($q) use ($filters) {
                 $term = '%' . $filters['search'] . '%';
                 $q->where(fn ($s) => $s

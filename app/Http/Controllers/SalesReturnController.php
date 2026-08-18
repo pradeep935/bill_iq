@@ -78,6 +78,7 @@ class SalesReturnController extends Controller
 
     public function store(SalesReturnVoucherRequest $request)
     {
+        $this->authorizeReturnAction();
         $voucher = $this->returns->create($request->validated());
 
         return response()->json(['message' => 'Sales return saved successfully.', 'return' => $this->returns->present($voucher)], 201);
@@ -85,6 +86,7 @@ class SalesReturnController extends Controller
 
     public function update(SalesReturnVoucherRequest $request, int $return)
     {
+        $this->authorizeReturnAction();
         $voucher = $this->returns->update($this->voucher($return), $request->validated());
 
         return response()->json(['message' => 'Sales return updated successfully.', 'return' => $this->returns->present($voucher)]);
@@ -104,6 +106,7 @@ class SalesReturnController extends Controller
 
     public function approve(int $return)
     {
+        $this->authorizeReturnAction();
         $voucher = $this->returns->post($this->voucher($return), 'approved');
 
         return response()->json(['message' => 'Sales return posted successfully.', 'return' => $this->returns->present($voucher)]);
@@ -111,6 +114,7 @@ class SalesReturnController extends Controller
 
     public function cancel(int $return)
     {
+        $this->authorizeReturnAction();
         $voucher = $this->returns->cancel($this->voucher($return));
 
         return response()->json(['message' => 'Sales return cancelled successfully.', 'return' => $this->returns->present($voucher)]);
@@ -118,7 +122,7 @@ class SalesReturnController extends Controller
 
     public function storeRefund(Request $request, int $return)
     {
-        abort_unless(AppController::canOpen('sales-returns'), 403);
+        $this->authorizeReturnAction();
         $data = $request->validate([
             'payment_method_id' => ['required', 'integer'],
             'amount' => ['required', 'numeric', 'min:0.01'],
@@ -134,6 +138,7 @@ class SalesReturnController extends Controller
 
     public function reverse(OpeningStockReverseRequest $request, int $return)
     {
+        $this->authorizeReturnAction();
         $voucher = $this->returns->reverse($this->voucher($return), $request->validated()['remarks']);
 
         return response()->json(['message' => 'Sales return reversed successfully.', 'return' => $this->returns->present($voucher)]);
@@ -178,5 +183,10 @@ class SalesReturnController extends Controller
         AppController::applyTenantScope($query, 'sales_return_vouchers');
 
         return $query->firstOrFail();
+    }
+
+    private function authorizeReturnAction(): void
+    {
+        abort_unless(AppController::canOpen('sales-returns') && AppController::roleId() !== 3, 403);
     }
 }

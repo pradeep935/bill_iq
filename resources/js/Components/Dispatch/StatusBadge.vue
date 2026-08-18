@@ -14,5 +14,5 @@ const label = computed(() => String(props.status || 'Draft').replaceAll('_', ' '
 </script>
 
 <style scoped>
-.dispatch-status{display:inline-flex;align-items:center;min-height:24px;padding:4px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:900;text-transform:capitalize;white-space:nowrap}.draft,.pending,.ready,.reserved{background:#fff7ed;color:#c2410c}.picking,.packed,.partial,.partially_dispatched,.in_transit{background:#eef6ff;color:#1d4f8f}.dispatched,.delivered,.completed,.fully_dispatched{background:#ecfdf3;color:#027a48}.cancelled,.released,.expired{background:#fff1f2;color:#be123c}
+.dispatch-status{display:inline-flex;align-items:center;min-height:24px;padding:4px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:900;text-transform:capitalize;white-space:nowrap}.draft,.pending,.ready,.reserved,.pending_stock_post{background:#fff7ed;color:#c2410c}.picking,.packed,.partial,.partially_dispatched,.in_transit,.invoice_posted{background:#eef6ff;color:#1d4f8f}.dispatched,.delivered,.completed,.fully_dispatched,.posted_by_sale,.posted_by_outward{background:#ecfdf3;color:#027a48}.cancelled,.released,.expired{background:#fff1f2;color:#be123c}
 </style>

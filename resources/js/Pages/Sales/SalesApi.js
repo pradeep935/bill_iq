@@ -193,11 +193,6 @@ const SalesApi = {
         return response.data;
     },
 
-    async searchReturnProducts(q = '', scope = {}) {
-        const response = await axios.get('/app/sales/returns/products/search', { params: { q, ...scope } });
-        return response.data;
-    },
-
     async searchReturnInvoices(q = '', scope = {}) {
         const response = await axios.get('/app/sales/returns/invoice-search', { params: { q, ...scope } });
         return response.data;

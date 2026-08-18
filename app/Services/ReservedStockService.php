@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Http\Controllers\AppController;
+use App\Models\DeliveryChallan;
 use App\Models\SalesOrder;
 use App\Services\AuditLogger;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -36,7 +37,7 @@ class ReservedStockService
                 'ledger' => $filters['tab'] === 'ledger' ? $this->ledger($filters) : $this->emptyPage($filters),
             ],
             'permissions' => $this->permissions(),
-            'stock_rule' => 'Reserved stock changes available-to-sell only. Physical stock changes only through stock_ledgers; posted sales invoices already deduct stock once.',
+            'stock_rule' => 'Reserved stock reduces available-to-sell only. Physical stock remains unchanged until a real stock ledger transaction is posted from invoice or Stock Outward.',
         ];
     }
 
@@ -88,6 +89,7 @@ class ReservedStockService
             'pending_dispatch' => $active->where('remaining_quantity', '>', 0)->count(),
             'unallocated_reservations' => $unallocated,
             'dispatched_reservations' => $dispatched,
+            'released_reservations' => $this->reservationQuery(array_merge($filters, ['tab' => 'released']))->count(),
         ];
     }
 
@@ -102,6 +104,9 @@ class ReservedStockService
             'statuses' => ['active', 'partially_dispatched', 'fully_dispatched', 'released', 'expired', 'cancelled'],
             'source_types' => ['sales_order', 'manual_reservation', 'transfer_request'],
             'expiry_statuses' => ['expires_today', 'expiring_soon', 'expired'],
+            'customers' => Schema::hasTable('customers')
+                ? DB::table('customers')->where('business_id', $businessId)->orderBy('customer_name')->limit(500)->get(['id', 'customer_name', 'customer_code', 'mobile'])
+                : collect(),
             'branches' => Schema::hasTable('branches')
                 ? DB::table('branches')->where('business_id', $businessId)->when($branches, fn ($q) => $q->whereIn('id', $branches))->orderBy('name')->get(['id', 'name', 'code'])
                 : collect(),
@@ -205,17 +210,19 @@ class ReservedStockService
         });
     }
 
-    public function dispatch(int $reservation): void
+    public function dispatch(int $reservation): DeliveryChallan
     {
         abort_unless($this->permissions()['dispatch'], 403);
         $order = $this->orderForReservation($reservation);
-        app(OrderManagementService::class)->createDeliveryChallanFromOrder($order->id, true);
+        $challan = app(OrderManagementService::class)->createDeliveryChallanFromOrder($order->id, false);
         AuditLogger::record([
             'module_name' => 'reserved_stock',
             'record_id' => $order->id,
-            'action_type' => 'Reservation Dispatched',
-            'changes' => [['field_name' => 'dispatch', 'old_value' => null, 'new_value' => 'delivery_challan']],
+            'action_type' => 'Reservation Sent to Stock Outward',
+            'changes' => [['field_name' => 'dispatch_queue', 'old_value' => null, 'new_value' => $challan->challan_number]],
         ]);
+
+        return $challan;
     }
 
     public function printHtml(array $input): string
@@ -286,7 +293,7 @@ class ReservedStockService
                     ->whereRaw('COALESCE(sales_order_items.product_variant_id, 0) = COALESCE(stock_reservations.product_variant_id, 0)')
                     ->whereRaw('COALESCE(sales_order_items.batch_id, 0) = COALESCE(stock_reservations.batch_id, 0)');
             })
-            ->selectRaw("stock_reservations.reference_id as id, CONCAT('RSV-', stock_reservations.reference_id) as reservation_number, MIN(stock_reservations.created_at) as reserved_date, MIN(stock_reservations.created_at) as created_at, 'Sales Order' as source_type, COALESCE(sales_orders.order_number, stock_reservations.reference_id) as source_number, sales_orders.customer_id, customers.customer_name, customers.customer_code, customers.mobile, stock_reservations.branch_id, branches.name as branch_name, stock_reservations.warehouse_id, warehouses.name as warehouse_name, stock_reservations.created_by, users.name as created_by_name, COUNT(DISTINCT stock_reservations.product_id) as product_lines, COALESCE(SUM(stock_reservations.reserved_quantity), 0) as reserved_quantity, COALESCE(SUM(stock_reservations.fulfilled_quantity), 0) as dispatched_quantity, COALESCE(SUM(stock_reservations.released_quantity), 0) as released_quantity, COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity), 0) as remaining_quantity, COALESCE(SUM((stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity) * COALESCE(sales_order_items.unit_price, 0)), 0) as reserved_value, MAX(stock_reservations.expires_at) as expiry, sales_orders.dispatch_status, MAX(stock_reservations.updated_at) as updated_at, CASE WHEN MAX(stock_reservations.status) = 'released' THEN 'released' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.released_quantity),0) AND COALESCE(SUM(stock_reservations.reserved_quantity),0) > 0 THEN 'fully_dispatched' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) > 0 THEN 'partially_dispatched' WHEN MAX(stock_reservations.expires_at) IS NOT NULL AND MAX(stock_reservations.expires_at) < CURRENT_DATE THEN 'expired' ELSE 'active' END as status")
+            ->selectRaw("stock_reservations.reference_id as id, CONCAT('RSV-', stock_reservations.reference_id) as reservation_number, MIN(stock_reservations.created_at) as reserved_date, MIN(stock_reservations.created_at) as created_at, 'Sales Order' as source_type, COALESCE(sales_orders.order_number, stock_reservations.reference_id) as source_number, sales_orders.customer_id, customers.customer_name, customers.customer_code, customers.mobile, stock_reservations.branch_id, branches.name as branch_name, stock_reservations.warehouse_id, warehouses.name as warehouse_name, stock_reservations.created_by, users.name as created_by_name, COUNT(DISTINCT stock_reservations.product_id) as product_lines, COALESCE(SUM(stock_reservations.reserved_quantity), 0) as reserved_quantity, COALESCE(SUM(stock_reservations.fulfilled_quantity), 0) as dispatched_quantity, COALESCE(SUM(stock_reservations.released_quantity), 0) as released_quantity, COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity), 0) as remaining_quantity, COALESCE(SUM((stock_reservations.reserved_quantity - stock_reservations.fulfilled_quantity - stock_reservations.released_quantity) * COALESCE(sales_order_items.unit_price, 0)), 0) as reserved_value, MAX(stock_reservations.expires_at) as expiry, sales_orders.dispatch_status, 'Available-to-sell only' as stock_effect, MAX(stock_reservations.updated_at) as updated_at, CASE WHEN MAX(stock_reservations.status) = 'released' THEN 'released' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) >= COALESCE(SUM(stock_reservations.reserved_quantity - stock_reservations.released_quantity),0) AND COALESCE(SUM(stock_reservations.reserved_quantity),0) > 0 THEN 'fully_dispatched' WHEN COALESCE(SUM(stock_reservations.fulfilled_quantity),0) > 0 THEN 'partially_dispatched' WHEN MAX(stock_reservations.expires_at) IS NOT NULL AND MAX(stock_reservations.expires_at) < CURRENT_DATE THEN 'expired' ELSE 'active' END as status")
             ->groupBy('stock_reservations.reference_id', 'sales_orders.order_number', 'sales_orders.customer_id', 'customers.customer_name', 'customers.customer_code', 'customers.mobile', 'stock_reservations.branch_id', 'branches.name', 'stock_reservations.warehouse_id', 'warehouses.name', 'stock_reservations.created_by', 'users.name', 'sales_orders.dispatch_status');
 
         return $query;

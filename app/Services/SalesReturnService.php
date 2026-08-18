@@ -7,8 +7,6 @@ use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Product;
-use App\Models\ProductBatch;
-use App\Models\ProductVariantItem;
 use App\Models\SalesItem;
 use App\Models\SalesReturnVoucher;
 use App\Models\SalesVoucher;
@@ -21,14 +19,12 @@ use Illuminate\Validation\ValidationException;
 
 class SalesReturnService
 {
-    private SalesCalculationService $calculator;
     private SalesInvoiceNumberService $numbers;
     private StockService $stock;
     private SalesService $sales;
 
-    public function __construct(SalesCalculationService $calculator, SalesInvoiceNumberService $numbers, StockService $stock, SalesService $sales)
+    public function __construct(SalesInvoiceNumberService $numbers, StockService $stock, SalesService $sales)
     {
-        $this->calculator = $calculator;
         $this->numbers = $numbers;
         $this->stock = $stock;
         $this->sales = $sales;
@@ -269,11 +265,6 @@ class SalesReturnService
         return $this->sales->references();
     }
 
-    public function searchProducts(string $search, array $scope = [])
-    {
-        return $this->sales->searchProducts($search, $scope);
-    }
-
     public function searchSales(string $search, array $filters = [])
     {
         $query = SalesVoucher::query()
@@ -318,6 +309,7 @@ class SalesReturnService
                 'place_of_supply_state_id' => $voucher->place_of_supply_state_id,
                 'grand_total' => (float) $voucher->grand_total,
                 'paid_amount' => (float) $voucher->paid_amount,
+                'balance_amount' => (float) $voucher->balance_amount,
                 'payment_status' => $voucher->payment_status,
                 'existing_return_total' => (float) $voucher->returns()->whereIn('status', ['confirmed', 'approved'])->sum('grand_total'),
                 'returnable_status' => 'Returnable',
@@ -447,6 +439,10 @@ class SalesReturnService
             'return_date' => optional($voucher->return_date)->format('Y-m-d'),
             'sales_voucher_id' => $voucher->sales_voucher_id,
             'invoice_number' => optional($voucher->sale)->invoice_number,
+            'invoice_date' => optional(optional($voucher->sale)->invoice_date)->format('Y-m-d'),
+            'invoice_grand_total' => (float) optional($voucher->sale)->grand_total,
+            'invoice_balance_amount' => (float) optional($voucher->sale)->balance_amount,
+            'payment_status' => optional($voucher->sale)->payment_status,
             'customer_id' => $voucher->customer_id,
             'customer' => optional($voucher->customer)->customer_name ?: optional($voucher->sale)->customer_name_snapshot,
             'branch_id' => $voucher->branch_id,
@@ -511,16 +507,7 @@ class SalesReturnService
         $subtotal = $discount = $taxable = $cgst = $sgst = $igst = $cess = 0.0;
 
         foreach ($data['items'] as $item) {
-            $line = $data['return_type'] === 'against_sale'
-                ? $this->linkedLine($item, $currentReturnId)
-                : $this->calculator->calculateLineTax([
-                    'quantity' => $item['quantity'],
-                    'selling_rate' => $item['selling_rate'],
-                    'discount_type' => 'amount',
-                    'discount_value' => $item['discount_amount'] ?? 0,
-                    'gst_rate' => $item['gst_rate'] ?? 0,
-                    'cess_rate' => $item['cess_rate'] ?? 0,
-                ], $data['tax_type'], 'tax_invoice');
+            $line = $this->linkedLine($item, $currentReturnId);
 
             $subtotal += $line['gross_amount'];
             $discount += $line['discount_amount'];
@@ -603,7 +590,7 @@ class SalesReturnService
             'branch_id' => $data['branch_id'],
             'warehouse_id' => $data['warehouse_id'],
             'customer_id' => $data['customer_id'] ?? null,
-            'sales_voucher_id' => $data['return_type'] === 'against_sale' ? ($data['sales_voucher_id'] ?? null) : null,
+            'sales_voucher_id' => $data['sales_voucher_id'],
             'return_date' => $data['return_date'],
             'return_type' => $data['return_type'],
             'tax_type' => $data['tax_type'],
@@ -684,58 +671,36 @@ class SalesReturnService
             Customer::query()->where('business_id', $businessId)->where('id', $data['customer_id'])->firstOrFail();
         }
 
-        $sale = null;
-        if ($data['return_type'] === 'against_sale') {
-            $sale = SalesVoucher::query()
-                ->where('business_id', $businessId)
-                ->whereIn('status', ['confirmed', 'approved'])
-                ->where('id', $data['sales_voucher_id'])
-                ->firstOrFail();
+        if (($data['return_type'] ?? null) !== 'against_sale') {
+            throw ValidationException::withMessages(['return_type' => 'Sales returns must be created against a completed sales invoice.']);
+        }
 
-            if ((int) ($sale->branch_id ?: 0) !== (int) ($data['branch_id'] ?: 0) || (int) ($sale->warehouse_id ?: 0) !== (int) ($data['warehouse_id'] ?: 0)) {
-                throw ValidationException::withMessages(['sales_voucher_id' => 'Branch and warehouse must match original invoice.']);
-            }
+        $sale = SalesVoucher::query()
+            ->where('business_id', $businessId)
+            ->whereIn('status', ['confirmed', 'approved'])
+            ->where('id', $data['sales_voucher_id'])
+            ->firstOrFail();
 
-            if ((int) ($sale->customer_id ?: 0) !== (int) ($data['customer_id'] ?: 0)) {
-                throw ValidationException::withMessages(['customer_id' => 'Customer must match original invoice.']);
-            }
+        if ((int) ($sale->branch_id ?: 0) !== (int) ($data['branch_id'] ?: 0) || (int) ($sale->warehouse_id ?: 0) !== (int) ($data['warehouse_id'] ?: 0)) {
+            throw ValidationException::withMessages(['sales_voucher_id' => 'Branch and warehouse must match original invoice.']);
+        }
 
-            if (!empty($data['return_date']) && optional($sale->invoice_date)->format('Y-m-d') && $data['return_date'] < $sale->invoice_date->format('Y-m-d')) {
-                throw ValidationException::withMessages(['return_date' => 'Return date cannot be earlier than original invoice date.']);
-            }
+        if ((int) ($sale->customer_id ?: 0) !== (int) ($data['customer_id'] ?: 0)) {
+            throw ValidationException::withMessages(['customer_id' => 'Customer must match original invoice.']);
+        }
+
+        if (!empty($data['return_date']) && optional($sale->invoice_date)->format('Y-m-d') && $data['return_date'] < $sale->invoice_date->format('Y-m-d')) {
+            throw ValidationException::withMessages(['return_date' => 'Return date cannot be earlier than original invoice date.']);
         }
 
         foreach ($data['items'] as $index => $item) {
             $this->validateRestockDecision($item, $index);
 
-            if ($sale) {
-                $salesItem = SalesItem::query()->where('sales_voucher_id', $sale->id)->where('id', $item['sales_item_id'])->firstOrFail();
-                foreach (['product_id', 'product_variant_id', 'batch_id'] as $field) {
-                    if ((int) ($salesItem->{$field} ?: 0) !== (int) ($item[$field] ?? 0)) {
-                        throw ValidationException::withMessages(["items.$index.$field" => 'Returned item must match original invoice line.']);
-                    }
+            $salesItem = SalesItem::query()->where('sales_voucher_id', $sale->id)->where('id', $item['sales_item_id'])->firstOrFail();
+            foreach (['product_id', 'product_variant_id', 'batch_id'] as $field) {
+                if ((int) ($salesItem->{$field} ?: 0) !== (int) ($item[$field] ?? 0)) {
+                    throw ValidationException::withMessages(["items.$index.$field" => 'Returned item must match original invoice line.']);
                 }
-                continue;
-            }
-
-            $product = Product::query()
-                ->where('id', $item['product_id'])
-                ->where('status', 'active')
-                ->where(function (Builder $q) use ($businessId) {
-                    $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
-                })
-                ->firstOrFail();
-
-            if (!empty($item['product_variant_id'])) {
-                ProductVariantItem::query()->where('business_id', $businessId)->where('product_id', $product->id)->where('id', $item['product_variant_id'])->firstOrFail();
-            }
-
-            if (($product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry'], true)) && empty($item['batch_id'])) {
-                throw ValidationException::withMessages(["items.$index.batch_id" => 'Batch is required for this product.']);
-            }
-
-            if (!empty($item['batch_id'])) {
-                ProductBatch::query()->where('business_id', $businessId)->where('product_id', $product->id)->where('id', $item['batch_id'])->firstOrFail();
             }
         }
 

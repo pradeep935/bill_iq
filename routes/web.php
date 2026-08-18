@@ -201,7 +201,6 @@ Route::middleware('auth')->group(function () {
             Route::get('/returns/list', [SalesReturnController::class, 'list'])->name('returns.list');
             Route::get('/returns/references', [SalesReturnController::class, 'references'])->name('returns.references');
             Route::get('/returns/invoice-search', [SalesReturnController::class, 'searchSales'])->name('returns.invoice-search');
-            Route::get('/returns/products/search', [SalesReturnController::class, 'searchProducts'])->name('returns.products.search');
             Route::get('/returns/invoices/search', [SalesReturnController::class, 'searchSales'])->name('returns.invoices.search');
             Route::get('/returns/invoices/{sale}/eligible-items', [SalesReturnController::class, 'saleItems'])->name('returns.eligible-items');
             Route::get('/returns/invoices/{sale}/items', [SalesReturnController::class, 'saleItems'])->name('returns.invoices.items');

@@ -8,7 +8,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in rows" :key="`${row.row_type}-${row.id}`" @click="$emit('open', row)">
+        <tr v-for="row in rows" :key="`${row.row_type || row.reservation_number || row.transaction_type || 'row'}-${row.id}`" @click="$emit('open', row)">
           <td v-for="column in columns" :key="column.key">
             <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]">{{ row[column.key] ?? '-' }}</slot>
           </td>

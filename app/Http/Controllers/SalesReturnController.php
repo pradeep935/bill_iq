@@ -62,13 +62,6 @@ class SalesReturnController extends Controller
         return response()->json($this->returns->references());
     }
 
-    public function searchProducts(Request $request)
-    {
-        abort_unless(AppController::canOpen('sales-returns'), 403);
-
-        return response()->json($this->returns->searchProducts(trim((string) $request->query('q')), $request->only(['branch_id', 'warehouse_id', 'price_type'])));
-    }
-
     public function searchSales(Request $request)
     {
         abort_unless(AppController::canOpen('sales-returns'), 403);

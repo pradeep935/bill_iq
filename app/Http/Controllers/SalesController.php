@@ -57,7 +57,7 @@ class SalesController extends Controller
         return Inertia::render('Sales/StockOperations', array_merge([
             'page' => 'inventory-outward',
             'title' => 'Stock Outward',
-            'initial_tab' => 'ready',
+            'initial_tab' => 'sale_dispatch',
             'endpoints' => $this->stockOutwardEndpoints(),
         ], $this->stockOutward->payload($request->query())));
     }
@@ -70,7 +70,7 @@ class SalesController extends Controller
         return Inertia::render('Sales/StockOperations', array_merge([
             'page' => 'inventory-reserved',
             'title' => 'Reserved Stock',
-            'initial_tab' => 'reserved',
+            'initial_tab' => 'active',
             'endpoints' => $this->reservedStockEndpoints(),
         ], $this->reservedStock->payload($request->query())));
     }
@@ -124,9 +124,9 @@ class SalesController extends Controller
 
     public function reservedStockDispatch(int $reservation)
     {
-        $this->reservedStock->dispatch($reservation);
+        $challan = $this->reservedStock->dispatch($reservation);
 
-        return response()->json(['message' => 'Dispatch created and posted from reservation.']);
+        return response()->json(['message' => 'Draft dispatch document created in Stock Outward. No physical stock was deducted by Reserved Stock.', 'challan_number' => $challan->challan_number]);
     }
 
     public function reservedStockCancel(Request $request, int $reservation)

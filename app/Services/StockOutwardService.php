@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 
 class StockOutwardService
 {
-    private const TABS = ['ready', 'reserved', 'picking', 'packing', 'dispatched', 'delivered', 'ledger'];
+    private const TABS = ['sale_dispatch', 'manual_outward', 'ledger'];
     private const PER_PAGE = [10, 25, 50, 100];
     private const OUTWARD_SORTS = ['number', 'date', 'customer', 'warehouse', 'status', 'reference_number', 'created_at'];
     private const LEDGER_SORTS = ['date', 'product', 'quantity', 'value', 'transaction_type'];
@@ -30,16 +30,13 @@ class StockOutwardService
             'references' => $this->references(),
             'summary' => $this->summary($filters),
             'rows' => [
-                'ready' => $filters['tab'] === 'ready' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'ready'])) : $this->emptyPage($filters),
+                'sale_dispatch' => $filters['tab'] === 'sale_dispatch' ? $this->outward(array_merge($filters, ['row_type' => 'invoice', 'status' => $filters['status'] ?: null])) : $this->emptyPage($filters),
+                'manual_outward' => $filters['tab'] === 'manual_outward' ? $this->outward(array_merge($filters, ['row_type' => 'challan', 'status' => $filters['status'] ?: null])) : $this->emptyPage($filters),
                 'reserved' => $filters['tab'] === 'reserved' ? $this->reserved($filters) : $this->emptyPage($filters),
-                'picking' => $filters['tab'] === 'picking' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'picking'])) : $this->emptyPage($filters),
-                'packing' => $filters['tab'] === 'packing' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'packed'])) : $this->emptyPage($filters),
-                'dispatched' => $filters['tab'] === 'dispatched' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'dispatched'])) : $this->emptyPage($filters),
-                'delivered' => $filters['tab'] === 'delivered' ? $this->outward(array_merge($filters, ['status' => $filters['status'] ?: 'delivered'])) : $this->emptyPage($filters),
                 'ledger' => $filters['tab'] === 'ledger' ? $this->ledger($filters) : $this->emptyPage($filters),
             ],
             'permissions' => $this->permissions(),
-            'stock_rule' => 'Sales invoice posting already deducts inventory through stock_ledgers.transaction_type = sale. Dispatch must not deduct invoice stock again.',
+            'stock_rule' => 'Sale-linked dispatch is physical handling only. Posted sales invoices already deduct stock through stock_ledgers.transaction_type = sale, so Stock Outward never deducts those invoice quantities again.',
         ];
     }
 
@@ -98,13 +95,13 @@ class StockOutwardService
         $period = $this->periodFilters($filters);
 
         return [
-            'total_dispatch_documents' => (clone $this->outwardQuery(array_merge($filters, $period)))->count(),
-            'dispatch_docs' => (clone $this->outwardQuery(array_merge($filters, $period, ['type' => 'dispatch'])))->count(),
+            'sale_linked_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['row_type' => 'invoice'])))->count(),
+            'manual_outward' => (clone $this->outwardQuery(array_merge($filters, $period, ['row_type' => 'challan'])))->count(),
             'reserved_orders' => (clone $this->reservedQuery(array_merge($filters, $period)))->count(),
-            'ready_for_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['status' => 'ready'])))->count(),
-            'pending_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['status' => 'pending'])))->count(),
+            'ready_for_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['row_type' => 'challan', 'status' => 'ready'])))->count(),
+            'pending_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['row_type' => 'challan', 'status' => 'pending'])))->count(),
             'completed_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['status' => 'delivered'])))->count(),
-            'cancelled_dispatch' => (clone $this->outwardQuery(array_merge($filters, $period, ['status' => 'cancelled'])))->count(),
+            'stock_posted_manual' => (clone $this->outwardQuery(array_merge($filters, $period, ['row_type' => 'challan', 'status' => 'dispatched'])))->count(),
             'outward_lines' => (clone $this->ledgerQuery(array_merge($filters, $period)))->count(),
         ];
     }
@@ -117,9 +114,9 @@ class StockOutwardService
         return [
             'tabs' => self::TABS,
             'per_page' => self::PER_PAGE,
-            'statuses' => ['draft', 'reserved', 'ready', 'picking', 'packed', 'dispatched', 'delivered', 'cancelled', 'pending', 'partial', 'completed'],
-            'delivery_statuses' => ['pending', 'ready', 'in_transit', 'delivered', 'cancelled'],
-            'reference_types' => ['sales_invoice', 'sales_order', 'delivery_challan', 'stock_transfer', 'manual_outward'],
+            'statuses' => ['draft', 'ready', 'picking', 'packed', 'dispatched', 'delivered', 'cancelled', 'pending'],
+            'delivery_statuses' => ['pending', 'in_transit', 'delivered', 'cancelled'],
+            'reference_types' => ['sales_invoice', 'sales_order', 'delivery_challan', 'manual_outward'],
             'customers' => Schema::hasTable('customers')
                 ? DB::table('customers')->where('business_id', $businessId)->orderBy('customer_name')->limit(500)->get(['id', 'customer_name', 'customer_code', 'mobile'])
                 : collect(),
@@ -187,6 +184,7 @@ class StockOutwardService
             ->where('business_id', AppController::businessId())
             ->when($this->allowedBranchIds(), fn ($q) => $q->whereIn('branch_id', $this->allowedBranchIds()))
             ->findOrFail($challanId);
+        $this->assertChallanIsNotSaleLinked($challan);
 
         $posted = app(OrderManagementService::class)->dispatchChallan($challan->id);
         AuditLogger::record([
@@ -360,8 +358,8 @@ class StockOutwardService
 
     public function filters(array $filters): array
     {
-        $requestedTab = $filters['tab'] ?? 'ready';
-        $tab = in_array($requestedTab, self::TABS, true) ? $requestedTab : 'ready';
+        $requestedTab = $filters['tab'] ?? 'sale_dispatch';
+        $tab = in_array($requestedTab, self::TABS, true) ? $requestedTab : 'sale_dispatch';
         $perPage = in_array((int) ($filters['per_page'] ?? 25), self::PER_PAGE, true) ? (int) ($filters['per_page'] ?? 25) : 25;
         $direction = strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
 
@@ -384,6 +382,7 @@ class StockOutwardService
             'transporter' => trim((string) ($filters['transporter'] ?? '')),
             'vehicle_number' => trim((string) ($filters['vehicle_number'] ?? '')),
             'type' => $filters['type'] ?? null,
+            'row_type' => $filters['row_type'] ?? null,
             'movement' => $filters['movement'] ?? null,
             'sort' => $filters['sort'] ?? 'date',
             'direction' => $direction,
@@ -408,7 +407,7 @@ class StockOutwardService
             ->leftJoin('users', 'users.id', '=', 'delivery_challans.created_by')
             ->leftJoin('delivery_challan_items', 'delivery_challan_items.delivery_challan_id', '=', 'delivery_challans.id')
             ->where('delivery_challans.business_id', $businessId)
-            ->selectRaw("'challan' as row_type, delivery_challans.id, delivery_challans.branch_id, delivery_challans.warehouse_id, delivery_challans.customer_id, delivery_challans.created_by, delivery_challans.challan_number as number, delivery_challans.challan_number as challan_number, NULL as sales_invoice, delivery_challans.challan_date as date, delivery_challans.challan_date as document_date, 'Delivery Challan' as reference_type, COALESCE(sales_orders.order_number, delivery_challans.dispatch_reference) as reference_number, COALESCE(sales_orders.order_number, delivery_challans.dispatch_reference) as order_number, customers.customer_name, customers.mobile, branches.name as branch_name, warehouses.name as warehouse_name, delivery_challans.status as dispatch_status, CASE WHEN delivery_challans.status = 'delivered' THEN 'delivered' WHEN delivery_challans.status IN ('dispatched') THEN 'in_transit' WHEN delivery_challans.status = 'cancelled' THEN 'cancelled' ELSE 'pending' END as delivery_status, delivery_challans.transporter_name as transporter, delivery_challans.vehicle_number, NULL as driver_name, NULL as driver_mobile, delivery_challans.tracking_number as lr_number, NULL as e_way_bill_number, CASE WHEN delivery_challans.status IN ('dispatched','delivered') THEN 'posted' ELSE 'pending' END as stock_status, users.name as created_by_name, delivery_challans.created_at, COUNT(delivery_challan_items.id) as total_lines, COALESCE(SUM(delivery_challan_items.dispatch_quantity), 0) as total_quantity")
+            ->selectRaw("'challan' as row_type, 'Manual Outward' as source_type, delivery_challans.id, delivery_challans.branch_id, delivery_challans.warehouse_id, delivery_challans.customer_id, delivery_challans.created_by, delivery_challans.challan_number as number, delivery_challans.challan_number as challan_number, NULL as sales_invoice, delivery_challans.challan_date as date, delivery_challans.challan_date as document_date, 'Delivery Challan' as reference_type, COALESCE(sales_orders.order_number, delivery_challans.dispatch_reference) as reference_number, COALESCE(sales_orders.order_number, delivery_challans.dispatch_reference) as order_number, customers.customer_name, customers.mobile, branches.name as branch_name, warehouses.name as warehouse_name, delivery_challans.status as dispatch_status, CASE WHEN delivery_challans.status = 'delivered' THEN 'delivered' WHEN delivery_challans.status IN ('dispatched') THEN 'in_transit' WHEN delivery_challans.status = 'cancelled' THEN 'cancelled' ELSE 'pending' END as delivery_status, delivery_challans.transporter_name as transporter, delivery_challans.vehicle_number, NULL as driver_name, NULL as driver_mobile, delivery_challans.tracking_number as lr_number, NULL as e_way_bill_number, CASE WHEN delivery_challans.status IN ('dispatched','delivered') THEN 'posted_by_outward' ELSE 'pending_stock_post' END as stock_status, 'Deducts stock on dispatch' as stock_policy, users.name as created_by_name, delivery_challans.created_at, COUNT(delivery_challan_items.id) as total_lines, COALESCE(SUM(delivery_challan_items.dispatch_quantity), 0) as total_quantity")
             ->groupBy('delivery_challans.id', 'delivery_challans.branch_id', 'delivery_challans.warehouse_id', 'delivery_challans.customer_id', 'delivery_challans.created_by', 'delivery_challans.challan_number', 'delivery_challans.challan_date', 'sales_orders.order_number', 'delivery_challans.dispatch_reference', 'customers.customer_name', 'customers.mobile', 'branches.name', 'warehouses.name', 'delivery_challans.status', 'delivery_challans.transporter_name', 'delivery_challans.vehicle_number', 'delivery_challans.tracking_number', 'users.name', 'delivery_challans.created_at');
         AppController::applyTenantScope($challans, 'delivery_challans');
 
@@ -420,7 +419,7 @@ class StockOutwardService
             ->leftJoin('sales_items', 'sales_items.sales_voucher_id', '=', 'sales_vouchers.id')
             ->where('sales_vouchers.business_id', $businessId)
             ->whereIn('sales_vouchers.status', ['confirmed', 'approved'])
-            ->selectRaw("'invoice' as row_type, sales_vouchers.id, sales_vouchers.branch_id, sales_vouchers.warehouse_id, sales_vouchers.customer_id, sales_vouchers.created_by, sales_vouchers.invoice_number as number, NULL as challan_number, sales_vouchers.invoice_number as sales_invoice, sales_vouchers.invoice_date as date, sales_vouchers.invoice_date as document_date, 'Sales Invoice' as reference_type, sales_vouchers.invoice_number as reference_number, NULL as order_number, customers.customer_name, customers.mobile, branches.name as branch_name, warehouses.name as warehouse_name, 'dispatched' as dispatch_status, CASE WHEN sales_vouchers.status IN ('confirmed','approved') THEN 'in_transit' ELSE 'pending' END as delivery_status, NULL as transporter, NULL as vehicle_number, NULL as driver_name, NULL as driver_mobile, NULL as lr_number, NULL as e_way_bill_number, 'posted' as stock_status, users.name as created_by_name, sales_vouchers.created_at, COUNT(sales_items.id) as total_lines, COALESCE(SUM(sales_items.quantity + COALESCE(sales_items.free_quantity, 0)), 0) as total_quantity")
+            ->selectRaw("'invoice' as row_type, 'Sale-Linked Dispatch' as source_type, sales_vouchers.id, sales_vouchers.branch_id, sales_vouchers.warehouse_id, sales_vouchers.customer_id, sales_vouchers.created_by, sales_vouchers.invoice_number as number, NULL as challan_number, sales_vouchers.invoice_number as sales_invoice, sales_vouchers.invoice_date as date, sales_vouchers.invoice_date as document_date, 'Sales Invoice' as reference_type, sales_vouchers.invoice_number as reference_number, NULL as order_number, customers.customer_name, customers.mobile, branches.name as branch_name, warehouses.name as warehouse_name, 'invoice_posted' as dispatch_status, 'pending' as delivery_status, NULL as transporter, NULL as vehicle_number, NULL as driver_name, NULL as driver_mobile, NULL as lr_number, NULL as e_way_bill_number, 'posted_by_sale' as stock_status, 'No stock deduction in Stock Outward' as stock_policy, users.name as created_by_name, sales_vouchers.created_at, COUNT(sales_items.id) as total_lines, COALESCE(SUM(sales_items.quantity + COALESCE(sales_items.free_quantity, 0)), 0) as total_quantity")
             ->groupBy('sales_vouchers.id', 'sales_vouchers.branch_id', 'sales_vouchers.warehouse_id', 'sales_vouchers.customer_id', 'sales_vouchers.created_by', 'sales_vouchers.invoice_number', 'sales_vouchers.invoice_date', 'sales_vouchers.status', 'customers.customer_name', 'customers.mobile', 'branches.name', 'warehouses.name', 'users.name', 'sales_vouchers.created_at');
         AppController::applyTenantScope($invoices, 'sales_vouchers');
 
@@ -432,6 +431,7 @@ class StockOutwardService
             ->when(($filters['status'] ?? null) === 'ready', fn ($q) => $q->whereIn('dispatch_status', ['draft', 'ready', 'ready_to_pick', 'pending']))
             ->when(!empty($filters['status']) && !in_array($filters['status'], ['pending', 'ready'], true), fn ($q) => $q->where('dispatch_status', $filters['status']))
             ->when(($filters['type'] ?? null) === 'dispatch', fn ($q) => $q->where('row_type', 'challan'))
+            ->when(!empty($filters['row_type']), fn ($q) => $q->where('row_type', $filters['row_type']))
             ->when(!empty($filters['reference_type']), fn ($q) => $q->where('reference_type', str_replace('_', ' ', $filters['reference_type'])))
             ->when(!empty($filters['delivery_status']), fn ($q) => $q->where('delivery_status', $filters['delivery_status']))
             ->when(!empty($filters['sales_invoice']), fn ($q) => $q->where('sales_invoice', 'like', '%' . $filters['sales_invoice'] . '%'))
@@ -556,6 +556,44 @@ class StockOutwardService
             'print' => AppController::canOpen('inventory-outward') || AppController::canOpen('stock-ledger'),
             'view_cost' => $admin,
         ];
+    }
+
+    private function assertChallanIsNotSaleLinked(DeliveryChallan $challan): void
+    {
+        $references = collect([$challan->dispatch_reference, $challan->challan_number])
+            ->filter(fn ($value) => trim((string) $value) !== '')
+            ->map(fn ($value) => trim((string) $value))
+            ->values();
+
+        if ($references->isEmpty()) {
+            return;
+        }
+
+        $invoice = SalesVoucher::query()
+            ->where('business_id', $challan->business_id)
+            ->whereIn('status', ['confirmed', 'approved'])
+            ->where(function ($query) use ($references) {
+                $query->whereIn('invoice_number', $references)
+                    ->orWhereIn('voucher_number', $references);
+            })
+            ->first();
+
+        if (!$invoice) {
+            return;
+        }
+
+        $saleStockPosted = DB::table('stock_ledgers')
+            ->where('business_id', $challan->business_id)
+            ->where('transaction_type', 'sale')
+            ->where('reference_type', SalesVoucher::class)
+            ->where('reference_id', $invoice->id)
+            ->exists();
+
+        if ($saleStockPosted) {
+            throw ValidationException::withMessages([
+                'stock' => 'This dispatch references a posted sales invoice. Stock was already deducted by the invoice, so Stock Outward cannot deduct it again.',
+            ]);
+        }
     }
 
     private function periodFilters(array $filters): array

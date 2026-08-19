@@ -77,6 +77,7 @@ class SalesService
         return DB::transaction(function () use ($data) {
             $businessId = AppController::businessId();
             $this->prepareCustomer($data);
+            $this->prepareItemTaxModes($businessId, $data);
             $this->validateOwnership($businessId, $data);
             $totals = $this->calculator->calculateVoucherTotals($data);
             $this->calculator->validateSaleTotals($totals);
@@ -119,6 +120,7 @@ class SalesService
 
             $businessId = AppController::businessId();
             $this->prepareCustomer($data);
+            $this->prepareItemTaxModes($businessId, $data);
             $this->validateOwnership($businessId, $data, $voucher->id);
             $totals = $this->calculator->calculateVoucherTotals($data);
             $this->calculator->validateSaleTotals($totals);
@@ -603,6 +605,33 @@ class SalesService
         if (empty($data['customer_id']) && ($data['sale_type'] ?? 'cash') === 'cash') {
             $data['customer_id'] = $this->customers->defaultWalkIn()->id;
         }
+    }
+
+    private function prepareItemTaxModes(int $businessId, array &$data): void
+    {
+        $productIds = collect($data['items'] ?? [])
+            ->pluck('product_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($productIds->isEmpty()) {
+            return;
+        }
+
+        $taxModes = Product::query()
+            ->whereIn('id', $productIds)
+            ->where(function (Builder $q) use ($businessId) {
+                $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
+            })
+            ->pluck('tax_inclusive', 'id');
+
+        foreach ($data['items'] as &$item) {
+            if (!array_key_exists('tax_inclusive', $item) && !empty($item['product_id']) && $taxModes->has($item['product_id'])) {
+                $item['tax_inclusive'] = (bool) $taxModes[$item['product_id']];
+            }
+        }
+        unset($item);
     }
 
     private function voucherAttributes(int $businessId, array $data, array $totals, array $extra = []): array

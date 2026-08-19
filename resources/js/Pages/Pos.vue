@@ -255,12 +255,18 @@ const validateCartStock = () => {
     return true;
 };
 const validatePaymentBeforeSave = (status) => {
-    if (!['confirmed', 'approved'].includes(status)) return true;
+    const paid = Number(totals.value.paid.toFixed(2));
+    if (!['confirmed', 'approved'].includes(status)) {
+        if (paid > 0) {
+            showToast('Payment entered hai. Invoice post karne ke liye Complete Sale use karo.', 'error');
+            return false;
+        }
+        return true;
+    }
     if (form.invoice_type === 'tax_invoice' && !hasCustomerGstin.value) {
         showToast('B2B Tax Invoice requires customer GSTIN. Select B2C Retail or add GSTIN to customer.', 'error');
         return false;
     }
-    const paid = Number(totals.value.paid.toFixed(2));
     const grand = Number(totals.value.grand.toFixed(2));
     if (paymentMode.value === 'credit') return true;
     if (paymentMode.value === 'split' && paid !== grand) {

@@ -46,6 +46,7 @@ class SalesVoucherRequest extends FormRequest
             'items.*.discount_value' => ['nullable', 'numeric', 'min:0'],
             'items.*.gst_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'items.*.cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.tax_inclusive' => ['nullable', 'boolean'],
             'items.*.remarks' => ['nullable', 'string', 'max:1000'],
             'payments' => ['nullable', 'array'],
             'payments.*.payment_method_id' => ['required_with:payments', 'integer'],

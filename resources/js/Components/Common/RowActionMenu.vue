@@ -4,18 +4,20 @@
   </button>
 
   <div class="action-menu-wrap">
-    <button type="button" class="crud-action more-action" :title="moreTitle" @click="$emit('toggle')">
+    <button ref="moreButton" type="button" class="crud-action more-action" :title="moreTitle" @click="$emit('toggle')">
       {{ moreLabel }}
     </button>
 
-    <div v-if="open" class="action-menu" :class="`placement-${placement}`">
+    <div v-if="open" class="action-menu" :style="menuStyle">
       <slot />
     </div>
   </div>
 </template>
 
 <script setup>
-defineProps({
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+
+const props = defineProps({
   open: { type: Boolean, default: false },
   showView: { type: Boolean, default: true },
   viewLabel: { type: String, default: 'View' },
@@ -26,6 +28,37 @@ defineProps({
 });
 
 defineEmits(['view', 'toggle']);
+
+const moreButton = ref(null);
+const menuStyle = ref({});
+
+const positionMenu = async () => {
+  if (!props.open) return;
+  await nextTick();
+  const rect = moreButton.value?.getBoundingClientRect();
+  if (!rect) return;
+
+  const gap = 7;
+  menuStyle.value = {
+    position: 'fixed',
+    right: `${Math.max(8, window.innerWidth - rect.right)}px`,
+    ...(props.placement === 'top'
+      ? { bottom: `${Math.max(8, window.innerHeight - rect.top + gap)}px`, top: 'auto' }
+      : { top: `${rect.bottom + gap}px`, bottom: 'auto' }),
+  };
+};
+
+watch(() => props.open, positionMenu);
+
+onMounted(() => {
+  window.addEventListener('resize', positionMenu);
+  window.addEventListener('scroll', positionMenu, true);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', positionMenu);
+  window.removeEventListener('scroll', positionMenu, true);
+});
 </script>
 
 <style scoped>
@@ -68,15 +101,7 @@ defineEmits(['view', 'toggle']);
   gap: 3px;
   min-width: 166px;
   padding: 6px;
-  position: absolute;
-  right: 0;
-  top: calc(100% + 7px);
-  z-index: 25;
-}
-
-.action-menu.placement-top {
-  bottom: calc(100% + 7px);
-  top: auto;
+  z-index: 1000;
 }
 
 .action-menu :slotted(button) {

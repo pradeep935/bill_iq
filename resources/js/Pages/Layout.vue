@@ -39,7 +39,7 @@
         <div class="bill-nav-section" :key="activeSection.key">
           <span class="bill-nav-heading">{{ activeSection.label }}</span>
           <a
-            v-for="item in activeSection.items"
+            v-for="item in activeNavItems"
             :key="item.href"
             :class="{ active: page === item.page }"
             :href="normalizeUrl(item.href)"
@@ -357,15 +357,6 @@ const iconPaths = {
 const iconSvg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPaths[name] || iconPaths['layout-dashboard']}</svg>`;
 
 const visibleSections = computed(() => {
-  if (isSalesInvoicePage.value) {
-    const salesPageItems = ['pos', 'sales', 'sales-returns', 'customers'];
-    const salesSection = sections.find((section) => section.key === 'sales');
-    return [{
-      ...salesSection,
-      items: salesSection.items.filter((item) => salesPageItems.includes(item.page)),
-    }];
-  }
-
   if (roleId.value === 1) return sections;
   if (roleId.value === 2) {
     return sections.map((section) => ({
@@ -390,6 +381,14 @@ const currentPageSection = computed(() => (
 const activeSection = computed(() => (
   visibleSections.value.find((section) => section.key === selectedSectionKey.value) || currentPageSection.value
 ));
+const activeNavItems = computed(() => {
+  if (isSalesInvoicePage.value && activeSection.value.key === 'sales') {
+    const salesPageItems = ['pos', 'sales', 'sales-returns', 'customers'];
+    return activeSection.value.items.filter((item) => salesPageItems.includes(item.page));
+  }
+
+  return activeSection.value.items;
+});
 
 const selectSection = (key) => {
   moduleOpen.value = false;

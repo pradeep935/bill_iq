@@ -358,10 +358,11 @@ const iconSvg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPat
 
 const visibleSections = computed(() => {
   if (isSalesInvoicePage.value) {
+    const salesPageItems = ['pos', 'sales', 'sales-returns', 'customers'];
     const salesSection = sections.find((section) => section.key === 'sales');
     return [{
       ...salesSection,
-      items: salesSection.items.filter((item) => item.page === 'sales'),
+      items: salesSection.items.filter((item) => salesPageItems.includes(item.page)),
     }];
   }
 

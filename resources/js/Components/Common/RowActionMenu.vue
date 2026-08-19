@@ -8,7 +8,7 @@
       {{ moreLabel }}
     </button>
 
-    <div v-if="open" class="action-menu">
+    <div v-if="open" class="action-menu" :class="`placement-${placement}`">
       <slot />
     </div>
   </div>
@@ -22,6 +22,7 @@ defineProps({
   viewTitle: { type: String, default: 'View record' },
   moreLabel: { type: String, default: 'More' },
   moreTitle: { type: String, default: 'More actions' },
+  placement: { type: String, default: 'bottom' },
 });
 
 defineEmits(['view', 'toggle']);
@@ -71,6 +72,11 @@ defineEmits(['view', 'toggle']);
   right: 0;
   top: calc(100% + 7px);
   z-index: 25;
+}
+
+.action-menu.placement-top {
+  bottom: calc(100% + 7px);
+  top: auto;
 }
 
 .action-menu :slotted(button) {

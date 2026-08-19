@@ -1,5 +1,5 @@
 <template>
-  <button type="button" class="crud-action" :title="viewTitle" @click="$emit('view')">
+  <button v-if="showView" type="button" class="crud-action" :title="viewTitle" @click="$emit('view')">
     {{ viewLabel }}
   </button>
 
@@ -17,6 +17,7 @@
 <script setup>
 defineProps({
   open: { type: Boolean, default: false },
+  showView: { type: Boolean, default: true },
   viewLabel: { type: String, default: 'View' },
   viewTitle: { type: String, default: 'View record' },
   moreLabel: { type: String, default: 'More' },

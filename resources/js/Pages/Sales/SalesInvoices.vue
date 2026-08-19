@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
 import SalesApi from './SalesApi';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 const props = defineProps({ page: { type: String, default: 'sales' }, title: { type: String, default: 'Sales Invoices' }, endpoints: { type: Object, default: () => ({}) } });
 SalesApi.configure(props.endpoints);
@@ -15,6 +16,7 @@ const productSearch = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const savingAction = ref('');
+const openActionMenuId = ref(null);
 const errors = ref({});
 const reports = ref({});
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
@@ -148,6 +150,8 @@ const editSale = (sale) => {
 };
 const simpleAction = async (fn, row, promptText) => { if (promptText && !window.confirm(promptText)) return; const response = await fn(row.id); alert(response.message || 'Done.'); await loadSales(pagination.value.current_page || 1); await loadReports(); };
 const reverseSale = async (row) => { const remarks = window.prompt('Reversal remarks'); if (!remarks) return; await simpleAction((id) => SalesApi.reverseSale(id, remarks), row); };
+const toggleActionMenu = (row) => { openActionMenuId.value = openActionMenuId.value === row.id ? null : row.id; };
+const closeActionMenu = () => { openActionMenuId.value = null; };
 const printSale = (sale, format = 'a4') => {
     window.open(SalesApi.printUrl(sale.id, format), '_blank', 'noopener');
 };
@@ -163,7 +167,6 @@ onUnmounted(() => window.removeEventListener('popstate', fromUrl));
             <div class="bill-page-title"><span>SALES MANAGEMENT</span><h1>Sales Invoices</h1><p>Draft, hold and post GST invoices with stock ledger integration.</p></div>
         </template>
         <div class="sales-page">
-            <div class="page-toolbar"><button @click="reset">New Sale</button></div>
             <section class="metrics"><div><span>Outstanding</span><strong>{{ formatMoney(reports.outstanding) }}</strong></div><div><span>Cancelled</span><strong>{{ reports.cancelled || 0 }}</strong></div><div><span>Today Total</span><strong>{{ formatMoney(reports.today_total) }}</strong></div><div><span>Draft / Held</span><strong>{{ reports.draft_count || 0 }} / {{ reports.held_count || 0 }}</strong></div></section>
             <section class="panel">
                 <div class="form-grid">
@@ -198,7 +201,7 @@ onUnmounted(() => window.removeEventListener('popstate', fromUrl));
                     <select v-model="filters.invoice_type"><option value="">All Types</option><option value="tax_invoice">Tax Invoice</option><option value="bill_of_supply">Bill of Supply</option><option value="retail_invoice">Retail Invoice</option></select>
                     <button @click="applyFilters">Apply</button><button @click="clearFilters">Clear Filters</button><button @click="exportRows">Export</button>
                 </div>
-                <div class="table-wrapper"><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Mobile</th><th>Branch</th><th>Warehouse</th><th>Type</th><th>Total</th><th>Paid</th><th>Balance</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in sales" :key="row.id"><td>{{ row.invoice_number }}</td><td>{{ row.invoice_date }}</td><td>{{ row.customer }}</td><td>{{ row.customer_mobile || '-' }}</td><td>{{ row.branch || '-' }}</td><td>{{ row.warehouse || '-' }}</td><td>{{ row.invoice_type }}</td><td>{{ formatMoney(row.grand_total) }}</td><td>{{ formatMoney(row.paid_amount) }}</td><td>{{ formatMoney(row.balance_amount) }}</td><td>{{ row.payment_status }}</td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td><div class="row-actions"><button @click="printSale(row)">A4</button><button @click="printSale(row, 'thermal')">80mm</button><button v-if="['draft','hold'].includes(row.status)" @click="editSale(row)">Edit</button><button v-if="['draft','hold'].includes(row.status)" @click="simpleAction(SalesApi.approveSale,row,'Post invoice?')">Post</button><button @click="simpleAction(SalesApi.duplicateSale,row)">Copy</button><button v-if="['draft','hold'].includes(row.status)" class="danger" @click="simpleAction(SalesApi.cancelSale,row,'Cancel invoice?')">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" class="danger" @click="reverseSale(row)">Reverse</button></div></td></tr><tr v-if="!sales.length && !loading"><td colspan="13" class="empty">No sales invoices found for the selected filters.</td></tr></tbody></table></div>
+                <div class="table-wrapper"><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Mobile</th><th>Branch</th><th>Warehouse</th><th>Type</th><th>Total</th><th>Paid</th><th>Balance</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in sales" :key="row.id"><td>{{ row.invoice_number }}</td><td>{{ row.invoice_date }}</td><td>{{ row.customer }}</td><td>{{ row.customer_mobile || '-' }}</td><td>{{ row.branch || '-' }}</td><td>{{ row.warehouse || '-' }}</td><td>{{ row.invoice_type }}</td><td>{{ formatMoney(row.grand_total) }}</td><td>{{ formatMoney(row.paid_amount) }}</td><td>{{ formatMoney(row.balance_amount) }}</td><td>{{ row.payment_status }}</td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td><div class="row-actions"><RowActionMenu :open="openActionMenuId === row.id" :show-view="false" more-label="Actions" more-title="Invoice actions" @toggle="toggleActionMenu(row)"><button type="button" @click="printSale(row); closeActionMenu()">Print A4</button><button type="button" @click="printSale(row, 'thermal'); closeActionMenu()">Print 80mm</button><button v-if="['draft','hold'].includes(row.status)" type="button" @click="editSale(row); closeActionMenu()">Edit</button><button v-if="['draft','hold'].includes(row.status)" type="button" @click="simpleAction(SalesApi.approveSale,row,'Post invoice?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(SalesApi.duplicateSale,row); closeActionMenu()">Copy</button><button v-if="['draft','hold'].includes(row.status)" type="button" class="danger" @click="simpleAction(SalesApi.cancelSale,row,'Cancel invoice?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" class="danger" @click="reverseSale(row); closeActionMenu()">Reverse</button></RowActionMenu></div></td></tr><tr v-if="!sales.length && !loading"><td colspan="13" class="empty">No sales invoices found for the selected filters.</td></tr></tbody></table></div>
                 <div class="pagination"><button :disabled="pagination.current_page <= 1" @click="loadSales(pagination.current_page - 1)">Previous</button><span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span><button :disabled="pagination.current_page >= pagination.last_page" @click="loadSales(pagination.current_page + 1)">Next</button></div>
             </section>
         </div>

@@ -92,7 +92,14 @@
           <input v-model="globalSearch" type="search" placeholder="Search invoices, customers, products" @keyup.enter="runGlobalSearch" />
         </div>
 
-        <div class="bill-top-actions">
+        <div class="bill-top-actions" v-if="isSalesInvoicePage">
+          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.invoices.create', '/app/sales/invoices/create')" title="Create a new sales invoice">
+            <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
+            New Invoice
+          </a>
+        </div>
+
+        <div class="bill-top-actions" v-else>
           <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.invoices.create', '/app/sales/invoices/create')" title="Create a new bill">
             <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
             New Bill
@@ -158,6 +165,7 @@ const financialYears = computed(() => context.value.financial_years?.length ? co
 const selectedBusinessId = ref(currentBusiness.value.id || '');
 const selectedBranchId = ref(currentBranch.value.id || '');
 const selectedFinancialYearValue = ref(currentFinancialYear.value.id || currentFinancialYear.value.name || '');
+const isSalesInvoicePage = computed(() => props.page === 'sales');
 
 const roleLabel = computed(() => {
   if (roleId.value === 1) return 'Super Admin';
@@ -349,6 +357,14 @@ const iconPaths = {
 const iconSvg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPaths[name] || iconPaths['layout-dashboard']}</svg>`;
 
 const visibleSections = computed(() => {
+  if (isSalesInvoicePage.value) {
+    const salesSection = sections.find((section) => section.key === 'sales');
+    return [{
+      ...salesSection,
+      items: salesSection.items.filter((item) => item.page === 'sales'),
+    }];
+  }
+
   if (roleId.value === 1) return sections;
   if (roleId.value === 2) {
     return sections.map((section) => ({

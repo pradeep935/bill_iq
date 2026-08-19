@@ -709,9 +709,9 @@ const shareLastSaleWhatsApp = async () => {
     }
 };
 
-const printAndNew = async () => {
+const printAndNew = async (format = defaultPrintFormat.value) => {
     const printWindow = window.open('about:blank', '_blank');
-    const sale = await save('approved', { print: true, printWindow, printFormat: defaultPrintFormat.value });
+    const sale = await save('approved', { print: true, printWindow, printFormat: format });
     if (!sale && printWindow) printWindow.close();
     if (sale) newBill({ keepLastSale: true });
 };
@@ -985,7 +985,8 @@ onUnmounted(() => {
                         <button v-if="lastSale" class="pos-action print" type="button" title="Print 80mm thermal receipt" @click="printInvoice(lastSale, null, 'thermal')">80mm</button>
                         <button v-if="lastSale" class="pos-action print" type="button" title="Print A4 GST invoice" @click="printInvoice(lastSale, null, 'a4')">A4</button>
                         <button v-if="lastSale" class="pos-action print" type="button" title="Share last posted invoice through WhatsApp" :disabled="sharingWhatsApp" @click="shareLastSaleWhatsApp">{{ sharingWhatsApp ? 'Opening...' : 'WhatsApp' }}</button>
-                        <button class="pos-action print" type="button" title="Complete sale, print invoice and start a new bill" :disabled="saving || !hasCartItems" @click="printAndNew">Print & New</button>
+                        <button class="pos-action print" type="button" title="Complete sale, print A4 invoice and start a new bill" :disabled="saving || !hasCartItems" @click="printAndNew('a4')">Print A4 & New</button>
+                        <button class="pos-action print" type="button" title="Complete sale, print 80mm receipt and start a new bill" :disabled="saving || !hasCartItems" @click="printAndNew('thermal')">Print 80mm & New</button>
 	                        <button class="pos-action complete primary" type="button" title="Complete sale and post invoice" :disabled="saving || !hasCartItems" @click="save('approved', { reset: true, keepLastSale: true })">
                             <span>{{ saving && savingAction === 'approved' ? 'Completing...' : 'Complete Sale' }}</span>
                             <strong>{{ formatMoney(totals.grand) }}</strong>

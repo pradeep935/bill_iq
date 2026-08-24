@@ -15,10 +15,11 @@ class InvoiceDocumentRenderer
         if (!blank($sale['branch_address'] ?? null)) {
             $business['address'] = $sale['branch_address'];
         }
+        $a4Options = $business['a4_print_options'];
         $money = fn ($value): string => 'Rs. ' . number_format((float) $value, 2);
         $date = $this->date($sale['invoice_date'] ?? null);
         $taxRows = $this->salesHsnTaxRows($sale);
-        $itemRows = collect($sale['items'] ?? [])->values()->map(function ($item, $index) use ($money) {
+        $itemRows = collect($sale['items'] ?? [])->values()->map(function ($item, $index) use ($money, $a4Options) {
             $tax = max(0, (float) ($item['line_total'] ?? 0) - (float) ($item['taxable_amount'] ?? 0));
             $rateText = $money($item['selling_rate'] ?? 0);
             $gstText = $money($tax) . ' (' . rtrim(rtrim(number_format((float) ($item['gst_rate'] ?? 0), 2), '0'), '.') . '%)';
@@ -26,7 +27,7 @@ class InvoiceDocumentRenderer
             return '<tr>'
                 . '<td>' . ($index + 1) . '</td>'
                 . '<td><strong>' . e($item['product'] ?? 'Item') . '</strong></td>'
-                . '<td>' . e($item['hsn_code_snapshot'] ?? '-') . '</td>'
+                . ($a4Options['show_hsn'] ? '<td>' . e($item['hsn_code_snapshot'] ?? '-') . '</td>' : '')
                 . '<td class="right">' . $this->qty($item['quantity'] ?? 0) . '</td>'
                 . '<td class="right">' . e($item['unit'] ?? 'PCS') . '</td>'
                 . '<td class="right">' . $rateText . '</td>'
@@ -45,15 +46,30 @@ class InvoiceDocumentRenderer
         $logo = ($business['show_logo_on_invoice'] ?? true) && !blank($business['logo_url'] ?? '')
             ? '<img class="seller-logo" src="' . e($business['logo_url']) . '" alt="' . e($business['name']) . ' logo">'
             : '';
+        $seller = $a4Options['show_business_info']
+            ? '<section class="invoice-head"><div class="seller"><div class="seller-top">' . $logo . '<div><h2>' . e($business['name']) . '</h2><p>' . e($business['address']) . '</p><p>Phone no.: ' . e($business['phone'] ?: '-') . '</p><p>Email: ' . e($business['email'] ?: '-') . '</p><p>GSTIN: ' . e($business['gstin'] ?: '-') . '</p><p>State: ' . e($business['state'] ?: '-') . '</p></div></div></div><div class="meta"><div><span>Invoice No.</span><strong>' . e($sale['invoice_number']) . '</strong></div><div><span>Date</span><strong>' . e($date) . '</strong></div><div><span>Place of supply</span><strong>' . e($business['state'] ?: '-') . '</strong></div></div></section>'
+            : '<section class="invoice-head"><div class="seller"><h2>Tax Invoice</h2></div><div class="meta"><div><span>Invoice No.</span><strong>' . e($sale['invoice_number']) . '</strong></div><div><span>Date</span><strong>' . e($date) . '</strong></div><div><span>Place of supply</span><strong>' . e($business['state'] ?: '-') . '</strong></div></div></section>';
+        $billTo = $a4Options['show_customer_info']
+            ? '<section class="bill-to"><span>Bill To</span><h3>' . e($sale['customer'] ?: 'Walk-in Customer') . '</h3><p>' . e($billToAddress) . '</p><p>Contact No.: ' . e($sale['customer_mobile'] ?: '-') . '</p><p>GSTIN: ' . e($sale['customer_gstin'] ?: '-') . '</p><p>State: ' . e($business['state'] ?: '-') . '</p></section>'
+            : '';
+        $hsnHeader = $a4Options['show_hsn'] ? '<th>HSN/SAC</th>' : '';
+        $emptyCols = $a4Options['show_hsn'] ? 8 : 7;
+        $totalHsnCell = $a4Options['show_hsn'] ? '<td></td>' : '';
+        $taxSummary = $a4Options['show_tax_summary']
+            ? '<table class="tax-summary"><thead><tr><th rowspan="2">HSN/SAC</th><th rowspan="2">Taxable amount</th><th colspan="2">CGST</th><th colspan="2">SGST</th><th rowspan="2">Total Tax Amount</th></tr><tr><th>Rate</th><th>Amount</th><th>Rate</th><th>Amount</th></tr></thead><tbody>' . $taxSummaryRows . '<tr class="total-row"><td>Total</td><td class="right">' . $money($sale['taxable_amount'] ?? 0) . '</td><td></td><td class="right">' . $money($sale['cgst_amount'] ?? 0) . '</td><td></td><td class="right">' . $money($sale['sgst_amount'] ?? 0) . '</td><td class="right">' . $money($totalTax) . '</td></tr></tbody></table>'
+            : '';
+        $bankBlock = $a4Options['show_bank_details'] ? '<div><h4>Bank Details</h4><p>Name : ' . e($business['bank']) . '</p><p>Account No. : ' . e($business['account_number'] ?: '-') . '</p><p>IFSC code : ' . e($business['ifsc'] ?: '-') . '</p><p>Account holder name : ' . e($business['account_holder'] ?: $business['name']) . '</p></div>' : '<div></div>';
+        $termsBlock = $a4Options['show_terms'] ? '<div><h4>Terms and conditions</h4><p>' . $terms . '</p></div>' : '<div></div>';
+        $signatureBlock = $a4Options['show_signature'] ? '<div class="signature"><p>For : ' . e($business['name']) . '</p><strong>Authorized Signatory</strong></div>' : '<div></div>';
 
         return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' . e($sale['invoice_number']) . '</title>' . $this->invoiceCss() . '</head><body>' . $printAction . '<main class="invoice-page">'
             . '<h1 class="title">Tax Invoice</h1>'
-            . '<section class="invoice-head"><div class="seller"><div class="seller-top">' . $logo . '<div><h2>' . e($business['name']) . '</h2><p>' . e($business['address']) . '</p><p>Phone no.: ' . e($business['phone'] ?: '-') . '</p><p>Email: ' . e($business['email'] ?: '-') . '</p><p>GSTIN: ' . e($business['gstin'] ?: '-') . '</p><p>State: ' . e($business['state'] ?: '-') . '</p></div></div></div><div class="meta"><div><span>Invoice No.</span><strong>' . e($sale['invoice_number']) . '</strong></div><div><span>Date</span><strong>' . e($date) . '</strong></div><div><span>Place of supply</span><strong>' . e($business['state'] ?: '-') . '</strong></div></div></section>'
-            . '<section class="bill-to"><span>Bill To</span><h3>' . e($sale['customer'] ?: 'Walk-in Customer') . '</h3><p>' . e($billToAddress) . '</p><p>Contact No.: ' . e($sale['customer_mobile'] ?: '-') . '</p><p>GSTIN: ' . e($sale['customer_gstin'] ?: '-') . '</p><p>State: ' . e($business['state'] ?: '-') . '</p></section>'
-            . '<table class="items"><thead><tr><th>#</th><th>Item name</th><th>HSN/SAC</th><th>Quantity</th><th>Unit</th><th>Price / Unit</th><th>GST</th><th>Amount</th></tr></thead><tbody>' . ($itemRows ?: '<tr><td colspan="8" class="center">No items</td></tr>') . '<tr class="total-row"><td></td><td>Total</td><td></td><td class="right">' . $this->qty(collect($sale['items'] ?? [])->sum(fn ($item) => (float) ($item['quantity'] ?? 0))) . '</td><td></td><td></td><td class="right">' . $money($totalTax) . '</td><td class="right">' . $money($sale['grand_total'] ?? 0) . '</td></tr></tbody></table>'
+            . $seller
+            . $billTo
+            . '<table class="items"><thead><tr><th>#</th><th>Item name</th>' . $hsnHeader . '<th>Quantity</th><th>Unit</th><th>Price / Unit</th><th>GST</th><th>Amount</th></tr></thead><tbody>' . ($itemRows ?: '<tr><td colspan="' . $emptyCols . '" class="center">No items</td></tr>') . '<tr class="total-row"><td></td><td>Total</td>' . $totalHsnCell . '<td class="right">' . $this->qty(collect($sale['items'] ?? [])->sum(fn ($item) => (float) ($item['quantity'] ?? 0))) . '</td><td></td><td></td><td class="right">' . $money($totalTax) . '</td><td class="right">' . $money($sale['grand_total'] ?? 0) . '</td></tr></tbody></table>'
             . '<section class="amount-row"><div><span>Invoice Amount in Words</span><strong>' . e($this->amountInWords((float) ($sale['grand_total'] ?? 0))) . '</strong></div><table><tr><th colspan="2">Amounts</th></tr><tr><td>Sub Total</td><td class="right">' . $money($sale['subtotal'] ?? 0) . '</td></tr><tr><td>Total</td><td class="right strong">' . $money($sale['grand_total'] ?? 0) . '</td></tr><tr><td>Received</td><td class="right">' . $money($received) . '</td></tr><tr><td>Balance</td><td class="right">' . $money($balance) . '</td></tr></table></section>'
-            . '<table class="tax-summary"><thead><tr><th rowspan="2">HSN/SAC</th><th rowspan="2">Taxable amount</th><th colspan="2">CGST</th><th colspan="2">SGST</th><th rowspan="2">Total Tax Amount</th></tr><tr><th>Rate</th><th>Amount</th><th>Rate</th><th>Amount</th></tr></thead><tbody>' . $taxSummaryRows . '<tr class="total-row"><td>Total</td><td class="right">' . $money($sale['taxable_amount'] ?? 0) . '</td><td></td><td class="right">' . $money($sale['cgst_amount'] ?? 0) . '</td><td></td><td class="right">' . $money($sale['sgst_amount'] ?? 0) . '</td><td class="right">' . $money($totalTax) . '</td></tr></tbody></table>'
-            . '<section class="footer-grid"><div><h4>Bank Details</h4><p>Name : ' . e($business['bank']) . '</p><p>Account No. : ' . e($business['account_number'] ?: '-') . '</p><p>IFSC code : ' . e($business['ifsc'] ?: '-') . '</p><p>Account holder name : ' . e($business['account_holder'] ?: $business['name']) . '</p></div><div><h4>Terms and conditions</h4><p>' . $terms . '</p></div><div class="signature"><p>For : ' . e($business['name']) . '</p><strong>Authorized Signatory</strong></div></section>'
+            . $taxSummary
+            . '<section class="footer-grid">' . $bankBlock . $termsBlock . $signatureBlock . '</section>'
             . '</main></body></html>';
     }
 
@@ -81,6 +97,7 @@ class InvoiceDocumentRenderer
         if (!blank($sale['branch_address'] ?? null)) {
             $business['address'] = $sale['branch_address'];
         }
+        $thermalOptions = $business['thermal_print_options'];
 
         $money = fn ($value): string => number_format((float) $value, 2);
         $qty = fn ($value): string => $this->qty($value);
@@ -89,8 +106,16 @@ class InvoiceDocumentRenderer
         $discount = (float) ($sale['item_discount_amount'] ?? 0) + (float) ($sale['voucher_discount_amount'] ?? 0);
         $dateTime = $sale['invoice_datetime'] ?? $sale['invoice_date'] ?? now()->format('Y-m-d H:i');
         $customer = $sale['customer'] ?: 'Walk-in Customer';
+        $paperWidth = $business['thermal_paper_width'] === '58mm' ? '58mm' : '80mm';
+        $receiptWidth = $paperWidth === '58mm' ? '54mm' : '76mm';
+        $logo = ($business['show_logo_on_thermal_receipt'] ?? false) && !blank($business['logo_url'] ?? '')
+            ? '<div class="center"><img class="receipt-logo" src="' . e($business['logo_url']) . '" alt="' . e($business['name']) . ' logo"></div>'
+            : '';
+        $businessBlock = $thermalOptions['show_business_info']
+            ? $logo . '<div class="center store">' . e($business['name']) . '</div><div class="center muted">' . e($business['address']) . '</div>' . ($thermalOptions['show_gstin'] ? '<div class="center muted">GSTIN: ' . e($business['gstin']) . '</div>' : '') . '<div class="center muted">Phone: ' . e($business['phone']) . '</div>'
+            : '';
 
-        $items = collect($sale['items'] ?? [])->values()->map(function ($item) use ($money, $qty) {
+        $items = collect($sale['items'] ?? [])->values()->map(function ($item) use ($money, $qty, $thermalOptions) {
             $mrp = (float) ($item['mrp'] ?? 0);
             $rate = (float) ($item['selling_rate'] ?? 0);
             $saving = $mrp > $rate ? ($mrp - $rate) * (float) ($item['quantity'] ?? 0) : 0;
@@ -98,35 +123,32 @@ class InvoiceDocumentRenderer
             return '<div class="item">'
                 . '<div class="item-name">' . e($item['product'] ?? 'Item') . '</div>'
                 . '<div class="line"><span>' . $qty($item['quantity'] ?? 0) . ' x ' . $money($rate) . '</span><strong>' . $money($item['line_total'] ?? 0) . '</strong></div>'
-                . ($saving > 0 ? '<div class="saving">MRP ' . $money($mrp) . ' | Saved ' . $money($saving) . '</div>' : '')
+                . ($thermalOptions['show_item_savings'] && $saving > 0 ? '<div class="saving">MRP ' . $money($mrp) . ' | Saved ' . $money($saving) . '</div>' : '')
                 . '</div>';
         })->implode('');
+        $customerBlock = $thermalOptions['show_customer'] ? '<div><span>Customer</span><strong>' . e($customer) . '</strong></div>' . (!blank($sale['customer_mobile'] ?? null) ? '<div><span>Mobile</span><strong>' . e($sale['customer_mobile']) . '</strong></div>' : '') : '';
+        $taxBlock = $thermalOptions['show_tax_breakup'] ? '<div class="line"><span>Taxable</span><strong>' . $money($sale['taxable_amount'] ?? 0) . '</strong></div><div class="line"><span>Tax</span><strong>' . $money($tax) . '</strong></div>' : '';
+        $paymentBlock = $thermalOptions['show_payment_details'] ? '<div class="line"><span>Payment</span><strong>' . e($paymentMode) . '</strong></div><div class="line"><span>Paid</span><strong>' . $money($sale['paid_amount'] ?? 0) . '</strong></div><div class="line"><span>Due</span><strong>' . $money($sale['balance_amount'] ?? 0) . '</strong></div>' : '';
+        $footerText = trim((string) ($business['thermal_footer_text'] ?? 'Thank You')) ?: 'Thank You';
 
         return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' . e($sale['invoice_number']) . ' Receipt</title><style>'
-            . '@page{size:80mm auto;margin:2mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#000;font-family:"Courier New",monospace;font-size:12px;line-height:1.3}.no-print{padding:8px;text-align:center}.no-print button{min-height:34px;padding:6px 12px;border:1px solid #000;background:#fff;color:#000;font-weight:700}.receipt{width:76mm;margin:0 auto;padding:2mm}.center{text-align:center}.store{font-size:15px;font-weight:800;text-transform:uppercase}.muted{font-size:11px}.rule{border-top:1px dashed #000;margin:7px 0}.meta div,.line{display:flex;justify-content:space-between;gap:8px}.meta span,.line span{min-width:0}.line strong{white-space:nowrap}.item{margin:7px 0}.item-name{font-weight:700;word-break:break-word}.saving{font-size:10px}.total{font-size:14px;font-weight:900}.thanks{margin-top:8px;text-align:center;font-weight:800}@media print{html,body{width:80mm;background:#fff}.no-print{display:none}.receipt{width:76mm;margin:0;padding:0}}'
-            . '</style></head><body><div class="no-print"><button onclick="window.print()">Print 80mm Receipt</button></div><main class="receipt">'
-            . '<div class="center store">' . e($business['name']) . '</div>'
-            . '<div class="center muted">' . e($business['address']) . '</div>'
-            . '<div class="center muted">GSTIN: ' . e($business['gstin']) . '</div>'
-            . '<div class="center muted">Phone: ' . e($business['phone']) . '</div>'
+            . '@page{size:' . $paperWidth . ' auto;margin:2mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#000;font-family:"Courier New",monospace;font-size:12px;line-height:1.3}.no-print{padding:8px;text-align:center}.no-print button{min-height:34px;padding:6px 12px;border:1px solid #000;background:#fff;color:#000;font-weight:700}.receipt{width:' . $receiptWidth . ';margin:0 auto;padding:2mm}.receipt-logo{width:28mm;max-height:18mm;object-fit:contain;margin-bottom:4px}.center{text-align:center}.store{font-size:15px;font-weight:800;text-transform:uppercase}.muted{font-size:11px}.rule{border-top:1px dashed #000;margin:7px 0}.meta div,.line{display:flex;justify-content:space-between;gap:8px}.meta span,.line span{min-width:0}.line strong{white-space:nowrap}.item{margin:7px 0}.item-name{font-weight:700;word-break:break-word}.saving{font-size:10px}.total{font-size:14px;font-weight:900}.thanks{margin-top:8px;text-align:center;font-weight:800}@media print{html,body{width:' . $paperWidth . ';background:#fff}.no-print{display:none}.receipt{width:' . $receiptWidth . ';margin:0;padding:0}}'
+            . '</style></head><body><div class="no-print"><button onclick="window.print()">Print ' . e($paperWidth) . ' Receipt</button></div><main class="receipt">'
+            . $businessBlock
             . '<div class="rule"></div><div class="meta">'
             . '<div><span>Invoice</span><strong>' . e($sale['invoice_number']) . '</strong></div>'
             . '<div><span>Date</span><strong>' . e($dateTime) . '</strong></div>'
-            . '<div><span>Customer</span><strong>' . e($customer) . '</strong></div>'
-            . (!blank($sale['customer_mobile'] ?? null) ? '<div><span>Mobile</span><strong>' . e($sale['customer_mobile']) . '</strong></div>' : '')
+            . $customerBlock
             . '</div><div class="rule"></div>'
             . ($items ?: '<div class="center">No items</div>')
             . '<div class="rule"></div>'
             . '<div class="line"><span>Subtotal</span><strong>' . $money($sale['subtotal'] ?? 0) . '</strong></div>'
             . '<div class="line"><span>Discount</span><strong>' . $money($discount) . '</strong></div>'
-            . '<div class="line"><span>Taxable</span><strong>' . $money($sale['taxable_amount'] ?? 0) . '</strong></div>'
-            . '<div class="line"><span>Tax</span><strong>' . $money($tax) . '</strong></div>'
+            . $taxBlock
             . '<div class="line"><span>Round Off</span><strong>' . $money($sale['round_off'] ?? 0) . '</strong></div>'
             . '<div class="rule"></div><div class="line total"><span>TOTAL</span><strong>' . $money($sale['grand_total'] ?? 0) . '</strong></div><div class="rule"></div>'
-            . '<div class="line"><span>Payment</span><strong>' . e($paymentMode) . '</strong></div>'
-            . '<div class="line"><span>Paid</span><strong>' . $money($sale['paid_amount'] ?? 0) . '</strong></div>'
-            . '<div class="line"><span>Due</span><strong>' . $money($sale['balance_amount'] ?? 0) . '</strong></div>'
-            . '<div class="thanks">Thank You</div>'
+            . $paymentBlock
+            . '<div class="thanks">' . e($footerText) . '</div>'
             . '</main></body></html>';
     }
 
@@ -135,7 +157,7 @@ class InvoiceDocumentRenderer
         $company = $businessId && Schema::hasTable('companies') ? DB::table('companies')->where('id', $businessId)->first() : null;
         $branch = $businessId && Schema::hasTable('branches') ? DB::table('branches')->where('business_id', $businessId)->where('status', 'active')->orderBy('id')->first() : null;
 
-        $value = fn ($source, string $key, $fallback = '') => $source && property_exists($source, $key) && $source->{$key} ? $source->{$key} : $fallback;
+        $value = fn ($source, string $key, $fallback = '') => $source && property_exists($source, $key) && $source->{$key} !== null ? $source->{$key} : $fallback;
 
         return [
             'name' => $value($company, 'name', 'ABC Enterprises'),
@@ -152,7 +174,46 @@ class InvoiceDocumentRenderer
             'logo_path' => $value($company, 'logo_path', ''),
             'logo_url' => $this->publicFileUrl($value($company, 'logo_path', '')),
             'show_logo_on_invoice' => (bool) $value($company, 'show_logo_on_invoice', true),
+            'show_logo_on_thermal_receipt' => (bool) $value($company, 'show_logo_on_thermal_receipt', false),
+            'thermal_paper_width' => $value($company, 'thermal_paper_width', '80mm'),
+            'thermal_footer_text' => $value($company, 'thermal_footer_text', 'Thank You'),
+            'a4_print_options' => $this->printOptions($value($company, 'a4_print_options', null), $this->defaultA4PrintOptions()),
+            'thermal_print_options' => $this->printOptions($value($company, 'thermal_print_options', null), $this->defaultThermalPrintOptions()),
             'upi' => config('invoice.upi_id', 'abc@upi'),
+        ];
+    }
+
+    private function printOptions($stored, array $defaults): array
+    {
+        if (is_string($stored) && $stored !== '') {
+            $stored = json_decode($stored, true);
+        }
+
+        return array_merge($defaults, is_array($stored) ? array_intersect_key($stored, $defaults) : []);
+    }
+
+    private function defaultA4PrintOptions(): array
+    {
+        return [
+            'show_business_info' => true,
+            'show_customer_info' => true,
+            'show_hsn' => true,
+            'show_tax_summary' => true,
+            'show_bank_details' => true,
+            'show_terms' => true,
+            'show_signature' => true,
+        ];
+    }
+
+    private function defaultThermalPrintOptions(): array
+    {
+        return [
+            'show_business_info' => true,
+            'show_gstin' => true,
+            'show_customer' => true,
+            'show_item_savings' => true,
+            'show_tax_breakup' => true,
+            'show_payment_details' => true,
         ];
     }
 

@@ -736,6 +736,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/saas', [SetupController::class, 'saas'])->name('saas');
             Route::get('/acceptance', [ReportsController::class, 'setupAcceptance'])->name('acceptance');
             Route::get('/settings', [SetupController::class, 'settings'])->name('settings');
+            Route::post('/settings/business-profile', [SetupController::class, 'updateBusinessProfile'])->name('settings.business-profile');
         });
     });
 

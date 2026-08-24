@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
+import axios from 'axios';
 import Layout from '../Layout.vue';
 
 const props = defineProps({
@@ -14,10 +15,29 @@ const props = defineProps({
     permissions: { type: Object, default: () => ({}) },
     routes: { type: Object, default: () => ({}) },
     emptyStates: { type: Object, default: () => ({}) },
+    businessProfile: { type: Object, default: () => ({}) },
 });
 
 const refreshing = ref(false);
 const changingSection = ref('');
+const savingProfile = ref(false);
+const profileErrors = ref({});
+const profileSaved = ref('');
+const profileForm = reactive({
+    name: props.businessProfile.name || '',
+    gstin: props.businessProfile.gstin || '',
+    state: props.businessProfile.state || '',
+    financial_year: props.businessProfile.financial_year || '',
+    address: props.businessProfile.address || '',
+    phone: props.businessProfile.phone || '',
+    email: props.businessProfile.email || '',
+    bank_name: props.businessProfile.bank_name || '',
+    bank_account_number: props.businessProfile.bank_account_number || '',
+    bank_ifsc: props.businessProfile.bank_ifsc || '',
+    bank_account_holder: props.businessProfile.bank_account_holder || '',
+    invoice_terms: props.businessProfile.invoice_terms || '',
+    default_print_format: props.businessProfile.default_print_format || 'a4',
+});
 
 const cards = computed(() => props.summary || []);
 const rows = computed(() => props.metrics || []);
@@ -56,6 +76,25 @@ const openSection = (section) => {
             changingSection.value = '';
         },
     });
+};
+
+const saveBusinessProfile = async () => {
+    savingProfile.value = true;
+    profileErrors.value = {};
+    profileSaved.value = '';
+    try {
+        const response = await axios.post(routeUrl('app.setup.settings.business-profile', '/app/setup/settings/business-profile'), profileForm);
+        Object.assign(profileForm, response.data.businessProfile || profileForm);
+        profileSaved.value = response.data.message || 'Business profile saved.';
+    } catch (error) {
+        if (error.response?.status === 422) {
+            profileErrors.value = error.response.data.errors || {};
+            return;
+        }
+        profileErrors.value = { general: [error.response?.data?.message || 'Business profile save nahi ho saka.'] };
+    } finally {
+        savingProfile.value = false;
+    }
 };
 
 const statusClass = (status) => String(status || '').toLowerCase().replace(/\s+/g, '-');
@@ -147,9 +186,42 @@ const showEmpty = computed(() => Object.values(props.emptyStates || {}).some((it
                 </table>
             </div>
         </section>
+
+        <section v-if="active === 'settings'" class="settings-panel">
+            <div class="settings-head">
+                <div>
+                    <span>BUSINESS SETTINGS</span>
+                    <h2>Business Profile & Invoice Print</h2>
+                    <p>Name, address, GSTIN, bank details and default print format invoice/report print par use honge.</p>
+                </div>
+                <button type="button" :disabled="savingProfile" @click="saveBusinessProfile">{{ savingProfile ? 'Saving...' : 'Save Settings' }}</button>
+            </div>
+
+            <div class="settings-grid">
+                <label><span>Business Name</span><input v-model="profileForm.name" placeholder="Business name" /></label>
+                <label><span>GST Number</span><input v-model="profileForm.gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
+                <label><span>State</span><input v-model="profileForm.state" placeholder="State" /></label>
+                <label><span>Financial Year</span><input v-model="profileForm.financial_year" placeholder="2026-27" /></label>
+                <label><span>Phone</span><input v-model="profileForm.phone" placeholder="Phone number" /></label>
+                <label><span>Email</span><input v-model="profileForm.email" type="email" placeholder="Email address" /></label>
+                <label class="span-2"><span>Address</span><textarea v-model="profileForm.address" placeholder="Business address printed on invoice"></textarea></label>
+                <label><span>Bank Name</span><input v-model="profileForm.bank_name" placeholder="Bank name" /></label>
+                <label><span>Account Number</span><input v-model="profileForm.bank_account_number" placeholder="Account number" /></label>
+                <label><span>IFSC Code</span><input v-model="profileForm.bank_ifsc" placeholder="IFSC code" /></label>
+                <label><span>Account Holder</span><input v-model="profileForm.bank_account_holder" placeholder="Account holder name" /></label>
+                <label><span>Default Print</span><select v-model="profileForm.default_print_format"><option value="a4">A4 Invoice</option><option value="thermal">80mm Thermal</option></select></label>
+                <label class="span-2"><span>Terms & Conditions</span><textarea v-model="profileForm.invoice_terms" placeholder="Terms shown at invoice footer"></textarea></label>
+            </div>
+
+            <div v-if="Object.keys(profileErrors).length" class="settings-error">
+                <span v-for="(messages, field) in profileErrors" :key="field">{{ messages[0] }}</span>
+            </div>
+            <div v-if="profileSaved" class="settings-success">{{ profileSaved }}</div>
+        </section>
     </Layout>
 </template>
 
 <style scoped>
 .workspace-toolbar{display:flex;gap:10px;justify-content:flex-end;margin:-4px 0 14px}.workspace-toolbar button,.workspace-toolbar a,.workspace-action,.workspace-empty a{align-items:center;background:#fff;border:1px solid #d8e0eb;border-radius:8px;color:#344159;display:inline-flex;font-size:12px;font-weight:800;min-height:38px;padding:8px 10px;text-decoration:none}.workspace-toolbar button:disabled,.tabs button:disabled{cursor:not-allowed;opacity:.65}.workspace-summary{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.workspace-card{background:#fff;border:1px solid #dfe6ef;border-left:4px solid #2563eb;border-radius:8px;box-shadow:0 8px 22px rgba(25,50,84,.035);color:inherit;min-height:92px;padding:13px 14px;text-decoration:none}.workspace-card.disabled{opacity:.65;pointer-events:none}.workspace-card span{color:#7f8da4;display:block;font-size:11px;font-weight:800;margin-bottom:7px}.workspace-card strong{color:#142139;display:block;font-size:22px;font-weight:900;line-height:1.1}.workspace-card small{color:#8490a2;display:block;margin-top:8px}.tone-good{border-left-color:#22c55e}.tone-warn{border-left-color:#f59e0b}.tone-money{border-left-color:#14b8a6}.workspace-empty-grid{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.workspace-empty{align-items:center;background:#fff;border:1px dashed #cad5e3;border-radius:8px;display:flex;gap:12px;justify-content:space-between;padding:14px}.workspace-empty strong{color:#344159;font-size:13px}.workspace-empty span,.workspace-muted{color:#8490a2;font-size:12px;font-weight:800}.workspace-panel{background:#fff;border:1px solid #dfe6ef;border-radius:8px;margin-top:18px;padding:18px}.workspace-head{align-items:flex-start;display:flex;gap:14px;justify-content:space-between;margin-bottom:14px}.workspace-head h2{color:#142139;font-size:18px;margin:0}.workspace-head p{color:#758197;font-size:12px;margin:4px 0 0}.tabs{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.tabs button{align-items:center;background:#fff;border:1px solid #d8e0eb;border-radius:8px;color:#344159;display:inline-flex;font-size:12px;font-weight:800;min-height:38px;padding:8px 10px;text-transform:capitalize}.tabs button.active{background:#142139;color:#fff}.workspace-table-wrap{border:1px solid #edf1f5;border-radius:8px;overflow:auto}.workspace-table{border-collapse:collapse;min-width:760px;width:100%}.workspace-table th,.workspace-table td{border-bottom:1px solid #edf1f5;font-size:12px;padding:12px 10px;text-align:left}.workspace-table th{background:#f8fafc;color:#69758a;font-size:10px;letter-spacing:.04em;text-transform:uppercase}.metric-status{background:#eef4ff;border-radius:999px;color:#2457d6;display:inline-flex;font-size:11px;font-weight:900;padding:5px 9px}.metric-status.completed,.metric-status.configured,.metric-status.active{background:#e7f8ef;color:#15803d}.metric-status.pending,.metric-status.not-configured,.metric-status.attention-required{background:#fff7ed;color:#b45309}.metric-status.coming-soon{background:#f1f5f9;color:#64748b}.workspace-empty-cell{color:#8490a2;text-align:center}@media(max-width:900px){.workspace-toolbar,.workspace-head{align-items:flex-start;flex-direction:column}.workspace-summary,.workspace-empty-grid{grid-template-columns:1fr}.tabs{justify-content:flex-start;overflow-x:auto;width:100%}}
+.settings-panel{margin-top:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.settings-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.settings-head span{color:#2457d6;font-size:10px;font-weight:900;letter-spacing:.08em}.settings-head h2{margin:2px 0 4px;color:#142139;font-size:18px}.settings-head p{margin:0;color:#758197;font-size:12px}.settings-head button{min-height:40px;padding:9px 14px;color:#fff;background:#2457d6;border:1px solid #2457d6;border-radius:8px;font-size:12px;font-weight:850;cursor:pointer}.settings-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.settings-grid label{display:grid;gap:6px}.settings-grid label span{color:#5f6d82;font-size:11px;font-weight:850}.settings-grid input,.settings-grid select,.settings-grid textarea{width:100%;min-height:38px;padding:8px 10px;color:#27344c;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}.settings-grid textarea{min-height:82px;resize:vertical}.span-2{grid-column:span 2}.settings-error,.settings-success{display:grid;gap:5px;margin-top:12px;padding:10px;border-radius:8px;font-size:12px;font-weight:750}.settings-error{color:#96333a;background:#fff3f4;border:1px solid #ffd4d8}.settings-success{color:#166534;background:#eefbf4;border:1px solid #bdebd0}@media(max-width:900px){.settings-head{flex-direction:column}.settings-grid{grid-template-columns:1fr}.span-2{grid-column:span 1}}
 </style>

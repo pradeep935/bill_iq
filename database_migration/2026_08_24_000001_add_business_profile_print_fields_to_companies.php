@@ -15,6 +15,7 @@ return new class extends Migration
         Schema::table('companies', function (Blueprint $table) {
             foreach ([
                 'address' => fn () => $table->text('address')->nullable(),
+                'logo_path' => fn () => $table->string('logo_path')->nullable(),
                 'phone' => fn () => $table->string('phone', 40)->nullable(),
                 'email' => fn () => $table->string('email')->nullable(),
                 'bank_name' => fn () => $table->string('bank_name')->nullable(),
@@ -22,6 +23,7 @@ return new class extends Migration
                 'bank_ifsc' => fn () => $table->string('bank_ifsc', 30)->nullable(),
                 'bank_account_holder' => fn () => $table->string('bank_account_holder')->nullable(),
                 'invoice_terms' => fn () => $table->text('invoice_terms')->nullable(),
+                'show_logo_on_invoice' => fn () => $table->boolean('show_logo_on_invoice')->default(true),
             ] as $column => $definition) {
                 if (!Schema::hasColumn('companies', $column)) {
                     $definition();
@@ -37,7 +39,7 @@ return new class extends Migration
         }
 
         Schema::table('companies', function (Blueprint $table) {
-            foreach (['invoice_terms', 'bank_account_holder', 'bank_ifsc', 'bank_account_number', 'bank_name', 'email', 'phone', 'address'] as $column) {
+            foreach (['show_logo_on_invoice', 'invoice_terms', 'bank_account_holder', 'bank_ifsc', 'bank_account_number', 'bank_name', 'email', 'phone', 'logo_path', 'address'] as $column) {
                 if (Schema::hasColumn('companies', $column)) {
                     $table->dropColumn($column);
                 }

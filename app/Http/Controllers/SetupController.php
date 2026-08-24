@@ -71,6 +71,7 @@ class SetupController extends Controller
             'state' => ['nullable', 'string', 'max:120'],
             'financial_year' => ['nullable', 'string', 'max:30'],
             'address' => ['nullable', 'string', 'max:2000'],
+            'logo_path' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
             'email' => ['nullable', 'email', 'max:255'],
             'bank_name' => ['nullable', 'string', 'max:255'],
@@ -79,6 +80,7 @@ class SetupController extends Controller
             'bank_account_holder' => ['nullable', 'string', 'max:255'],
             'invoice_terms' => ['nullable', 'string', 'max:3000'],
             'default_print_format' => ['nullable', 'in:a4,thermal'],
+            'show_logo_on_invoice' => ['nullable', 'boolean'],
         ]);
 
         $businessId = AppController::businessId();
@@ -110,6 +112,8 @@ class SetupController extends Controller
             'state' => $value('state'),
             'financial_year' => $value('financial_year'),
             'address' => $value('address'),
+            'logo_path' => $value('logo_path'),
+            'logo_url' => $this->publicFileUrl($value('logo_path')),
             'phone' => $value('phone'),
             'email' => $value('email'),
             'bank_name' => $value('bank_name'),
@@ -118,6 +122,21 @@ class SetupController extends Controller
             'bank_account_holder' => $value('bank_account_holder'),
             'invoice_terms' => $value('invoice_terms'),
             'default_print_format' => $value('default_print_format', 'a4'),
+            'show_logo_on_invoice' => (bool) $value('show_logo_on_invoice', true),
         ];
+    }
+
+    private function publicFileUrl(?string $path): string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return '';
+        }
+
+        if (preg_match('#^https?://#i', $path) || substr($path, 0, 1) === '/') {
+            return $path;
+        }
+
+        return asset('storage/' . ltrim($path, '/'));
     }
 }

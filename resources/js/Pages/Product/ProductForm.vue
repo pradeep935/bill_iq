@@ -1210,8 +1210,8 @@ const validateBeforeSave = () => {
         }
     });
 
-    if (!form.hsn_master_id) {
-        errors.hsn_code = `Select a valid ${hsnSacLabel.value} from HSN/SAC Master.`;
+    if (isTaxable.value && !form.hsn_code) {
+        errors.hsn_code = `Enter or select ${hsnSacLabel.value}.`;
         firstErrorTab ||= 'gst';
     }
 
@@ -1884,7 +1884,7 @@ const saveProduct = () => {
                                         </span>
 
                                         <span class="field-hint">
-                                            Product name/category se HSN/SAC Master suggestions aayenge. Select karte hi GST rate auto-fill ho jayega.
+                                            Product name/category se HSN/SAC Master suggestions aayenge. Manual code bhi enter kar sakte hain; master select karne par GST rate auto-fill ho jayega.
                                         </span>
                                     </div>
 
@@ -1897,6 +1897,17 @@ const saveProduct = () => {
                                         <span>
                                             {{ selectedHsn.code_type || hsnSacLabel }} {{ selectedHsn.hsn_code }} - {{ selectedHsn.description }}. One classification can be linked with many products.
                                             <template v-if="form.tax_source === 'master_suggested'"> GST rate is suggested from master and can be verified from HSN/SAC Master.</template>
+                                        </span>
+                                    </div>
+
+                                    <div
+                                        v-else-if="form.hsn_code"
+                                        class="field-help manual-hsn field-span-2"
+                                    >
+                                        <span class="help-icon">i</span>
+
+                                        <span>
+                                            Manual {{ hsnSacLabel }} {{ form.hsn_code }} use ho raha hai. Master select karenge to GST rate auto-fill ho jayega.
                                         </span>
                                     </div>
 
@@ -3097,6 +3108,12 @@ const saveProduct = () => {
     border-radius: 9px;
     font-size: 11px;
     line-height: 1.5;
+}
+
+.manual-hsn {
+    color: #43536d;
+    background: #fffaf0;
+    border-color: #f4d48b;
 }
 
 .tab-purpose-help {

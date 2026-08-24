@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 defineProps({ page: { type: String, default: 'purchases' }, title: { type: String, default: 'Purchases' } });
 
@@ -13,6 +14,7 @@ const productSearch = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const errors = ref({});
+const openActionMenuId = ref(null);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 const filters = reactive({ status: '', payment_status: '', purchase_type: '', tax_type: '' });
 const form = reactive({
@@ -147,6 +149,8 @@ const reversePurchase = async (purchase) => {
     alert(response.message || 'Purchase reversed.');
     await loadPurchases(pagination.value.current_page || 1);
 };
+const toggleActionMenu = (purchase) => { openActionMenuId.value = openActionMenuId.value === purchase.id ? null : purchase.id; };
+const closeActionMenu = () => { openActionMenuId.value = null; };
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -226,7 +230,7 @@ onMounted(async () => { await loadReferences(); await loadPurchases(); });
                             <tr v-for="purchase in purchases" :key="purchase.id">
                                 <td>{{ purchase.voucher_number }}</td><td>{{ purchase.purchase_date }}</td><td>{{ purchase.supplier }}</td><td>{{ purchase.branch || '-' }}</td><td>{{ purchase.warehouse || '-' }}</td><td>{{ purchase.supplier_invoice_number || '-' }}</td>
                                 <td>Rs. {{ formatMoney(purchase.grand_total) }}</td><td>Rs. {{ formatMoney(purchase.paid_amount) }}</td><td>Rs. {{ formatMoney(purchase.balance_amount) }}</td><td>{{ purchase.payment_status }}</td><td><span class="badge" :class="purchase.status">{{ purchase.status }}</span></td><td>{{ purchase.created_by || '-' }}</td>
-                                <td><div class="row-actions"><button v-if="purchase.status === 'draft'" @click="editPurchase(purchase)">Edit</button><button v-if="purchase.status === 'draft'" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?')">Post</button><button @click="simpleAction(PurchaseApi.duplicatePurchase, purchase)">Copy</button><button v-if="purchase.status === 'draft'" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?')">Cancel</button><button v-if="['approved','confirmed'].includes(purchase.status)" class="danger" @click="reversePurchase(purchase)">Reverse</button></div></td>
+                                <td><div class="row-actions"><RowActionMenu :open="openActionMenuId === purchase.id" :show-view="false" more-label="Actions" more-title="Purchase actions" placement="top" @toggle="toggleActionMenu(purchase)"><button v-if="purchase.status === 'draft'" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="purchase.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(PurchaseApi.duplicatePurchase, purchase); closeActionMenu()">Copy</button><button v-if="purchase.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" class="danger" @click="reversePurchase(purchase); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
                             </tr>
                             <tr v-if="!purchases.length && !loading"><td colspan="13" class="empty">No purchases found.</td></tr>
                         </tbody>

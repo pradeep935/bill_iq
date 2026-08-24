@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 defineProps({
     page: { type: String, default: 'suppliers' },
@@ -15,6 +16,7 @@ const status = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const errors = ref({});
+const openActionMenuId = ref(null);
 let timer = null;
 
 const form = reactive({
@@ -110,6 +112,8 @@ const restoreSupplier = async (supplier) => {
     await PurchaseApi.restoreSupplier(supplier.id);
     await loadSuppliers(pagination.value.current_page || 1);
 };
+const toggleActionMenu = (supplier) => { openActionMenuId.value = openActionMenuId.value === supplier.id ? null : supplier.id; };
+const closeActionMenu = () => { openActionMenuId.value = null; };
 
 watch([search, status], () => {
     clearTimeout(timer);
@@ -138,7 +142,7 @@ onMounted(() => loadSuppliers());
                     <input v-model="form.gstin" placeholder="GSTIN" />
                     <input v-model="form.pan" placeholder="PAN" />
                     <input v-model="form.city" placeholder="City" />
-                    <input v-model="form.pincode" placeholder="Pincode" />
+                    <input v-model="form.pincode" placeholder="Pincode (optional)" />
                     <input v-model="form.opening_balance" type="number" placeholder="Opening Balance" />
                     <select v-model="form.opening_balance_type">
                         <option value="credit">Credit</option>
@@ -158,7 +162,7 @@ onMounted(() => loadSuppliers());
                     <span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span>
                 </div>
                 <div class="actions">
-                    <button type="button" :disabled="saving" @click="saveSupplier">{{ saving ? 'Saving...' : 'Save Supplier' }}</button>
+                    <button type="button" class="primary" :disabled="saving" @click="saveSupplier">{{ saving ? 'Saving...' : 'Save Supplier' }}</button>
                 </div>
             </section>
 
@@ -189,9 +193,13 @@ onMounted(() => loadSuppliers());
                                 <td>{{ supplier.opening_balance }} {{ supplier.opening_balance_type }}</td>
                                 <td><span class="badge" :class="supplier.status">{{ supplier.deleted_at ? 'deleted' : supplier.status }}</span></td>
                                 <td>
-                                    <button v-if="!supplier.deleted_at" type="button" @click="editSupplier(supplier)">Edit</button>
-                                    <button v-if="!supplier.deleted_at" type="button" class="danger" @click="deleteSupplier(supplier)">Delete</button>
-                                    <button v-else type="button" @click="restoreSupplier(supplier)">Restore</button>
+                                    <div class="row-actions">
+                                        <RowActionMenu :open="openActionMenuId === supplier.id" :show-view="false" more-label="Actions" more-title="Supplier actions" placement="top" @toggle="toggleActionMenu(supplier)">
+                                            <button v-if="!supplier.deleted_at" type="button" @click="editSupplier(supplier); closeActionMenu()">Edit</button>
+                                            <button v-if="!supplier.deleted_at" type="button" class="danger" @click="deleteSupplier(supplier); closeActionMenu()">Delete</button>
+                                            <button v-else type="button" @click="restoreSupplier(supplier); closeActionMenu()">Restore</button>
+                                        </RowActionMenu>
+                                    </div>
                                 </td>
                             </tr>
                             <tr v-if="!suppliers.length && !loading"><td colspan="8" class="empty">No suppliers found.</td></tr>
@@ -210,7 +218,7 @@ onMounted(() => loadSuppliers());
 
 <style scoped>
 .purchase-page { padding: 4px 0 28px; }
-.page-heading, .toolbar, .actions, .pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.page-heading, .toolbar, .actions, .pagination, .row-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .page-heading { margin-bottom: 18px; }
 .page-heading span { color: #2457d6; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; }
 .page-heading h1 { margin: 0; color: #142139; font-weight: 800; }
@@ -220,6 +228,7 @@ onMounted(() => loadSuppliers());
 input, select, textarea, button { min-height: 38px; padding: 8px 10px; color: #344159; background: #fff; border: 1px solid #d8e0eb; border-radius: 8px; font-size: 12px; }
 textarea { min-height: 72px; resize: vertical; }
 button { font-weight: 750; cursor: pointer; }
+button.primary { color: #fff; background: #2457d6; border-color: #2457d6; box-shadow: 0 6px 14px rgba(36, 87, 214, .16); }
 button.danger { color: #d23f49; background: #fff3f4; border-color: #ffd6da; }
 .actions, .pagination { justify-content: flex-end; margin-top: 12px; }
 .toolbar { margin-bottom: 12px; justify-content: flex-start; }

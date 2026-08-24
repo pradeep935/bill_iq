@@ -31,7 +31,7 @@ class SupplierRequest extends FormRequest
             'shipping_address' => ['nullable', 'string', 'max:2000'],
             'state_id' => ['nullable', 'integer'],
             'city' => ['required', 'string', 'max:120'],
-            'pincode' => ['required', 'string', 'max:12'],
+            'pincode' => ['nullable', 'string', 'max:12'],
             'opening_balance' => ['nullable', 'numeric', 'min:0'],
             'opening_balance_type' => ['required', Rule::in(['debit', 'credit'])],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],

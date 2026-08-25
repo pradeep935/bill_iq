@@ -650,7 +650,7 @@ class SalesService
             'tax_type' => $data['invoice_type'] === 'bill_of_supply' ? 'exempt' : $data['tax_type'],
             'place_of_supply_state_id' => $data['place_of_supply_state_id'] ?? null,
             'customer_name_snapshot' => optional($customer)->customer_name,
-            'customer_mobile_snapshot' => optional($customer)->mobile ?: optional($customer)->phone,
+            'customer_mobile_snapshot' => optional($customer)->whatsapp_number ?: optional($customer)->mobile ?: optional($customer)->normalized_mobile ?: optional($customer)->phone,
             'customer_gstin_snapshot' => optional($customer)->gstin,
             'billing_address_snapshot' => optional($customer)->billing_address,
             'shipping_address_snapshot' => optional($customer)->shipping_address,

@@ -300,7 +300,12 @@ const addOrReplaceCustomerReference = (customer) => {
 };
 
 const customerContactNumber = (customer) => customer?.whatsapp_number || customer?.mobile || customer?.normalized_mobile || customer?.phone || '';
-const lastSaleWhatsAppNumber = computed(() => lastSale.value?.customer_mobile || customerContactNumber(lastSaleCustomer.value));
+const lastSaleWhatsAppNumber = computed(() => (
+    lastSale.value?.customer_whatsapp
+    || lastSale.value?.customer_mobile
+    || customerContactNumber(lastSale.value?.customer)
+    || customerContactNumber(lastSaleCustomer.value)
+));
 
 const syncCustomerLookupFromSelection = () => {
     syncingCustomerLookup = true;

@@ -7,7 +7,7 @@ import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 defineProps({ page: { type: String, default: 'customers' }, title: { type: String, default: 'Customers' } });
 
 const customers = ref([]);
-const references = ref({ customer_types: [], price_types: [], states: [], branches: [] });
+const references = ref({ customer_types: [], price_types: [], states: [], cities: [], branches: [] });
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 const search = ref('');
 const status = ref('');
@@ -34,6 +34,13 @@ const form = reactive({
 
 const sameAsBilling = ref(false);
 const queryParams = computed(() => ({ page: pagination.value.current_page, search: search.value, status: status.value, type: type.value, state_id: stateId.value, price_type: priceType.value, crm_status: crmStatus.value }));
+const filteredCities = computed(() => {
+    if (!form.state_id) {
+        return references.value.cities || [];
+    }
+
+    return (references.value.cities || []).filter((city) => Number(city.state_id) === Number(form.state_id));
+});
 
 const reset = () => {
     Object.assign(form, {
@@ -55,6 +62,10 @@ const loadCustomers = async (page = 1) => {
     } finally {
         loading.value = false;
     }
+};
+
+const uppercaseGstin = () => {
+    form.gstin = (form.gstin || '').toUpperCase();
 };
 
 const editCustomer = (customer) => {
@@ -152,6 +163,11 @@ watch(sameAsBilling, (checked) => { if (checked) form.shipping_address = form.bi
 watch(() => form.billing_address, (value) => { if (sameAsBilling.value) form.shipping_address = value; });
 watch(() => form.whatsapp_same_as_mobile, (checked) => { if (checked) form.whatsapp_number = form.mobile; });
 watch(() => form.mobile, (value) => { if (form.whatsapp_same_as_mobile) form.whatsapp_number = value; });
+watch(() => form.state_id, () => {
+    if (form.city && !filteredCities.value.some((city) => city.name === form.city)) {
+        form.city = '';
+    }
+});
 watch([search, status, type, stateId, priceType, crmStatus], () => {
     clearTimeout(timer);
     timer = setTimeout(() => loadCustomers(1), 300);
@@ -186,11 +202,11 @@ onMounted(async () => { await loadReferences(); await loadCustomers(); });
                     <label v-if="!form.whatsapp_same_as_mobile">WhatsApp<input v-model="form.whatsapp_number" placeholder="9876543210" /></label>
                     <label>Phone<input v-model="form.phone" placeholder="Phone" /></label>
                     <label>Email<input v-model="form.email" placeholder="Email" /></label>
-                    <label>GSTIN<input v-model="form.gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
-                    <label>PAN<input v-model="form.pan" maxlength="10" placeholder="PAN" /></label>
-                    <label>City<input v-model="form.city" placeholder="City" /></label>
-                    <label>Pincode<input v-model="form.pincode" maxlength="6" placeholder="Pincode" /></label>
+                    <label>GSTIN<input v-model="form.gstin" maxlength="15" placeholder="15-character GSTIN" @input="uppercaseGstin" /></label>
                     <label>State<select v-model="form.state_id"><option value="">Select State</option><option v-for="state in references.states" :key="state.id" :value="state.id">{{ state.name }}</option></select></label>
+                    <label>PAN<input v-model="form.pan" maxlength="10" placeholder="PAN" /></label>
+                    <label>City<input v-model="form.city" list="customer-city-options" placeholder="Search City" /><datalist id="customer-city-options"><option v-for="city in filteredCities" :key="city.id" :value="city.name" /></datalist></label>
+                    <label>Pincode<input v-model="form.pincode" maxlength="6" placeholder="Pincode" /></label>
                     <label>Opening Balance<input v-model="form.opening_balance" type="number" min="0" step="0.01" placeholder="Opening Balance" /></label>
                     <label>Balance Type<select v-model="form.opening_balance_type"><option value="debit">Debit</option><option value="credit">Credit</option></select></label>
                     <label>Credit Limit<input v-model="form.credit_limit" type="number" min="0" step="0.01" placeholder="Credit Limit" /></label>

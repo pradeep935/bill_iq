@@ -207,8 +207,10 @@ class CustomerService
                 ['value' => 'dealer', 'label' => 'Dealer Price'],
                 ['value' => 'distributor', 'label' => 'Distributor Price'],
                 ['value' => 'online', 'label' => 'Online Price'],
+                ['value' => 'other', 'label' => 'Other'],
             ],
             'states' => $this->states(),
+            'cities' => $this->cities(),
             'branches' => Schema::hasTable('branches')
                 ? DB::table('branches')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code'])
                 : collect(),
@@ -825,6 +827,25 @@ class CustomerService
         }
 
         return DB::table('states')->orderBy('name')->get(['id', 'name', 'code']);
+    }
+
+    private function cities()
+    {
+        if (!Schema::hasTable('cities')) {
+            return collect();
+        }
+
+        $columns = Schema::getColumnListing('cities');
+        $select = array_values(array_intersect(['id', 'state_id', 'name', 'code'], $columns));
+        $query = DB::table('cities');
+
+        if (in_array('status', $columns, true)) {
+            $query->where(function ($query) {
+                $query->whereNull('status')->orWhere('status', 'active')->orWhere('status', 1);
+            });
+        }
+
+        return $query->orderBy('name')->get($select);
     }
 
     private function stateName($stateId): ?string

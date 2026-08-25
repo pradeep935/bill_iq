@@ -20,11 +20,11 @@ class WhatsAppShareService
     {
         $number = $recipient
             ?: ($voucher->customer?->whatsapp_number ?: $voucher->customer?->mobile ?: $voucher->customer_mobile_snapshot);
-        $waNumber = $this->mobileNumbers->waMeNumber($number);
-
-        if (!$waNumber) {
+        if (!$this->mobileNumbers->isValidIndianMobile($number)) {
             throw ValidationException::withMessages(['whatsapp_number' => 'Valid WhatsApp number is required.']);
         }
+
+        $waNumber = $this->mobileNumbers->waMeNumber($number);
 
         $publicUrl = $this->publicShares->salesInvoiceUrl($voucher);
         $pdfUrl = $this->publicShares->salesInvoicePdfUrl($voucher);
@@ -61,11 +61,11 @@ class WhatsAppShareService
     public function quotationShare(Quotation $quotation, ?string $recipient = null): array
     {
         $number = $recipient ?: ($quotation->customer?->whatsapp_number ?: $quotation->customer?->mobile);
-        $waNumber = $this->mobileNumbers->waMeNumber($number);
-
-        if (!$waNumber) {
+        if (!$this->mobileNumbers->isValidIndianMobile($number)) {
             throw ValidationException::withMessages(['whatsapp_number' => 'Valid WhatsApp number is required.']);
         }
+
+        $waNumber = $this->mobileNumbers->waMeNumber($number);
 
         $publicUrl = $this->publicShares->quotationUrl($quotation);
         $businessName = $quotation->branch?->name ?: 'BillIQ';

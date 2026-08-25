@@ -44,6 +44,7 @@ const sharingWhatsApp = ref(false);
 const canChangeCounterScope = computed(() => Number(props.role_id || 0) === 1);
 let customerLookupTimer = null;
 let toastTimer = null;
+let syncingCustomerLookup = false;
 
 const quickCustomer = reactive({
     customer_name: '',
@@ -87,6 +88,7 @@ const primaryPrintLabel = computed(() => defaultPrintFormat.value === 'thermal' 
 const customers = computed(() => references.value.customers || []);
 const paymentMethods = computed(() => references.value.payment_methods || []);
 const selectedCustomer = computed(() => customers.value.find((customer) => Number(customer.id) === Number(form.customer_id)));
+const lastSaleCustomer = computed(() => customers.value.find((customer) => Number(customer.id) === Number(lastSale.value?.customer_id)));
 const selectedIsWalkIn = computed(() => !selectedCustomer.value || selectedCustomer.value.customer_type === 'walk_in');
 const hasCustomerGstin = computed(() => Boolean(selectedCustomer.value?.gstin));
 const invoicePartyType = computed(() => form.invoice_type === 'bill_of_supply' ? 'BOS' : (form.invoice_type === 'tax_invoice' ? 'B2B' : 'B2C'));
@@ -295,6 +297,19 @@ const addOrReplaceCustomerReference = (customer) => {
     }
 
     references.value.customers.push(customer);
+};
+
+const customerContactNumber = (customer) => customer?.whatsapp_number || customer?.mobile || customer?.normalized_mobile || customer?.phone || '';
+const lastSaleWhatsAppNumber = computed(() => lastSale.value?.customer_mobile || customerContactNumber(lastSaleCustomer.value));
+
+const syncCustomerLookupFromSelection = () => {
+    syncingCustomerLookup = true;
+    customerMobileLookup.value = selectedIsWalkIn.value ? '' : customerContactNumber(selectedCustomer.value);
+    customerLookup.value = { status: '', message: '', normalized_mobile: '' };
+    showQuickCustomer.value = false;
+    nextTick(() => {
+        syncingCustomerLookup = false;
+    });
 };
 
 const resetQuickCustomer = (mobile = customerMobileLookup.value) => {
@@ -690,10 +705,7 @@ const shareLastSaleWhatsApp = async () => {
     const shareWindow = window.open('about:blank', '_blank');
     sharingWhatsApp.value = true;
     try {
-        let whatsappNumber = selectedCustomer.value?.whatsapp_number
-            || selectedCustomer.value?.mobile
-            || customerMobileLookup.value
-            || lastSale.value.customer_mobile;
+        let whatsappNumber = lastSaleWhatsAppNumber.value;
         if (!whatsappNumber) {
             whatsappNumber = window.prompt('Enter WhatsApp mobile number for this invoice') || '';
         }
@@ -706,7 +718,7 @@ const shareLastSaleWhatsApp = async () => {
         } else {
             window.location.href = response.url;
         }
-        showToast('WhatsApp opened. Share status logged as initiated.', 'success');
+        showToast(`WhatsApp opened for ${response.recipient || whatsappNumber}.`, 'success');
     } catch (error) {
         if (shareWindow) shareWindow.close();
         showToast(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'WhatsApp share could not be prepared.', 'error');
@@ -739,6 +751,7 @@ watch(() => form.branch_id, () => {
 });
 watch(() => form.customer_id, () => {
     updateCustomerTaxTreatment();
+    syncCustomerLookupFromSelection();
     loadCustomerInsight();
 });
 watch(() => form.invoice_type, (type) => {
@@ -757,6 +770,7 @@ watch(() => quickCustomer.mobile, (mobile) => {
     if (quickCustomer.whatsapp_same_as_mobile) quickCustomer.whatsapp_number = mobile;
 });
 watch(customerMobileLookup, () => {
+    if (syncingCustomerLookup) return;
     clearTimeout(customerLookupTimer);
     customerLookupTimer = setTimeout(lookupCustomerByMobile, 450);
 });
@@ -795,13 +809,14 @@ onUnmounted(() => {
                 <div>
                     <span>Payment Successful</span>
                     <strong>Invoice {{ lastSale.invoice_number }}</strong>
-                    <small>Grand Total: {{ formatMoney(lastSale.grand_total) }}</small>
+                    <small>Grand Total: {{ formatMoney(lastSale.grand_total) }}<template v-if="lastSaleWhatsAppNumber"> | WhatsApp {{ lastSaleWhatsAppNumber }}</template></small>
                 </div>
                 <div class="pos-payment-success-actions">
-                    <button type="button" class="primary" @click="printInvoice(lastSale, null, defaultPrintFormat)">{{ primaryPrintLabel }}</button>
-                    <button type="button" @click="printInvoice(lastSale, null, 'thermal')">Print Receipt</button>
-                    <button type="button" @click="printInvoice(lastSale, null, 'a4')">Print A4 Invoice</button>
-                    <button type="button" @click="newBill()">New Sale</button>
+                    <button type="button" class="primary" @click.stop.prevent="printInvoice(lastSale, null, defaultPrintFormat)">{{ primaryPrintLabel }}</button>
+                    <button type="button" @click.stop.prevent="printInvoice(lastSale, null, 'thermal')">Print Receipt</button>
+                    <button type="button" @click.stop.prevent="printInvoice(lastSale, null, 'a4')">Print A4 Invoice</button>
+                    <button type="button" :disabled="sharingWhatsApp" @click.stop.prevent="shareLastSaleWhatsApp">{{ sharingWhatsApp ? 'Opening WhatsApp...' : 'Share WhatsApp' }}</button>
+                    <button type="button" @click.stop.prevent="newBill()">New Sale</button>
                 </div>
             </section>
 
@@ -987,13 +1002,13 @@ onUnmounted(() => {
                         <button class="pos-action secondary" type="button" title="Hold invoice for later recall" :disabled="saving || !hasCartItems" @click="save('hold')">{{ saving && savingAction === 'hold' ? 'Holding...' : 'Hold Bill' }}</button>
                     </div>
                     <div class="pos-footer-group">
-                        <button v-if="lastSale" class="pos-action print" type="button" title="Print last completed or saved invoice" @click="printInvoice(lastSale, null, defaultPrintFormat)">{{ primaryPrintLabel }}</button>
-                        <button v-if="lastSale" class="pos-action print" type="button" title="Print 80mm thermal receipt" @click="printInvoice(lastSale, null, 'thermal')">80mm</button>
-                        <button v-if="lastSale" class="pos-action print" type="button" title="Print A4 GST invoice" @click="printInvoice(lastSale, null, 'a4')">A4</button>
-                        <button v-if="lastSale" class="pos-action print" type="button" title="Share last posted invoice through WhatsApp" :disabled="sharingWhatsApp" @click="shareLastSaleWhatsApp">{{ sharingWhatsApp ? 'Opening...' : 'WhatsApp' }}</button>
-                        <button class="pos-action print" type="button" title="Complete sale, print A4 invoice and start a new bill" :disabled="saving || !hasCartItems" @click="printAndNew('a4')">Print A4 & New</button>
-                        <button class="pos-action print" type="button" title="Complete sale, print 80mm receipt and start a new bill" :disabled="saving || !hasCartItems" @click="printAndNew('thermal')">Print 80mm & New</button>
-	                        <button class="pos-action complete primary" type="button" title="Complete sale and post invoice" :disabled="saving || !hasCartItems" @click="save('approved', { reset: true, keepLastSale: true })">
+                        <button v-if="lastSale" class="pos-action print" type="button" title="Print last completed or saved invoice" @click.stop.prevent="printInvoice(lastSale, null, defaultPrintFormat)">{{ primaryPrintLabel }}</button>
+                        <button v-if="lastSale" class="pos-action print" type="button" title="Print 80mm thermal receipt" @click.stop.prevent="printInvoice(lastSale, null, 'thermal')">80mm</button>
+                        <button v-if="lastSale" class="pos-action print" type="button" title="Print A4 GST invoice" @click.stop.prevent="printInvoice(lastSale, null, 'a4')">A4</button>
+                        <button v-if="lastSale" class="pos-action print" type="button" title="Share last posted invoice through WhatsApp" :disabled="sharingWhatsApp" @click.stop.prevent="shareLastSaleWhatsApp">{{ sharingWhatsApp ? 'Opening...' : 'WhatsApp' }}</button>
+                        <button class="pos-action print" type="button" title="Complete sale, print A4 invoice and start a new bill" :disabled="saving || !hasCartItems" @click.stop.prevent="printAndNew('a4')">Print A4 & New</button>
+                        <button class="pos-action print" type="button" title="Complete sale, print 80mm receipt and start a new bill" :disabled="saving || !hasCartItems" @click.stop.prevent="printAndNew('thermal')">Print 80mm & New</button>
+	                        <button class="pos-action complete primary" type="button" title="Complete sale and post invoice" :disabled="saving || !hasCartItems" @click.stop.prevent="save('approved', { reset: true, keepLastSale: true })">
                             <span>{{ saving && savingAction === 'approved' ? 'Completing...' : 'Complete Sale' }}</span>
                             <strong>{{ formatMoney(totals.grand) }}</strong>
                         </button>

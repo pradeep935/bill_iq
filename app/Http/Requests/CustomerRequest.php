@@ -44,7 +44,7 @@ class CustomerRequest extends FormRequest
             'opening_balance_type' => ['nullable', Rule::in(['debit', 'credit'])],
             'credit_limit' => ['nullable', 'numeric', 'min:0'],
             'credit_days' => ['nullable', 'integer', 'min:0'],
-            'price_type' => ['nullable', Rule::in(['retail', 'wholesale', 'dealer', 'distributor', 'online'])],
+            'price_type' => ['nullable', Rule::in(['retail', 'wholesale', 'dealer', 'distributor', 'online', 'other'])],
             'status' => ['required', Rule::in(['active', 'inactive', 'blocked'])],
             'blocked_reason' => ['nullable', 'required_if:status,blocked', 'string', 'max:2000'],
         ];
@@ -86,8 +86,8 @@ class CustomerRequest extends FormRequest
 
             if ($gstin && $this->filled('state_id') && Schema::hasTable('states')) {
                 $state = DB::table('states')->where('id', $this->input('state_id'))->first();
-                $stateCode = $state->code ?? $state->gst_code ?? null;
-                if ($stateCode && str_pad((string) $stateCode, 2, '0', STR_PAD_LEFT) !== substr($gstin, 0, 2)) {
+                $stateCode = $state->gst_code ?? $state->lgd_code ?? $state->code ?? null;
+                if ($stateCode && ctype_digit((string) $stateCode) && str_pad((string) $stateCode, 2, '0', STR_PAD_LEFT) !== substr($gstin, 0, 2)) {
                     $validator->errors()->add('gstin', 'GSTIN state code does not match selected state.');
                 }
             }

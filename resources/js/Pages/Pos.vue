@@ -41,6 +41,11 @@ const customerLookup = ref({ status: '', message: '', normalized_mobile: '' });
 const customerInsight = ref(null);
 const showQuickCustomer = ref(false);
 const sharingWhatsApp = ref(false);
+const postSaleActions = reactive({
+    printA4: false,
+    printThermal: false,
+    whatsapp: false,
+});
 const canChangeCounterScope = computed(() => Number(props.role_id || 0) === 1);
 let customerLookupTimer = null;
 let toastTimer = null;
@@ -721,16 +726,16 @@ const printInvoice = (sale = lastSale.value, targetWindow = null, format = defau
     window.open(printUrl, '_blank', 'noopener');
 };
 
-const shareLastSaleWhatsApp = async () => {
-    if (!lastSale.value?.id) {
+const shareLastSaleWhatsApp = async (sale = lastSale.value, targetWindow = null) => {
+    if (!sale?.id) {
         showToast('Complete or save a posted invoice before WhatsApp sharing.', 'error');
         return;
     }
 
-    const shareWindow = window.open('about:blank', '_blank');
+    const shareWindow = targetWindow || window.open('about:blank', '_blank');
     sharingWhatsApp.value = true;
     try {
-        let whatsappNumber = lastSaleWhatsAppNumber.value;
+        let whatsappNumber = sale.id === lastSale.value?.id ? lastSaleWhatsAppNumber.value : (sale.customer_mobile || customerContactNumber(sale.customer));
         if (!whatsappNumber) {
             whatsappNumber = window.prompt('Enter WhatsApp mobile number for this invoice') || '';
         }
@@ -750,6 +755,23 @@ const shareLastSaleWhatsApp = async () => {
     } finally {
         sharingWhatsApp.value = false;
     }
+};
+
+const selectedPostSaleActionCount = computed(() => Object.values(postSaleActions).filter(Boolean).length);
+const completeSale = async () => {
+    const printA4Window = postSaleActions.printA4 ? window.open('about:blank', '_blank') : null;
+    const printThermalWindow = postSaleActions.printThermal ? window.open('about:blank', '_blank') : null;
+    const whatsappWindow = postSaleActions.whatsapp ? window.open('about:blank', '_blank') : null;
+
+    const sale = await save('approved', { reset: true, keepLastSale: true });
+    if (!sale) {
+        [printA4Window, printThermalWindow, whatsappWindow].forEach((target) => target?.close());
+        return;
+    }
+
+    if (postSaleActions.printA4) printInvoice(sale, printA4Window, 'a4');
+    if (postSaleActions.printThermal) printInvoice(sale, printThermalWindow, 'thermal');
+    if (postSaleActions.whatsapp) await shareLastSaleWhatsApp(sale, whatsappWindow);
 };
 
 const printAndNew = async (format = defaultPrintFormat.value) => {
@@ -1027,7 +1049,28 @@ onUnmounted(() => {
                         :balance="formatMoney(totals.balance)"
                         :change="formatMoney(totals.change)"
                         @update:payment-mode="setPaymentMode"
-                    />
+                    >
+                        <template #actions>
+                            <div class="pos-post-sale-actions">
+                                <div class="pos-post-sale-actions-head">
+                                    <span>After Complete</span>
+                                    <strong>{{ selectedPostSaleActionCount }} selected</strong>
+                                </div>
+                                <label>
+                                    <input v-model="postSaleActions.printThermal" type="checkbox" />
+                                    <span>Print 80mm</span>
+                                </label>
+                                <label>
+                                    <input v-model="postSaleActions.printA4" type="checkbox" />
+                                    <span>Print A4</span>
+                                </label>
+                                <label>
+                                    <input v-model="postSaleActions.whatsapp" type="checkbox" />
+                                    <span>Share WhatsApp</span>
+                                </label>
+                            </div>
+                        </template>
+                    </PaymentPanel>
                 </aside>
             </section>
 
@@ -1051,13 +1094,7 @@ onUnmounted(() => {
                         <button class="pos-action secondary" type="button" title="Hold invoice for later recall" :disabled="saving || !hasCartItems" @click="save('hold')">{{ saving && savingAction === 'hold' ? 'Holding...' : 'Hold Bill' }}</button>
                     </div>
                     <div class="pos-footer-group">
-                        <button v-if="lastSale" class="pos-action print" type="button" title="Print last completed or saved invoice" @click.stop.prevent="printInvoice(lastSale, null, defaultPrintFormat)">{{ primaryPrintLabel }}</button>
-                        <button v-if="lastSale" class="pos-action print" type="button" title="Print 80mm thermal receipt" @click.stop.prevent="printInvoice(lastSale, null, 'thermal')">80mm</button>
-                        <button v-if="lastSale" class="pos-action print" type="button" title="Print A4 GST invoice" @click.stop.prevent="printInvoice(lastSale, null, 'a4')">A4</button>
-                        <button v-if="lastSale" class="pos-action print" type="button" title="Share last posted invoice through WhatsApp" :disabled="sharingWhatsApp" @click.stop.prevent="shareLastSaleWhatsApp">{{ sharingWhatsApp ? 'Opening...' : 'WhatsApp' }}</button>
-                        <button class="pos-action print" type="button" title="Complete sale, print A4 invoice and start a new bill" :disabled="saving || !hasCartItems" @click.stop.prevent="printAndNew('a4')">Print A4 & New</button>
-                        <button class="pos-action print" type="button" title="Complete sale, print 80mm receipt and start a new bill" :disabled="saving || !hasCartItems" @click.stop.prevent="printAndNew('thermal')">Print 80mm & New</button>
-	                        <button class="pos-action complete primary" type="button" title="Complete sale and post invoice" :disabled="saving || !hasCartItems" @click.stop.prevent="save('approved', { reset: true, keepLastSale: true })">
+	                        <button class="pos-action complete primary" type="button" title="Complete sale and post invoice" :disabled="saving || !hasCartItems || sharingWhatsApp" @click.stop.prevent="completeSale">
                             <span>{{ saving && savingAction === 'approved' ? 'Completing...' : 'Complete Sale' }}</span>
                             <strong>{{ formatMoney(totals.grand) }}</strong>
                         </button>
@@ -1435,6 +1472,55 @@ onUnmounted(() => {
 .pos-manual-discount button:disabled {
     opacity: .45;
     cursor: not-allowed;
+}
+
+.pos-post-sale-actions {
+    display: grid;
+    gap: 8px;
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid #e6edf5;
+}
+
+.pos-post-sale-actions-head,
+.pos-post-sale-actions label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.pos-post-sale-actions-head span {
+    color: #2563eb;
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.pos-post-sale-actions-head strong {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 850;
+}
+
+.pos-post-sale-actions label {
+    min-height: 38px;
+    justify-content: flex-start;
+    padding: 8px 10px;
+    border: 1px solid #d8e0eb;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #24354f;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.pos-post-sale-actions input {
+    width: 16px;
+    height: 16px;
+    accent-color: #155ee8;
 }
 
 :deep(.bill-ui-card) {

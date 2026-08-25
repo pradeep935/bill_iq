@@ -32,6 +32,7 @@
       <div><span>Balance</span><strong>{{ balance }}</strong></div>
       <div><span>Change</span><strong>{{ change }}</strong></div>
     </div>
+    <slot name="actions" />
   </section>
 </template>
 

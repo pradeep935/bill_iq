@@ -168,6 +168,11 @@ const paymentStatus = computed(() => {
 });
 const statusLabel = computed(() => ({ draft: 'Draft', hold: 'Hold', paid: 'Paid', partial: 'Partial', cancelled: 'Cancelled' }[paymentStatus.value] || 'Draft'));
 const hasInclusiveTax = computed(() => form.items.some((item) => item.tax_inclusive && (Number(item.gst_rate || 0) + Number(item.cess_rate || 0)) > 0));
+const manualDiscountLabel = computed(() => {
+    const value = Number(form.voucher_discount_value || 0);
+    if (!form.voucher_discount_type || value <= 0) return 'No manual discount';
+    return form.voucher_discount_type === 'percentage' ? `${value}% manual discount` : `${formatMoney(value)} manual discount`;
+});
 const summaryRows = computed(() => [
     { label: 'MRP Total', value: formatMoney(totals.value.mrpTotal) },
     { label: 'Price Saving (MRP - Rate)', value: `-${formatMoney(totals.value.priceSaving)}`, saving: true },
@@ -207,6 +212,21 @@ const showToast = (text, tone = 'info') => {
     }, tone === 'error' ? 5200 : 3600);
 };
 const formatDate = (value) => value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+const applyManualDiscount = () => {
+    const value = Number(form.voucher_discount_value || 0);
+    if (value <= 0) {
+        form.voucher_discount_type = '';
+        form.voucher_discount_value = '';
+    } else if (!form.voucher_discount_type) {
+        form.voucher_discount_type = 'amount';
+    }
+    syncPaymentAmount();
+};
+const clearManualDiscount = () => {
+    form.voucher_discount_type = '';
+    form.voucher_discount_value = '';
+    syncPaymentAmount();
+};
 const firstWarehouseForBranch = (branchId = form.branch_id) => {
     const warehouses = references.value.warehouses || [];
     if (!warehouses.length) return '';
@@ -972,6 +992,30 @@ onUnmounted(() => {
                         <template #badge>
                             <span class="bill-status-badge" :class="paymentStatus">{{ statusLabel }}</span>
                         </template>
+                        <div class="pos-manual-discount">
+                            <label>
+                                <span>Manual Discount</span>
+                                <select v-model="form.voucher_discount_type" @change="applyManualDiscount">
+                                    <option value="">None</option>
+                                    <option value="amount">Amount</option>
+                                    <option value="percentage">Percent</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>Value</span>
+                                <input
+                                    v-model.number="form.voucher_discount_value"
+                                    type="number"
+                                    min="0"
+                                    :max="form.voucher_discount_type === 'percentage' ? 100 : undefined"
+                                    step="0.01"
+                                    placeholder="0"
+                                    @input="applyManualDiscount"
+                                />
+                            </label>
+                            <button type="button" :disabled="!form.voucher_discount_type && !form.voucher_discount_value" @click="clearManualDiscount">Clear</button>
+                            <small>{{ manualDiscountLabel }}</small>
+                        </div>
                     </SummaryCard>
 
                     <PaymentPanel
@@ -1347,6 +1391,51 @@ onUnmounted(() => {
 .pos-clear-cart-button { color: #ef4444; }
 .pos-clear-cart-button:disabled { opacity: .45; cursor: not-allowed; }
 .pos-table-items { color: #64748b; font-size: 12px; font-weight: 850; }
+
+.pos-manual-discount {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 92px auto;
+    gap: 8px;
+    align-items: end;
+    padding-top: 12px;
+    margin-top: 10px;
+    border-top: 1px solid #e6edf5;
+}
+
+.pos-manual-discount label {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.pos-manual-discount span,
+.pos-manual-discount small {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 850;
+}
+
+.pos-manual-discount small {
+    grid-column: 1 / -1;
+    color: #15803d;
+}
+
+.pos-manual-discount button {
+    min-height: 40px;
+    padding: 7px 10px;
+    border: 1px solid #d8e0eb;
+    border-radius: 8px;
+    background: #fff;
+    color: #ef4444;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.pos-manual-discount button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
 
 :deep(.bill-ui-card) {
     border-color: #dfe7f1;

@@ -115,7 +115,8 @@ const saveSupplier = async () => {
             alert(Object.values(errors.value)?.[0]?.[0] || 'Please check supplier fields.');
             return;
         }
-        alert(error.response?.data?.message || 'Supplier save nahi ho saka.');
+        const data = error.response?.data || {};
+        alert(data.message || data.error || error.message || 'Supplier save nahi ho saka.');
     } finally {
         saving.value = false;
     }

@@ -382,11 +382,6 @@ const activeSection = computed(() => (
   visibleSections.value.find((section) => section.key === selectedSectionKey.value) || currentPageSection.value
 ));
 const activeNavItems = computed(() => {
-  if (isSalesInvoicePage.value && activeSection.value.key === 'sales') {
-    const salesPageItems = ['pos', 'sales', 'sales-returns', 'customers'];
-    return activeSection.value.items.filter((item) => salesPageItems.includes(item.page));
-  }
-
   return activeSection.value.items;
 });
 

@@ -1,8 +1,9 @@
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
+import SearchSelect from '../../Components/Common/SearchSelect.vue';
 
 defineProps({
     page: { type: String, default: 'suppliers' },
@@ -10,6 +11,7 @@ defineProps({
 });
 
 const suppliers = ref([]);
+const references = ref({ states: [], cities: [] });
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 const search = ref('');
 const status = ref('');
@@ -17,6 +19,7 @@ const loading = ref(false);
 const saving = ref(false);
 const errors = ref({});
 const openActionMenuId = ref(null);
+const statusFilters = [{ value: '', label: 'All Status' }, { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'deleted', label: 'Deleted' }];
 let timer = null;
 
 const form = reactive({
@@ -64,6 +67,22 @@ const reset = () => {
         status: 'active',
     });
     errors.value = {};
+};
+
+const filteredCities = computed(() => {
+    if (!form.state_id) {
+        return references.value.cities || [];
+    }
+
+    return (references.value.cities || []).filter((city) => Number(city.state_id) === Number(form.state_id));
+});
+
+const loadReferences = async () => {
+    const response = await PurchaseApi.references();
+    references.value = {
+        states: response.states || [],
+        cities: response.cities || [],
+    };
 };
 
 const loadSuppliers = async (page = 1) => {
@@ -120,7 +139,13 @@ watch([search, status], () => {
     timer = setTimeout(() => loadSuppliers(1), 300);
 });
 
-onMounted(() => loadSuppliers());
+watch(() => form.state_id, () => {
+    if (form.city && !filteredCities.value.some((city) => city.name === form.city)) {
+        form.city = '';
+    }
+});
+
+onMounted(async () => { await loadReferences(); await loadSuppliers(); });
 </script>
 
 <template>
@@ -133,30 +158,24 @@ onMounted(() => loadSuppliers());
 
             <section class="panel">
                 <div class="form-grid">
-                    <input v-model="form.supplier_code" placeholder="Supplier Code" />
-                    <input v-model="form.supplier_name" placeholder="Supplier Name" />
-                    <input v-model="form.contact_person" placeholder="Contact Person" />
-                    <input v-model="form.mobile" placeholder="Mobile" />
-                    <input v-model="form.phone" placeholder="Phone" />
-                    <input v-model="form.email" placeholder="Email" />
-                    <input v-model="form.gstin" placeholder="GSTIN" />
-                    <input v-model="form.pan" placeholder="PAN" />
-                    <input v-model="form.city" placeholder="City" />
-                    <input v-model="form.pincode" placeholder="Pincode (optional)" />
-                    <input v-model="form.opening_balance" type="number" placeholder="Opening Balance" />
-                    <select v-model="form.opening_balance_type">
-                        <option value="credit">Credit</option>
-                        <option value="debit">Debit</option>
-                    </select>
-                    <input v-model="form.credit_limit" type="number" placeholder="Credit Limit" />
-                    <input v-model="form.credit_days" type="number" placeholder="Credit Days" />
-                    <select v-model="form.status">
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                    <input v-model="form.state_id" type="number" placeholder="State ID" />
-                    <textarea v-model="form.billing_address" placeholder="Billing Address"></textarea>
-                    <textarea v-model="form.shipping_address" placeholder="Shipping Address"></textarea>
+                    <label>Supplier Code<input v-model="form.supplier_code" placeholder="Auto if blank" /></label>
+                    <label><span>Supplier Name <span class="required-mark">*</span></span><input v-model="form.supplier_name" placeholder="Supplier Name" /></label>
+                    <label>Contact Person<input v-model="form.contact_person" placeholder="Contact Person" /></label>
+                    <label><span>Mobile <span class="required-mark">*</span></span><input v-model="form.mobile" placeholder="9876543210" /></label>
+                    <label>Phone<input v-model="form.phone" placeholder="Phone" /></label>
+                    <label>Email<input v-model="form.email" placeholder="Email" /></label>
+                    <label>GSTIN<input v-model="form.gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
+                    <label>PAN<input v-model="form.pan" maxlength="10" placeholder="PAN" /></label>
+                    <SearchSelect v-model="form.state_id" label="State" :options="references.states" option-value-key="id" option-label-key="name" select-placeholder="Select State" />
+                    <SearchSelect v-model="form.city" label="City" :options="filteredCities" option-value-key="name" option-label-key="name" select-placeholder="Search City" required allow-custom />
+                    <label>Pincode<input v-model="form.pincode" maxlength="12" placeholder="Pincode (optional)" /></label>
+                    <label>Opening Balance<input v-model="form.opening_balance" type="number" min="0" step="0.01" placeholder="Opening Balance" /></label>
+                    <SearchSelect v-model="form.opening_balance_type" label="Balance Type" :options="[{ value: 'credit', label: 'Credit' }, { value: 'debit', label: 'Debit' }]" option-value-key="value" option-label-key="label" select-placeholder="Select Balance Type" required />
+                    <label>Credit Limit<input v-model="form.credit_limit" type="number" min="0" step="0.01" placeholder="Credit Limit" /></label>
+                    <label>Credit Days<input v-model="form.credit_days" type="number" min="0" placeholder="Credit Days" /></label>
+                    <SearchSelect v-model="form.status" label="Status" :options="[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]" option-value-key="value" option-label-key="label" select-placeholder="Select Status" required />
+                    <label class="wide"><span>Billing Address <span class="required-mark">*</span></span><textarea v-model="form.billing_address" placeholder="Billing Address"></textarea></label>
+                    <label class="wide">Shipping Address<textarea v-model="form.shipping_address" placeholder="Shipping Address"></textarea></label>
                 </div>
                 <div v-if="Object.keys(errors).length" class="error-box">
                     <span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span>
@@ -169,12 +188,7 @@ onMounted(() => loadSuppliers());
             <section class="panel">
                 <div class="toolbar">
                     <input v-model="search" placeholder="Search name, code, GSTIN, phone" />
-                    <select v-model="status">
-                        <option value="">All Status</option>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="deleted">Deleted</option>
-                    </select>
+                    <SearchSelect v-model="status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" />
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -223,8 +237,13 @@ onMounted(() => loadSuppliers());
 .page-heading span { color: #2457d6; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; }
 .page-heading h1 { margin: 0; color: #142139; font-weight: 800; }
 .page-heading p { margin: 6px 0 0; color: #758197; font-size: 13px; }
-.panel { margin-bottom: 18px; padding: 18px; background: #fff; border: 1px solid #dfe6ef; border-radius: 14px; }
+.panel { margin-bottom: 18px; padding: 18px; background: #fff; border: 1px solid #dfe6ef; border-radius: 8px; }
 .form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.form-grid label { display: grid; gap: 5px; color: #667085; font-size: 11px; font-weight: 800; }
+.form-grid :deep(.search-select) { display: block; }
+.toolbar :deep(.search-select) { min-width: 180px; }
+.wide { grid-column: span 2; }
+.required-mark { color: #dc2626; font-weight: 900; margin-left: 3px; }
 input, select, textarea, button { min-height: 38px; padding: 8px 10px; color: #344159; background: #fff; border: 1px solid #d8e0eb; border-radius: 8px; font-size: 12px; }
 textarea { min-height: 72px; resize: vertical; }
 button { font-weight: 750; cursor: pointer; }
@@ -242,6 +261,6 @@ td { padding: 12px 10px; color: #27344c; border-bottom: 1px solid #edf1f5; white
 .badge.inactive { color: #69758a; background: #f0f2f5; }
 .empty { padding: 28px !important; color: #8490a2; text-align: center; }
 .error-box { display: grid; gap: 4px; margin-top: 12px; padding: 10px; color: #96333a; background: #fff3f4; border: 1px solid #ffd4d8; border-radius: 8px; font-size: 11px; }
-@media (max-width: 1000px) { .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 700px) { .page-heading, .toolbar { align-items: stretch; flex-direction: column; } .form-grid { grid-template-columns: 1fr; } .toolbar input { min-width: 0; width: 100%; } }
+@media (max-width: 1000px) { .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wide { grid-column: span 2; } }
+@media (max-width: 700px) { .page-heading, .toolbar { align-items: stretch; flex-direction: column; } .form-grid { grid-template-columns: 1fr; } .wide { grid-column: span 1; } .toolbar input, .toolbar :deep(.search-select) { min-width: 0; width: 100%; } }
 </style>

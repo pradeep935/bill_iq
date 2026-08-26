@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\SalesItem;
 use App\Models\SalesReturnVoucher;
 use App\Models\SalesVoucher;
+use App\Models\Unit;
 use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -104,12 +105,8 @@ class SalesReturnService
         return DB::transaction(function () use ($voucher, $status) {
             $this->assertBusiness($voucher);
 
-            if ($this->hasStockPosting($voucher)) {
-                return $this->fresh($voucher);
-            }
-
             if ($voucher->status !== 'draft') {
-                throw ValidationException::withMessages(['status' => 'Only draft sales returns can be posted.']);
+                return $this->fresh($voucher);
             }
 
             $voucher->load(['items.product']);
@@ -171,6 +168,8 @@ class SalesReturnService
                 'approved_at' => now(),
             ]);
 
+            $this->applyInvoiceAdjustment($voucher);
+
             if (\Illuminate\Support\Facades\Schema::hasTable('journal_vouchers')) {
                 app(AccountingPostingService::class)->postSalesReturn($voucher->fresh(['items']));
             }
@@ -224,7 +223,7 @@ class SalesReturnService
             ]);
 
             $refundTotal = round((float) $voucher->refunds()->sum('amount'), 2);
-            $adjustment = $voucher->settlement_type === 'customer_credit' ? max(0, (float) $voucher->grand_total - $refundTotal) : (float) $voucher->adjustment_amount;
+            $adjustment = $voucher->settlement_type === 'invoice_adjustment' ? (float) $voucher->adjustment_amount : 0.0;
 
             $voucher->update([
                 'refund_amount' => $refundTotal,
@@ -319,7 +318,7 @@ class SalesReturnService
     public function saleItems(int $saleId)
     {
         $sale = SalesVoucher::query()
-            ->with(['items.product.images', 'items.variant', 'items.batch'])
+            ->with(['items.product.images', 'items.variant', 'items.batch', 'items.unit'])
             ->whereIn('status', ['confirmed', 'approved'])
             ->where('id', $saleId)
             ->tap(fn (Builder $q) => AppController::applyTenantScope($q, 'sales_vouchers'))
@@ -335,7 +334,8 @@ class SalesReturnService
                 'product_id' => $item->product_id,
                 'product' => $item->product_name_snapshot,
                 'sku' => $item->sku_snapshot,
-                'barcode' => optional($item->product)->primary_barcode ?: optional($item->product)->barcode,
+                'barcode' => $item->barcode_snapshot ?: (optional($item->product)->primary_barcode ?: optional($item->product)->barcode),
+                'hsn_code' => $item->hsn_code_snapshot,
                 'image_url' => $this->imageUrl(optional($image)->image_path),
                 'product_variant_id' => $item->product_variant_id,
                 'variant' => optional($item->variant)->sku,
@@ -343,14 +343,22 @@ class SalesReturnService
                 'batch' => optional($item->batch)->batch_no ?: optional($item->batch)->batch_number,
                 'expiry_date' => optional($item->batch)->expiry_date ? optional($item->batch->expiry_date)->format('Y-m-d') : ($item->batch->expiry_date ?? null),
                 'unit_id' => $item->unit_id,
+                'unit' => optional($item->unit)->code ?: optional($item->unit)->name,
                 'sold_quantity' => (float) $item->quantity + (float) $item->free_quantity,
                 'previously_returned' => $returned,
                 'available_quantity' => max(0, $available),
-                'quantity' => max(0, $available),
+                'quantity' => 0,
                 'selling_rate' => (float) $item->selling_rate,
                 'discount_amount' => (float) $item->discount_amount,
                 'gst_rate' => (float) $item->gst_rate,
+                'cgst_rate' => (float) $item->cgst_rate,
+                'sgst_rate' => (float) $item->sgst_rate,
+                'igst_rate' => (float) $item->igst_rate,
+                'cgst_amount' => (float) $item->cgst_amount,
+                'sgst_amount' => (float) $item->sgst_amount,
+                'igst_amount' => (float) $item->igst_amount,
                 'cess_rate' => (float) $item->cess_rate,
+                'cess_amount' => (float) $item->cess_amount,
                 'taxable_amount' => (float) $item->taxable_amount,
                 'line_total' => (float) $item->line_total,
                 'return_line_total' => round((float) $item->line_total * (($available > 0 && ((float) $item->quantity + (float) $item->free_quantity) > 0) ? $available / ((float) $item->quantity + (float) $item->free_quantity) : 0), 2),
@@ -393,7 +401,7 @@ class SalesReturnService
     private function returnQuery(array $filters = []): Builder
     {
         $query = SalesReturnVoucher::query()
-            ->with(['customer', 'sale', 'branch', 'warehouse', 'creator', 'approver', 'items', 'refunds.method'])
+            ->with(['customer', 'sale', 'branch', 'warehouse', 'creator', 'approver', 'items.product', 'items.variant', 'items.batch', 'items.unit', 'refunds.method'])
             ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('return_date', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('return_date', '<=', $filters['date_to']))
             ->when(!empty($filters['customer_id']), fn (Builder $q) => $q->where('customer_id', $filters['customer_id']))
@@ -475,15 +483,24 @@ class SalesReturnService
                 'product_id' => $item->product_id,
                 'product' => $item->product_name_snapshot,
                 'sku' => $item->sku_snapshot,
+                'hsn_code' => $item->hsn_code_snapshot,
+                'barcode' => optional($item->product)->primary_barcode ?: optional($item->product)->barcode,
                 'product_variant_id' => $item->product_variant_id,
+                'variant' => optional($item->variant)->sku,
                 'batch_id' => $item->batch_id,
+                'batch' => optional($item->batch)->batch_no ?: optional($item->batch)->batch_number,
                 'unit_id' => $item->unit_id,
+                'unit' => optional($item->unit)->code ?: optional($item->unit)->name,
                 'quantity' => (float) $item->quantity,
                 'selling_rate' => (float) $item->selling_rate,
                 'discount_amount' => (float) $item->discount_amount,
                 'taxable_amount' => (float) $item->taxable_amount,
                 'gst_rate' => (float) $item->gst_rate,
+                'cgst_amount' => (float) $item->cgst_amount,
+                'sgst_amount' => (float) $item->sgst_amount,
+                'igst_amount' => (float) $item->igst_amount,
                 'cess_rate' => (float) $item->cess_rate,
+                'cess_amount' => (float) $item->cess_amount,
                 'line_total' => (float) $item->line_total,
                 'return_reason' => $item->return_reason,
                 'condition_status' => $item->condition_status,
@@ -522,7 +539,15 @@ class SalesReturnService
         $grand = round($taxable + $cgst + $sgst + $igst + $cess, 2);
         $rounded = round($grand);
         $refund = round(collect($data['refunds'] ?? [])->sum(fn ($refund) => (float) ($refund['amount'] ?? 0)), 2);
-        $adjustment = in_array($data['settlement_type'], ['invoice_adjustment', 'customer_credit'], true) ? max(0, $rounded - $refund) : 0;
+        $adjustment = 0.0;
+        if (($data['settlement_type'] ?? null) === 'invoice_adjustment') {
+            $sale = SalesVoucher::query()->findOrFail($data['sales_voucher_id']);
+            $adjustment = min(max(0, (float) $sale->balance_amount), max(0, $rounded - $refund));
+
+            if ($adjustment <= 0) {
+                throw ValidationException::withMessages(['settlement_type' => 'Invoice balance adjustment is available only when the original invoice has outstanding balance.']);
+            }
+        }
 
         if ($refund > $rounded) {
             throw ValidationException::withMessages(['refunds' => 'Refund cannot exceed credit note amount.']);
@@ -556,6 +581,8 @@ class SalesReturnService
             throw ValidationException::withMessages(['quantity' => 'Return quantity cannot exceed available return quantity.']);
         }
 
+        $this->validateUnitQuantity($salesItem, $quantity);
+
         $ratio = $baseQty > 0 ? $quantity / $baseQty : 0;
 
         return [
@@ -581,6 +608,29 @@ class SalesReturnService
             'sku_snapshot' => $salesItem->sku_snapshot,
             'hsn_code_snapshot' => $salesItem->hsn_code_snapshot,
         ];
+    }
+
+    private function applyInvoiceAdjustment(SalesReturnVoucher $voucher): void
+    {
+        if ($voucher->settlement_type !== 'invoice_adjustment' || (float) $voucher->adjustment_amount <= 0) {
+            return;
+        }
+
+        $sale = SalesVoucher::query()
+            ->where('business_id', $voucher->business_id)
+            ->where('id', $voucher->sales_voucher_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$sale) {
+            return;
+        }
+
+        $balance = round(max(0, (float) $sale->balance_amount - (float) $voucher->adjustment_amount), 2);
+        $sale->update([
+            'balance_amount' => $balance,
+            'payment_status' => $balance <= 0 ? 'paid' : ((float) $sale->paid_amount > 0 ? 'partial' : 'unpaid'),
+        ]);
     }
 
     private function voucherAttributes(int $businessId, array $data, array $totals, array $extra = []): array
@@ -693,6 +743,10 @@ class SalesReturnService
             throw ValidationException::withMessages(['return_date' => 'Return date cannot be earlier than original invoice date.']);
         }
 
+        if (($data['settlement_type'] ?? null) === 'invoice_adjustment' && (float) $sale->balance_amount <= 0) {
+            throw ValidationException::withMessages(['settlement_type' => 'Invoice balance adjustment is available only when the original invoice has outstanding balance.']);
+        }
+
         foreach ($data['items'] as $index => $item) {
             $this->validateRestockDecision($item, $index);
 
@@ -761,6 +815,23 @@ class SalesReturnService
         }
     }
 
+    private function validateUnitQuantity(SalesItem $salesItem, float $quantity): void
+    {
+        $unit = $salesItem->unit_id ? Unit::query()->find($salesItem->unit_id) : null;
+        $unitText = strtolower(trim(($unit->code ?? '') . ' ' . ($unit->name ?? '')));
+        $wholeUnits = ['pcs', 'piece', 'bottle', 'box', 'packet', 'pair', 'unit'];
+
+        if ($unitText === '') {
+            return;
+        }
+
+        foreach ($wholeUnits as $wholeUnit) {
+            if (str_contains($unitText, $wholeUnit) && abs($quantity - round($quantity)) > 0.0001) {
+                throw ValidationException::withMessages(['quantity' => 'This unit allows whole return quantities only.']);
+            }
+        }
+    }
+
     private function hasStockPosting(SalesReturnVoucher $voucher): bool
     {
         return DB::table('stock_ledgers')
@@ -777,7 +848,7 @@ class SalesReturnService
 
     private function fresh(SalesReturnVoucher $voucher): SalesReturnVoucher
     {
-        return $voucher->fresh(['customer', 'sale', 'branch', 'warehouse', 'creator', 'items.product.images', 'items.variant', 'items.batch', 'refunds.method']);
+        return $voucher->fresh(['customer', 'sale', 'branch', 'warehouse', 'creator', 'items.product.images', 'items.variant', 'items.batch', 'items.unit', 'refunds.method']);
     }
 
     private function imageUrl(?string $path): ?string

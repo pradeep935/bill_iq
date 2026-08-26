@@ -4,6 +4,7 @@ import Layout from '../Layout.vue';
 import InventoryApi from '../Inventory/InventoryApi';
 import InventoryModuleScaffold from '../Inventory/Shared/InventoryModuleScaffold.vue';
 import InventoryTable from '../Inventory/Shared/InventoryTable.vue';
+import SearchSelect from '../../Components/Common/SearchSelect.vue';
 
 const props = defineProps({ page: String, title: String });
 const loading = ref(false);
@@ -11,6 +12,7 @@ const loaded = ref(false);
 const rows = ref([]);
 const refs = ref({ branches: [], warehouses: [] });
 const filters = reactive({ search: '', branch_id: '', warehouse_id: '', per_page: 50 });
+const perPageOptions = [{ value: 25, label: '25' }, { value: 50, label: '50' }, { value: 100, label: '100' }];
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 
 const suggestions = computed(() => rows.value.map((r) => {
@@ -58,9 +60,9 @@ onMounted(load);
             <template #toolbar><button @click="load">Refresh</button><button @click="exportCsv">Export CSV</button><button @click="window.print()">Print</button></template>
             <template #filters>
                 <input v-model="filters.search" placeholder="Search product or SKU" @keyup.enter="load" />
-                <select v-model="filters.branch_id" @change="load"><option value="">All branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
-                <select v-model="filters.warehouse_id" @change="load"><option value="">All warehouses</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
-                <select v-model="filters.per_page" @change="load"><option>25</option><option>50</option><option>100</option></select>
+                <SearchSelect v-model="filters.branch_id" label="Branch" :options="refs.branches" option-value-key="id" option-label-key="name" select-placeholder="All Branches" @selected="load" />
+                <SearchSelect v-model="filters.warehouse_id" label="Warehouse" :options="refs.warehouses" option-value-key="id" option-label-key="name" select-placeholder="All Warehouses" @selected="load" />
+                <SearchSelect v-model="filters.per_page" label="Rows" :options="perPageOptions" option-value-key="value" option-label-key="label" select-placeholder="Rows" @selected="load" />
                 <button @click="filters.search = ''; filters.branch_id = ''; filters.warehouse_id = ''; load()">Clear</button>
             </template>
             <InventoryTable :columns="[{key:'product_name',label:'Product'},{key:'sku',label:'SKU'},{key:'warehouse_name',label:'Warehouse'},{key:'available',label:'Available'},{key:'reorder_level',label:'Reorder Level'},{key:'suggested_quantity',label:'Suggested Qty'},{key:'shortage_status',label:'Status'}]" :rows="suggestions" empty-text="No reorder suggestions found." />
@@ -69,5 +71,5 @@ onMounted(load);
 </template>
 
 <style scoped>
-input,select,button{border:1px solid #d8e0eb;border-radius:8px;font-size:12px;min-height:38px;padding:8px 10px}button{background:#fff;cursor:pointer;font-weight:800}
+input,select,button{border:1px solid #d8e0eb;border-radius:8px;font-size:12px;min-height:38px;padding:8px 10px}button{background:#fff;cursor:pointer;font-weight:800}:deep(.search-select){min-width:180px}
 </style>

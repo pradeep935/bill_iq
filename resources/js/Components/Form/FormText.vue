@@ -88,3 +88,29 @@ const { value, errorMessage } = useField(() => name, processedReq, {
         <span v-if="errorMessage" class="field-error">{{ errorMessage }}</span>                 
     </div>
 </template>
+
+<style scoped>
+.required-mark {
+    color: #dc2626;
+    font-weight: 900;
+    margin-left: 3px;
+}
+
+.field-hint {
+    color: #7b879c;
+    display: block;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.4;
+    margin-top: 6px;
+}
+
+.field-error {
+    color: #dc2626;
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.4;
+    margin-top: 6px;
+}
+</style>

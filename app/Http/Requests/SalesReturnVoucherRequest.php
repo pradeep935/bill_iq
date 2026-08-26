@@ -40,7 +40,7 @@ class SalesReturnVoucherRequest extends FormRequest
             'items.*.discount_amount' => ['nullable', 'numeric', 'min:0'],
             'items.*.gst_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'items.*.cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'items.*.return_reason' => ['nullable', 'string', 'max:1000'],
+            'items.*.return_reason' => ['required', 'string', 'max:1000'],
             'items.*.condition_status' => ['nullable', Rule::in(['good', 'resalable', 'damaged', 'opened', 'expired', 'defective', 'scrap', 'inspection_required'])],
             'items.*.restock_status' => ['required', Rule::in(['restock', 'damaged_stock', 'quarantine_stock', 'expired_stock', 'non_restockable', 'scrap', 'vendor_return'])],
             'refunds' => ['nullable', 'array'],
@@ -58,6 +58,10 @@ class SalesReturnVoucherRequest extends FormRequest
             foreach ((array) $this->input('items', []) as $index => $item) {
                 if (empty($item['sales_item_id'])) {
                     $validator->errors()->add("items.$index.sales_item_id", 'Original sales item is required.');
+                }
+
+                if (($item['return_reason'] ?? null) === 'Other' && blank($this->input('remarks'))) {
+                    $validator->errors()->add('remarks', 'Remarks are required when return reason is Other.');
                 }
             }
         });

@@ -66,6 +66,58 @@ class SalesInventoryFlowTest extends TestCase
         $this->assertSame(1, StockLedger::query()->where('reference_type', SalesReturnVoucher::class)->where('reference_id', $return->id)->where('transaction_type', 'sales_return')->count());
     }
 
+    public function test_sales_return_uses_original_invoice_values_and_blocks_over_return(): void
+    {
+        [$businessId, $user, $product, $branch, $warehouse, $customer] = $this->fixture();
+        $this->loginBusiness($user, $businessId);
+        $sale = $this->taxedSale($businessId, $branch, $warehouse, $customer, $product->id, 10, 100, 100, 900, 45, 45);
+
+        $first = app(SalesReturnService::class)->create($this->returnPayload($sale, 4));
+
+        $this->assertSame(396.0, (float) $first->grand_total);
+        $this->assertSame(360.0, (float) $first->taxable_amount);
+        $this->assertSame(40.0, (float) $first->discount_amount);
+        $this->assertSame(18.0, (float) $first->cgst_amount);
+        $this->assertSame(18.0, (float) $first->sgst_amount);
+
+        app(SalesReturnService::class)->post($first);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(SalesReturnService::class)->create($this->returnPayload($sale, 7));
+    }
+
+    public function test_sales_return_rejects_decimal_quantity_for_whole_unit(): void
+    {
+        [$businessId, $user, $product, $branch, $warehouse, $customer] = $this->fixture();
+        $unit = DB::table('units')->insertGetId(['code' => 'BTL', 'name' => 'Bottle', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $product->update(['unit_id' => $unit]);
+        $this->loginBusiness($user, $businessId);
+        $sale = $this->sale($businessId, $branch, $warehouse, $customer, $product->id, 10, 'approved');
+        $sale->items()->update(['unit_id' => $unit]);
+        $sale = $sale->fresh(['items.product']);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(SalesReturnService::class)->create($this->returnPayload($sale, 4.5));
+    }
+
+    public function test_invoice_adjustment_reduces_original_invoice_balance(): void
+    {
+        [$businessId, $user, $product, $branch, $warehouse, $customer] = $this->fixture();
+        $this->loginBusiness($user, $businessId);
+        $sale = $this->sale($businessId, $branch, $warehouse, $customer, $product->id, 10, 'approved');
+        $sale->update(['grand_total' => 100, 'paid_amount' => 50, 'balance_amount' => 50, 'payment_status' => 'partial']);
+
+        $return = app(SalesReturnService::class)->create(array_merge($this->returnPayload($sale->fresh(['items.product']), 3), [
+            'settlement_type' => 'invoice_adjustment',
+        ]));
+
+        app(SalesReturnService::class)->post($return);
+
+        $sale->refresh();
+        $this->assertSame(20.0, (float) $sale->balance_amount);
+        $this->assertSame('partial', $sale->payment_status);
+    }
+
     private function fixture(): array
     {
         $businessId = DB::table('companies')->insertGetId(['name' => 'Bill IQ Test', 'created_at' => now(), 'updated_at' => now()]);
@@ -112,5 +164,47 @@ class SalesInventoryFlowTest extends TestCase
         $return->items()->create(['sales_item_id' => $sale->items->first()->id, 'product_id' => $sale->items->first()->product_id, 'product_name_snapshot' => 'Inventory Item', 'sku_snapshot' => 'INV-1', 'quantity' => 1, 'selling_rate' => 10, 'discount_amount' => 0, 'taxable_amount' => 10, 'gst_rate' => 0, 'cgst_rate' => 0, 'sgst_rate' => 0, 'igst_rate' => 0, 'cgst_amount' => 0, 'sgst_amount' => 0, 'igst_amount' => 0, 'cess_rate' => 0, 'cess_amount' => 0, 'line_total' => 10, 'restock_status' => 'restock']);
 
         return $return->fresh(['items.product']);
+    }
+
+    private function taxedSale(int $businessId, int $branch, int $warehouse, int $customer, int $productId, float $quantity, float $rate, float $discount, float $taxable, float $cgst, float $sgst): SalesVoucher
+    {
+        $sale = SalesVoucher::query()->create(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'customer_id' => $customer, 'voucher_number' => 'SV-' . uniqid(), 'invoice_number' => 'INV-' . uniqid(), 'invoice_date' => now()->toDateString(), 'sale_type' => 'cash', 'invoice_type' => 'tax_invoice', 'tax_type' => 'intrastate', 'subtotal' => $quantity * $rate, 'discount_amount' => $discount, 'taxable_amount' => $taxable, 'cgst_amount' => $cgst, 'sgst_amount' => $sgst, 'grand_total' => $taxable + $cgst + $sgst, 'paid_amount' => $taxable + $cgst + $sgst, 'balance_amount' => 0, 'payment_status' => 'paid', 'status' => 'approved']);
+        $sale->items()->create(['product_id' => $productId, 'product_name_snapshot' => 'Inventory Item', 'sku_snapshot' => 'INV-1', 'quantity' => $quantity, 'free_quantity' => 0, 'selling_rate' => $rate, 'discount_amount' => $discount, 'taxable_amount' => $taxable, 'gst_rate' => 10, 'cgst_rate' => 5, 'sgst_rate' => 5, 'igst_rate' => 0, 'cgst_amount' => $cgst, 'sgst_amount' => $sgst, 'igst_amount' => 0, 'cess_rate' => 0, 'cess_amount' => 0, 'line_total' => $taxable + $cgst + $sgst, 'cost_rate' => 10]);
+
+        return $sale->fresh(['items.product']);
+    }
+
+    private function returnPayload(SalesVoucher $sale, float $quantity): array
+    {
+        $item = $sale->items->first();
+
+        return [
+            'branch_id' => $sale->branch_id,
+            'warehouse_id' => $sale->warehouse_id,
+            'customer_id' => $sale->customer_id,
+            'sales_voucher_id' => $sale->id,
+            'return_date' => now()->toDateString(),
+            'return_type' => 'against_sale',
+            'tax_type' => $sale->tax_type ?: 'intrastate',
+            'settlement_type' => 'customer_credit',
+            'reason' => 'Damaged',
+            'status' => 'draft',
+            'items' => [[
+                'sales_item_id' => $item->id,
+                'product_id' => $item->product_id,
+                'product_variant_id' => $item->product_variant_id,
+                'batch_id' => $item->batch_id,
+                'unit_id' => $item->unit_id,
+                'quantity' => $quantity,
+                'selling_rate' => $item->selling_rate,
+                'discount_amount' => 0,
+                'gst_rate' => $item->gst_rate,
+                'cess_rate' => $item->cess_rate,
+                'return_reason' => 'Damaged',
+                'condition_status' => 'damaged',
+                'restock_status' => 'damaged_stock',
+            ]],
+            'refunds' => [],
+        ];
     }
 }

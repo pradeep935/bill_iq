@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
+import SearchSelect from '../../Components/Common/SearchSelect.vue';
 
 defineProps({ page: { type: String, default: 'purchase-returns' }, title: { type: String, default: 'Purchase Returns' } });
 
@@ -17,6 +18,18 @@ const saving = ref(false);
 const errors = ref({});
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 const filters = reactive({ status: '', return_type: '', settlement_type: '' });
+const returnTypes = [{ value: 'against_purchase', label: 'Against Purchase' }, { value: 'direct_return', label: 'Direct Return' }];
+const returnTypeFilters = [{ value: '', label: 'All Types' }, ...returnTypes];
+const taxTypes = [{ value: 'intrastate', label: 'Intrastate' }, { value: 'interstate', label: 'Interstate' }, { value: 'exempt', label: 'Exempt' }];
+const settlementTypes = [
+    { value: 'supplier_credit', label: 'Supplier Credit' },
+    { value: 'cash_refund', label: 'Cash Refund' },
+    { value: 'bank_refund', label: 'Bank Refund' },
+    { value: 'adjustment', label: 'Adjustment' },
+    { value: 'pending', label: 'Pending' },
+];
+const settlementTypeFilters = [{ value: '', label: 'All Settlements' }, ...settlementTypes];
+const statusFilters = [{ value: '', label: 'All Status' }, { value: 'draft', label: 'Draft' }, { value: 'approved', label: 'Approved' }, { value: 'cancelled', label: 'Cancelled' }, { value: 'reversed', label: 'Reversed' }];
 const form = reactive({
     id: null,
     return_type: 'against_purchase',
@@ -189,17 +202,17 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
 
             <section class="panel">
                 <div class="form-grid">
-                    <select v-model="form.return_type"><option value="against_purchase">Against Purchase</option><option value="direct_return">Direct Return</option></select>
-                    <select v-model="form.supplier_id"><option value="">Supplier</option><option v-for="s in references.suppliers" :key="s.id" :value="s.id">{{ s.supplier_name || s.name }}</option></select>
-                    <select v-model="form.branch_id"><option value="">Branch</option><option v-for="b in references.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
-                    <select v-model="form.warehouse_id"><option value="">Warehouse</option><option v-for="w in filteredWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
-                    <input v-model="form.return_date" type="date" />
-                    <input v-model="form.supplier_debit_note_number" placeholder="Supplier Debit Note No" />
-                    <select v-model="form.tax_type"><option value="intrastate">Intrastate</option><option value="interstate">Interstate</option><option value="exempt">Exempt</option></select>
-                    <select v-model="form.settlement_type"><option value="supplier_credit">Supplier Credit</option><option value="cash_refund">Cash Refund</option><option value="bank_refund">Bank Refund</option><option value="adjustment">Adjustment</option><option value="pending">Pending</option></select>
-                    <input v-model="form.settlement_amount" type="number" placeholder="Settlement Amount" />
-                    <input v-model="form.reason" placeholder="Reason" />
-                    <input v-model="form.remarks" placeholder="Remarks" />
+                    <SearchSelect v-model="form.return_type" label="Return Type" :options="returnTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Return Type" required />
+                    <SearchSelect v-model="form.supplier_id" label="Supplier" :options="references.suppliers" option-value-key="id" option-label-key="supplier_name" select-placeholder="Select Supplier" required />
+                    <SearchSelect v-model="form.branch_id" label="Branch" :options="references.branches" option-value-key="id" option-label-key="name" select-placeholder="Select Branch" :required="form.return_type === 'direct_return'" />
+                    <SearchSelect v-model="form.warehouse_id" label="Warehouse" :options="filteredWarehouses" option-value-key="id" option-label-key="name" select-placeholder="Select Warehouse" :required="form.return_type === 'direct_return'" />
+                    <label><span>Return Date <span class="required-mark">*</span></span><input v-model="form.return_date" type="date" /></label>
+                    <label>Supplier Debit Note No<input v-model="form.supplier_debit_note_number" placeholder="Supplier Debit Note No" /></label>
+                    <SearchSelect v-model="form.tax_type" label="Tax Type" :options="taxTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Tax Type" required />
+                    <SearchSelect v-model="form.settlement_type" label="Settlement Type" :options="settlementTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Settlement" required />
+                    <label>Settlement Amount<input v-model="form.settlement_amount" type="number" min="0" step="0.01" placeholder="Settlement Amount" /></label>
+                    <label>Reason<input v-model="form.reason" placeholder="Reason" /></label>
+                    <label>Remarks<input v-model="form.remarks" placeholder="Remarks" /></label>
                 </div>
 
                 <div v-if="form.return_type === 'against_purchase'" class="search-box">
@@ -223,7 +236,7 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
 
                 <div class="table-wrapper">
                     <table>
-                        <thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>Purchased</th><th>Returned</th><th>Available</th><th>Return Qty</th><th>Rate</th><th>Discount</th><th>GST</th><th>Reason</th><th></th></tr></thead>
+                        <thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>Purchased</th><th>Returned</th><th>Available</th><th>Return Qty <span class="required-mark">*</span></th><th>Rate <span class="required-mark">*</span></th><th>Discount</th><th>GST</th><th>Reason</th><th></th></tr></thead>
                         <tbody>
                             <tr v-for="(item, index) in form.items" :key="`${item.product_id}-${index}`">
                                 <td><strong>{{ item.product }}</strong><span>{{ item.sku }}</span></td>
@@ -262,9 +275,9 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
 
             <section class="panel">
                 <div class="toolbar">
-                    <select v-model="filters.status" @change="loadReturns(1)"><option value="">All Status</option><option value="draft">Draft</option><option value="approved">Approved</option><option value="cancelled">Cancelled</option><option value="reversed">Reversed</option></select>
-                    <select v-model="filters.return_type" @change="loadReturns(1)"><option value="">All Types</option><option value="against_purchase">Against Purchase</option><option value="direct_return">Direct</option></select>
-                    <select v-model="filters.settlement_type" @change="loadReturns(1)"><option value="">All Settlements</option><option value="supplier_credit">Supplier Credit</option><option value="cash_refund">Cash Refund</option><option value="bank_refund">Bank Refund</option><option value="adjustment">Adjustment</option><option value="pending">Pending</option></select>
+                    <SearchSelect v-model="filters.status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" @selected="loadReturns(1)" />
+                    <SearchSelect v-model="filters.return_type" label="Type" :options="returnTypeFilters" option-value-key="value" option-label-key="label" select-placeholder="All Types" @selected="loadReturns(1)" />
+                    <SearchSelect v-model="filters.settlement_type" label="Settlement" :options="settlementTypeFilters" option-value-key="value" option-label-key="label" select-placeholder="All Settlements" @selected="loadReturns(1)" />
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -285,5 +298,5 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
 </template>
 
 <style scoped>
-.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:14px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}input,select,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.search-box{position:relative;margin:14px 0}.search-box input{width:100%}.direct-label{display:block;margin-bottom:8px;color:#7a5b10;font-size:11px}.search-results{position:absolute;z-index:20;top:44px;left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 10px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:12px 10px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input{min-width:86px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:flex-start;margin-bottom:12px}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}}
+.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){min-width:180px}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.search-box{position:relative;margin:14px 0}.search-box input{width:100%}.direct-label{display:block;margin-bottom:8px;color:#7a5b10;font-size:11px}.search-results{position:absolute;z-index:20;top:44px;left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 10px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:12px 10px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input{min-width:86px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}}
 </style>

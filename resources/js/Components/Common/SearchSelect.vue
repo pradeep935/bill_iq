@@ -20,7 +20,7 @@
         :disabled="disabled"
         @focus="openList"
         @keydown="handleKeydown"
-        @input="openList"
+        @input="handleInput"
       />
       <button v-if="modelValue && !disabled" class="search-select-clear" type="button" aria-label="Clear selection" @click.prevent="clearSelection">
         x
@@ -67,6 +67,7 @@ const props = defineProps({
   required: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
   span: { type: Number, default: 1 },
+  allowCustom: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue', 'selected']);
@@ -111,7 +112,7 @@ const purposeHint = computed(() => {
 });
 
 const syncSearchToSelection = () => {
-  search.value = selectedOption.value ? optionLabel(selectedOption.value) : '';
+  search.value = selectedOption.value ? optionLabel(selectedOption.value) : (props.allowCustom && props.modelValue ? String(props.modelValue) : '');
 };
 
 const openList = () => {
@@ -134,6 +135,13 @@ const selectOption = (option) => {
   open.value = false;
   activeIndex.value = -1;
   search.value = optionLabel(option);
+};
+
+const handleInput = () => {
+  openList();
+  if (props.allowCustom) {
+    emit('update:modelValue', search.value);
+  }
 };
 
 const clearSelection = () => {
@@ -177,10 +185,18 @@ const handleKeydown = (event) => {
   if (event.key === 'Enter' && open.value) {
     event.preventDefault();
     const option = filteredOptions.value[activeIndex.value];
-    if (option) selectOption(option);
+    if (option) {
+      selectOption(option);
+    } else if (props.allowCustom && search.value.trim()) {
+      emit('update:modelValue', search.value.trim());
+      closeList();
+    }
   }
 
   if (event.key === 'Tab') {
+    if (props.allowCustom && search.value.trim()) {
+      emit('update:modelValue', search.value.trim());
+    }
     closeList();
   }
 };

@@ -230,6 +230,8 @@ class PurchaseService
             'suppliers' => Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('supplier_name')->get(['id', 'supplier_code', 'supplier_name', 'name', 'state_id', 'credit_days']),
             'branches' => Branch::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
             'warehouses' => Warehouse::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'branch_id', 'name', 'code']),
+            'states' => $this->states(),
+            'cities' => $this->cities(),
         ];
     }
 
@@ -502,6 +504,31 @@ class PurchaseService
     private function fresh(PurchaseVoucher $voucher): PurchaseVoucher
     {
         return $voucher->fresh(['supplier', 'branch', 'warehouse', 'creator', 'items.product', 'items.variant', 'items.batch']);
+    }
+
+    private function states()
+    {
+        if (!Schema::hasTable('states')) {
+            return collect();
+        }
+
+        return DB::table('states')->orderBy('name')->get(['id', 'name', 'code']);
+    }
+
+    private function cities()
+    {
+        if (!Schema::hasTable('cities')) {
+            return collect();
+        }
+
+        $columns = Schema::getColumnListing('cities');
+        $select = array_values(array_intersect(['id', 'state_id', 'name', 'code'], $columns));
+
+        if (!$select) {
+            return collect();
+        }
+
+        return DB::table('cities')->orderBy('name')->get($select);
     }
 
     private function nextVoucherNumber(int $businessId): string

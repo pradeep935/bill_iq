@@ -4,11 +4,11 @@
   </button>
 
   <div class="action-menu-wrap">
-    <button ref="moreButton" type="button" class="crud-action more-action" :title="moreTitle" @click="$emit('toggle')">
+    <button ref="moreButton" type="button" class="crud-action more-action" :aria-label="moreTitle" @click="$emit('toggle')">
       {{ moreLabel }}
     </button>
 
-    <div v-if="open" class="action-menu" :style="menuStyle">
+    <div v-if="open" ref="menu" class="action-menu" :style="menuStyle">
       <slot />
     </div>
   </div>
@@ -30,6 +30,7 @@ const props = defineProps({
 defineEmits(['view', 'toggle']);
 
 const moreButton = ref(null);
+const menu = ref(null);
 const menuStyle = ref({});
 
 const positionMenu = async () => {
@@ -39,10 +40,19 @@ const positionMenu = async () => {
   if (!rect) return;
 
   const gap = 7;
+  const menuHeight = menu.value?.offsetHeight || 0;
+  const spaceBelow = window.innerHeight - rect.bottom - gap;
+  const spaceAbove = rect.top - gap;
+  const openTop = props.placement === 'top' && spaceAbove >= menuHeight
+    ? true
+    : props.placement !== 'bottom' && spaceBelow < menuHeight && spaceAbove > spaceBelow;
+
   menuStyle.value = {
     position: 'fixed',
     right: `${Math.max(8, window.innerWidth - rect.right)}px`,
-    ...(props.placement === 'top'
+    maxHeight: `${Math.max(160, Math.min(360, window.innerHeight - 24))}px`,
+    overflow: 'auto',
+    ...(openTop
       ? { bottom: `${Math.max(8, window.innerHeight - rect.top + gap)}px`, top: 'auto' }
       : { top: `${rect.bottom + gap}px`, bottom: 'auto' }),
   };

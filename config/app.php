@@ -54,6 +54,8 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'force_root_url' => env('APP_FORCE_ROOT_URL', false),
+
     /*
     |--------------------------------------------------------------------------
     | Frontend Asset Version

@@ -25,7 +25,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        if (config('app.url')) {
+        if (config('app.force_root_url') && config('app.url')) {
             URL::forceRootUrl(config('app.url'));
         }
 

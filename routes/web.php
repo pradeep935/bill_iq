@@ -32,6 +32,7 @@ use App\Http\Controllers\WarehouseController;
 
 
 Route::get('/', [UserController::class, 'login'])->name('login');
+Route::get('/login', [UserController::class, 'login'])->name('login.form');
 Route::post('/login', [UserController::class, 'postLogin']);
 Route::get('/logout', [UserController::class, 'logout']);
 Route::post('/uploads-new/file', [GeneralController::class, 'uploadFile']);

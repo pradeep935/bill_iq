@@ -70,6 +70,7 @@ const barcodeProduct = ref({});
 
 const showLabelModal = ref(false);
 const labelProducts = ref([]);
+const quickCreateReturnTo = ref('');
 
 const selectedIds = ref([]);
 const openActionMenuId = ref(null);
@@ -348,6 +349,27 @@ const addProduct = () => {
     showForm.value = true;
 };
 
+const productPrefillFromQuery = () => {
+    const params = new URLSearchParams(window.location.search);
+    const prefillName = (params.get('prefill_name') || '').trim();
+
+    quickCreateReturnTo.value = params.get('return_to') || '';
+
+    if (!prefillName) {
+        return;
+    }
+
+    search.value = prefillName;
+    serverErrors.value = {};
+    selectedProduct.value = {
+        name: prefillName,
+        product_type: 'goods',
+        item_type: 'stock',
+        status: 'active',
+    };
+    showForm.value = true;
+};
+
 const editProduct = async (product) => {
     openActionMenuId.value = null;
     serverErrors.value = {};
@@ -383,6 +405,14 @@ const saveProduct = async (form) => {
 
         showForm.value = false;
         serverErrors.value = {};
+
+        if (quickCreateReturnTo.value && response.product?.id) {
+            const url = new URL(quickCreateReturnTo.value, window.location.origin);
+            url.searchParams.set('added_product_id', response.product.id);
+            url.searchParams.set('added_product_name', response.product.name || form.name || '');
+            window.location.href = `${url.pathname}${url.search}`;
+            return;
+        }
 
         await loadProducts(pagination.value.current_page || 1);
 
@@ -719,6 +749,7 @@ watch(
 );
 
 onMounted(() => {
+    productPrefillFromQuery();
     loadReferences();
     loadProducts();
 });

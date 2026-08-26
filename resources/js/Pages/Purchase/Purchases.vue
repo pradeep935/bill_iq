@@ -40,6 +40,7 @@ const form = reactive({
     remarks: '',
     items: [],
 });
+const draftStorageKey = 'bill_iq_purchase_draft';
 
 const filteredWarehouses = computed(() => {
     if (!form.branch_id) return references.value.warehouses || [];
@@ -68,6 +69,58 @@ const loadPurchases = async (page = 1) => {
 const searchProducts = async () => {
     if (productSearch.value.trim().length < 2) { products.value = []; return; }
     products.value = await PurchaseApi.searchProducts(productSearch.value.trim());
+};
+
+const persistDraftForProductCreate = () => {
+    sessionStorage.setItem(draftStorageKey, JSON.stringify({
+        form: JSON.parse(JSON.stringify(form)),
+        productSearch: productSearch.value,
+    }));
+};
+
+const restoreDraftAfterProductCreate = () => {
+    const saved = sessionStorage.getItem(draftStorageKey);
+    if (!saved) return;
+
+    try {
+        const draft = JSON.parse(saved);
+        Object.assign(form, {
+            ...form,
+            ...(draft.form || {}),
+            items: draft.form?.items || [],
+        });
+        productSearch.value = draft.productSearch || '';
+    } catch (error) {
+        console.error(error);
+    } finally {
+        sessionStorage.removeItem(draftStorageKey);
+    }
+};
+
+const openProductMasterCreate = () => {
+    persistDraftForProductCreate();
+
+    const url = new URL('/app/inventory/products', window.location.origin);
+    url.searchParams.set('return_to', '/app/purchase/bills');
+
+    if (productSearch.value.trim()) {
+        url.searchParams.set('prefill_name', productSearch.value.trim());
+    }
+
+    window.location.href = `${url.pathname}${url.search}`;
+};
+
+const addReturnedProduct = async () => {
+    const params = new URLSearchParams(window.location.search);
+    const productId = params.get('added_product_id');
+    if (!productId) return;
+
+    const found = await PurchaseApi.searchProducts(`id:${productId}`);
+    if (found?.[0]) {
+        addProduct(found[0]);
+    }
+
+    window.history.replaceState({}, document.title, window.location.pathname);
 };
 
 const addProduct = (product) => {
@@ -160,7 +213,12 @@ const closeActionMenu = () => { openActionMenuId.value = null; };
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-onMounted(async () => { await loadReferences(); await loadPurchases(); });
+onMounted(async () => {
+    restoreDraftAfterProductCreate();
+    await loadReferences();
+    await addReturnedProduct();
+    await loadPurchases();
+});
 </script>
 
 <template>
@@ -189,7 +247,10 @@ onMounted(async () => { await loadReferences(); await loadPurchases(); });
                 </div>
 
                 <div class="product-search">
-                    <input v-model="productSearch" placeholder="Search product by name, SKU or barcode" @input="searchProducts" />
+                    <div class="product-search-row">
+                        <input v-model="productSearch" placeholder="Search product by name, SKU or barcode" @input="searchProducts" />
+                        <button type="button" class="secondary-action" @click="openProductMasterCreate">Add Product</button>
+                    </div>
                     <div v-if="products.length" class="search-results">
                         <button v-for="product in products" :key="product.id" type="button" @click="addProduct(product)">
                             <strong>{{ product.name }}</strong><span>{{ product.sku }} | {{ product.barcode || 'No barcode' }}</span>
@@ -249,5 +310,5 @@ onMounted(async () => { await loadReferences(); await loadPurchases(); });
 </template>
 
 <style scoped>
-.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){min-width:180px}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.product-search{position:relative;margin:14px 0}.product-search input{width:100%}.search-results{position:absolute;z-index:20;top:44px;left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 10px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:12px 10px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}}
+.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){min-width:180px}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.secondary-action{color:#2457d6;background:#edf4ff;border-color:#cfe0ff}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.product-search{position:relative;margin:14px 0}.product-search-row{display:flex;gap:10px}.product-search-row input{flex:1;min-width:0}.product-search-row button{white-space:nowrap}.search-results{position:absolute;z-index:20;top:44px;left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 10px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:12px 10px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.product-search-row{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}}
 </style>

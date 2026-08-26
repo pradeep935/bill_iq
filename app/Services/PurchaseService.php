@@ -238,6 +238,11 @@ class PurchaseService
     public function searchProducts(string $search)
     {
         $businessId = AppController::businessId();
+        $productId = null;
+
+        if (preg_match('/^id:(\d+)$/', trim($search), $matches)) {
+            $productId = (int) $matches[1];
+        }
 
         return Product::query()
             ->with(['barcodes', 'variantItems', 'batches' => fn ($q) => $q->where('status', 'active')->orderBy('batch_no')])
@@ -247,11 +252,17 @@ class PurchaseService
             ->where('product_type', 'goods')
             ->where('item_type', 'stock')
             ->where('status', 'active')
-            ->where(function (Builder $q) use ($search) {
+            ->where(function (Builder $q) use ($search, $productId) {
+                if ($productId) {
+                    $q->where('id', $productId);
+
+                    return;
+                }
+
                 $q->where('name', 'like', '%' . $search . '%')
-                    ->orWhere('sku', 'like', '%' . $search . '%')
-                    ->orWhere('primary_barcode', 'like', '%' . $search . '%')
-                    ->orWhereHas('barcodes', fn (Builder $barcodeQuery) => $barcodeQuery->where('barcode', 'like', '%' . $search . '%'));
+                  ->orWhere('sku', 'like', '%' . $search . '%')
+                  ->orWhere('primary_barcode', 'like', '%' . $search . '%')
+                  ->orWhereHas('barcodes', fn (Builder $barcodeQuery) => $barcodeQuery->where('barcode', 'like', '%' . $search . '%'));
             })
             ->limit(20)
             ->get()

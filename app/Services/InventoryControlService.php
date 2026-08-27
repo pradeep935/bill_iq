@@ -455,6 +455,12 @@ class InventoryControlService
             ->latest('transaction_date')
             ->limit(200)
             ->get();
+        $references = $this->stock->stockReferenceNumbers($ledger);
+        $ledger->each(function (StockLedger $entry) use ($references) {
+            $entry->reference_number = $references[$entry->reference_type . ':' . $entry->reference_id] ?? (string) $entry->reference_id;
+            $entry->product_name = $entry->product?->name;
+            $entry->user_name = $entry->creator?->name ?: ($entry->created_by ? 'User' : 'System');
+        });
         $batchNumberColumn = Schema::hasColumn('product_batches', 'batch_number') ? 'product_batches.batch_number' : 'product_batches.batch_no';
 
         return [

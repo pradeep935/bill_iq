@@ -613,7 +613,7 @@ class StockService
         })->reverse()->take($limit)->values();
     }
 
-    private function stockReferenceNumbers($entries): array
+    public function stockReferenceNumbers($entries): array
     {
         $map = [
             OpeningStockVoucher::class => ['table' => 'opening_stock_vouchers', 'column' => 'voucher_number'],

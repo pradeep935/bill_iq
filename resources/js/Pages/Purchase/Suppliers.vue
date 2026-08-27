@@ -217,6 +217,7 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
                 <div class="toolbar">
                     <input v-model="search" placeholder="Search name, code, GSTIN, phone" />
                     <SearchSelect v-model="status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" />
+                    <button type="button" class="primary" @click="loadSuppliers(1)">Search</button>
                     <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
                 </div>
                 <div class="table-wrapper">

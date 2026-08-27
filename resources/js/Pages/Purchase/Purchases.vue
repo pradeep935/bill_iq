@@ -440,6 +440,7 @@ onMounted(async () => {
                 <div class="toolbar">
                     <SearchSelect v-model="filters.status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" @selected="loadPurchases(1)" />
                     <SearchSelect v-model="filters.payment_status" label="Payment" :options="paymentFilters" option-value-key="value" option-label-key="label" select-placeholder="All Payment" @selected="loadPurchases(1)" />
+                    <button type="button" class="primary" @click="loadPurchases(1)">Search</button>
                     <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
                 </div>
                 <div class="table-wrapper">

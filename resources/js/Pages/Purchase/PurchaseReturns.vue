@@ -305,6 +305,7 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
                     <SearchSelect v-model="filters.status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" @selected="loadReturns(1)" />
                     <SearchSelect v-model="filters.return_type" label="Type" :options="returnTypeFilters" option-value-key="value" option-label-key="label" select-placeholder="All Types" @selected="loadReturns(1)" />
                     <SearchSelect v-model="filters.settlement_type" label="Settlement" :options="settlementTypeFilters" option-value-key="value" option-label-key="label" select-placeholder="All Settlements" @selected="loadReturns(1)" />
+                    <button type="button" class="primary" @click="loadReturns(1)">Search</button>
                     <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
                 </div>
                 <div class="table-wrapper">

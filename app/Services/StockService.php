@@ -287,7 +287,7 @@ class StockService
             )
             ->leftJoinSub(
                 DB::table('product_images')
-                    ->selectRaw('product_id, MIN(image_path) as image_path')
+                    ->selectRaw("product_id, SUBSTRING_INDEX(GROUP_CONCAT(image_path ORDER BY is_primary DESC, sort_order ASC, id DESC SEPARATOR '|'), '|', 1) as image_path")
                     ->whereNull('deleted_at')
                     ->groupBy('product_id'),
                 'product_images',

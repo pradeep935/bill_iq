@@ -36,6 +36,7 @@ Route::get('/login', [UserController::class, 'login'])->name('login.form');
 Route::post('/login', [UserController::class, 'postLogin']);
 Route::get('/logout', [UserController::class, 'logout']);
 Route::post('/uploads-new/file', [GeneralController::class, 'uploadFile']);
+Route::get('/storage/{path}', [GeneralController::class, 'publicStorageFile'])->where('path', '.*');
 Route::get('/i/{token}', [PublicInvoiceController::class, 'show'])->name('public.invoice.show');
 Route::get('/i/{token}/pdf', [PublicInvoiceController::class, 'pdf'])->name('public.invoice.pdf');
 Route::get('/q/{token}', [PublicInvoiceController::class, 'quotation'])->name('public.quotation.show');

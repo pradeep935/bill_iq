@@ -1012,11 +1012,19 @@ const imagePreviewUrl = (image = {}) => {
         return '';
     }
 
-    if (/^(https?:)?\/\//.test(path) || path.startsWith('data:') || path.startsWith('blob:')) {
+    if (path.startsWith('data:') || path.startsWith('blob:')) {
         return path;
     }
 
-    const normalizedPath = path.replace(/^\/+/, '');
+    let normalizedPath = path.replace(/^\/+/, '');
+
+    if (/^(https?:)?\/\//.test(path)) {
+        try {
+            normalizedPath = new URL(path, window.location.origin).pathname.replace(/^\/+/, '');
+        } catch {
+            return path;
+        }
+    }
 
     if (normalizedPath.startsWith('storage/')) {
         return `/${normalizedPath}`;

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Storage;
 
 class GeneralController extends Controller
 {
@@ -22,7 +23,7 @@ class GeneralController extends Controller
         return Response::json([
             'success' => true,
             'path' => $path,
-            'url' => asset('storage/' . $path),
+            'url' => '/storage/' . ltrim($path, '/'),
         ]);
     }
 
@@ -40,7 +41,16 @@ class GeneralController extends Controller
         return Response::json([
             'success' => true,
             'path' => $path,
-            'url' => asset('storage/' . $path),
+            'url' => '/storage/' . ltrim($path, '/'),
         ]);
+    }
+
+    public function publicStorageFile(string $path)
+    {
+        $path = ltrim($path, '/');
+
+        abort_unless(Storage::disk('public')->exists($path), 404);
+
+        return Response::file(Storage::disk('public')->path($path));
     }
 }

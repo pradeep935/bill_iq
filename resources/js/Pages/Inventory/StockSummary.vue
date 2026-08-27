@@ -164,22 +164,36 @@ const closeActionMenu = () => {
 };
 
 const stockImage = (source) => {
-    const path = source?.image || source?.product?.image || '';
+    const path = String(source?.image || source?.product?.image || '').trim();
 
     if (!path) {
         return '';
     }
 
-    if (String(path).startsWith('http') || String(path).startsWith('data:')) {
+    if (path.startsWith('data:') || path.startsWith('blob:')) {
         return path;
     }
 
     const appBasePath = window.location.pathname.split('/app')[0] || '';
-    const cleanPath = String(path)
-        .replace(/^\/storage\//, '')
-        .replace(/^storage\//, '');
+    let cleanPath = path.replace(/^\/+/, '');
 
-    return `${appBasePath}/storage/${cleanPath}`;
+    if (/^(https?:)?\/\//.test(path)) {
+        try {
+            cleanPath = new URL(path, window.location.origin).pathname.replace(/^\/+/, '');
+        } catch {
+            return path;
+        }
+    }
+
+    if (cleanPath.startsWith('storage/uploads/')) {
+        cleanPath = cleanPath.replace(/^storage\//, '');
+    }
+
+    if (cleanPath.startsWith('uploads/') || cleanPath.startsWith('upload/') || cleanPath.startsWith('storage/')) {
+        return `${appBasePath}/${cleanPath}`;
+    }
+
+    return `${appBasePath}/uploads/${cleanPath}`;
 };
 
 const drawerTitle = computed(() => selectedDetail.value?.product?.name || 'Inventory Summary');

@@ -8,6 +8,8 @@ import TableLoadingState from '../../Components/Common/TableLoadingState.vue';
 const props = defineProps({ page: { type: String, default: 'inventory' }, title: { type: String, default: 'Inventory Control' }, initial_tab: { type: String, default: 'dashboard' } });
 
 const tab = ref(props.initial_tab === 'adjustments' ? 'voucher' : props.initial_tab);
+const showOperationSelector = ref(false);
+const barcodeScan = ref('');
 const saving = ref(false);
 const loading = ref(false);
 const errors = ref({});
@@ -21,7 +23,16 @@ const transfers = ref([]);
 const movements = ref([]);
 const warehouseLocations = ref([]);
 const reasons = ref([]);
-const tabs = ['dashboard', 'voucher', 'register', 'counts', 'transfers', 'locations', 'reasons', 'reports'];
+const tabs = [
+    { key: 'dashboard', label: 'Overview' },
+    { key: 'register', label: 'Movement History' },
+    { key: 'voucher', label: 'Adjustments' },
+    { key: 'transfers', label: 'Transfers' },
+    { key: 'counts', label: 'Stock Counts' },
+    { key: 'locations', label: 'Locations' },
+    { key: 'reasons', label: 'Reasons' },
+    { key: 'reports', label: 'Reports' },
+];
 const voucherType = ref(props.initial_tab === 'transfers' ? 'stock_transfer' : props.initial_tab === 'counts' ? 'stock_count' : 'stock_adjustment');
 const registerFilters = reactive({ search: '', status: '', branch_id: '', warehouse_id: '', voucher_type: '', date_from: '', date_to: '', reason: '' });
 const permissions = reactive({ create: true, edit_draft: true, approve: true, cancel: true, print: true });
@@ -69,6 +80,72 @@ const reportTabs = [
 const currentReportRows = computed(() => Array.isArray(reports.value?.[activeReport.value]) ? reports.value[activeReport.value] : []);
 const countDifference = (item) => Number(item.counted_quantity || 0) - Number(item.system_quantity || 0);
 const adjustmentQty = (item) => Math.abs(countDifference(item));
+
+const labelize = (value) => String(value || '-').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+const signedQty = (value) => `${Number(value || 0) > 0 ? '+' : ''}${qty(value)}`;
+const stockDelta = (item) => item.direction === 'out' ? -Number(item.adjustment_quantity || 0) : Number(item.adjustment_quantity || 0);
+const lineNewStock = (item) => Number(item.current_stock || 0) + stockDelta(item);
+const adjustmentSummary = computed(() => {
+    const increases = adjustment.items.filter((item) => stockDelta(item) > 0).reduce((sum, item) => sum + stockDelta(item), 0);
+    const decreases = Math.abs(adjustment.items.filter((item) => stockDelta(item) < 0).reduce((sum, item) => sum + stockDelta(item), 0));
+    return { products: adjustment.items.filter((item) => item.product_id).length, increases, decreases, net: increases - decreases };
+});
+const kpiCards = computed(() => [
+    { key: 'stock-value', label: 'Stock Value', value: `Rs. ${money(dashboard.value.total_stock_value)}`, note: 'Current inventory valuation' },
+    { key: 'saleable', label: 'Saleable Stock', value: qty(dashboard.value.total_saleable_quantity), note: 'Units available for sale' },
+    { key: 'low', label: 'Low Stock', value: dashboard.value.low_stock_items || 0, note: 'Below reorder level', tone: 'warning', action: () => openCurrentStock('low_stock') },
+    { key: 'out', label: 'Out of Stock', value: dashboard.value.out_of_stock_items || 0, note: 'Products needing replenishment', tone: 'danger', action: () => openCurrentStock('out_of_stock') },
+    { key: 'near-expiry', label: 'Near Expiry', value: dashboard.value.near_expiry_items || 0, note: 'Next 30 days', tone: 'warning', action: () => openBatchReport('near_expiry') },
+    { key: 'expired', label: 'Expired Stock', value: dashboard.value.expired_items || 0, note: 'Already expired', tone: 'danger', action: () => openBatchReport('expired') },
+    { key: 'transit', label: 'In Transit', value: qty(dashboard.value.stock_in_transit), note: 'Transfer quantity moving now', tone: 'info', action: () => switchTab('transfers') },
+    { key: 'counts', label: 'Pending Counts', value: dashboard.value.pending_stock_counts || 0, note: 'Awaiting review or posting', tone: 'info', action: () => switchTab('counts') },
+]);
+const inventoryAlerts = computed(() => [
+    { label: 'Out of Stock', products: dashboard.value.out_of_stock_items || 0, action: () => openCurrentStock('out_of_stock') },
+    { label: 'Low Stock', products: dashboard.value.low_stock_items || 0, action: () => openCurrentStock('low_stock') },
+    { label: 'Near Expiry', products: dashboard.value.near_expiry_items || 0, action: () => openBatchReport('near_expiry') },
+    { label: 'Expired', products: dashboard.value.expired_items || 0, action: () => openBatchReport('expired') },
+    { label: 'Pending Transfers', products: transfers.value.filter((row) => ['draft', 'approved', 'dispatched', 'partially_received'].includes(row.status)).length, action: () => switchTab('transfers') },
+    { label: 'Count Variances', products: counts.value.filter((row) => row.status !== 'posted' && (row.items || []).some((item) => Number(item.variance_quantity || 0) !== 0)).length, action: () => switchTab('counts') },
+].filter((alert) => Number(alert.products || 0) > 0));
+const recentActivity = computed(() => registerRows.value.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8));
+const operationCards = [
+    { key: 'stock_adjustment', label: 'Stock Adjustment', tab: 'voucher', detail: 'Correct available stock for damaged, lost, found, expired or manual correction cases.', bullets: ['Increase or decrease stock', 'Reason and warehouse required', 'Posts immutable ledger entries'] },
+    { key: 'stock_transfer', label: 'Stock Transfer', tab: 'transfers', detail: 'Move stock between branches, warehouses or locations with dispatch and receive stages.', bullets: ['Source to destination', 'Tracks in-transit stock', 'Supports partial receive'] },
+    { key: 'stock_count', label: 'Stock Count', tab: 'counts', detail: 'Verify physical stock before posting approved count variances as adjustments.', bullets: ['Full or cycle count', 'System vs counted quantity', 'Approval before posting'] },
+    { key: 'production_output', label: 'Stock In', tab: 'voucher', detail: 'Record controlled manual stock increases where business rules allow it.', bullets: ['Found stock', 'Opening correction', 'Positive ledger effect'] },
+    { key: 'production_consumption', label: 'Stock Out', tab: 'voucher', detail: 'Issue inventory for internal use, wastage, samples or production consumption.', bullets: ['Stock decrease', 'Available stock validation', 'Reason-led audit trail'] },
+    { key: 'location_movement', label: 'Location Movement', tab: 'locations', detail: 'Move products within the same warehouse from one rack, shelf or bin to another.', bullets: ['Rack A-01 to Rack B-04', 'Warehouse location history', 'No branch transfer needed'] },
+];
+const quickActions = [
+    { label: 'Adjust Stock', key: 'stock_adjustment' },
+    { label: 'Transfer Stock', key: 'stock_transfer' },
+    { label: 'Start Stock Count', key: 'stock_count' },
+    { label: 'Move Location', key: 'location_movement' },
+    { label: 'Scan Product', key: 'scan' },
+    { label: 'View Stock Ledger', key: 'ledger' },
+];
+const selectOperation = (operation) => {
+    showOperationSelector.value = false;
+    if (operation.key === 'location_movement') { tab.value = 'locations'; return; }
+    voucherType.value = operation.key;
+    setVoucherType();
+};
+const runQuickAction = (action) => {
+    if (action.key === 'scan') { barcodeScan.value = ''; showToast('Barcode scanner is ready in the operation header.', 'success', 'Scan Product'); return; }
+    if (action.key === 'ledger') { tab.value = 'reports'; activeReport.value = 'movement_report'; return; }
+    const operation = operationCards.find((item) => item.key === action.key);
+    if (operation) selectOperation(operation);
+};
+const openCurrentStock = (status) => { window.location.href = `/app/inventory/current-stock?stock_status=${status}`; };
+const openBatchReport = (status) => { tab.value = 'reports'; activeReport.value = 'expiry_report'; showToast(`${labelize(status)} filter can be applied in the expiry report.`, 'success', 'Inventory Alerts'); };
+const scanBarcode = () => {
+    const code = barcodeScan.value.trim();
+    if (!code) return;
+    showToast(`Barcode ${code} captured for stock operation lookup.`, 'success', 'Scan Barcode');
+    barcodeScan.value = '';
+};
+const exportDashboard = () => exportRows('csv');
 const registerRows = computed(() => [
     ...adjustments.value.map((row) => ({ id: `adjustment-${row.id}`, raw: row, type: row.source || 'stock_adjustment', number: row.voucher_number, date: row.adjustment_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: Number(row.total_quantity_in || 0) + Number(row.total_quantity_out || 0), status: row.status, action: 'adjustment' })),
     ...transfers.value.map((row) => ({ id: `transfer-${row.id}`, raw: row, type: row.transfer_type || 'stock_transfer', number: row.voucher_number, date: row.transfer_date, branch: `${row.source_branch?.name || '-'} -> ${row.destination_branch?.name || '-'}`, warehouse: `${row.source_warehouse?.name || '-'} -> ${row.destination_warehouse?.name || '-'}`, items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Number(item.approved_quantity || item.requested_quantity || 0), 0) || 0, status: row.status, action: 'transfer' })),
@@ -214,29 +291,48 @@ onMounted(load);
             <div class="bill-page-title">
                 <span>INVENTORY</span>
                 <h1>Stock Operations</h1>
-                <p>Adjustment, count, transfer, location movement and valuation from immutable stock ledgers.</p>
+                <p>Manage stock adjustments, physical counts, transfers, locations and inventory movements.</p>
             </div>
         </template>
         <div class="inventory-control">
             <AppToast v-if="toast" show :title="toast.title" :message="toast.message" :type="toast.type" />
-            <div class="page-toolbar"><button :disabled="loading" @click="load">Refresh</button></div>
-            <div class="voucher-selector">
-                <label>Voucher Type</label>
-                <select v-model="voucherType" @change="setVoucherType">
-                    <option v-for="type in voucherTypes" :key="type.key" :value="type.key">{{ type.label }}</option>
-                </select>
-                <span>{{ currentVoucherType.label }} controls required fields, validation and ledger posting type.</span>
+            <div class="page-toolbar">
+                <button class="primary" @click="showOperationSelector = true">+ New Stock Operation</button>
+                <div class="barcode-capture"><input v-model="barcodeScan" placeholder="Scan barcode" @keyup.enter="scanBarcode" /><button @click="scanBarcode">Scan Barcode</button></div>
+                <button @click="exportDashboard">Export</button>
+                <button :disabled="loading" @click="load">{{ loading ? 'Refreshing...' : 'Refresh' }}</button>
             </div>
-            <div class="tabs"><button v-for="t in tabs" :key="t" :class="{active: tab === t}" @click="tab = t">{{ t }}</button></div>
+            <div class="tabs"><button v-for="t in tabs" :key="t.key" :class="{active: tab === t.key}" @click="tab = t.key">{{ t.label }}</button></div>
             <div v-if="errors.form" class="alert">{{ errors.form[0] }}</div>
             <TableLoadingState v-if="loading" title="Loading inventory vouchers..." description="Please wait while stock operation data is loaded." />
 
-            <section v-if="!loading && tab === 'dashboard'" class="panel cards">
-                <div><span>Stock Value</span><strong>Rs. {{ money(dashboard.total_stock_value) }}</strong></div><div><span>Saleable Qty</span><strong>{{ qty(dashboard.total_saleable_quantity) }}</strong></div><div><span>Low Stock</span><strong>{{ dashboard.low_stock_items || 0 }}</strong></div><div><span>Out of Stock</span><strong>{{ dashboard.out_of_stock_items || 0 }}</strong></div><div><span>Near Expiry</span><strong>{{ dashboard.near_expiry_items || 0 }}</strong></div><div><span>Expired</span><strong>{{ dashboard.expired_items || 0 }}</strong></div><div><span>In Transit</span><strong>{{ qty(dashboard.stock_in_transit) }}</strong></div><div><span>Pending Counts</span><strong>{{ dashboard.pending_stock_counts || 0 }}</strong></div>
+            <section v-if="!loading && tab === 'dashboard'" class="dashboard-stack">
+                <div class="kpi-grid">
+                    <button v-for="card in kpiCards" :key="card.key" type="button" class="kpi-card" :class="card.tone" @click="card.action && card.action()">
+                        <span>{{ card.label }}</span><strong>{{ card.value }}</strong><small>{{ card.note }}</small>
+                    </button>
+                </div>
+                <div class="dashboard-columns">
+                    <section class="panel">
+                        <div class="section-head"><div><h2>Inventory Alerts</h2><p>Critical stock exceptions that need attention.</p></div></div>
+                        <div v-if="inventoryAlerts.length" class="alert-list">
+                            <div v-for="alert in inventoryAlerts" :key="alert.label" class="alert-row"><span>{{ alert.label }}</span><strong>{{ alert.products }}</strong><button @click="alert.action">View</button></div>
+                        </div>
+                        <div v-else class="healthy-state">Inventory is healthy. No critical stock alerts.</div>
+                    </section>
+                    <section class="panel">
+                        <div class="section-head"><div><h2>Quick Actions</h2><p>Start the common inventory workflows directly.</p></div></div>
+                        <div class="quick-grid"><button v-for="action in quickActions" :key="action.key" @click="runQuickAction(action)">{{ action.label }}</button></div>
+                    </section>
+                </div>
+                <section class="panel">
+                    <div class="section-head"><div><h2>Recent Stock Activity</h2><p>Latest adjustments, transfers, counts and location movements.</p></div><button @click="tab = 'register'">Open History</button></div>
+                    <div class="table-wrapper"><table><thead><tr><th>Date & Time</th><th>Voucher No.</th><th>Operation</th><th>Product</th><th>Warehouse</th><th>Qty Change</th><th>User</th><th>Status</th></tr></thead><tbody><tr v-for="row in recentActivity" :key="row.id" @click="tab = 'register'"><td>{{ row.date || '-' }}</td><td>{{ row.number || '-' }}</td><td>{{ labelize(row.type) }}</td><td>{{ row.raw?.items?.[0]?.product?.name || '-' }}</td><td>{{ row.warehouse }}</td><td :class="['qty-change', row.action === 'transfer' ? 'neutral' : Number(row.quantity || 0) > 0 ? 'positive' : 'negative']">{{ row.action === 'transfer' ? qty(row.quantity) : signedQty(row.quantity) }}</td><td>{{ row.raw?.created_by?.name || row.raw?.approved_by?.name || '-' }}</td><td><span class="status-pill">{{ labelize(row.status) }}</span></td></tr><tr v-if="!recentActivity.length"><td colspan="8" class="empty">No stock movement history found.</td></tr></tbody></table></div>
+                </section>
             </section>
 
             <section v-if="!loading && tab === 'voucher'" class="panel">
-                <div class="section-head"><div><h2>{{ currentVoucherType.label }}</h2><p>Draft does not update stock. Posting creates immutable stock ledger entries.</p></div><span class="status-pill">{{ adjustment.status }}</span></div>
+                <div class="section-head"><div><span>STOCK ADJUSTMENT WORKFLOW</span><h2>New {{ currentVoucherType.label }}</h2><p>Draft does not update stock. Posting creates immutable stock ledger entries.</p></div><span class="status-pill">{{ labelize(adjustment.status) }}</span></div>
                 <div class="form-grid"><input value="Auto generated on save" disabled /><select v-model="adjustment.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="adjustment.warehouse_id"><option value="">Source Warehouse</option><option v-for="w in filteredWarehouses(adjustment.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="adjustment.adjustment_date" type="date" /><select v-model="adjustment.adjustment_reason_id" @change="applyReason"><option value="">Reason</option><option v-for="r in refs.reasons" :key="r.id" :value="r.id">{{ r.reason_name }}</option></select><select v-model="adjustment.adjustment_type"><option value="increase">Increase</option><option value="decrease">Decrease</option><option value="mixed">Mixed</option></select><input :value="currentVoucherType.label" disabled /><textarea v-model="adjustment.remarks" placeholder="Remarks / reason note"></textarea></div>
                 <div class="hint-grid">
                     <span>Voucher number is generated when the voucher is saved.</span>
@@ -244,8 +340,8 @@ onMounted(load);
                     <span>Reason is required before posting and is used for audit reports.</span>
                     <span>Draft vouchers remain editable and do not update stock.</span>
                 </div>
-                <div class="line-head"><span>Product</span><span>Current</span><span>Direction</span><span>Qty</span><span>Cost</span><span>Location</span><span>Condition</span><span></span></div>
-                <div v-for="(item, i) in adjustment.items" :key="i" class="line-grid adjustment-row"><select v-model="item.product_id" @change="refreshLineStock(item)"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }} - {{ p.sku }}</option></select><input :value="qty(item.current_stock)" disabled /><select v-model="item.direction"><option value="in">IN</option><option value="out">OUT</option></select><input v-model.number="item.adjustment_quantity" type="number" step="0.001" /><input v-model.number="item.unit_cost" type="number" step="0.01" /><input v-model="item.warehouse_location" placeholder="Location" /><select v-model="item.condition_status"><option>saleable</option><option>damaged</option><option>expired</option><option>defective</option><option>quarantined</option><option>lost</option></select><button @click="adjustment.items.splice(i,1)" :disabled="adjustment.items.length === 1">Remove</button></div>
+                <div class="line-head"><span>Product</span><span>Current</span><span>Adjustment</span><span>Qty</span><span>New Stock</span><span>Cost</span><span>Location</span><span>Condition</span><span></span></div>
+                <div v-for="(item, i) in adjustment.items" :key="i" class="line-grid adjustment-row"><select v-model="item.product_id" @change="refreshLineStock(item)"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }} - {{ p.sku }}</option></select><input :value="qty(item.current_stock)" disabled /><select v-model="item.direction"><option value="in">Increase</option><option value="out">Decrease</option></select><input v-model.number="item.adjustment_quantity" type="number" step="0.001" /><input :value="qty(lineNewStock(item))" disabled :class="lineNewStock(item) < 0 ? 'stock-negative' : ''" /><input v-model.number="item.unit_cost" type="number" step="0.01" /><input v-model="item.warehouse_location" placeholder="Location" /><select v-model="item.condition_status"><option>saleable</option><option>damaged</option><option>expired</option><option>defective</option><option>quarantined</option><option>lost</option></select><button @click="adjustment.items.splice(i,1)" :disabled="adjustment.items.length === 1">Remove</button></div>
                 <section class="voucher-help-card">
                     <strong>Line guidance</strong>
                     <ul>
@@ -255,7 +351,7 @@ onMounted(load);
                         <li>Location and condition help separate saleable, damaged, expired or lost stock.</li>
                     </ul>
                 </section>
-                <div class="actions"><button @click="addRow(adjustment.items, { product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', reason: '' })">Add Item</button><button :disabled="saving" @click="saveAdjustment('draft')">Save Draft</button><button :disabled="saving" @click="saveAdjustment('posted')">Post</button></div>
+                <div class="posting-summary"><strong>{{ adjustmentSummary.products }} products affected</strong><span>Stock Increase: +{{ qty(adjustmentSummary.increases) }}</span><span>Stock Decrease: -{{ qty(adjustmentSummary.decreases) }}</span><span>Net Difference: {{ signedQty(adjustmentSummary.net) }}</span></div><div class="actions"><button @click="addRow(adjustment.items, { product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', reason: '' })">Add Item</button><button :disabled="saving" @click="saveAdjustment('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="saveAdjustment('posted')">Post Adjustment</button></div>
             </section>
 
             <section v-if="!loading && tab === 'register'" class="panel">
@@ -299,10 +395,22 @@ onMounted(load);
                 <div class="tabs report-tabs"><button v-for="report in reportTabs" :key="report.key" :class="{active: activeReport === report.key}" @click="activeReport = report.key">{{ report.label }}</button></div>
                 <div class="table-wrapper"><table><thead><tr><th>Date</th><th>Type</th><th>Product / Voucher</th><th>Branch</th><th>Warehouse</th><th>In</th><th>Out</th><th>Qty</th><th>Value</th><th>Status</th></tr></thead><tbody><tr v-for="(row, index) in currentReportRows" :key="row.id || index"><td>{{ row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date || '-' }}</td><td>{{ row.transaction_type || row.source || row.transfer_type || activeReport }}</td><td>{{ row.product?.name || row.product_name || row.voucher_number || row.name || '-' }}</td><td>{{ row.branch?.name || row.branch_name || row.source_branch?.name || '-' }}</td><td>{{ row.warehouse?.name || row.warehouse_name || row.source_warehouse?.name || '-' }}</td><td>{{ qty(row.quantity_in) }}</td><td>{{ qty(row.quantity_out) }}</td><td>{{ qty(row.quantity_available || row.total_quantity_in || row.total_quantity_out) }}</td><td>Rs. {{ money(row.stock_value || row.total_value_in || row.total_value_out) }}</td><td>{{ row.status || row.stock_status || '-' }}</td></tr><tr v-if="!currentReportRows.length"><td colspan="10" class="empty">No report data found.</td></tr></tbody></table></div>
             </section>
+
+            <div v-if="showOperationSelector" class="selector-backdrop" @click.self="showOperationSelector = false">
+                <section class="operation-selector">
+                    <div class="section-head"><div><span>NEW STOCK OPERATION</span><h2>Choose an inventory action</h2><p>Select the workflow that matches why stock is changing.</p></div><button @click="showOperationSelector = false">Close</button></div>
+                    <div class="operation-grid">
+                        <button v-for="operation in operationCards" :key="operation.key" class="operation-card" @click="selectOperation(operation)">
+                            <strong>{{ operation.label }}</strong><span>{{ operation.detail }}</span><small v-for="bullet in operation.bullets" :key="bullet">{{ bullet }}</small>
+                        </button>
+                    </div>
+                </section>
+            </div>
         </div>
     </Layout>
 </template>
 
+
 <style scoped>
-.inventory-control{padding:0 0 28px}.page-toolbar,.tabs,.actions{display:flex;align-items:center;gap:12px}.page-toolbar{justify-content:flex-end;margin:-6px 0 12px}.voucher-selector{align-items:center;background:#fff;border:1px solid #dfe6ef;border-radius:8px;display:flex;gap:10px;margin-bottom:12px;padding:12px}.voucher-selector label{color:#69758a;font-size:10px;font-weight:800;text-transform:uppercase}.voucher-selector span{color:#758197;font-size:12px}.tabs{flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#173b77;color:#fff;border-color:#173b77}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.section-head{align-items:flex-start;display:flex;justify-content:space-between;margin-bottom:14px}.section-head h2{color:#142139;font-size:18px;margin:0}.section-head p{color:#758197;font-size:12px;margin:4px 0 0}.status-pill{background:#edf2ff;border-radius:7px;color:#2457d6;display:inline-flex;font-size:10px;font-weight:800;padding:5px 8px;text-transform:capitalize}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.cards div{padding:14px;border:1px solid #edf1f5;border-radius:8px}.cards span{display:block;color:#69758a;font-size:11px}.cards strong{display:block;margin-top:6px;color:#142139;font-size:18px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}.hint-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}.hint-grid span,.voucher-help-card{background:#f8fafc;border:1px dashed #d9e2ef;border-radius:8px;color:#6f7b90;font-size:11px;font-weight:650;line-height:1.45;padding:9px 11px}.voucher-help-card{margin:10px 0 12px}.voucher-help-card strong{color:#27344c;display:block;font-size:12px;margin-bottom:6px}.voucher-help-card ul{margin:0;padding-left:17px}.voucher-help-card li{margin:3px 0}.line-head,.line-grid{display:grid;gap:8px;align-items:center;margin-bottom:8px}.line-head{color:#69758a;font-size:10px;font-weight:800;text-transform:uppercase}.adjustment-row,.line-head{grid-template-columns:1.5fr .7fr .7fr .7fr .7fr 1fr 1fr .7fr}.count-row,.count-head{grid-template-columns:1.5fr .75fr .75fr .75fr .75fr .7fr .9fr .9fr .65fr}.transfer-row,.transfer-head{grid-template-columns:1.4fr .65fr .65fr .65fr .65fr .8fr .8fr .8fr .8fr .9fr .9fr .65fr}.location-row{grid-template-columns:1.8fr .8fr 1fr 1fr .7fr}.actions{justify-content:flex-end;flex-wrap:wrap;margin:12px 0}.actions.inline{margin:0}.secondary{border-top:1px solid #edf1f5;margin-top:20px;padding-top:16px}.report-tabs{margin-bottom:10px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:38px}button{font-weight:750;cursor:pointer}.alert{padding:10px 12px;margin-bottom:12px;border-radius:8px;background:#fff4f4;color:#b42318;border:1px solid #ffd5d5;font-size:12px}.empty{color:#8490a2;text-align:center}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{padding:11px 10px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap;font-size:12px}th{color:#69758a;background:#f8fafc;font-size:10px;text-transform:uppercase}@media(max-width:1000px){.cards,.form-grid,.hint-grid,.line-grid,.line-head,.adjustment-row,.count-row,.transfer-row,.location-row{grid-template-columns:1fr}.page-toolbar{justify-content:flex-start}.voucher-selector{align-items:flex-start;flex-direction:column}}
+.inventory-control{padding:0 0 28px}.page-toolbar,.tabs,.actions,.barcode-capture{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.page-toolbar{justify-content:flex-end;margin:-6px 0 14px}.barcode-capture input{width:170px}.tabs{margin-bottom:14px}.tabs button.active{background:#173b77;color:#fff;border-color:#173b77}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.section-head{align-items:flex-start;display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.section-head span{color:#2457d6;font-size:10px;font-weight:900;letter-spacing:1px}.section-head h2{color:#142139;font-size:18px;margin:0}.section-head p{color:#758197;font-size:12px;margin:4px 0 0}.status-pill{background:#edf2ff;border-radius:7px;color:#2457d6;display:inline-flex;font-size:10px;font-weight:800;padding:5px 8px;text-transform:capitalize}.dashboard-stack{display:grid;gap:16px}.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpi-card{align-items:flex-start;display:grid;gap:6px;padding:15px;text-align:left;background:#fff;border:1px solid #e3e9f2;border-left:4px solid #2457d6;border-radius:8px}.kpi-card strong{color:#142139;font-size:21px}.kpi-card span,.cards span{color:#69758a;font-size:11px;font-weight:850;text-transform:uppercase}.kpi-card small{color:#758197}.kpi-card.warning{border-left-color:#d99000}.kpi-card.danger{border-left-color:#d23f49}.kpi-card.info{border-left-color:#0f8b8d}.dashboard-columns{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.alert-list{display:grid;gap:8px}.alert-row{align-items:center;display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:10px 0;border-bottom:1px solid #edf1f5}.alert-row span{color:#344159;font-weight:800}.alert-row strong{color:#142139}.healthy-state{padding:18px;color:#168757;background:#eaf8f1;border:1px solid #cceedd;border-radius:8px;font-weight:800}.quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.quick-grid button{text-align:left}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}.hint-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}.hint-grid span,.voucher-help-card{background:#f8fafc;border:1px dashed #d9e2ef;border-radius:8px;color:#6f7b90;font-size:11px;font-weight:650;line-height:1.45;padding:9px 11px}.voucher-help-card{margin:10px 0 12px}.voucher-help-card strong{color:#27344c;display:block;font-size:12px;margin-bottom:6px}.voucher-help-card ul{margin:0;padding-left:17px}.voucher-help-card li{margin:3px 0}.line-head,.line-grid{display:grid;gap:8px;align-items:center;margin-bottom:8px}.line-head{color:#69758a;font-size:10px;font-weight:800;text-transform:uppercase}.adjustment-row,.line-head{grid-template-columns:1.5fr .7fr .8fr .65fr .75fr .7fr 1fr 1fr .7fr}.count-row,.count-head{grid-template-columns:1.5fr .75fr .75fr .75fr .75fr .7fr .9fr .9fr .65fr}.transfer-row,.transfer-head{grid-template-columns:1.4fr .65fr .65fr .65fr .65fr .8fr .8fr .8fr .8fr .9fr .9fr .65fr}.location-row{grid-template-columns:1.8fr .8fr 1fr 1fr .7fr}.posting-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0;padding:12px;background:#f8fafc;border:1px solid #e5eaf2;border-radius:8px;color:#344159;font-size:12px}.posting-summary strong{color:#142139}.actions{justify-content:flex-end;margin:12px 0}.actions.inline{margin:0}.secondary{border-top:1px solid #edf1f5;margin-top:20px;padding-top:16px}.report-tabs{margin-bottom:10px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:38px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.alert{padding:10px 12px;margin-bottom:12px;border-radius:8px;background:#fff4f4;color:#b42318;border:1px solid #ffd5d5;font-size:12px}.empty{color:#8490a2;text-align:center}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:12px}tr{cursor:pointer}th,td{padding:11px 10px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap;font-size:12px}th{color:#69758a;background:#f8fafc;font-size:10px;text-transform:uppercase}.stock-negative{color:#d23f49!important}.qty-change.positive{color:#168757;font-weight:900}.qty-change.negative{color:#d23f49;font-weight:900}.qty-change.neutral{color:#344159;font-weight:900}.selector-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.operation-selector{width:min(980px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.operation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.operation-card{display:grid;align-content:start;gap:8px;min-height:170px;padding:14px;text-align:left;border:1px solid #dfe6ef}.operation-card strong{color:#142139;font-size:15px}.operation-card span{color:#536174;line-height:1.45}.operation-card small{color:#69758a;background:#f8fafc;border-radius:6px;padding:5px 7px}@media(max-width:1000px){.kpi-grid,.dashboard-columns,.form-grid,.hint-grid,.line-grid,.line-head,.adjustment-row,.count-row,.transfer-row,.location-row,.operation-grid{grid-template-columns:1fr}.page-toolbar{justify-content:flex-start}.barcode-capture input{width:100%}.quick-grid{grid-template-columns:1fr}.section-head{flex-direction:column}}
 </style>

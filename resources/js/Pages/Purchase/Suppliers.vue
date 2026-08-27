@@ -107,6 +107,12 @@ const loadSuppliers = async (page = 1) => {
     }
 };
 
+const clearFilters = async () => {
+    search.value = '';
+    status.value = '';
+    await loadSuppliers(1);
+};
+
 const editSupplier = (supplier) => {
     Object.assign(form, supplier);
     errors.value = {};
@@ -211,6 +217,7 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
                 <div class="toolbar">
                     <input v-model="search" placeholder="Search name, code, GSTIN, phone" />
                     <SearchSelect v-model="status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" />
+                    <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -269,7 +276,8 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
 .form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .form-grid label { display: grid; gap: 5px; color: #667085; font-size: 11px; font-weight: 800; }
 .form-grid :deep(.search-select) { display: block; }
-.toolbar :deep(.search-select) { min-width: 180px; }
+.toolbar :deep(.search-select) { width: 220px; min-width: 0; }
+.toolbar :deep(.search-select-hint) { display: none; }
 .wide { grid-column: span 2; }
 .required-mark { color: #dc2626; font-weight: 900; margin-left: 3px; }
 input, select, textarea, button { min-height: 38px; padding: 8px 10px; color: #344159; background: #fff; border: 1px solid #d8e0eb; border-radius: 8px; font-size: 12px; }
@@ -280,6 +288,7 @@ button.danger { color: #d23f49; background: #fff3f4; border-color: #ffd6da; }
 .actions, .pagination { justify-content: flex-end; margin-top: 12px; }
 .toolbar { margin-bottom: 12px; justify-content: flex-start; }
 .toolbar input { min-width: 280px; }
+.ghost-action { color: #475569; background: #f8fafc; border-color: #dfe6ef; }
 .table-wrapper { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th { padding: 12px 10px; color: #69758a; background: #f8fafc; border-bottom: 1px solid #e7ecf2; text-align: left; white-space: nowrap; font-size: 10px; font-weight: 800; text-transform: uppercase; }

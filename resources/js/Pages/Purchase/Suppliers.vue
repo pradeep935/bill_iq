@@ -174,8 +174,6 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
             <div class="bill-page-title"><span>PURCHASE MANAGEMENT</span><h1>Supplier Master</h1><p>Maintain GST, credit and payable-ready supplier information.</p></div>
         </template>
         <div class="purchase-page">
-            <div class="page-toolbar"><button type="button" class="primary" @click="openSupplierCreate">New Supplier</button></div>
-
             <div v-if="showSupplierDrawer" class="drawer-backdrop" @click.self="closeSupplierDrawer">
                 <aside class="drawer-panel">
                     <div class="drawer-heading">
@@ -215,10 +213,13 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
 
             <section class="panel">
                 <div class="toolbar">
-                    <input v-model="search" placeholder="Search name, code, GSTIN, phone" />
-                    <SearchSelect v-model="status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" />
-                    <button type="button" class="primary" @click="loadSuppliers(1)">Search</button>
-                    <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
+                    <div class="filter-group">
+                        <input v-model="search" placeholder="Search name, code, GSTIN, phone" />
+                        <SearchSelect v-model="status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" />
+                        <button type="button" class="primary" @click="loadSuppliers(1)">Search</button>
+                        <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
+                    </div>
+                    <button type="button" class="primary" @click="openSupplierCreate">New Supplier</button>
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -268,7 +269,6 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
 <style scoped>
 .purchase-page { padding: 4px 0 28px; }
 .page-heading, .toolbar, .actions, .pagination, .row-actions, .drawer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.page-toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
 .page-heading { margin-bottom: 18px; }
 .page-heading span, .drawer-heading span { color: #2457d6; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; }
 .page-heading h1 { margin: 0; color: #142139; font-weight: 800; }
@@ -287,9 +287,11 @@ button { font-weight: 750; cursor: pointer; }
 button.primary { color: #fff; background: #2457d6; border-color: #2457d6; box-shadow: 0 6px 14px rgba(36, 87, 214, .16); }
 button.danger { color: #d23f49; background: #fff3f4; border-color: #ffd6da; }
 .actions, .pagination { justify-content: flex-end; margin-top: 12px; }
-.toolbar { margin-bottom: 12px; justify-content: flex-start; }
+.toolbar { margin-bottom: 12px; justify-content: space-between; flex-wrap: wrap; }
+.filter-group { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
 .toolbar input { min-width: 280px; }
 .ghost-action { color: #475569; background: #f8fafc; border-color: #dfe6ef; }
+.toolbar > .primary { margin-left: auto; white-space: nowrap; }
 .table-wrapper { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th { padding: 12px 10px; color: #69758a; background: #f8fafc; border-bottom: 1px solid #e7ecf2; text-align: left; white-space: nowrap; font-size: 10px; font-weight: 800; text-transform: uppercase; }
@@ -312,5 +314,5 @@ td { padding: 12px 10px; color: #27344c; border-bottom: 1px solid #edf1f5; white
 .drawer-heading { position: sticky; z-index: 30; top: 0; margin: -18px -18px 16px; padding: 16px 18px; background: #fff; border-bottom: 1px solid #edf1f5; }
 .drawer-heading h2 { margin: 2px 0 0; color: #142139; font-size: 20px; }
 @media (max-width: 1000px) { .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wide { grid-column: span 2; } }
-@media (max-width: 700px) { .page-heading, .toolbar, .drawer-heading { align-items: stretch; flex-direction: column; } .form-grid { grid-template-columns: 1fr; } .wide { grid-column: span 1; } .toolbar input, .toolbar :deep(.search-select) { min-width: 0; width: 100%; } .drawer-panel { width: 100vw; } }
+@media (max-width: 700px) { .page-heading, .toolbar, .drawer-heading { align-items: stretch; flex-direction: column; } .filter-group { width: 100%; align-items: stretch; } .form-grid { grid-template-columns: 1fr; } .wide { grid-column: span 1; } .toolbar input, .toolbar :deep(.search-select), .toolbar > .primary { min-width: 0; width: 100%; margin-left: 0; } .drawer-panel { width: 100vw; } }
 </style>

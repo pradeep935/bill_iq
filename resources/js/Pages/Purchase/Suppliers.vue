@@ -219,7 +219,12 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
                                 <th>Code</th><th>Name</th><th>GSTIN</th><th>Mobile</th><th>City</th><th>Opening</th><th>Status</th><th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody :class="{ 'is-loading': loading }">
+                            <template v-if="loading">
+                                <tr v-for="index in 4" :key="`supplier-loading-${index}`" class="loading-row">
+                                    <td v-for="cell in 8" :key="cell"><span class="skeleton-line" :class="`w-${(cell % 4) + 1}`"></span></td>
+                                </tr>
+                            </template>
                             <tr v-for="supplier in suppliers" :key="supplier.id">
                                 <td>{{ supplier.supplier_code || '-' }}</td>
                                 <td>{{ supplier.supplier_name }}</td>
@@ -284,6 +289,14 @@ td { padding: 12px 10px; color: #27344c; border-bottom: 1px solid #edf1f5; white
 .badge.inactive { color: #69758a; background: #f0f2f5; }
 .empty { padding: 28px !important; color: #8490a2; text-align: center; }
 .error-box { display: grid; gap: 4px; margin-top: 12px; padding: 10px; color: #96333a; background: #fff3f4; border: 1px solid #ffd4d8; border-radius: 8px; font-size: 11px; }
+.is-loading tr:not(.loading-row) { opacity: .38; }
+.loading-row td { padding: 14px 10px; }
+.skeleton-line { display: block; width: 100%; height: 12px; border-radius: 999px; background: linear-gradient(90deg, #eef3fb 25%, #f8fbff 38%, #eef3fb 63%); background-size: 240% 100%; animation: shimmer 1.05s ease-in-out infinite; }
+.skeleton-line.w-1 { width: 46%; }
+.skeleton-line.w-2 { width: 64%; }
+.skeleton-line.w-3 { width: 78%; }
+.skeleton-line.w-4 { width: 92%; }
+@keyframes shimmer { 0% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
 .drawer-backdrop { position: fixed; z-index: 950; inset: 0; display: flex; justify-content: flex-end; background: rgba(15, 23, 42, .38); }
 .drawer-panel { width: min(980px, calc(100vw - 28px)); height: 100vh; overflow: auto; padding: 18px; background: #fff; border-left: 1px solid #dfe6ef; box-shadow: -24px 0 70px rgba(15, 23, 42, .2); }
 .drawer-heading { position: sticky; z-index: 30; top: 0; margin: -18px -18px 16px; padding: 16px 18px; background: #fff; border-bottom: 1px solid #edf1f5; }

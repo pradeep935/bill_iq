@@ -471,6 +471,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/control/reports', [InventoryController::class, 'inventoryReports'])->name('control.reports');
         Route::get('/control/valuation', [InventoryController::class, 'valuation'])->name('control.valuation');
         Route::get('/adjustment-reasons/list', [InventoryController::class, 'reasons'])->name('adjustment-reasons.list');
+        Route::post('/adjustment-reasons/seed-defaults', [InventoryController::class, 'seedDefaultReasons'])->name('adjustment-reasons.seed-defaults');
         Route::post('/adjustment-reasons', [InventoryController::class, 'saveReason'])->name('adjustment-reasons.store');
         Route::put('/adjustment-reasons/{reason}', [InventoryController::class, 'saveReason'])->name('adjustment-reasons.update');
         Route::delete('/adjustment-reasons/{reason}', [InventoryController::class, 'deleteReason'])->name('adjustment-reasons.delete');

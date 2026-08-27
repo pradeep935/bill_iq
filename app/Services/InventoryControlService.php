@@ -65,7 +65,7 @@ class InventoryControlService
 
     public function reasons(array $filters)
     {
-        return StockAdjustmentReason::query()->with('account')->where('business_id', AppController::businessId())
+        return StockAdjustmentReason::query()->with('account')->withCount('vouchers')->where('business_id', AppController::businessId())
             ->when(!empty($filters['search']), fn (Builder $q) => $q->where('reason_name', 'like', '%' . $filters['search'] . '%')->orWhere('reason_code', 'like', '%' . $filters['search'] . '%'))
             ->latest('id')->paginate(50);
     }
@@ -74,9 +74,58 @@ class InventoryControlService
     {
         $businessId = AppController::businessId();
         if (!empty($data['accounting_account_id'])) $this->assertAccount($data['accounting_account_id']);
+        $duplicateActive = StockAdjustmentReason::query()
+            ->where('business_id', $businessId)
+            ->where('reason_name', $data['reason_name'])
+            ->where('default_direction', $data['default_direction'])
+            ->where('default_condition_status', $data['default_condition_status'])
+            ->where('status', 'active')
+            ->when($id, fn (Builder $query) => $query->where('id', '!=', $id))
+            ->exists();
+        if (($data['status'] ?? 'active') === 'active' && $duplicateActive) {
+            throw ValidationException::withMessages(['reason_name' => 'An active reason with the same name, movement and condition already exists.']);
+        }
         $reason = $id ? StockAdjustmentReason::query()->where('business_id', $businessId)->findOrFail($id) : new StockAdjustmentReason(['business_id' => $businessId, 'created_by' => Auth::id()]);
         $reason->fill(array_merge($data, ['updated_by' => Auth::id()]))->save();
-        return $reason->fresh('account');
+        return $reason->fresh('account')->loadCount('vouchers');
+    }
+
+    public function seedDefaultReasons(): int
+    {
+        $businessId = AppController::businessId();
+        if (StockAdjustmentReason::query()->where('business_id', $businessId)->exists()) {
+            throw ValidationException::withMessages(['reasons' => 'Default reasons can be created only when no reasons exist.']);
+        }
+
+        $defaults = [
+            ['DAMAGE', 'Damaged Stock', 'out', 'damaged'],
+            ['EXPIRED', 'Expired Stock', 'out', 'expired'],
+            ['LOST', 'Lost / Missing Stock', 'out', 'lost'],
+            ['DEFECT', 'Defective Stock', 'out', 'defective'],
+            ['INTUSE', 'Internal Consumption', 'out', 'saleable'],
+            ['FOUND', 'Found Stock', 'in', 'saleable'],
+            ['OPNCOR', 'Opening Correction', 'in', 'saleable'],
+            ['PHYGAIN', 'Physical Count Gain', 'in', 'saleable'],
+            ['PHYSHORT', 'Physical Count Shortage', 'out', 'saleable'],
+            ['OTHER', 'Other Adjustment', 'out', 'saleable'],
+        ];
+
+        foreach ($defaults as [$code, $name, $direction, $condition]) {
+            StockAdjustmentReason::query()->create([
+                'business_id' => $businessId,
+                'reason_code' => $code,
+                'reason_name' => $name,
+                'default_direction' => $direction,
+                'default_condition_status' => $condition,
+                'approval_required' => true,
+                'is_system' => false,
+                'status' => 'active',
+                'created_by' => Auth::id(),
+                'updated_by' => Auth::id(),
+            ]);
+        }
+
+        return count($defaults);
     }
 
     public function deleteReason(int $id, bool $force = false): void
@@ -466,6 +515,7 @@ class InventoryControlService
             throw ValidationException::withMessages(['adjustment_reason_id' => 'Reason is required before posting.']);
         }
 
+        $reason = !empty($data['adjustment_reason_id']) ? $this->assertReason((int) $data['adjustment_reason_id']) : null;
         $serials = [];
 
         foreach ($items as $index => $item) {
@@ -476,6 +526,10 @@ class InventoryControlService
 
             if (!in_array($item['direction'] ?? '', ['in', 'out'], true)) {
                 throw ValidationException::withMessages(["items.$index.direction" => 'Direction must be IN or OUT.']);
+            }
+
+            if ($reason && ($item['direction'] ?? null) !== $reason->default_direction) {
+                throw ValidationException::withMessages(["items.$index.direction" => "{$reason->reason_name} requires {$reason->default_direction} movement."]);
             }
 
             if (!empty($item['serial_id'])) {

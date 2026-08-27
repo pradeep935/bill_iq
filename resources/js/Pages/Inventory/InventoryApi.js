@@ -102,6 +102,11 @@ const InventoryApi = {
         return response.data;
     },
 
+    async seedAdjustmentReasons() {
+        const response = await axios.post('/app/inventory/adjustment-reasons/seed-defaults');
+        return response.data;
+    },
+
     async stockAdjustments(params = {}) {
         const response = await axios.get('/app/inventory/stock-adjustments/list', { params });
         return response.data;

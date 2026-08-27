@@ -99,6 +99,12 @@ class InventoryController extends Controller
         return response()->json(['message' => 'Adjustment reason saved.', 'reason' => $this->inventory->saveReason($request->validated(), $reason)], $reason ? 200 : 201);
     }
 
+    public function seedDefaultReasons()
+    {
+        $count = $this->inventory->seedDefaultReasons();
+        return response()->json(['message' => "{$count} default adjustment reasons created."]);
+    }
+
     public function deleteReason(Request $request, int $reason)
     {
         $this->inventory->deleteReason($reason, $request->boolean('force'));

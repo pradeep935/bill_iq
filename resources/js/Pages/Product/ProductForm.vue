@@ -1026,15 +1026,19 @@ const imagePreviewUrl = (image = {}) => {
         }
     }
 
+    if (normalizedPath.startsWith('storage/uploads/')) {
+        return `/${normalizedPath.replace(/^storage\//, '')}`;
+    }
+
     if (normalizedPath.startsWith('storage/')) {
         return `/${normalizedPath}`;
     }
 
     if (normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('upload/')) {
-        return `/storage/${normalizedPath}`;
+        return `/${normalizedPath}`;
     }
 
-    return `/storage/${normalizedPath}`;
+    return `/${normalizedPath}`;
 };
 
 const uploadImage = async (event, index) => {

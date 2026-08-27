@@ -18,12 +18,19 @@ class GeneralController extends Controller
         $file = $request->file('file');
         $name = preg_replace('/[^A-Za-z0-9_.-]/', '', $file->getClientOriginalName());
         $filename = time() . '_' . $name;
-        $path = $file->storeAs($destination, $filename, 'public');
+        $target = public_path($destination);
+
+        if (!is_dir($target)) {
+            mkdir($target, 0755, true);
+        }
+
+        $file->move($target, $filename);
+        $path = $destination . '/' . $filename;
 
         return Response::json([
             'success' => true,
             'path' => $path,
-            'url' => '/storage/' . ltrim($path, '/'),
+            'url' => '/' . ltrim($path, '/'),
         ]);
     }
 
@@ -36,12 +43,19 @@ class GeneralController extends Controller
         $file = $request->file('photo');
         $name = preg_replace('/[^A-Za-z0-9_-]/', '', pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
         $filename = time() . '_' . $name . '.' . $file->getClientOriginalExtension();
-        $path = $file->storeAs('uploads', $filename, 'public');
+        $target = public_path('uploads');
+
+        if (!is_dir($target)) {
+            mkdir($target, 0755, true);
+        }
+
+        $file->move($target, $filename);
+        $path = 'uploads/' . $filename;
 
         return Response::json([
             'success' => true,
             'path' => $path,
-            'url' => '/storage/' . ltrim($path, '/'),
+            'url' => '/' . ltrim($path, '/'),
         ]);
     }
 

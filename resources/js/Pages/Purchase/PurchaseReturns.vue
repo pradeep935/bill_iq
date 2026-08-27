@@ -16,6 +16,7 @@ const productResults = ref([]);
 const loading = ref(false);
 const saving = ref(false);
 const errors = ref({});
+const showReturnDrawer = ref(false);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 const filters = reactive({ status: '', return_type: '', settlement_type: '' });
 const returnTypes = [{ value: 'against_purchase', label: 'Against Purchase' }, { value: 'direct_return', label: 'Direct Return' }];
@@ -61,6 +62,18 @@ const reset = () => {
     });
     purchaseSearch.value = '';
     productSearch.value = '';
+    purchaseResults.value = [];
+    productResults.value = [];
+    errors.value = {};
+};
+
+const openReturnCreate = () => {
+    reset();
+    showReturnDrawer.value = true;
+};
+
+const closeReturnDrawer = () => {
+    showReturnDrawer.value = false;
     purchaseResults.value = [];
     productResults.value = [];
     errors.value = {};
@@ -136,6 +149,7 @@ const saveReturn = async (status = 'draft') => {
         const response = await PurchaseApi.savePurchaseReturn(payload(status), form.id);
         alert(response.message || 'Purchase return saved.');
         reset();
+        closeReturnDrawer();
         await loadReturns();
     } catch (error) {
         if (error.response?.status === 422) {
@@ -170,6 +184,7 @@ const editReturn = (row) => {
             available_quantity: '',
         })),
     });
+    showReturnDrawer.value = true;
 };
 
 const simpleAction = async (fn, row, promptText) => {
@@ -198,80 +213,87 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
             <div class="bill-page-title"><span>PURCHASE MANAGEMENT</span><h1>Purchase Returns</h1><p>Return stock against purchases or create authorized direct supplier returns.</p></div>
         </template>
         <div class="purchase-page">
-            <div class="page-toolbar"><button type="button" @click="reset">New Return</button></div>
+            <div class="page-toolbar"><button type="button" class="primary" @click="openReturnCreate">New Return</button></div>
 
-            <section class="panel">
-                <div class="form-grid">
-                    <SearchSelect v-model="form.return_type" label="Return Type" :options="returnTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Return Type" required />
-                    <SearchSelect v-model="form.supplier_id" label="Supplier" :options="references.suppliers" option-value-key="id" option-label-key="supplier_name" select-placeholder="Select Supplier" required />
-                    <SearchSelect v-model="form.branch_id" label="Branch" :options="references.branches" option-value-key="id" option-label-key="name" select-placeholder="Select Branch" :required="form.return_type === 'direct_return'" />
-                    <SearchSelect v-model="form.warehouse_id" label="Warehouse" :options="filteredWarehouses" option-value-key="id" option-label-key="name" select-placeholder="Select Warehouse" :required="form.return_type === 'direct_return'" />
-                    <label><span>Return Date <span class="required-mark">*</span></span><input v-model="form.return_date" type="date" /></label>
-                    <label>Supplier Debit Note No<input v-model="form.supplier_debit_note_number" placeholder="Supplier Debit Note No" /></label>
-                    <SearchSelect v-model="form.tax_type" label="Tax Type" :options="taxTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Tax Type" required />
-                    <SearchSelect v-model="form.settlement_type" label="Settlement Type" :options="settlementTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Settlement" required />
-                    <label>Settlement Amount<input v-model="form.settlement_amount" type="number" min="0" step="0.01" placeholder="Settlement Amount" /></label>
-                    <label>Reason<input v-model="form.reason" placeholder="Reason" /></label>
-                    <label>Remarks<input v-model="form.remarks" placeholder="Remarks" /></label>
-                </div>
-
-                <div v-if="form.return_type === 'against_purchase'" class="search-box">
-                    <input v-model="purchaseSearch" placeholder="Search approved purchase voucher" @input="searchPurchases" />
-                    <div v-if="purchaseResults.length" class="search-results">
-                        <button v-for="purchase in purchaseResults" :key="purchase.id" type="button" @click="selectPurchase(purchase)">
-                            <strong>{{ purchase.voucher_number }}</strong><span>{{ purchase.supplier }} | {{ purchase.purchase_date }}</span>
-                        </button>
+            <div v-if="showReturnDrawer" class="drawer-backdrop" @click.self="closeReturnDrawer">
+                <aside class="drawer-panel">
+                    <div class="drawer-heading">
+                        <div><span>PURCHASE MANAGEMENT</span><h2>{{ form.id ? 'Edit Return' : 'New Return' }}</h2></div>
+                        <button type="button" @click="closeReturnDrawer">Close</button>
                     </div>
-                </div>
 
-                <div v-else class="search-box">
-                    <strong class="direct-label">Direct return: not linked to original purchase</strong>
-                    <input v-model="productSearch" placeholder="Search product by name, SKU or barcode" @input="searchProducts" />
-                    <div v-if="productResults.length" class="search-results">
-                        <button v-for="product in productResults" :key="product.id" type="button" @click="addProduct(product)">
-                            <strong>{{ product.name }}</strong><span>{{ product.sku }} | {{ product.barcode || 'No barcode' }}</span>
-                        </button>
+                    <div class="form-grid">
+                        <SearchSelect v-model="form.return_type" label="Return Type" :options="returnTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Return Type" required />
+                        <SearchSelect v-model="form.supplier_id" label="Supplier" :options="references.suppliers" option-value-key="id" option-label-key="supplier_name" select-placeholder="Select Supplier" required />
+                        <SearchSelect v-model="form.branch_id" label="Branch" :options="references.branches" option-value-key="id" option-label-key="name" select-placeholder="Select Branch" :required="form.return_type === 'direct_return'" />
+                        <SearchSelect v-model="form.warehouse_id" label="Warehouse" :options="filteredWarehouses" option-value-key="id" option-label-key="name" select-placeholder="Select Warehouse" :required="form.return_type === 'direct_return'" />
+                        <label><span>Return Date <span class="required-mark">*</span></span><input v-model="form.return_date" type="date" /></label>
+                        <label>Supplier Debit Note No<input v-model="form.supplier_debit_note_number" placeholder="Supplier Debit Note No" /></label>
+                        <SearchSelect v-model="form.tax_type" label="Tax Type" :options="taxTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Tax Type" required />
+                        <SearchSelect v-model="form.settlement_type" label="Settlement Type" :options="settlementTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Settlement" required />
+                        <label>Settlement Amount<input v-model="form.settlement_amount" type="number" min="0" step="0.01" placeholder="Settlement Amount" /></label>
+                        <label>Reason<input v-model="form.reason" placeholder="Reason" /></label>
+                        <label>Remarks<input v-model="form.remarks" placeholder="Remarks" /></label>
                     </div>
-                </div>
 
-                <div class="table-wrapper">
-                    <table>
-                        <thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>Purchased</th><th>Returned</th><th>Available</th><th>Return Qty <span class="required-mark">*</span></th><th>Rate <span class="required-mark">*</span></th><th>Discount</th><th>GST</th><th>Reason</th><th></th></tr></thead>
-                        <tbody>
-                            <tr v-for="(item, index) in form.items" :key="`${item.product_id}-${index}`">
-                                <td><strong>{{ item.product }}</strong><span>{{ item.sku }}</span></td>
-                                <td>
-                                    <span v-if="form.return_type === 'against_purchase'">{{ item.variant || '-' }}</span>
-                                    <select v-else v-model="item.product_variant_id">
-                                        <option value="">No Variant</option>
-                                        <option v-for="variant in item.variants || []" :key="variant.id" :value="variant.id">{{ variant.sku || variant.barcode || variant.id }}</option>
-                                    </select>
-                                </td>
-                                <td>
-                                    <span v-if="form.return_type === 'against_purchase'">{{ item.batch || item.batch_id || '-' }}</span>
-                                    <select v-else-if="(item.batches || []).length" v-model="item.batch_id">
-                                        <option value="">Batch</option>
-                                        <option v-for="batch in item.batches || []" :key="batch.id" :value="batch.id">{{ batch.batch_no }}{{ batch.expiry_date ? ` | ${batch.expiry_date}` : '' }}</option>
-                                    </select>
-                                    <input v-else v-model="item.batch_id" type="number" placeholder="Batch ID" />
-                                </td>
-                                <td>{{ item.purchased_quantity }}</td>
-                                <td>{{ item.previously_returned }}</td>
-                                <td>{{ item.available_quantity }}</td>
-                                <td><input v-model="item.quantity" type="number" min="0.001" step="0.001" /></td>
-                                <td><input v-model="item.purchase_rate" type="number" min="0" step="0.01" :disabled="form.return_type === 'against_purchase'" /></td>
-                                <td><input v-model="item.discount_amount" type="number" min="0" step="0.01" /></td>
-                                <td><input v-model="item.gst_rate" type="number" min="0" step="0.01" :disabled="form.return_type === 'against_purchase'" /></td>
-                                <td><input v-model="item.reason" /></td>
-                                <td><button type="button" class="danger" @click="removeItem(index)">Remove</button></td>
-                            </tr>
-                            <tr v-if="!form.items.length"><td colspan="12" class="empty">Select a purchase or add direct return products.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div v-if="Object.keys(errors).length" class="error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
-                <div class="actions"><button :disabled="saving" @click="saveReturn('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="saveReturn('approved')">{{ saving ? 'Saving...' : 'Confirm & Post' }}</button></div>
-            </section>
+                    <div v-if="form.return_type === 'against_purchase'" class="search-box">
+                        <input v-model="purchaseSearch" placeholder="Search approved purchase voucher" @input="searchPurchases" />
+                        <div v-if="purchaseResults.length" class="search-results">
+                            <button v-for="purchase in purchaseResults" :key="purchase.id" type="button" @click="selectPurchase(purchase)">
+                                <strong>{{ purchase.voucher_number }}</strong><span>{{ purchase.supplier }} | {{ purchase.purchase_date }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-else class="search-box">
+                        <strong class="direct-label">Direct return: not linked to original purchase</strong>
+                        <input v-model="productSearch" placeholder="Search product by name, SKU or barcode" @input="searchProducts" />
+                        <div v-if="productResults.length" class="search-results">
+                            <button v-for="product in productResults" :key="product.id" type="button" @click="addProduct(product)">
+                                <strong>{{ product.name }}</strong><span>{{ product.sku }} | {{ product.barcode || 'No barcode' }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>Purchased</th><th>Returned</th><th>Available</th><th>Return Qty <span class="required-mark">*</span></th><th>Rate <span class="required-mark">*</span></th><th>Discount</th><th>GST</th><th>Reason</th><th></th></tr></thead>
+                            <tbody>
+                                <tr v-for="(item, index) in form.items" :key="`${item.product_id}-${index}`">
+                                    <td><strong>{{ item.product }}</strong><span>{{ item.sku }}</span></td>
+                                    <td>
+                                        <span v-if="form.return_type === 'against_purchase'">{{ item.variant || '-' }}</span>
+                                        <select v-else v-model="item.product_variant_id">
+                                            <option value="">No Variant</option>
+                                            <option v-for="variant in item.variants || []" :key="variant.id" :value="variant.id">{{ variant.sku || variant.barcode || variant.id }}</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <span v-if="form.return_type === 'against_purchase'">{{ item.batch || item.batch_id || '-' }}</span>
+                                        <select v-else-if="(item.batches || []).length" v-model="item.batch_id">
+                                            <option value="">Batch</option>
+                                            <option v-for="batch in item.batches || []" :key="batch.id" :value="batch.id">{{ batch.batch_no }}{{ batch.expiry_date ? ` | ${batch.expiry_date}` : '' }}</option>
+                                        </select>
+                                        <input v-else v-model="item.batch_id" type="number" placeholder="Batch ID" />
+                                    </td>
+                                    <td>{{ item.purchased_quantity }}</td>
+                                    <td>{{ item.previously_returned }}</td>
+                                    <td>{{ item.available_quantity }}</td>
+                                    <td><input v-model="item.quantity" type="number" min="0.001" step="0.001" /></td>
+                                    <td><input v-model="item.purchase_rate" type="number" min="0" step="0.01" :disabled="form.return_type === 'against_purchase'" /></td>
+                                    <td><input v-model="item.discount_amount" type="number" min="0" step="0.01" /></td>
+                                    <td><input v-model="item.gst_rate" type="number" min="0" step="0.01" :disabled="form.return_type === 'against_purchase'" /></td>
+                                    <td><input v-model="item.reason" /></td>
+                                    <td><button type="button" class="danger" @click="removeItem(index)">Remove</button></td>
+                                </tr>
+                                <tr v-if="!form.items.length"><td colspan="12" class="empty">Select a purchase or add direct return products.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-if="Object.keys(errors).length" class="error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
+                    <div class="actions"><button type="button" @click="closeReturnDrawer">Cancel</button><button :disabled="saving" @click="saveReturn('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="saveReturn('approved')">{{ saving ? 'Saving...' : 'Confirm & Post' }}</button></div>
+                </aside>
+            </div>
 
             <section class="panel">
                 <div class="toolbar">
@@ -298,5 +320,5 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
 </template>
 
 <style scoped>
-.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){min-width:180px}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.search-box{position:relative;margin:14px 0}.search-box input{width:100%}.direct-label{display:block;margin-bottom:8px;color:#7a5b10;font-size:11px}.search-results{position:absolute;z-index:20;top:44px;left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 10px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:12px 10px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input{min-width:86px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}}
+.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions,.drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-toolbar{display:flex;justify-content:flex-end;margin-bottom:14px}.page-heading{margin-bottom:18px}.page-heading span,.drawer-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){min-width:180px}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.search-box{position:relative;margin:14px 0}.search-box input{width:100%}.direct-label{display:block;margin-bottom:8px;color:#7a5b10;font-size:11px}.search-results{position:absolute;z-index:20;top:44px;left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 10px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:12px 10px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input{min-width:86px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.drawer-backdrop{position:fixed;z-index:950;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.38)}.drawer-panel{width:min(1120px,calc(100vw - 28px));height:100vh;overflow:auto;padding:18px;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-24px 0 70px rgba(15,23,42,.2)}.drawer-heading{position:sticky;z-index:30;top:0;margin:-18px -18px 16px;padding:16px 18px;background:#fff;border-bottom:1px solid #edf1f5}.drawer-heading h2{margin:2px 0 0;color:#142139;font-size:20px}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.drawer-heading{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}.drawer-panel{width:100vw}}
 </style>

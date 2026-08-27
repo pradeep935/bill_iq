@@ -19,6 +19,7 @@ const loading = ref(false);
 const saving = ref(false);
 const errors = ref({});
 const openActionMenuId = ref(null);
+const showSupplierDrawer = ref(false);
 const statusFilters = [{ value: '', label: 'All Status' }, { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'deleted', label: 'Deleted' }];
 let timer = null;
 
@@ -69,6 +70,16 @@ const reset = () => {
     errors.value = {};
 };
 
+const openSupplierCreate = () => {
+    reset();
+    showSupplierDrawer.value = true;
+};
+
+const closeSupplierDrawer = () => {
+    showSupplierDrawer.value = false;
+    errors.value = {};
+};
+
 const filteredCities = computed(() => {
     if (!form.state_id) {
         return references.value.cities || [];
@@ -99,6 +110,7 @@ const loadSuppliers = async (page = 1) => {
 const editSupplier = (supplier) => {
     Object.assign(form, supplier);
     errors.value = {};
+    showSupplierDrawer.value = true;
 };
 
 const saveSupplier = async () => {
@@ -108,6 +120,7 @@ const saveSupplier = async () => {
         const response = await PurchaseApi.saveSupplier({ ...form }, form.id);
         alert(response.message || 'Supplier saved.');
         reset();
+        closeSupplierDrawer();
         await loadSuppliers();
     } catch (error) {
         if (error.response?.status === 422) {
@@ -155,36 +168,44 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
             <div class="bill-page-title"><span>PURCHASE MANAGEMENT</span><h1>Supplier Master</h1><p>Maintain GST, credit and payable-ready supplier information.</p></div>
         </template>
         <div class="purchase-page">
-            <div class="page-toolbar"><button type="button" @click="reset">New Supplier</button></div>
+            <div class="page-toolbar"><button type="button" class="primary" @click="openSupplierCreate">New Supplier</button></div>
 
-            <section class="panel">
-                <div class="form-grid">
-                    <label>Supplier Code<input v-model="form.supplier_code" placeholder="Auto if blank" /></label>
-                    <label><span>Supplier Name <span class="required-mark">*</span></span><input v-model="form.supplier_name" placeholder="Supplier Name" /></label>
-                    <label>Contact Person<input v-model="form.contact_person" placeholder="Contact Person" /></label>
-                    <label><span>Mobile <span class="required-mark">*</span></span><input v-model="form.mobile" placeholder="9876543210" /></label>
-                    <label>Phone<input v-model="form.phone" placeholder="Phone" /></label>
-                    <label>Email<input v-model="form.email" placeholder="Email" /></label>
-                    <label>GSTIN<input v-model="form.gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
-                    <label>PAN<input v-model="form.pan" maxlength="10" placeholder="PAN" /></label>
-                    <SearchSelect v-model="form.state_id" label="State" :options="references.states" option-value-key="id" option-label-key="name" select-placeholder="Select State" />
-                    <SearchSelect v-model="form.city" label="City" :options="filteredCities" option-value-key="name" option-label-key="name" select-placeholder="Search City" required allow-custom />
-                    <label>Pincode<input v-model="form.pincode" maxlength="12" placeholder="Pincode (optional)" /></label>
-                    <label>Opening Balance<input v-model="form.opening_balance" type="number" min="0" step="0.01" placeholder="Opening Balance" /></label>
-                    <SearchSelect v-model="form.opening_balance_type" label="Balance Type" :options="[{ value: 'credit', label: 'Credit' }, { value: 'debit', label: 'Debit' }]" option-value-key="value" option-label-key="label" select-placeholder="Select Balance Type" required />
-                    <label>Credit Limit<input v-model="form.credit_limit" type="number" min="0" step="0.01" placeholder="Credit Limit" /></label>
-                    <label>Credit Days<input v-model="form.credit_days" type="number" min="0" placeholder="Credit Days" /></label>
-                    <SearchSelect v-model="form.status" label="Status" :options="[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]" option-value-key="value" option-label-key="label" select-placeholder="Select Status" required />
-                    <label class="wide"><span>Billing Address <span class="required-mark">*</span></span><textarea v-model="form.billing_address" placeholder="Billing Address"></textarea></label>
-                    <label class="wide">Shipping Address<textarea v-model="form.shipping_address" placeholder="Shipping Address"></textarea></label>
-                </div>
-                <div v-if="Object.keys(errors).length" class="error-box">
-                    <span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span>
-                </div>
-                <div class="actions">
-                    <button type="button" class="primary" :disabled="saving" @click="saveSupplier">{{ saving ? 'Saving...' : 'Save Supplier' }}</button>
-                </div>
-            </section>
+            <div v-if="showSupplierDrawer" class="drawer-backdrop" @click.self="closeSupplierDrawer">
+                <aside class="drawer-panel">
+                    <div class="drawer-heading">
+                        <div><span>PURCHASE MANAGEMENT</span><h2>{{ form.id ? 'Edit Supplier' : 'New Supplier' }}</h2></div>
+                        <button type="button" @click="closeSupplierDrawer">Close</button>
+                    </div>
+
+                    <div class="form-grid">
+                        <label>Supplier Code<input v-model="form.supplier_code" placeholder="Auto if blank" /></label>
+                        <label><span>Supplier Name <span class="required-mark">*</span></span><input v-model="form.supplier_name" placeholder="Supplier Name" /></label>
+                        <label>Contact Person<input v-model="form.contact_person" placeholder="Contact Person" /></label>
+                        <label><span>Mobile <span class="required-mark">*</span></span><input v-model="form.mobile" placeholder="9876543210" /></label>
+                        <label>Phone<input v-model="form.phone" placeholder="Phone" /></label>
+                        <label>Email<input v-model="form.email" placeholder="Email" /></label>
+                        <label>GSTIN<input v-model="form.gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
+                        <label>PAN<input v-model="form.pan" maxlength="10" placeholder="PAN" /></label>
+                        <SearchSelect v-model="form.state_id" label="State" :options="references.states" option-value-key="id" option-label-key="name" select-placeholder="Select State" />
+                        <SearchSelect v-model="form.city" label="City" :options="filteredCities" option-value-key="name" option-label-key="name" select-placeholder="Search City" required allow-custom />
+                        <label>Pincode<input v-model="form.pincode" maxlength="12" placeholder="Pincode (optional)" /></label>
+                        <label>Opening Balance<input v-model="form.opening_balance" type="number" min="0" step="0.01" placeholder="Opening Balance" /></label>
+                        <SearchSelect v-model="form.opening_balance_type" label="Balance Type" :options="[{ value: 'credit', label: 'Credit' }, { value: 'debit', label: 'Debit' }]" option-value-key="value" option-label-key="label" select-placeholder="Select Balance Type" required />
+                        <label>Credit Limit<input v-model="form.credit_limit" type="number" min="0" step="0.01" placeholder="Credit Limit" /></label>
+                        <label>Credit Days<input v-model="form.credit_days" type="number" min="0" placeholder="Credit Days" /></label>
+                        <SearchSelect v-model="form.status" label="Status" :options="[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]" option-value-key="value" option-label-key="label" select-placeholder="Select Status" required />
+                        <label class="wide"><span>Billing Address <span class="required-mark">*</span></span><textarea v-model="form.billing_address" placeholder="Billing Address"></textarea></label>
+                        <label class="wide">Shipping Address<textarea v-model="form.shipping_address" placeholder="Shipping Address"></textarea></label>
+                    </div>
+                    <div v-if="Object.keys(errors).length" class="error-box">
+                        <span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span>
+                    </div>
+                    <div class="actions">
+                        <button type="button" @click="closeSupplierDrawer">Cancel</button>
+                        <button type="button" class="primary" :disabled="saving" @click="saveSupplier">{{ saving ? 'Saving...' : 'Save Supplier' }}</button>
+                    </div>
+                </aside>
+            </div>
 
             <section class="panel">
                 <div class="toolbar">
@@ -233,9 +254,10 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
 
 <style scoped>
 .purchase-page { padding: 4px 0 28px; }
-.page-heading, .toolbar, .actions, .pagination, .row-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.page-heading, .toolbar, .actions, .pagination, .row-actions, .drawer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.page-toolbar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
 .page-heading { margin-bottom: 18px; }
-.page-heading span { color: #2457d6; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; }
+.page-heading span, .drawer-heading span { color: #2457d6; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; }
 .page-heading h1 { margin: 0; color: #142139; font-weight: 800; }
 .page-heading p { margin: 6px 0 0; color: #758197; font-size: 13px; }
 .panel { margin-bottom: 18px; padding: 18px; background: #fff; border: 1px solid #dfe6ef; border-radius: 8px; }
@@ -262,6 +284,10 @@ td { padding: 12px 10px; color: #27344c; border-bottom: 1px solid #edf1f5; white
 .badge.inactive { color: #69758a; background: #f0f2f5; }
 .empty { padding: 28px !important; color: #8490a2; text-align: center; }
 .error-box { display: grid; gap: 4px; margin-top: 12px; padding: 10px; color: #96333a; background: #fff3f4; border: 1px solid #ffd4d8; border-radius: 8px; font-size: 11px; }
+.drawer-backdrop { position: fixed; z-index: 950; inset: 0; display: flex; justify-content: flex-end; background: rgba(15, 23, 42, .38); }
+.drawer-panel { width: min(980px, calc(100vw - 28px)); height: 100vh; overflow: auto; padding: 18px; background: #fff; border-left: 1px solid #dfe6ef; box-shadow: -24px 0 70px rgba(15, 23, 42, .2); }
+.drawer-heading { position: sticky; z-index: 30; top: 0; margin: -18px -18px 16px; padding: 16px 18px; background: #fff; border-bottom: 1px solid #edf1f5; }
+.drawer-heading h2 { margin: 2px 0 0; color: #142139; font-size: 20px; }
 @media (max-width: 1000px) { .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wide { grid-column: span 2; } }
-@media (max-width: 700px) { .page-heading, .toolbar { align-items: stretch; flex-direction: column; } .form-grid { grid-template-columns: 1fr; } .wide { grid-column: span 1; } .toolbar input, .toolbar :deep(.search-select) { min-width: 0; width: 100%; } }
+@media (max-width: 700px) { .page-heading, .toolbar, .drawer-heading { align-items: stretch; flex-direction: column; } .form-grid { grid-template-columns: 1fr; } .wide { grid-column: span 1; } .toolbar input, .toolbar :deep(.search-select) { min-width: 0; width: 100%; } .drawer-panel { width: 100vw; } }
 </style>

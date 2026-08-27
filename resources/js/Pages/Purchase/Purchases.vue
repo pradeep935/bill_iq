@@ -17,6 +17,7 @@ const saving = ref(false);
 const errors = ref({});
 const supplierErrors = ref({});
 const openActionMenuId = ref(null);
+const showPurchaseDrawer = ref(false);
 const showSupplierModal = ref(false);
 const savingSupplier = ref(false);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
@@ -81,6 +82,18 @@ const reset = () => {
         purchase_date: today, supplier_invoice_date: '', due_date: '', purchase_type: 'credit',
         tax_type: 'intrastate', discount_type: '', discount_value: 0, paid_amount: 0, remarks: '', items: [],
     });
+    errors.value = {};
+};
+
+const openPurchaseCreate = () => {
+    reset();
+    showPurchaseDrawer.value = true;
+};
+
+const closePurchaseDrawer = () => {
+    showPurchaseDrawer.value = false;
+    products.value = [];
+    productSearch.value = '';
     errors.value = {};
 };
 
@@ -248,6 +261,7 @@ const savePurchase = async (status = 'draft') => {
         const response = await PurchaseApi.savePurchase(payload(status), form.id);
         alert(response.message || 'Purchase saved.');
         reset();
+        closePurchaseDrawer();
         await loadPurchases();
     } catch (error) {
         if (error.response?.status === 422) {
@@ -277,6 +291,7 @@ const editPurchase = (purchase) => {
         remarks: purchase.remarks || '',
         items: (purchase.items || []).map((item) => ({ ...item, product_name: item.product, variants: [] })),
     });
+    showPurchaseDrawer.value = true;
 };
 
 const simpleAction = async (fn, purchase, promptText) => {
@@ -308,6 +323,9 @@ onMounted(async () => {
     restoreDraftAfterProductCreate();
     await loadReferences();
     await addReturnedProduct();
+    if (form.items.length || form.id) {
+        showPurchaseDrawer.value = true;
+    }
     await loadPurchases();
 });
 </script>
@@ -318,66 +336,73 @@ onMounted(async () => {
             <div class="bill-page-title"><span>PURCHASE MANAGEMENT</span><h1>Purchase Vouchers</h1><p>Draft purchases and post confirmed stock into the stock ledger.</p></div>
         </template>
         <div class="purchase-page">
-            <div class="page-toolbar"><button type="button" @click="reset">New Purchase</button></div>
+            <div class="page-toolbar"><button type="button" class="primary" @click="openPurchaseCreate">New Purchase</button></div>
 
-            <section class="panel">
-                <div class="form-grid">
-                    <SearchSelect v-model="form.branch_id" label="Branch" :options="references.branches" option-value-key="id" option-label-key="name" select-placeholder="Select Branch" />
-                    <SearchSelect v-model="form.warehouse_id" label="Warehouse" :options="filteredWarehouses" option-value-key="id" option-label-key="name" select-placeholder="Select Warehouse" />
-                    <div class="supplier-picker">
-                        <SearchSelect v-model="form.supplier_id" label="Supplier" :options="references.suppliers" option-value-key="id" option-label-key="supplier_name" select-placeholder="Select Supplier" required />
-                        <button type="button" class="secondary-action add-supplier-btn" @click="openSupplierCreate">Add Supplier</button>
+            <div v-if="showPurchaseDrawer" class="drawer-backdrop" @click.self="closePurchaseDrawer">
+                <aside class="drawer-panel">
+                    <div class="drawer-heading">
+                        <div><span>PURCHASE MANAGEMENT</span><h2>{{ form.id ? 'Edit Purchase' : 'New Purchase' }}</h2></div>
+                        <button type="button" @click="closePurchaseDrawer">Close</button>
                     </div>
-                    <label>Supplier Invoice No<input v-model="form.supplier_invoice_number" placeholder="Supplier Invoice No" /></label>
-                    <label><span>Purchase Date <span class="required-mark">*</span></span><input v-model="form.purchase_date" type="date" /></label>
-                    <label>Supplier Invoice Date<input v-model="form.supplier_invoice_date" type="date" /></label>
-                    <label>Due Date<input v-model="form.due_date" type="date" /></label>
-                    <SearchSelect v-model="form.purchase_type" label="Purchase Type" :options="purchaseTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Type" required />
-                    <SearchSelect v-model="form.tax_type" label="Tax Type" :options="taxTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Tax Type" required />
-                    <SearchSelect v-model="form.discount_type" label="Discount Type" :options="discountTypes" option-value-key="value" option-label-key="label" select-placeholder="No Discount" />
-                    <label>Voucher Discount<input v-model="form.discount_value" type="number" min="0" step="0.01" placeholder="Voucher Discount" /></label>
-                    <label>Paid Amount<input v-model="form.paid_amount" type="number" min="0" step="0.01" placeholder="Paid Amount" /></label>
-                    <label>Remarks<input v-model="form.remarks" placeholder="Remarks" /></label>
-                </div>
 
-                <div class="product-search">
-                    <div class="product-search-row">
-                        <input v-model="productSearch" placeholder="Search product by name, SKU or barcode" @input="searchProducts" />
-                        <button type="button" class="secondary-action" @click="openProductMasterCreate">Add Product</button>
+                    <div class="form-grid">
+                        <SearchSelect v-model="form.branch_id" label="Branch" :options="references.branches" option-value-key="id" option-label-key="name" select-placeholder="Select Branch" />
+                        <SearchSelect v-model="form.warehouse_id" label="Warehouse" :options="filteredWarehouses" option-value-key="id" option-label-key="name" select-placeholder="Select Warehouse" />
+                        <div class="supplier-picker">
+                            <SearchSelect v-model="form.supplier_id" label="Supplier" :options="references.suppliers" option-value-key="id" option-label-key="supplier_name" select-placeholder="Select Supplier" required />
+                            <button type="button" class="secondary-action add-supplier-btn" @click="openSupplierCreate">Add Supplier</button>
+                        </div>
+                        <label>Supplier Invoice No<input v-model="form.supplier_invoice_number" placeholder="Supplier Invoice No" /></label>
+                        <label><span>Purchase Date <span class="required-mark">*</span></span><input v-model="form.purchase_date" type="date" /></label>
+                        <label>Supplier Invoice Date<input v-model="form.supplier_invoice_date" type="date" /></label>
+                        <label>Due Date<input v-model="form.due_date" type="date" /></label>
+                        <SearchSelect v-model="form.purchase_type" label="Purchase Type" :options="purchaseTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Type" required />
+                        <SearchSelect v-model="form.tax_type" label="Tax Type" :options="taxTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Tax Type" required />
+                        <SearchSelect v-model="form.discount_type" label="Discount Type" :options="discountTypes" option-value-key="value" option-label-key="label" select-placeholder="No Discount" />
+                        <label>Voucher Discount<input v-model="form.discount_value" type="number" min="0" step="0.01" placeholder="Voucher Discount" /></label>
+                        <label>Paid Amount<input v-model="form.paid_amount" type="number" min="0" step="0.01" placeholder="Paid Amount" /></label>
+                        <label>Remarks<input v-model="form.remarks" placeholder="Remarks" /></label>
                     </div>
-                    <div v-if="products.length" class="search-results">
-                        <button v-for="product in products" :key="product.id" type="button" @click="addProduct(product)">
-                            <strong>{{ product.name }}</strong><span>{{ product.sku }} | {{ product.barcode || 'No barcode' }}</span>
-                        </button>
-                    </div>
-                </div>
 
-                <div class="table-wrapper">
-                    <table>
-                        <thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>Expiry</th><th>Qty <span class="required-mark">*</span></th><th>Free</th><th>Rate <span class="required-mark">*</span></th><th>Disc</th><th>GST</th><th>Sell</th><th>MRP</th><th>Location</th><th></th></tr></thead>
-                        <tbody>
-                            <tr v-for="(item, index) in form.items" :key="`${item.product_id}-${index}`">
-                                <td><strong>{{ item.product_name }}</strong><span>{{ item.sku }}</span></td>
-                                <td><select v-model="item.product_variant_id"><option value="">Default</option><option v-for="v in item.variants" :key="v.id" :value="v.id">{{ v.sku }}</option></select></td>
-                                <td><input v-model="item.batch_number" /></td>
-                                <td><input v-model="item.expiry_date" type="date" /></td>
-                                <td><input v-model="item.quantity" type="number" step="0.001" /></td>
-                                <td><input v-model="item.free_quantity" type="number" step="0.001" /></td>
-                                <td><input v-model="item.purchase_rate" type="number" step="0.01" /></td>
-                                <td><input v-model="item.discount_value" type="number" step="0.01" /></td>
-                                <td><input v-model="item.gst_rate" type="number" step="0.01" /></td>
-                                <td><input v-model="item.selling_price" type="number" step="0.01" /></td>
-                                <td><input v-model="item.mrp" type="number" step="0.01" /></td>
-                                <td><input v-model="item.warehouse_location" /></td>
-                                <td><button type="button" class="danger" @click="removeItem(index)">Remove</button></td>
-                            </tr>
-                            <tr v-if="!form.items.length"><td colspan="13" class="empty">Search and add purchase items.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div v-if="Object.keys(errors).length" class="error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
-                <div class="actions"><button :disabled="saving" @click="savePurchase('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="savePurchase('approved')">{{ saving ? 'Saving...' : 'Confirm & Post' }}</button></div>
-            </section>
+                    <div class="product-search">
+                        <div class="product-search-row">
+                            <input v-model="productSearch" placeholder="Search product by name, SKU or barcode" @input="searchProducts" />
+                            <button type="button" class="secondary-action" @click="openProductMasterCreate">Add Product</button>
+                        </div>
+                        <div v-if="products.length" class="search-results">
+                            <button v-for="product in products" :key="product.id" type="button" @click="addProduct(product)">
+                                <strong>{{ product.name }}</strong><span>{{ product.sku }} | {{ product.barcode || 'No barcode' }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>Expiry</th><th>Qty <span class="required-mark">*</span></th><th>Free</th><th>Rate <span class="required-mark">*</span></th><th>Disc</th><th>GST</th><th>Sell</th><th>MRP</th><th>Location</th><th></th></tr></thead>
+                            <tbody>
+                                <tr v-for="(item, index) in form.items" :key="`${item.product_id}-${index}`">
+                                    <td><strong>{{ item.product_name }}</strong><span>{{ item.sku }}</span></td>
+                                    <td><select v-model="item.product_variant_id"><option value="">Default</option><option v-for="v in item.variants" :key="v.id" :value="v.id">{{ v.sku }}</option></select></td>
+                                    <td><input v-model="item.batch_number" /></td>
+                                    <td><input v-model="item.expiry_date" type="date" /></td>
+                                    <td><input v-model="item.quantity" type="number" step="0.001" /></td>
+                                    <td><input v-model="item.free_quantity" type="number" step="0.001" /></td>
+                                    <td><input v-model="item.purchase_rate" type="number" step="0.01" /></td>
+                                    <td><input v-model="item.discount_value" type="number" step="0.01" /></td>
+                                    <td><input v-model="item.gst_rate" type="number" step="0.01" /></td>
+                                    <td><input v-model="item.selling_price" type="number" step="0.01" /></td>
+                                    <td><input v-model="item.mrp" type="number" step="0.01" /></td>
+                                    <td><input v-model="item.warehouse_location" /></td>
+                                    <td><button type="button" class="danger" @click="removeItem(index)">Remove</button></td>
+                                </tr>
+                                <tr v-if="!form.items.length"><td colspan="13" class="empty">Search and add purchase items.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div v-if="Object.keys(errors).length" class="error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
+                    <div class="actions"><button type="button" @click="closePurchaseDrawer">Cancel</button><button :disabled="saving" @click="savePurchase('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="savePurchase('approved')">{{ saving ? 'Saving...' : 'Confirm & Post' }}</button></div>
+                </aside>
+            </div>
 
             <div v-if="showSupplierModal" class="modal-backdrop" @click.self="closeSupplierCreate">
                 <section class="modal-panel">
@@ -431,5 +456,5 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions,.modal-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span,.modal-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){min-width:180px}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:72px;resize:vertical}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.secondary-action{color:#2457d6;background:#edf4ff;border-color:#cfe0ff}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.supplier-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.add-supplier-btn{height:38px;align-self:end;white-space:nowrap}.product-search{position:relative;margin:14px 0}.product-search-row{display:flex;gap:10px}.product-search-row input{flex:1;min-width:0}.product-search-row button{white-space:nowrap}.search-results{position:absolute;z-index:20;top:44px;left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 10px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:12px 10px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.modal-panel{width:min(920px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.modal-heading{margin-bottom:14px}.modal-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.supplier-form-grid .wide{grid-column:span 2}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.product-search-row,.modal-heading{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}.supplier-picker{grid-template-columns:1fr}.supplier-form-grid .wide{grid-column:auto}}
+.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions,.modal-heading,.drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-toolbar{display:flex;justify-content:flex-end;margin-bottom:14px}.page-heading{margin-bottom:18px}.page-heading span,.modal-heading span,.drawer-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){min-width:180px}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:72px;resize:vertical}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.secondary-action{color:#2457d6;background:#edf4ff;border-color:#cfe0ff}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.supplier-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.add-supplier-btn{height:38px;align-self:end;white-space:nowrap}.product-search{position:relative;margin:14px 0}.product-search-row{display:flex;gap:10px}.product-search-row input{flex:1;min-width:0}.product-search-row button{white-space:nowrap}.search-results{position:absolute;z-index:20;top:44px;left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 10px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:12px 10px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.drawer-backdrop{position:fixed;z-index:950;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.38)}.drawer-panel{width:min(1120px,calc(100vw - 28px));height:100vh;overflow:auto;padding:18px;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-24px 0 70px rgba(15,23,42,.2)}.drawer-heading{position:sticky;z-index:30;top:0;margin:-18px -18px 16px;padding:16px 18px;background:#fff;border-bottom:1px solid #edf1f5}.drawer-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.modal-panel{width:min(920px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.modal-heading{margin-bottom:14px}.modal-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.supplier-form-grid .wide{grid-column:span 2}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.product-search-row,.modal-heading,.drawer-heading{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}.supplier-picker{grid-template-columns:1fr}.supplier-form-grid .wide{grid-column:auto}.drawer-panel{width:100vw}}
 </style>

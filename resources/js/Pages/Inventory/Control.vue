@@ -170,6 +170,19 @@ const scanBarcode = () => {
 };
 const exportDashboard = () => exportRows('csv');
 const registerRows = computed(() => [
+    ...(reports.value.movement_report || []).map((row) => ({
+        id: `ledger-${row.id}`,
+        raw: row,
+        type: row.transaction_type || 'stock_movement',
+        number: row.reference_number || row.remarks || `Ledger #${row.id}`,
+        date: row.transaction_date,
+        branch: row.branch?.name || '-',
+        warehouse: row.warehouse?.name || '-',
+        items: 1,
+        quantity: Number(row.quantity_in || 0) - Number(row.quantity_out || 0),
+        status: 'posted',
+        action: 'ledger',
+    })),
     ...adjustments.value.map((row) => ({ id: `adjustment-${row.id}`, raw: row, type: row.source || 'stock_adjustment', number: row.voucher_number, date: row.adjustment_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: Number(row.total_quantity_in || 0) + Number(row.total_quantity_out || 0), status: row.status, action: 'adjustment' })),
     ...transfers.value.map((row) => ({ id: `transfer-${row.id}`, raw: row, type: row.transfer_type || 'stock_transfer', number: row.voucher_number, date: row.transfer_date, branch: `${row.source_branch?.name || '-'} -> ${row.destination_branch?.name || '-'}`, warehouse: `${row.source_warehouse?.name || '-'} -> ${row.destination_warehouse?.name || '-'}`, items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Number(item.approved_quantity || item.requested_quantity || 0), 0) || 0, status: row.status, action: 'transfer' })),
     ...counts.value.map((row) => ({ id: `count-${row.id}`, raw: row, type: 'stock_count', number: row.session_number, date: row.count_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Math.abs(Number(item.variance_quantity || 0)), 0) || 0, status: row.status, action: 'count' })),
@@ -217,14 +230,14 @@ const load = async () => {
     try {
         refs.value = await InventoryApi.controlReferences();
         applyDefaultSelections();
-        dashboard.value = await InventoryApi.inventoryDashboard();
+        dashboard.value = await InventoryApi.inventoryDashboard(registerFilters);
         adjustments.value = (await InventoryApi.stockAdjustments(registerFilters)).adjustments || [];
         counts.value = (await InventoryApi.stockCounts()).sessions || [];
         transfers.value = (await InventoryApi.stockTransfers()).transfers || [];
         movements.value = (await InventoryApi.locationTransfers()).movements || [];
         warehouseLocations.value = (await InventoryApi.warehouseLocations()).locations || [];
         reasons.value = (await InventoryApi.adjustmentReasons()).reasons || [];
-        reports.value = await InventoryApi.inventoryReports();
+        reports.value = await InventoryApi.inventoryReports(registerFilters);
     } finally {
         loading.value = false;
     }

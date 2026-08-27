@@ -489,6 +489,7 @@ class StockService
         return [
             'total_products' => $rows->pluck('product_id')->unique()->count(),
             'total_quantity' => round((float) $rows->sum('quantity_on_hand'), 3),
+            'saleable_quantity' => round((float) $rows->sum('quantity_available'), 3),
             'inventory_value' => round((float) $rows->sum('stock_value'), 2),
             'low_stock_products' => $rows->where('stock_status', 'Low Stock')->pluck('product_id')->unique()->count(),
             'out_of_stock_products' => $rows->where('stock_status', 'Out of Stock')->pluck('product_id')->unique()->count(),

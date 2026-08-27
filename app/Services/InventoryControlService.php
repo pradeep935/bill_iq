@@ -427,16 +427,17 @@ class InventoryControlService
     public function dashboard(array $filters): array
     {
         $businessId = AppController::businessId();
-        $summary = $this->stock->summary(array_merge($filters, ['per_page' => 100]))->getCollection();
+        $dashboard = $this->stock->dashboard($filters);
+
         return [
-            'total_stock_value' => round($summary->sum(fn ($r) => (float) $r->stock_value), 2),
-            'total_saleable_quantity' => round($summary->sum(fn ($r) => (float) $r->quantity_available), 3),
-            'low_stock_items' => $summary->where('stock_status', 'Low Stock')->count(),
-            'out_of_stock_items' => $summary->where('stock_status', 'Out of Stock')->count(),
-            'near_expiry_items' => StockLedger::query()->where('business_id', $businessId)->join('product_batches', 'product_batches.id', '=', 'stock_ledgers.batch_id')->whereBetween('product_batches.expiry_date', [now(), now()->addDays(30)])->distinct('stock_ledgers.batch_id')->count('stock_ledgers.batch_id'),
-            'expired_items' => StockLedger::query()->where('business_id', $businessId)->join('product_batches', 'product_batches.id', '=', 'stock_ledgers.batch_id')->whereDate('product_batches.expiry_date', '<', now())->distinct('stock_ledgers.batch_id')->count('stock_ledgers.batch_id'),
-            'damaged_stock_value' => (float) StockLedger::query()->where('business_id', $businessId)->where('stock_status', 'damaged')->sum('stock_value'),
-            'stock_in_transit' => (float) StockLedger::query()->where('business_id', $businessId)->where('stock_status', 'in_transit')->selectRaw('COALESCE(SUM(quantity_in - quantity_out), 0) as qty')->value('qty'),
+            'total_stock_value' => $dashboard['inventory_value'] ?? 0,
+            'total_saleable_quantity' => $dashboard['saleable_quantity'] ?? $dashboard['total_quantity'] ?? 0,
+            'low_stock_items' => $dashboard['low_stock_products'] ?? 0,
+            'out_of_stock_items' => $dashboard['out_of_stock_products'] ?? 0,
+            'near_expiry_items' => $this->ledgerQuery($filters)->join('product_batches', 'product_batches.id', '=', 'stock_ledgers.batch_id')->whereBetween('product_batches.expiry_date', [now(), now()->addDays(30)])->distinct('stock_ledgers.batch_id')->count('stock_ledgers.batch_id'),
+            'expired_items' => $this->ledgerQuery($filters)->join('product_batches', 'product_batches.id', '=', 'stock_ledgers.batch_id')->whereDate('product_batches.expiry_date', '<', now())->distinct('stock_ledgers.batch_id')->count('stock_ledgers.batch_id'),
+            'damaged_stock_value' => (float) $this->ledgerQuery($filters)->where('stock_status', 'damaged')->sum('stock_value'),
+            'stock_in_transit' => (float) $this->ledgerQuery($filters)->where('stock_status', 'in_transit')->selectRaw('COALESCE(SUM(quantity_in - quantity_out), 0) as qty')->value('qty'),
             'pending_stock_counts' => StockCountSession::query()->where('business_id', $businessId)->whereIn('status', ['draft', 'assigned', 'counting', 'submitted', 'reviewed'])->count(),
             'pending_transfer_receipts' => StockTransferVoucher::query()->where('business_id', $businessId)->whereIn('status', ['dispatched', 'partially_received'])->count(),
             'stock_adjustment_value' => (float) StockAdjustmentVoucher::query()->where('business_id', $businessId)->where('status', 'posted')->sum(DB::raw('total_value_in + total_value_out')),
@@ -628,6 +629,14 @@ class InventoryControlService
     private function stockPayload(StockAdjustmentVoucher $voucher, $item, array $extra): array
     {
         return array_merge(['business_id' => $voucher->business_id, 'branch_id' => $voucher->branch_id, 'warehouse_id' => $voucher->warehouse_id, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id, 'serial_id' => $item->serial_id, 'transaction_date' => $voucher->adjustment_date], $extra);
+    }
+
+    private function ledgerQuery(array $filters): Builder
+    {
+        return StockLedger::query()
+            ->where('business_id', AppController::businessId())
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']));
     }
 
     private function transferPayload(StockTransferVoucher $voucher, $item, float $qty, ?int $branchId, int $warehouseId, string $type, ?string $location, ?int $batchId = null, ?int $serialId = null): array

@@ -110,14 +110,19 @@ const searchProducts = async () => {
     productResults.value = await OrderApi.products(productSearch.value.trim(), 'purchase');
 };
 
+const suggestedPurchaseQty = (product) => {
+    const qty = Number(product.suggested_purchase_quantity || product.reorder_stock || product.maximum_stock || product.minimum_stock || 0);
+    return qty > 0 ? qty : 1;
+};
+
 const addReqProduct = (product) => {
-    requisition.items.push({ product_id: product.id, product, unit_id: product.unit_id || '', quantity: 1, approved_quantity: '', remarks: '' });
+    requisition.items.push({ product_id: product.id, product, unit_id: product.unit_id || '', quantity: suggestedPurchaseQty(product), approved_quantity: '', remarks: '' });
     productSearch.value = '';
     productResults.value = [];
 };
 
 const addPoProduct = (product) => {
-    po.items.push({ product_id: product.id, product, product_variant_id: '', unit_id: product.unit_id || '', ordered_quantity: 1, purchase_rate: Number(product.purchase_price || product.cost_price || 0), discount_amount: 0, gst_rate: Number(product.gst_rate || 0), remarks: '' });
+    po.items.push({ product_id: product.id, product, product_variant_id: '', unit_id: product.unit_id || '', ordered_quantity: suggestedPurchaseQty(product), purchase_rate: Number(product.purchase_price || product.cost_price || 0), discount_amount: 0, gst_rate: Number(product.gst_rate || 0), remarks: '' });
     productSearch.value = '';
     productResults.value = [];
 };

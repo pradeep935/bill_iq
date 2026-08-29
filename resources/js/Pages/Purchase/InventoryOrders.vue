@@ -113,7 +113,13 @@ const searchProducts = async () => {
     products.value = await PurchaseApi.searchInventoryOrderProducts(productSearch.value.trim());
 };
 
+const suggestedPurchaseQty = (product) => {
+    const qty = Number(product.suggested_purchase_quantity || product.reorder_stock || product.maximum_stock || product.minimum_stock || 0);
+    return qty > 0 ? qty : 1;
+};
+
 const addProduct = (product) => {
+    const qty = suggestedPurchaseQty(product);
     form.items.push({
         product_id: product.id,
         product,
@@ -121,8 +127,8 @@ const addProduct = (product) => {
         unit_id: product.unit_id || '',
         current_stock: Number(product.current_stock || 0),
         incoming_quantity: 0,
-        required_quantity: 1,
-        ordered_quantity: 1,
+        required_quantity: qty,
+        ordered_quantity: qty,
         purchase_rate: Number(product.purchase_rate || product.purchase_price || product.cost_price || 0),
         discount_amount: 0,
         gst_rate: Number(product.gst_rate || 0),

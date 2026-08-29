@@ -41,7 +41,7 @@ class OrderManagementService
             'suppliers' => Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderByRaw('COALESCE(supplier_name, name)')->limit(300)->get(['id', 'supplier_code', 'supplier_name', 'name', 'phone', 'mobile', 'gstin', 'credit_days']),
             'branches' => Branch::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
             'warehouses' => Warehouse::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'branch_id', 'name', 'code']),
-            'products' => $this->productQuery()->orderBy('name')->limit(300)->get(['id', 'name', 'sku', 'primary_barcode', 'barcode', 'unit_id', 'unit', 'current_stock', 'selling_price', 'purchase_price', 'cost_price', 'gst_rate', 'cess_rate']),
+            'products' => $this->productQuery()->orderBy('name')->limit(300)->get(['id', 'name', 'sku', 'primary_barcode', 'barcode', 'unit_id', 'unit', 'current_stock', 'selling_price', 'purchase_price', 'cost_price', 'gst_rate', 'cess_rate', 'minimum_stock', 'reorder_stock', 'reorder_level', 'maximum_stock']),
         ];
     }
 

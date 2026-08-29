@@ -226,6 +226,11 @@ const addReturnedProduct = async () => {
     window.history.replaceState({}, document.title, window.location.pathname);
 };
 
+const suggestedPurchaseQty = (product) => {
+    const qty = Number(product.suggested_purchase_quantity || product.reorder_stock || product.maximum_stock || product.minimum_stock || 0);
+    return qty > 0 ? qty : 1;
+};
+
 const addProduct = (product) => {
     form.items.push({
         product_id: product.id,
@@ -234,7 +239,7 @@ const addProduct = (product) => {
         variants: product.variants || [],
         product_variant_id: '',
         batch_id: '',
-        quantity: 1,
+        quantity: suggestedPurchaseQty(product),
         free_quantity: 0,
         unit_id: product.unit_id || '',
         purchase_rate: product.purchase_rate || 0,

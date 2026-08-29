@@ -478,7 +478,7 @@ onMounted(async () => {
                         <div><span>Physical Qty</span><strong>{{ formatQty(selectedDetail.valuation.physical_quantity) }}</strong></div>
                         <div><span>Saleable Qty</span><strong>{{ formatQty(selectedDetail.valuation.saleable_quantity) }}</strong></div>
                         <div><span>Reserved Qty</span><strong>{{ formatQty(selectedDetail.valuation.reserved) }}</strong></div>
-                        <div><span>Available</span><strong>{{ formatQty(selectedDetail.valuation.available) }}</strong></div>
+                        <div><span>Available for Sale</span><strong>{{ formatQty(selectedDetail.valuation.available) }}</strong></div>
                         <div><span>Non-Saleable Qty</span><strong>{{ formatQty(selectedDetail.valuation.non_saleable_quantity) }}</strong></div>
                         <div><span>Saleable Value</span><strong>Rs. {{ formatMoney(selectedDetail.valuation.value) }}</strong></div>
                     </div>

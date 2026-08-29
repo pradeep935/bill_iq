@@ -62,7 +62,20 @@ class StockService
 
     public function getCurrentStock(array $scope): float
     {
-        return $this->quantityQuery($scope)->value('available_quantity') ?: 0.0;
+        return $this->getConditionStock($scope, $scope['stock_status'] ?? 'saleable');
+    }
+
+    public function getConditionStock(array $scope, string $condition): float
+    {
+        return $this->quantityQuery(array_merge($scope, ['stock_status' => $condition]))->value('available_quantity') ?: 0.0;
+    }
+
+    public function getPhysicalStock(array $scope): float
+    {
+        $scopeWithoutCondition = $scope;
+        unset($scopeWithoutCondition['stock_status']);
+
+        return $this->quantityQuery($scopeWithoutCondition)->value('available_quantity') ?: 0.0;
     }
 
     public function getActiveReservedQuantity(array $scope, ?int $excludeReferenceId = null, bool $lock = false): float
@@ -189,7 +202,8 @@ class StockService
 
     public function getAverageCost(array $scope): float
     {
-        $query = $this->baseLedgerQuery($scope)
+        $costScope = array_key_exists('stock_status', $scope) ? $scope : array_merge($scope, ['stock_status' => 'saleable']);
+        $query = $this->baseLedgerQuery($costScope)
             ->where('quantity_in', '>', 0);
 
         $totalQty = (float) $query->sum('quantity_in');
@@ -198,7 +212,7 @@ class StockService
             return 0.0;
         }
 
-        $totalCost = (float) $this->baseLedgerQuery($scope)
+        $totalCost = (float) $this->baseLedgerQuery($costScope)
             ->where('quantity_in', '>', 0)
             ->selectRaw('COALESCE(SUM(quantity_in * unit_cost), 0) as total_cost')
             ->value('total_cost');
@@ -377,14 +391,22 @@ class StockService
                 MAX(stock_ledgers.updated_at) as last_updated,
                 MAX(stock_ledgers.created_by) as created_by_id,
                 NULL as updated_by_id,
-                COALESCE(SUM(stock_ledgers.quantity_in), 0) - COALESCE(SUM(stock_ledgers.quantity_out), 0) as quantity_on_hand,
+                COALESCE(SUM(stock_ledgers.quantity_in), 0) - COALESCE(SUM(stock_ledgers.quantity_out), 0) as physical_quantity,
+                COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as saleable_quantity,
+                COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") <> "saleable" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as non_saleable_quantity,
+                COALESCE(SUM(CASE WHEN stock_ledgers.stock_status = "damaged" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as damaged_quantity,
+                COALESCE(SUM(CASE WHEN stock_ledgers.stock_status = "expired" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as expired_quantity,
+                COALESCE(SUM(CASE WHEN stock_ledgers.stock_status = "defective" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as defective_quantity,
+                COALESCE(SUM(CASE WHEN stock_ledgers.stock_status = "quarantined" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as quarantined_quantity,
+                COALESCE(SUM(CASE WHEN stock_ledgers.stock_status = "lost" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as lost_quantity,
+                COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as quantity_on_hand,
                 COALESCE(MAX(reservations.reserved_quantity), 0) as reserved_quantity,
-                COALESCE(SUM(stock_ledgers.quantity_in), 0) - COALESCE(SUM(stock_ledgers.quantity_out), 0) - COALESCE(MAX(reservations.reserved_quantity), 0) as quantity_available,
+                COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) - COALESCE(MAX(reservations.reserved_quantity), 0) as quantity_available,
                 CASE
-                    WHEN COALESCE(SUM(CASE WHEN stock_ledgers.quantity_in > 0 THEN stock_ledgers.quantity_in ELSE 0 END), 0) = 0
+                    WHEN COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" AND stock_ledgers.quantity_in > 0 THEN stock_ledgers.quantity_in ELSE 0 END), 0) = 0
                     THEN 0
-                    ELSE COALESCE(SUM(CASE WHEN stock_ledgers.quantity_in > 0 THEN stock_ledgers.quantity_in * stock_ledgers.unit_cost ELSE 0 END), 0)
-                        / COALESCE(SUM(CASE WHEN stock_ledgers.quantity_in > 0 THEN stock_ledgers.quantity_in ELSE 0 END), 1)
+                    ELSE COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" AND stock_ledgers.quantity_in > 0 THEN stock_ledgers.quantity_in * stock_ledgers.unit_cost ELSE 0 END), 0)
+                        / COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" AND stock_ledgers.quantity_in > 0 THEN stock_ledgers.quantity_in ELSE 0 END), 1)
                 END as average_cost
             ');
 
@@ -453,6 +475,14 @@ class StockService
                 MAX(last_updated) as last_updated,
                 MAX(created_by_id) as created_by_id,
                 NULL as updated_by_id,
+                SUM(physical_quantity) as physical_quantity,
+                SUM(saleable_quantity) as saleable_quantity,
+                SUM(non_saleable_quantity) as non_saleable_quantity,
+                SUM(damaged_quantity) as damaged_quantity,
+                SUM(expired_quantity) as expired_quantity,
+                SUM(defective_quantity) as defective_quantity,
+                SUM(quarantined_quantity) as quarantined_quantity,
+                SUM(lost_quantity) as lost_quantity,
                 SUM(quantity_on_hand) as quantity_on_hand,
                 SUM(reserved_quantity) as reserved_quantity,
                 SUM(quantity_available) as quantity_available,
@@ -488,8 +518,10 @@ class StockService
 
         return [
             'total_products' => $rows->pluck('product_id')->unique()->count(),
-            'total_quantity' => round((float) $rows->sum('quantity_on_hand'), 3),
-            'saleable_quantity' => round((float) $rows->sum('quantity_available'), 3),
+            'total_quantity' => round((float) $rows->sum('physical_quantity'), 3),
+            'saleable_quantity' => round((float) $rows->sum('quantity_on_hand'), 3),
+            'available_quantity' => round((float) $rows->sum('quantity_available'), 3),
+            'non_saleable_quantity' => round((float) $rows->sum('non_saleable_quantity'), 3),
             'inventory_value' => round((float) $rows->sum('stock_value'), 2),
             'low_stock_products' => $rows->where('stock_status', 'Low Stock')->pluck('product_id')->unique()->count(),
             'out_of_stock_products' => $rows->where('stock_status', 'Out of Stock')->pluck('product_id')->unique()->count(),
@@ -516,6 +548,7 @@ class StockService
             ->get();
 
         $recentMovements = $this->recentStockMovements($productId, $filters, 100);
+        $lastAdjustment = $ledger->first(fn (StockLedger $entry) => $this->isAdjustmentTransaction($entry->transaction_type));
 
         return [
             'product' => [
@@ -532,18 +565,36 @@ class StockService
                 'branch_id' => $group->first()->branch_id,
                 'branch' => $group->first()->branch_name ?: 'Default',
                 'quantity' => round((float) $group->sum('quantity_on_hand'), 3),
+                'physical_quantity' => round((float) $group->sum('physical_quantity'), 3),
+                'saleable_quantity' => round((float) $group->sum('saleable_quantity'), 3),
+                'reserved_quantity' => round((float) $group->sum('reserved_quantity'), 3),
+                'available_quantity' => round((float) $group->sum('quantity_available'), 3),
+                'non_saleable_quantity' => round((float) $group->sum('non_saleable_quantity'), 3),
+                'condition_stock' => $this->conditionBreakdownFromRows($group),
                 'value' => round((float) $group->sum('stock_value'), 2),
             ])->values(),
             'warehouse_stock' => $rows->groupBy(fn ($row) => ($row->branch_id ?: 0) . '-' . ($row->warehouse_id ?: 0))->map(fn ($group) => [
                 'branch' => $group->first()->branch_name ?: 'Default',
                 'warehouse' => $group->first()->warehouse_name ?: 'Default',
                 'quantity' => round((float) $group->sum('quantity_on_hand'), 3),
+                'physical_quantity' => round((float) $group->sum('physical_quantity'), 3),
+                'saleable_quantity' => round((float) $group->sum('saleable_quantity'), 3),
+                'reserved_quantity' => round((float) $group->sum('reserved_quantity'), 3),
+                'available_quantity' => round((float) $group->sum('quantity_available'), 3),
+                'non_saleable_quantity' => round((float) $group->sum('non_saleable_quantity'), 3),
+                'condition_stock' => $this->conditionBreakdownFromRows($group),
                 'value' => round((float) $group->sum('stock_value'), 2),
             ])->values(),
             'batch_stock' => $rows->whereNotNull('batch_id')->map(fn ($row) => [
                 'batch' => $row->batch_no,
                 'expiry_date' => $row->expiry_date,
                 'quantity' => (float) $row->quantity_on_hand,
+                'physical_quantity' => (float) $row->physical_quantity,
+                'saleable_quantity' => (float) $row->saleable_quantity,
+                'reserved_quantity' => (float) $row->reserved_quantity,
+                'available_quantity' => (float) $row->quantity_available,
+                'non_saleable_quantity' => (float) $row->non_saleable_quantity,
+                'condition_stock' => $this->conditionBreakdownFromRows(collect([$row])),
                 'value' => round((float) $row->stock_value, 2),
             ])->values(),
             'serial_numbers' => Schema::hasTable('product_serial_numbers')
@@ -551,14 +602,20 @@ class StockService
                 : [],
             'valuation' => [
                 'quantity' => round((float) $rows->sum('quantity_on_hand'), 3),
+                'physical_quantity' => round((float) $rows->sum('physical_quantity'), 3),
+                'saleable_quantity' => round((float) $rows->sum('saleable_quantity'), 3),
+                'non_saleable_quantity' => round((float) $rows->sum('non_saleable_quantity'), 3),
+                'damaged_quantity' => round((float) $rows->sum('damaged_quantity'), 3),
                 'reserved' => round((float) $rows->sum('reserved_quantity'), 3),
                 'available' => round((float) $rows->sum('quantity_available'), 3),
                 'value' => round((float) $rows->sum('stock_value'), 2),
             ],
+            'condition_stock' => $this->conditionBreakdownFromRows($rows),
             'last_movement' => optional($ledger->first())->transaction_date?->toDateTimeString(),
             'last_purchase' => optional($ledger->firstWhere('transaction_type', 'purchase') ?: $ledger->firstWhere('transaction_type', 'goods_receipt'))->transaction_date?->toDateTimeString(),
             'last_sale' => optional($ledger->firstWhere('transaction_type', 'sale') ?: $ledger->firstWhere('transaction_type', 'delivery_challan'))->transaction_date?->toDateTimeString(),
-            'last_adjustment' => optional($ledger->firstWhere('transaction_type', 'stock_adjustment_in') ?: $ledger->firstWhere('transaction_type', 'stock_adjustment_out'))->transaction_date?->toDateTimeString(),
+            'last_adjustment' => optional($lastAdjustment)->transaction_date?->toDateTimeString(),
+            'last_adjustment_reference' => $lastAdjustment ? ($this->stockReferenceNumbers(collect([$lastAdjustment]))[$lastAdjustment->reference_type . ':' . $lastAdjustment->reference_id] ?? (string) $lastAdjustment->reference_id) : null,
             'ledger' => $ledger->map(fn ($entry) => [
                 'date' => optional($entry->transaction_date)->format('Y-m-d'),
                 'type' => $entry->transaction_type,
@@ -572,6 +629,22 @@ class StockService
             ])->values(),
             'recent_movements' => $recentMovements,
         ];
+    }
+
+    private function conditionBreakdownFromRows($rows): array
+    {
+        return collect([
+            'saleable' => $rows->sum('saleable_quantity'),
+            'damaged' => $rows->sum('damaged_quantity'),
+            'expired' => $rows->sum('expired_quantity'),
+            'defective' => $rows->sum('defective_quantity'),
+            'quarantined' => $rows->sum('quarantined_quantity'),
+            'lost' => $rows->sum('lost_quantity'),
+        ])->map(fn ($quantity, $condition) => [
+            'condition' => $condition,
+            'label' => str($condition)->replace('_', ' ')->title()->toString(),
+            'quantity' => round((float) $quantity, 3),
+        ])->filter(fn ($row) => abs($row['quantity']) > 0.0004)->values()->all();
     }
 
     private function recentStockMovements(int $productId, array $filters, int $limit = 100)
@@ -590,13 +663,19 @@ class StockService
             ->get();
 
         $references = $this->stockReferenceNumbers($entries);
-        $runningBalance = 0.0;
+        $runningSaleable = 0.0;
+        $runningPhysical = 0.0;
+        $rows = [];
 
-        return $entries->map(function (StockLedger $entry) use (&$runningBalance, $references) {
-            $runningBalance += (float) $entry->quantity_in - (float) $entry->quantity_out;
+        foreach ($entries as $entry) {
+            $net = (float) $entry->quantity_in - (float) $entry->quantity_out;
+            if (($entry->stock_status ?: 'saleable') === 'saleable') {
+                $runningSaleable += $net;
+            }
+            $runningPhysical += $net;
             $referenceKey = $entry->reference_type . ':' . $entry->reference_id;
 
-            return [
+            $rows[] = [
                 'id' => $entry->id,
                 'date_time' => optional($entry->transaction_date)->toDateTimeString(),
                 'transaction_type' => $entry->transaction_type,
@@ -604,13 +683,72 @@ class StockService
                 'reference_type' => class_basename((string) $entry->reference_type),
                 'reference_id' => $entry->reference_id,
                 'reference_number' => $references[$referenceKey] ?? (string) $entry->reference_id,
+                'stock_status' => $entry->stock_status ?: 'saleable',
+                'movement' => null,
                 'stock_in' => (float) $entry->quantity_in,
                 'stock_out' => (float) $entry->quantity_out,
-                'running_balance' => round($runningBalance, 3),
+                'running_balance' => round($runningSaleable, 3),
+                'saleable_balance' => round($runningSaleable, 3),
+                'physical_balance' => round($runningPhysical, 3),
                 'branch' => optional($entry->branch)->name,
                 'warehouse' => optional($entry->warehouse)->name,
             ];
-        })->reverse()->take($limit)->values();
+        }
+
+        return collect($this->mergeReclassificationMovements($rows))->reverse()->take($limit)->values();
+    }
+
+    private function mergeReclassificationMovements(array $rows): array
+    {
+        $merged = [];
+        $skip = [];
+
+        foreach ($rows as $index => $row) {
+            if (isset($skip[$index])) {
+                continue;
+            }
+
+            $pairIndex = null;
+            if ($this->isAdjustmentTransaction($row['transaction_type']) && $row['reference_type'] === 'StockAdjustmentVoucher') {
+                foreach ($rows as $candidateIndex => $candidate) {
+                    if ($candidateIndex === $index || isset($skip[$candidateIndex])) {
+                        continue;
+                    }
+                    if ($candidate['reference_type'] !== $row['reference_type'] || (int) $candidate['reference_id'] !== (int) $row['reference_id']) {
+                        continue;
+                    }
+                    if ($this->isReclassificationPair($row, $candidate)) {
+                        $pairIndex = $candidateIndex;
+                        break;
+                    }
+                }
+            }
+
+            if ($pairIndex === null) {
+                $merged[] = $row;
+                continue;
+            }
+
+            $pair = $rows[$pairIndex];
+            $out = ((float) $row['stock_out'] > 0) ? $row : $pair;
+            $in = ((float) $row['stock_in'] > 0) ? $row : $pair;
+            $condition = $in['stock_status'] === 'saleable' ? $out['stock_status'] : $in['stock_status'];
+            $skip[$pairIndex] = true;
+
+            $merged[] = [
+                ...$row,
+                'transaction_label' => $this->stockTransactionLabel($condition === 'damaged' ? 'damaged_stock' : 'stock_reclassification_out'),
+                'movement' => 'Saleable -> ' . str($condition)->replace('_', ' ')->title()->toString(),
+                'stock_in' => 0,
+                'stock_out' => max((float) $out['stock_out'], (float) $in['stock_in']),
+                'quantity' => max((float) $out['stock_out'], (float) $in['stock_in']),
+                'running_balance' => $out['saleable_balance'],
+                'saleable_balance' => $out['saleable_balance'],
+                'physical_balance' => max($row['physical_balance'], $pair['physical_balance']),
+            ];
+        }
+
+        return $merged;
     }
 
     public function stockReferenceNumbers($entries): array
@@ -686,6 +824,40 @@ class StockService
             'manufacturing_output' => 'Manufacturing Output',
             'manufacturing_wastage' => 'Manufacturing Wastage',
         ][$type] ?? str($type)->replace('_', ' ')->title()->toString();
+    }
+
+    private function isAdjustmentTransaction(string $type): bool
+    {
+        return in_array($type, [
+            'stock_adjustment_in',
+            'stock_adjustment_out',
+            'damaged_stock',
+            'expired_stock',
+            'lost_stock',
+            'theft_stock',
+            'stock_reclassification_in',
+            'stock_reclassification_out',
+        ], true);
+    }
+
+    private function isReclassificationPair(array $first, array $second): bool
+    {
+        $oneIn = ((float) $first['stock_in'] > 0 && (float) $second['stock_out'] > 0);
+        $oneOut = ((float) $first['stock_out'] > 0 && (float) $second['stock_in'] > 0);
+
+        if (!$oneIn && !$oneOut) {
+            return false;
+        }
+
+        $quantityMatches = round(abs((float) $first['stock_in'] - (float) $second['stock_out']), 3) === 0.0
+            || round(abs((float) $first['stock_out'] - (float) $second['stock_in']), 3) === 0.0;
+
+        if (!$quantityMatches) {
+            return false;
+        }
+
+        return in_array($first['transaction_type'], ['stock_reclassification_in', 'stock_reclassification_out', 'damaged_stock', 'expired_stock', 'lost_stock'], true)
+            || in_array($second['transaction_type'], ['stock_reclassification_in', 'stock_reclassification_out', 'damaged_stock', 'expired_stock', 'lost_stock'], true);
     }
 
     private function createLedgerEntry(array $data, bool $validate = true): StockLedger
@@ -888,7 +1060,8 @@ class StockService
             ->when(array_key_exists('warehouse_id', $scope), fn (Builder $q) => $q->where('warehouse_id', $scope['warehouse_id']))
             ->when(!empty($scope['product_id']), fn (Builder $q) => $q->where('product_id', $scope['product_id']))
             ->when(array_key_exists('product_variant_id', $scope), fn (Builder $q) => $q->where('product_variant_id', $scope['product_variant_id']))
-            ->when(array_key_exists('batch_id', $scope), fn (Builder $q) => $q->where('batch_id', $scope['batch_id']));
+            ->when(array_key_exists('batch_id', $scope), fn (Builder $q) => $q->where('batch_id', $scope['batch_id']))
+            ->when(array_key_exists('stock_status', $scope), fn (Builder $q) => $q->where('stock_status', $scope['stock_status']));
     }
 
     private function applyStockStatusFilter($query, string $status): void

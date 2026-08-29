@@ -56,12 +56,12 @@ const detailedColumns = [
     { key: 'branch', label: 'Branch' },
     { key: 'warehouse', label: 'Warehouse' },
     { key: 'batch', label: 'Batch' },
-    { key: 'quantity_on_hand', label: 'Current Qty' },
+    { key: 'quantity_on_hand', label: 'Saleable Qty' },
     { key: 'reserved_quantity', label: 'Reserved Qty' },
     { key: 'quantity_available', label: 'Available Qty' },
     { key: 'unit', label: 'Unit' },
     { key: 'average_cost', label: 'Average Cost' },
-    { key: 'stock_value', label: 'Stock Value' },
+    { key: 'stock_value', label: 'Saleable Value' },
     { key: 'last_updated', label: 'Last Updated' },
     { key: 'status', label: 'Status' },
 ];
@@ -73,10 +73,10 @@ const summaryColumns = [
     { key: 'sku', label: 'SKU' },
     { key: 'barcode', label: 'Barcode' },
     { key: 'brand', label: 'Brand' },
-    { key: 'quantity_on_hand', label: 'Total Qty' },
+    { key: 'quantity_on_hand', label: 'Saleable Qty' },
     { key: 'unit', label: 'Unit' },
     { key: 'average_cost', label: 'Average Cost' },
-    { key: 'stock_value', label: 'Inventory Value' },
+    { key: 'stock_value', label: 'Saleable Value' },
     { key: 'branch_count', label: 'Branches' },
     { key: 'status', label: 'Status' },
 ];
@@ -95,8 +95,10 @@ const filteredWarehouses = computed(() => {
 
 const summaryCards = computed(() => [
     { label: 'Total Products', value: dashboard.value.total_products },
-    { label: 'Total Quantity', value: formatQty(dashboard.value.total_quantity) },
-    { label: 'Inventory Value', value: `Rs. ${formatMoney(dashboard.value.inventory_value)}` },
+    { label: 'Physical Quantity', value: formatQty(dashboard.value.total_quantity) },
+    { label: 'Saleable Quantity', value: formatQty(dashboard.value.saleable_quantity) },
+    { label: 'Non-Saleable Quantity', value: formatQty(dashboard.value.non_saleable_quantity) },
+    { label: 'Saleable Value', value: `Rs. ${formatMoney(dashboard.value.inventory_value)}` },
     { label: 'Low Stock Products', value: dashboard.value.low_stock_products },
     { label: 'Out of Stock Products', value: dashboard.value.out_of_stock_products },
 ]);
@@ -276,6 +278,12 @@ const formatQty = (value) => Number(value || 0).toLocaleString('en-IN', { minimu
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatDate = (value) => value ? new Date(value).toLocaleString('en-IN') : '-';
 const formatDateTime = (value) => value ? new Date(value).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+const conditionQty = (row, condition) => Number((row.condition_stock || []).find((item) => item.condition === condition)?.quantity || 0);
+const movementText = (row) => {
+    if (Number(row.stock_in || 0)) return `In to ${row.stock_status || 'saleable'}`;
+    if (Number(row.stock_out || 0)) return `Out from ${row.stock_status || 'saleable'}`;
+    return '-';
+};
 
 watch(filters, () => {
     clearTimeout(timer);
@@ -420,7 +428,7 @@ onMounted(async () => {
                         <div v-else>
                             <div class="mini-row" v-for="(stock, index) in expandedDetails[row.product_id].warehouse_stock" :key="index">
                                 <span>{{ stock.branch }} / {{ stock.warehouse }}</span>
-                                <strong>Qty {{ formatQty(stock.quantity) }} | Rs. {{ formatMoney(stock.value) }}</strong>
+                                <strong>Physical {{ formatQty(stock.physical_quantity) }} | Saleable {{ formatQty(stock.saleable_quantity) }} | Rs. {{ formatMoney(stock.value) }}</strong>
                             </div>
                         </div>
                     </section>
@@ -467,22 +475,26 @@ onMounted(async () => {
                         </div>
                     </div>
                     <div class="detail-cards">
-                        <div><span>Total Qty</span><strong>{{ formatQty(selectedDetail.valuation.quantity) }}</strong></div>
-                        <div><span>Reserved</span><strong>{{ formatQty(selectedDetail.valuation.reserved) }}</strong></div>
+                        <div><span>Physical Qty</span><strong>{{ formatQty(selectedDetail.valuation.physical_quantity) }}</strong></div>
+                        <div><span>Saleable Qty</span><strong>{{ formatQty(selectedDetail.valuation.saleable_quantity) }}</strong></div>
+                        <div><span>Reserved Qty</span><strong>{{ formatQty(selectedDetail.valuation.reserved) }}</strong></div>
                         <div><span>Available</span><strong>{{ formatQty(selectedDetail.valuation.available) }}</strong></div>
-                        <div><span>Value</span><strong>Rs. {{ formatMoney(selectedDetail.valuation.value) }}</strong></div>
+                        <div><span>Non-Saleable Qty</span><strong>{{ formatQty(selectedDetail.valuation.non_saleable_quantity) }}</strong></div>
+                        <div><span>Saleable Value</span><strong>Rs. {{ formatMoney(selectedDetail.valuation.value) }}</strong></div>
                     </div>
                     <div class="detail-grid">
                         <div><strong>Last Movement</strong><span>{{ selectedDetail.last_movement || '-' }}</span></div>
                         <div><strong>Last Purchase</strong><span>{{ selectedDetail.last_purchase || '-' }}</span></div>
                         <div><strong>Last Sale</strong><span>{{ selectedDetail.last_sale || '-' }}</span></div>
-                        <div><strong>Last Adjustment</strong><span>{{ selectedDetail.last_adjustment || '-' }}</span></div>
+                        <div><strong>Last Adjustment</strong><span>{{ selectedDetail.last_adjustment_reference || '-' }}<br>{{ selectedDetail.last_adjustment || '-' }}</span></div>
                     </div>
                     <template v-if="detailMode === 'view'">
+                        <h3>Stock By Condition</h3>
+                        <div class="mini-row" v-for="row in selectedDetail.condition_stock" :key="row.condition"><span>{{ row.label }}</span><strong>{{ formatQty(row.quantity) }} {{ selectedDetail.product.unit }}</strong></div>
                         <h3>Branch-wise Stock</h3>
-                        <div class="mini-row" v-for="row in selectedDetail.branch_stock" :key="row.branch_id"><span>{{ row.branch }}</span><strong>{{ formatQty(row.quantity) }} | Rs. {{ formatMoney(row.value) }}</strong></div>
+                        <div class="mini-row stock-breakdown-row" v-for="row in selectedDetail.branch_stock" :key="row.branch_id"><span>{{ row.branch }}</span><strong>Physical {{ formatQty(row.physical_quantity) }} | Saleable {{ formatQty(row.saleable_quantity) }} | Damaged {{ formatQty(conditionQty(row, 'damaged')) }} | Rs. {{ formatMoney(row.value) }}</strong></div>
                         <h3>Warehouse-wise Stock</h3>
-                        <div class="mini-row" v-for="(row, index) in selectedDetail.warehouse_stock" :key="index"><span>{{ row.branch }} / {{ row.warehouse }}</span><strong>{{ formatQty(row.quantity) }} | Rs. {{ formatMoney(row.value) }}</strong></div>
+                        <div class="mini-row stock-breakdown-row" v-for="(row, index) in selectedDetail.warehouse_stock" :key="index"><span>{{ row.branch }} / {{ row.warehouse }}</span><strong>Physical {{ formatQty(row.physical_quantity) }} | Saleable {{ formatQty(row.saleable_quantity) }} | Damaged {{ formatQty(conditionQty(row, 'damaged')) }} | Available {{ formatQty(row.available_quantity) }}</strong></div>
                     </template>
                     <template v-if="detailMode === 'view' || detailMode === 'ledger'">
                         <h3>Recent Stock Movements / Stock Ledger</h3>
@@ -494,9 +506,10 @@ onMounted(async () => {
                                         <th>Date & Time</th>
                                         <th>Type</th>
                                         <th>Reference</th>
-                                        <th class="numeric">In</th>
-                                        <th class="numeric">Out</th>
-                                        <th class="numeric">Balance</th>
+                                        <th>Movement</th>
+                                        <th class="numeric">Qty</th>
+                                        <th class="numeric">Saleable Balance</th>
+                                        <th class="numeric">Physical Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -504,9 +517,10 @@ onMounted(async () => {
                                         <td>{{ formatDateTime(row.date_time) }}</td>
                                         <td>{{ row.transaction_label || row.transaction_type }}</td>
                                         <td>{{ row.reference_number || '-' }}</td>
-                                        <td class="numeric">{{ Number(row.stock_in || 0) ? formatQty(row.stock_in) : '-' }}</td>
-                                        <td class="numeric">{{ Number(row.stock_out || 0) ? formatQty(row.stock_out) : '-' }}</td>
-                                        <td class="numeric">{{ formatQty(row.running_balance) }}</td>
+                                        <td>{{ row.movement || movementText(row) }}</td>
+                                        <td class="numeric">{{ formatQty(row.quantity || row.stock_in || row.stock_out) }}</td>
+                                        <td class="numeric">{{ formatQty(row.saleable_balance ?? row.running_balance) }}</td>
+                                        <td class="numeric">{{ formatQty(row.physical_balance ?? row.running_balance) }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -515,7 +529,7 @@ onMounted(async () => {
                     <template v-if="detailMode === 'view' || detailMode === 'batch'">
                         <h3>Batch Details</h3>
                         <div v-if="!selectedDetail.batch_stock.length" class="detail-empty">No batch stock.</div>
-                        <div class="mini-row" v-for="(row, index) in selectedDetail.batch_stock" :key="index"><span>{{ row.batch }} / {{ row.expiry_date || '-' }}</span><strong>{{ formatQty(row.quantity) }}</strong></div>
+                        <div class="mini-row" v-for="(row, index) in selectedDetail.batch_stock" :key="index"><span>{{ row.batch }} / {{ row.expiry_date || '-' }}</span><strong>Physical {{ formatQty(row.physical_quantity) }} | Saleable {{ formatQty(row.saleable_quantity) }}</strong></div>
                     </template>
                     <template v-if="detailMode === 'view' || detailMode === 'serial'">
                         <h3>Serial Numbers</h3>

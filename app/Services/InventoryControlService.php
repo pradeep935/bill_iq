@@ -186,16 +186,34 @@ class InventoryControlService
             if ($this->stockAlreadyPosted(StockAdjustmentVoucher::class, $voucher->id)) return $voucher;
             $this->validateAdjustmentVoucher($voucher->toArray(), $voucher->items->map(fn ($item) => $item->toArray())->all(), true);
             foreach ($voucher->items as $item) {
-                $payload = $this->stockPayload($voucher, $item, [
-                    'transaction_type' => $item->direction === 'in' ? 'stock_adjustment_in' : $this->outTypeForCondition($item->condition_status),
+                $condition = $item->condition_status ?: 'saleable';
+                $basePayload = $this->stockPayload($voucher, $item, [
                     'reference_type' => StockAdjustmentVoucher::class,
                     'reference_id' => $voucher->id,
                     'quantity' => (float) $item->adjustment_quantity,
                     'unit_cost' => (float) $item->unit_cost,
                     'warehouse_location' => $item->warehouse_location,
-                    'stock_status' => $item->condition_status ?: 'saleable',
                     'remarks' => $item->reason ?: $voucher->remarks,
                 ]);
+
+                if ($item->direction === 'out' && $this->isConditionReclassification($condition, $voucher)) {
+                    $this->stock->decreaseStock($basePayload + [
+                        'transaction_type' => 'stock_reclassification_out',
+                        'stock_status' => 'saleable',
+                        'remarks' => trim(($item->reason ?: $voucher->remarks ?: '') . ' Saleable -> ' . str($condition)->replace('_', ' ')->title()),
+                    ]);
+                    $this->stock->increaseStock($basePayload + [
+                        'transaction_type' => 'stock_reclassification_in',
+                        'stock_status' => $condition,
+                        'remarks' => trim(($item->reason ?: $voucher->remarks ?: '') . ' Saleable -> ' . str($condition)->replace('_', ' ')->title()),
+                    ]);
+                    continue;
+                }
+
+                $payload = $basePayload + [
+                    'transaction_type' => $item->direction === 'in' ? 'stock_adjustment_in' : $this->outTypeForCondition($condition),
+                    'stock_status' => $condition,
+                ];
                 $item->direction === 'in' ? $this->stock->increaseStock($payload) : $this->stock->decreaseStock($payload);
             }
             $journal = $this->postAdjustmentAccounting($voucher);
@@ -675,6 +693,16 @@ class InventoryControlService
         if ($condition === 'expired') return 'expired_stock';
         if ($condition === 'lost') return 'lost_stock';
         return 'stock_adjustment_out';
+    }
+
+    private function isConditionReclassification(?string $condition, StockAdjustmentVoucher $voucher): bool
+    {
+        $reasonText = strtolower(trim(($voucher->reason?->reason_code ?? '') . ' ' . ($voucher->reason?->reason_name ?? '') . ' ' . ($voucher->remarks ?? '')));
+        if (strpos($reasonText, 'scrap') !== false || strpos($reasonText, 'disposal') !== false || strpos($reasonText, 'write-off') !== false || strpos($reasonText, 'write off') !== false) {
+            return false;
+        }
+
+        return in_array($condition, ['damaged', 'expired', 'defective', 'quarantined'], true);
     }
 
     private function stockAlreadyPosted(string $type, int $id): bool

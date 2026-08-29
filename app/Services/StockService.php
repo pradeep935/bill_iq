@@ -256,6 +256,7 @@ class StockService
                     'quantity_in' => (float) $entry->quantity_out,
                     'quantity_out' => (float) $entry->quantity_in,
                     'unit_cost' => (float) $entry->unit_cost,
+                    'stock_status' => $entry->stock_status ?: 'saleable',
                     'transaction_date' => now(),
                     'remarks' => $remarks ?: 'Reversal for ledger #' . $entry->id,
                 ], false);

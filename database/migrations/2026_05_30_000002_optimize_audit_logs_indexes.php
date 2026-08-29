@@ -68,6 +68,12 @@ return new class extends Migration
 
     private function indexes(): array
     {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return collect(Schema::getIndexes(self::TABLE))
+                ->mapWithKeys(fn (array $index) => [$index['name'] => $index['columns']])
+                ->all();
+        }
+
         $rows = DB::select('SHOW INDEX FROM '.self::TABLE);
         $indexes = [];
 

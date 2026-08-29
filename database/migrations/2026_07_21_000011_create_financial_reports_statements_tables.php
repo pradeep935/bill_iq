@@ -148,13 +148,19 @@ return new class extends Migration
             ]);
         }
 
-        DB::table('accounts')->join('account_groups', 'account_groups.id', '=', 'accounts.account_group_id')
-            ->update([
-                'accounts.financial_statement_section' => DB::raw('account_groups.financial_statement_section'),
-                'accounts.cash_flow_category' => DB::raw('account_groups.cash_flow_category'),
-                'accounts.report_order' => DB::raw('account_groups.report_order'),
-                'accounts.is_control_account' => DB::raw('account_groups.is_control_group'),
-            ]);
+        if (
+            DB::connection()->getDriverName() === 'mysql'
+            && Schema::hasColumn('account_groups', 'financial_statement_section')
+            && Schema::hasColumn('accounts', 'financial_statement_section')
+        ) {
+            DB::table('accounts')->join('account_groups', 'account_groups.id', '=', 'accounts.account_group_id')
+                ->update([
+                    'accounts.financial_statement_section' => DB::raw('account_groups.financial_statement_section'),
+                    'accounts.cash_flow_category' => DB::raw('account_groups.cash_flow_category'),
+                    'accounts.report_order' => DB::raw('account_groups.report_order'),
+                    'accounts.is_control_account' => DB::raw('account_groups.is_control_group'),
+                ]);
+        }
     }
 
     private function seedPermissions(): void
@@ -168,6 +174,10 @@ return new class extends Migration
 
     private function indexExists(string $table, string $index): bool
     {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return collect(Schema::getIndexes($table))->contains(fn (array $row) => $row['name'] === $index);
+        }
+
         $database = DB::getDatabaseName();
         return DB::table('information_schema.statistics')->where('table_schema', $database)->where('table_name', $table)->where('index_name', $index)->exists();
     }

@@ -65,6 +65,58 @@ const PurchaseApi = {
         return response.data;
     },
 
+    async reorderReferences() {
+        const response = await axios.get('/app/purchase/reorder/references');
+        return response.data;
+    },
+
+    async reorderSuggestions(params = {}) {
+        const response = await axios.get('/app/purchase/reorder/list', { params });
+        return response.data;
+    },
+
+    async createReorderRequisition(items = []) {
+        const response = await axios.post('/app/purchase/reorder/requisitions', { items });
+        return response.data;
+    },
+
+    async createReorderPurchaseOrders(payload = {}) {
+        const response = await axios.post('/app/purchase/reorder/purchase-orders', payload);
+        return response.data;
+    },
+
+    async inventoryOrderReferences() {
+        const response = await axios.get('/app/purchase/orders/references');
+        return response.data;
+    },
+
+    async inventoryOrders(params = {}) {
+        const response = await axios.get('/app/purchase/orders/list', { params });
+        return response.data;
+    },
+
+    async searchInventoryOrderProducts(q = '') {
+        const response = await axios.get('/app/purchase/orders/products/search', { params: { q } });
+        return response.data;
+    },
+
+    async saveInventoryOrder(payload, id = null) {
+        const response = id
+            ? await axios.put(`/app/purchase/orders/${id}`, payload)
+            : await axios.post('/app/purchase/orders', payload);
+        return response.data;
+    },
+
+    async markInventoryOrderOrdered(id) {
+        const response = await axios.post(`/app/purchase/orders/${id}/mark-ordered`);
+        return response.data;
+    },
+
+    async cancelInventoryOrder(id) {
+        const response = await axios.post(`/app/purchase/orders/${id}/cancel`);
+        return response.data;
+    },
+
     async purchaseReturns(params = {}) {
         const response = await axios.get('/app/purchase/returns/list', { params });
         return response.data;

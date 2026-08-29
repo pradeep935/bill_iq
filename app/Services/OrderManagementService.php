@@ -38,10 +38,10 @@ class OrderManagementService
         $businessId = AppController::businessId();
         return [
             'customers' => Customer::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(300)->get(['id', 'customer_name', 'mobile', 'gstin', 'billing_address', 'shipping_address']),
-            'suppliers' => Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->limit(300)->get(['id', 'name', 'phone', 'gstin']),
+            'suppliers' => Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderByRaw('COALESCE(supplier_name, name)')->limit(300)->get(['id', 'supplier_code', 'supplier_name', 'name', 'phone', 'mobile', 'gstin', 'credit_days']),
             'branches' => Branch::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
             'warehouses' => Warehouse::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'branch_id', 'name', 'code']),
-            'products' => $this->productQuery()->orderBy('name')->limit(300)->get(['id', 'name', 'sku', 'primary_barcode', 'barcode', 'unit_id', 'selling_price', 'purchase_price', 'gst_rate', 'cess_rate']),
+            'products' => $this->productQuery()->orderBy('name')->limit(300)->get(['id', 'name', 'sku', 'primary_barcode', 'barcode', 'unit_id', 'unit', 'current_stock', 'selling_price', 'purchase_price', 'cost_price', 'gst_rate', 'cess_rate']),
         ];
     }
 
@@ -344,7 +344,7 @@ class OrderManagementService
         });
     }
 
-    public function purchaseOrders(array $filters) { return $this->applyDocumentFilters(PurchaseOrder::query()->with(['supplier', 'warehouse', 'items.product'])->where('business_id', AppController::businessId()), $filters, 'po_number', 'status', 'po_date', 'supplier_id')->latest('id')->paginate((int) ($filters['per_page'] ?? 20)); }
+    public function purchaseOrders(array $filters) { return $this->applyDocumentFilters(PurchaseOrder::query()->with(['supplier', 'branch', 'warehouse', 'requisition', 'items.product'])->where('business_id', AppController::businessId()), $filters, 'po_number', 'status', 'po_date', 'supplier_id')->latest('id')->paginate((int) ($filters['per_page'] ?? 20)); }
 
     public function savePurchaseOrder(array $data, ?int $id = null): PurchaseOrder
     {
@@ -352,11 +352,29 @@ class OrderManagementService
             $businessId = AppController::businessId();
             $this->supplier($data['supplier_id']); $this->warehouse($data['warehouse_id'], $data['branch_id'] ?? null);
             $items = $this->calculateItems($data['items'], 'purchase'); unset($data['items']);
+            $requestedStatus = $data['status'] ?? 'draft';
+            if ($requestedStatus === 'ordered') {
+                $data['status'] = 'confirmed';
+            }
             $po = $id ? PurchaseOrder::query()->where('business_id', $businessId)->findOrFail($id) : new PurchaseOrder(['business_id' => $businessId, 'po_number' => $this->nextNumber('PO', PurchaseOrder::class, 'po_number'), 'created_by' => Auth::id()]);
             $totals = $this->totals($items, null, 0, 0);
-            $po->fill(array_merge($data, ['subtotal' => $totals['subtotal'], 'taxable_amount' => $totals['taxable_amount'], 'tax_amount' => $totals['cgst'] + $totals['sgst'] + $totals['igst'] + $totals['cess'], 'grand_total' => $totals['grand_total']]))->save();
+            $po->fill(array_merge($data, ['currency' => $data['currency'] ?? 'INR', 'subtotal' => $totals['subtotal'], 'taxable_amount' => $totals['taxable_amount'], 'tax_amount' => $totals['cgst'] + $totals['sgst'] + $totals['igst'] + $totals['cess'], 'grand_total' => $totals['grand_total']]))->save();
             $po->items()->delete(); $po->items()->createMany($items);
-            if (in_array($data['status'], ['approved', 'sent', 'confirmed'], true)) $po->update(['approved_by' => Auth::id(), 'approved_at' => now()]);
+            if (!empty($data['purchase_requisition_id'])) {
+                PurchaseRequisition::query()
+                    ->where('business_id', $businessId)
+                    ->where('id', $data['purchase_requisition_id'])
+                    ->update(['status' => 'converted_to_po', 'converted_purchase_order_id' => $po->id]);
+            }
+            if (in_array($data['status'], ['approved', 'sent', 'confirmed'], true)) {
+                $updates = ['approved_by' => Auth::id(), 'approved_at' => now()];
+                if ($data['status'] === 'confirmed') {
+                    $updates['confirmation_status'] = 'accepted';
+                    if (Schema::hasColumn('purchase_orders', 'ordered_by')) $updates['ordered_by'] = Auth::id();
+                    if (Schema::hasColumn('purchase_orders', 'ordered_at')) $updates['ordered_at'] = now();
+                }
+                $po->update($updates);
+            }
             return $po->fresh(['items.product', 'supplier']);
         });
     }
@@ -371,14 +389,49 @@ class OrderManagementService
         });
     }
 
-    public function goodsReceipts(array $filters) { return $this->applyDocumentFilters(GoodsReceipt::query()->with(['supplier', 'order', 'warehouse', 'items.product'])->where('business_id', AppController::businessId()), $filters, 'grn_number', 'status', 'receipt_date', 'supplier_id')->latest('id')->paginate((int) ($filters['per_page'] ?? 20)); }
+    public function goodsReceipts(array $filters) { return $this->applyDocumentFilters(GoodsReceipt::query()->with(['supplier', 'order', 'branch', 'warehouse', 'items.product', 'items.orderItem'])->where('business_id', AppController::businessId()), $filters, 'grn_number', 'status', 'receipt_date', 'supplier_id')->latest('id')->paginate((int) ($filters['per_page'] ?? 20)); }
 
     public function saveGoodsReceipt(array $data, ?int $id = null): GoodsReceipt
     {
         return DB::transaction(function () use ($data, $id) {
             $businessId = AppController::businessId();
             $this->supplier($data['supplier_id']); $this->warehouse($data['warehouse_id'], $data['branch_id'] ?? null);
-            $items = $data['items']; unset($data['items']);
+            $order = null;
+            if (!empty($data['purchase_order_id'])) {
+                $order = PurchaseOrder::query()->where('business_id', $businessId)->with('items')->where('id', $data['purchase_order_id'])->firstOrFail();
+                if ((int) $order->supplier_id !== (int) $data['supplier_id']
+                    || (int) $order->warehouse_id !== (int) $data['warehouse_id']
+                    || ((int) ($order->branch_id ?? 0) !== (int) ($data['branch_id'] ?? 0))) {
+                    throw ValidationException::withMessages(['purchase_order_id' => 'GRN supplier, branch and warehouse must match the selected purchase order.']);
+                }
+            }
+            $items = collect($data['items'])->map(fn ($item) => [
+                'purchase_order_item_id' => $item['purchase_order_item_id'] ?? null,
+                'product_id' => $item['product_id'],
+                'product_variant_id' => $item['product_variant_id'] ?? null,
+                'batch_id' => $item['batch_id'] ?? null,
+                'serial_id' => $item['serial_id'] ?? null,
+                'ordered_quantity' => $item['ordered_quantity'] ?? 0,
+                'received_quantity' => $item['received_quantity'],
+                'rejected_quantity' => $item['rejected_quantity'] ?? 0,
+                'damaged_quantity' => $item['damaged_quantity'] ?? 0,
+                'unit_cost' => $item['unit_cost'] ?? 0,
+                'batch_number' => $item['batch_number'] ?? null,
+                'manufacturing_date' => $item['manufacturing_date'] ?? null,
+                'expiry_date' => $item['expiry_date'] ?? null,
+                'qc_status' => $item['qc_status'] ?? 'pending',
+                'warehouse_location' => $item['warehouse_location'] ?? null,
+                'remarks' => $item['remarks'] ?? null,
+            ])->all();
+            if ($order) {
+                $validItemIds = $order->items->pluck('id')->map(fn ($value) => (int) $value)->all();
+                foreach ($items as $index => $item) {
+                    if (empty($item['purchase_order_item_id']) || !in_array((int) $item['purchase_order_item_id'], $validItemIds, true)) {
+                        throw ValidationException::withMessages(["items.$index.purchase_order_item_id" => 'GRN items must belong to the selected purchase order.']);
+                    }
+                }
+            }
+            unset($data['items']);
             $grn = $id ? GoodsReceipt::query()->where('business_id', $businessId)->findOrFail($id) : new GoodsReceipt(['business_id' => $businessId, 'grn_number' => $this->nextNumber('GRN', GoodsReceipt::class, 'grn_number'), 'created_by' => Auth::id()]);
             if (in_array($grn->status, ['received', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Received GRN cannot be edited.']);
             $grn->fill($data)->save();
@@ -397,7 +450,7 @@ class OrderManagementService
                 $net = max(0, (float) $item->received_quantity - (float) $item->rejected_quantity - (float) $item->damaged_quantity);
                 if ($item->purchase_order_item_id && $grn->order) {
                     $poItem = $grn->order->items->firstWhere('id', $item->purchase_order_item_id);
-                    if ($poItem && $net > ((float) $poItem->ordered_quantity - (float) $poItem->received_quantity)) throw ValidationException::withMessages(['received_quantity' => 'Cannot over-receive purchase order item.']);
+                    if ($poItem && (float) $item->received_quantity > ((float) $poItem->ordered_quantity - (float) $poItem->received_quantity)) throw ValidationException::withMessages(['received_quantity' => 'Received now cannot exceed pending purchase order quantity.']);
                 }
                 if ($net > 0) $this->stock->increaseStock(['business_id' => $grn->business_id, 'branch_id' => $grn->branch_id, 'warehouse_id' => $grn->warehouse_id, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id, 'serial_id' => $item->serial_id, 'transaction_type' => 'goods_receipt', 'reference_type' => GoodsReceipt::class, 'reference_id' => $grn->id, 'quantity' => $net, 'unit_cost' => (float) $item->unit_cost, 'warehouse_location' => $item->warehouse_location, 'transaction_date' => $grn->receipt_date, 'remarks' => 'GRN ' . $grn->grn_number]);
                 if ($item->purchase_order_item_id) $item->orderItem()->increment('received_quantity', $net);
@@ -420,6 +473,52 @@ class OrderManagementService
             'pending_goods_receipt' => GoodsReceipt::query()->where('business_id', $businessId)->where('status', 'draft')->count(),
             'pending_supplier_confirmation' => PurchaseOrder::query()->where('business_id', $businessId)->where('confirmation_status', 'pending')->count(),
             'pending_back_orders' => BackOrder::query()->where('business_id', $businessId)->where('status', 'open')->count(),
+        ];
+    }
+
+    public function purchaseDashboard(): array
+    {
+        $businessId = AppController::businessId();
+        $today = now()->toDateString();
+        $monthStart = now()->startOfMonth()->toDateString();
+        $openStatuses = ['draft', 'approved', 'sent', 'confirmed', 'partially_received'];
+        $recentPo = PurchaseOrder::query()->with('supplier')->where('business_id', $businessId)->latest('id')->limit(6)->get();
+        $recentGrn = GoodsReceipt::query()->with('supplier')->where('business_id', $businessId)->latest('id')->limit(6)->get();
+
+        return [
+            'purchase_requisitions' => PurchaseRequisition::query()->where('business_id', $businessId)->count(),
+            'requisitions_pending_approval' => PurchaseRequisition::query()->where('business_id', $businessId)->whereIn('status', ['submitted', 'pending_approval'])->count(),
+            'open_purchase_orders' => PurchaseOrder::query()->where('business_id', $businessId)->whereIn('status', $openStatuses)->count(),
+            'po_value' => (float) PurchaseOrder::query()->where('business_id', $businessId)->whereIn('status', $openStatuses)->sum('grand_total'),
+            'grn_pending' => PurchaseOrder::query()->where('business_id', $businessId)->whereIn('status', ['confirmed', 'partially_received'])->whereIn('receipt_status', ['not_received', 'partial_received'])->count(),
+            'partially_received_orders' => PurchaseOrder::query()->where('business_id', $businessId)->whereIn('status', ['partially_received', 'partial_received'])->count(),
+            'goods_received_today' => GoodsReceipt::query()->where('business_id', $businessId)->where('status', 'received')->whereDate('receipt_date', $today)->count(),
+            'purchase_value_this_month' => (float) PurchaseOrder::query()->where('business_id', $businessId)->whereDate('po_date', '>=', $monthStart)->sum('grand_total'),
+            'supplier_pending_deliveries' => PurchaseOrder::query()->where('business_id', $businessId)->whereIn('status', ['confirmed', 'partially_received'])->distinct('supplier_id')->count('supplier_id'),
+            'backordered_purchase_items' => PurchaseOrder::query()->where('business_id', $businessId)->whereHas('items', fn (Builder $q) => $q->whereColumn('received_quantity', '<', 'ordered_quantity'))->count(),
+            'recent_activity' => $recentPo->map(fn (PurchaseOrder $po) => ['type' => 'PO', 'reference' => $po->po_number, 'supplier' => $po->supplier->supplier_name ?? $po->supplier->name ?? '-', 'date' => optional($po->po_date)->format('d M Y'), 'amount' => (float) $po->grand_total, 'status' => $po->status])
+                ->merge($recentGrn->map(fn (GoodsReceipt $grn) => ['type' => 'GRN', 'reference' => $grn->grn_number, 'supplier' => $grn->supplier->supplier_name ?? $grn->supplier->name ?? '-', 'date' => optional($grn->receipt_date)->format('d M Y'), 'amount' => null, 'status' => $grn->status]))
+                ->take(10)
+                ->values(),
+        ];
+    }
+
+    public function purchaseReports(): array
+    {
+        $businessId = AppController::businessId();
+
+        return [
+            'purchase_requisition_report' => PurchaseRequisition::query()->where('business_id', $businessId)->with(['branch', 'items.product'])->latest('id')->limit(100)->get(),
+            'purchase_order_report' => PurchaseOrder::query()->where('business_id', $businessId)->with(['supplier', 'warehouse', 'items.product'])->latest('id')->limit(100)->get(),
+            'pending_po_report' => PurchaseOrder::query()->where('business_id', $businessId)->whereIn('status', ['draft', 'approved', 'sent', 'confirmed', 'partially_received'])->with(['supplier', 'warehouse'])->latest('id')->limit(100)->get(),
+            'grn_report' => GoodsReceipt::query()->where('business_id', $businessId)->with(['supplier', 'warehouse', 'items.product'])->latest('id')->limit(100)->get(),
+            'pending_grn_report' => PurchaseOrder::query()->where('business_id', $businessId)->whereIn('receipt_status', ['not_received', 'partial_received'])->with(['supplier', 'warehouse', 'items.product'])->latest('id')->limit(100)->get(),
+            'partial_receipt_report' => PurchaseOrder::query()->where('business_id', $businessId)->whereIn('status', ['partially_received', 'partial_received'])->with(['supplier', 'warehouse', 'items.product'])->latest('id')->limit(100)->get(),
+            'supplier_purchase_report' => PurchaseOrder::query()->where('business_id', $businessId)->select('supplier_id', DB::raw('COUNT(*) as po_count'), DB::raw('SUM(grand_total) as purchase_value'))->groupBy('supplier_id')->with('supplier')->limit(100)->get(),
+            'supplier_pending_delivery_report' => PurchaseOrder::query()->where('business_id', $businessId)->whereIn('status', ['confirmed', 'partially_received'])->with(['supplier', 'items.product'])->latest('id')->limit(100)->get(),
+            'purchase_item_report' => PurchaseOrder::query()->where('business_id', $businessId)->with(['supplier', 'items.product'])->latest('id')->limit(100)->get()->flatMap(fn (PurchaseOrder $po) => $po->items->map(fn ($item) => ['po_number' => $po->po_number, 'supplier' => $po->supplier->supplier_name ?? $po->supplier->name ?? '-', 'product' => $item->product->name ?? '-', 'ordered' => (float) $item->ordered_quantity, 'received' => (float) $item->received_quantity, 'pending' => max(0, (float) $item->ordered_quantity - (float) $item->received_quantity), 'line_total' => (float) $item->line_total]))->values(),
+            'warehouse_receipt_report' => GoodsReceipt::query()->where('business_id', $businessId)->with(['warehouse', 'items.product'])->latest('id')->limit(100)->get(),
+            'purchase_tax_report' => PurchaseOrder::query()->where('business_id', $businessId)->select('po_number', 'po_date', 'taxable_amount', 'tax_amount', 'grand_total')->latest('id')->limit(100)->get(),
         ];
     }
 
@@ -453,7 +552,21 @@ class OrderManagementService
             $gstRate = (float) ($row['gst_rate'] ?? $product->gst_rate ?? 0);
             $tax = round($taxable * $gstRate / 100, 2);
             $base = ['product_id' => $product->id, 'unit_id' => $row['unit_id'] ?? $product->unit_id ?? null, 'tax_snapshot' => ['gst_rate' => $gstRate], 'tax_amount' => $tax, 'line_total' => round($taxable + $tax, 2)];
-            if ($type === 'purchase') return array_merge($row, $base, ['ordered_quantity' => $qty, 'purchase_rate' => $rate]);
+            if ($type === 'purchase') {
+                return [
+                    'product_id' => $product->id,
+                    'product_variant_id' => $row['product_variant_id'] ?? null,
+                    'unit_id' => $row['unit_id'] ?? $product->unit_id ?? null,
+                    'ordered_quantity' => $qty,
+                    'purchase_rate' => $rate,
+                    'discount_amount' => $discount,
+                    'taxable_amount' => $taxable,
+                    'tax_amount' => $tax,
+                    'tax_snapshot' => ['gst_rate' => $gstRate],
+                    'line_total' => round($taxable + $tax, 2),
+                    'remarks' => $row['remarks'] ?? null,
+                ];
+            }
             if ($type === 'sales_order') return array_merge($row, $base, ['ordered_quantity' => $qty, 'unit_price' => $rate, 'discount_amount' => $discount]);
             return ['product_id' => $product->id, 'variant_id' => $row['variant_id'] ?? null, 'batch_id' => $row['batch_id'] ?? null, 'description' => $row['description'] ?? $product->name, 'quantity' => $qty, 'unit_id' => $row['unit_id'] ?? $product->unit_id ?? null, 'unit_price' => $rate, 'discount' => $discount, 'taxable_amount' => $taxable, 'gst_snapshot' => ['gst_rate' => $gstRate, 'tax_amount' => $tax], 'total' => round($taxable + $tax, 2)];
         })->all();
@@ -461,9 +574,10 @@ class OrderManagementService
 
     private function totals(array $items, ?string $discountType, float $discountValue, float $shipping): array
     {
-        $subtotal = collect($items)->sum(fn ($i) => (float) ($i['taxable_amount'] ?? ((float) ($i['ordered_quantity'] ?? 0) * (float) ($i['unit_price'] ?? $i['purchase_rate'] ?? 0))));
+        $subtotal = collect($items)->sum(fn ($i) => (float) (($i['ordered_quantity'] ?? 0) * ($i['unit_price'] ?? $i['purchase_rate'] ?? 0)));
+        $lineDiscount = collect($items)->sum(fn ($i) => (float) ($i['discount_amount'] ?? $i['discount'] ?? 0));
         $tax = collect($items)->sum(fn ($i) => (float) ($i['tax_amount'] ?? ($i['gst_snapshot']['tax_amount'] ?? 0)));
-        $discount = $discountType === 'percentage' ? round($subtotal * min($discountValue, 100) / 100, 2) : min($subtotal, $discountValue);
+        $discount = $lineDiscount + ($discountType === 'percentage' ? round($subtotal * min($discountValue, 100) / 100, 2) : min($subtotal, $discountValue));
         $grand = round($subtotal - $discount + $tax + $shipping, 2);
         return ['subtotal' => round($subtotal, 2), 'discount_amount' => round($discount, 2), 'taxable_amount' => round(max(0, $subtotal - $discount), 2), 'cgst' => round($tax / 2, 2), 'sgst' => round($tax / 2, 2), 'igst' => 0, 'cess' => 0, 'round_off' => round(round($grand) - $grand, 2), 'grand_total' => round($grand + (round($grand) - $grand), 2)];
     }
@@ -479,7 +593,7 @@ class OrderManagementService
     {
         $po->load('items');
         $total = $po->items->sum('ordered_quantity'); $received = $po->items->sum('received_quantity');
-        $po->update(['receipt_status' => $received <= 0 ? 'not_received' : ($received >= $total ? 'received' : 'partial_received'), 'status' => $received >= $total ? 'received' : 'partial_received']);
+        $po->update(['receipt_status' => $received <= 0 ? 'not_received' : ($received >= $total ? 'received' : 'partial_received'), 'status' => $received >= $total ? 'fully_received' : 'partially_received']);
     }
 
     private function stockPosted(string $type, int $id): bool

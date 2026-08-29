@@ -43,7 +43,7 @@ class OrderManagementController extends Controller
             return $redirect;
         }
 
-        return Inertia::render('Orders/Management', [
+        return Inertia::render('Purchase/Workflow', [
             'page' => 'inventory-orders',
             'title' => 'Purchase Orders',
             'initial_tab' => 'purchase-orders',
@@ -65,16 +65,24 @@ class OrderManagementController extends Controller
         return response()->json($this->orders->searchProducts(trim((string) $request->query('q'))));
     }
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
         abort_unless(AppController::canOpen('sales') || AppController::canOpen('inventory-orders'), 403);
+
+        if ($request->is('app/purchase/*')) {
+            return response()->json($this->orders->purchaseDashboard());
+        }
 
         return response()->json($this->orders->dashboard());
     }
 
-    public function reports()
+    public function reports(Request $request)
     {
         abort_unless(AppController::canOpen('sales') || AppController::canOpen('inventory-orders'), 403);
+
+        if ($request->is('app/purchase/*')) {
+            return response()->json($this->orders->purchaseReports());
+        }
 
         return response()->json($this->orders->reports());
     }

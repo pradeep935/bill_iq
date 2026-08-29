@@ -171,6 +171,10 @@ class InventoryControlService
             $voucher = $id ? StockAdjustmentVoucher::query()->where('business_id', $businessId)->with('items')->findOrFail($id) : new StockAdjustmentVoucher(['business_id' => $businessId, 'voucher_number' => $this->nextNumber('ADJ', StockAdjustmentVoucher::class, 'voucher_number'), 'created_by' => Auth::id()]);
             if (in_array($voucher->status, ['posted', 'reversed', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Posted stock adjustments cannot be edited.']);
             $totals = $this->adjustmentTotals($items);
+            $items = collect($items)->map(function (array $item) {
+                unset($item['source_condition_quantity']);
+                return $item;
+            })->all();
             $voucher->fill(array_merge($data, $totals))->save();
             $voucher->items()->delete();
             $voucher->items()->createMany($items);
@@ -187,6 +191,7 @@ class InventoryControlService
             $this->validateAdjustmentVoucher($voucher->toArray(), $voucher->items->map(fn ($item) => $item->toArray())->all(), true);
             foreach ($voucher->items as $item) {
                 $condition = $item->condition_status ?: 'saleable';
+                $isConditionTransfer = $voucher->adjustment_type === 'condition_transfer' || $item->direction === 'transfer';
                 $basePayload = $this->stockPayload($voucher, $item, [
                     'reference_type' => StockAdjustmentVoucher::class,
                     'reference_id' => $voucher->id,
@@ -195,6 +200,24 @@ class InventoryControlService
                     'warehouse_location' => $item->warehouse_location,
                     'remarks' => $item->reason ?: $voucher->remarks,
                 ]);
+
+                if ($isConditionTransfer) {
+                    $fromCondition = $item->source_condition_status ?: 'saleable';
+                    $toCondition = $item->destination_condition_status ?: $condition;
+                    $movement = str($fromCondition)->replace('_', ' ')->title() . ' -> ' . str($toCondition)->replace('_', ' ')->title();
+
+                    $this->stock->decreaseStock($basePayload + [
+                        'transaction_type' => 'stock_reclassification_out',
+                        'stock_status' => $fromCondition,
+                        'remarks' => trim(($item->reason ?: $voucher->remarks ?: '') . ' ' . $movement),
+                    ]);
+                    $this->stock->increaseStock($basePayload + [
+                        'transaction_type' => 'stock_reclassification_in',
+                        'stock_status' => $toCondition,
+                        'remarks' => trim(($item->reason ?: $voucher->remarks ?: '') . ' ' . $movement),
+                    ]);
+                    continue;
+                }
 
                 if ($item->direction === 'out' && $this->isConditionReclassification($condition, $voucher)) {
                     $this->stock->decreaseStock($basePayload + [
@@ -514,13 +537,26 @@ class InventoryControlService
         return collect($data['items'])->map(function ($row) use ($data) {
             $product = $this->assertProduct($row['product_id']);
             $scope = $this->scope($data['branch_id'] ?? null, $data['warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['batch_id'] ?? null);
+            $isConditionTransfer = ($data['adjustment_type'] ?? null) === 'condition_transfer' || ($row['direction'] ?? null) === 'transfer';
+            $sourceCondition = $row['source_condition_status'] ?? ($isConditionTransfer ? ($row['condition_status'] ?? 'saleable') : 'saleable');
+            $destinationCondition = $row['destination_condition_status'] ?? ($row['condition_status'] ?? 'saleable');
             $systemQty = $this->stock->getCurrentStock($scope);
-            if ($row['direction'] === 'out') $this->stock->validateAvailableStock($scope, (float) $row['adjustment_quantity']);
+            $sourceQty = $this->stock->getConditionStock($scope, $sourceCondition);
+            if (($row['direction'] ?? null) === 'out') {
+                $outScope = $scope;
+                if ($this->isPhysicalConditionOut($row['condition_status'] ?? 'saleable', $data)) {
+                    $outScope['stock_status'] = $row['condition_status'] ?? 'saleable';
+                }
+                $this->stock->validateAvailableStock($outScope, (float) $row['adjustment_quantity']);
+            }
             return array_merge($row, [
                 'unit_id' => $row['unit_id'] ?? $product->unit_id ?? null,
                 'system_quantity' => $systemQty,
                 'adjustment_value' => round((float) $row['adjustment_quantity'] * (float) $row['unit_cost'], 2),
-                'condition_status' => $row['condition_status'] ?? 'saleable',
+                'condition_status' => $destinationCondition,
+                'source_condition_status' => $isConditionTransfer ? $sourceCondition : null,
+                'destination_condition_status' => $isConditionTransfer ? $destinationCondition : null,
+                'source_condition_quantity' => round((float) $sourceQty, 3),
             ]);
         })->all();
     }
@@ -549,11 +585,39 @@ class InventoryControlService
                 throw ValidationException::withMessages(["items.$index.adjustment_quantity" => 'Quantity must be greater than zero.']);
             }
 
-            if (!in_array($item['direction'] ?? '', ['in', 'out'], true)) {
+            $isConditionTransfer = ($data['adjustment_type'] ?? null) === 'condition_transfer' || ($item['direction'] ?? null) === 'transfer';
+
+            if (!in_array($item['direction'] ?? '', ['in', 'out', 'transfer'], true)) {
                 throw ValidationException::withMessages(["items.$index.direction" => 'Direction must be IN or OUT.']);
             }
 
-            if ($reason && ($item['direction'] ?? null) !== $reason->default_direction) {
+            if ($isConditionTransfer) {
+                $sourceCondition = $item['source_condition_status'] ?? null;
+                $destinationCondition = $item['destination_condition_status'] ?? null;
+
+                if (!$sourceCondition) {
+                    throw ValidationException::withMessages(["items.$index.source_condition_status" => 'From condition is required.']);
+                }
+
+                if (!$destinationCondition) {
+                    throw ValidationException::withMessages(["items.$index.destination_condition_status" => 'To condition is required.']);
+                }
+
+                if ($sourceCondition === $destinationCondition) {
+                    throw ValidationException::withMessages(["items.$index.destination_condition_status" => 'From and To condition cannot be the same.']);
+                }
+
+                $sourceQty = (float) ($item['source_condition_quantity'] ?? $this->stock->getConditionStock(
+                    $this->scope($data['branch_id'] ?? null, $data['warehouse_id'] ?? null, (int) ($item['product_id'] ?? 0), $item['product_variant_id'] ?? null, $item['batch_id'] ?? null),
+                    $sourceCondition
+                ));
+
+                if ($sourceQty + 0.0004 < $quantity) {
+                    throw ValidationException::withMessages([
+                        "items.$index.adjustment_quantity" => 'Only ' . round($sourceQty, 3) . ' units are available in ' . str($sourceCondition)->replace('_', ' ')->title() . ' stock.',
+                    ]);
+                }
+            } elseif ($reason && ($item['direction'] ?? null) !== $reason->default_direction) {
                 throw ValidationException::withMessages(["items.$index.direction" => "{$reason->reason_name} requires {$reason->default_direction} movement."]);
             }
 
@@ -633,6 +697,7 @@ class InventoryControlService
 
     private function postAdjustmentAccounting(StockAdjustmentVoucher $voucher): ?JournalVoucher
     {
+        if ($voucher->adjustment_type === 'condition_transfer') return null;
         if (!class_exists(JournalVoucher::class)) return null;
         $settings = BusinessInventorySetting::query()->where('business_id', $voucher->business_id)->first();
         $inventoryAccount = DB::table('business_account_settings')->where('business_id', $voucher->business_id)->value('inventory_account_id');
@@ -703,6 +768,25 @@ class InventoryControlService
         }
 
         return in_array($condition, ['damaged', 'expired', 'defective', 'quarantined'], true);
+    }
+
+    private function isPhysicalConditionOut(?string $condition, array $data): bool
+    {
+        if (!in_array($condition, ['damaged', 'expired', 'defective', 'quarantined', 'lost'], true)) {
+            return false;
+        }
+
+        $reason = null;
+        if (!empty($data['adjustment_reason_id'])) {
+            $reason = StockAdjustmentReason::query()->where('business_id', AppController::businessId())->find($data['adjustment_reason_id']);
+        }
+
+        $reasonText = strtolower(trim(($reason?->reason_code ?? '') . ' ' . ($reason?->reason_name ?? '') . ' ' . ($data['remarks'] ?? '') . ' ' . ($data['source'] ?? '')));
+
+        return str_contains($reasonText, 'scrap')
+            || str_contains($reasonText, 'disposal')
+            || str_contains($reasonText, 'write-off')
+            || str_contains($reasonText, 'write off');
     }
 
     private function stockAlreadyPosted(string $type, int $id): bool

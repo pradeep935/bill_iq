@@ -40,7 +40,7 @@ const permissions = reactive({ create: true, edit_draft: true, approve: true, ca
 const activeReport = ref('movement_report');
 
 const today = new Date().toISOString().slice(0, 10);
-const adjustment = reactive({ branch_id: '', warehouse_id: '', adjustment_date: today, adjustment_reason_id: '', adjustment_type: 'mixed', source: 'manual', status: 'draft', remarks: '', items: [{ product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', reason: '' }] });
+const adjustment = reactive({ branch_id: '', warehouse_id: '', adjustment_date: today, adjustment_reason_id: '', adjustment_type: 'mixed', source: 'manual', status: 'draft', remarks: '', items: [{ product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', source_condition_status: 'damaged', destination_condition_status: 'saleable', reason: '' }] });
 const count = reactive({ branch_id: '', warehouse_id: '', count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [{ product_id: '', counted_quantity: 0, unit_cost: 0, warehouse_location: '', review_status: 'accepted' }] });
 const transfer = reactive({ transfer_date: today, source_branch_id: '', source_warehouse_id: '', destination_branch_id: '', destination_warehouse_id: '', transfer_type: 'immediate', expected_delivery_date: '', status: 'draft', remarks: '', items: [{ product_id: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', destination_location: '' }] });
 const location = reactive({ branch_id: '', warehouse_id: '', movement_date: today, status: 'draft', remarks: '', items: [{ product_id: '', quantity: 1, from_location: '', to_location: '' }] });
@@ -53,7 +53,17 @@ const qty = formatInventoryQty;
 const capture = (e) => { errors.value = e?.response?.data?.errors || { form: [e?.response?.data?.message || 'Unable to save.'] }; };
 const clearErrors = () => { errors.value = {}; };
 const selectedReason = computed(() => refs.value.reasons.find((r) => Number(r.id) === Number(adjustment.adjustment_reason_id)));
-const applyReason = () => { if (selectedReason.value) adjustment.items.forEach((i) => { i.direction = selectedReason.value.default_direction; i.condition_status = selectedReason.value.default_condition_status || 'saleable'; }); };
+const applyReason = () => {
+    if (!selectedReason.value) return;
+    adjustment.items.forEach((item) => {
+        if (isConditionTransferLine(item)) {
+            item.condition_status = item.destination_condition_status || 'saleable';
+            return;
+        }
+        item.direction = selectedReason.value.default_direction;
+        item.condition_status = selectedReason.value.default_condition_status || 'saleable';
+    });
+};
 const voucherTypes = [
     { key: 'stock_adjustment', label: 'Stock Adjustment', tab: 'voucher', source: 'manual', direction: 'out', adjustment_type: 'decrease' },
     { key: 'damage', label: 'Damage / Breakage', tab: 'voucher', source: 'damage', direction: 'out', adjustment_type: 'decrease', condition_status: 'damaged' },
@@ -84,7 +94,7 @@ const adjustmentQty = (item) => Math.abs(countDifference(item));
 
 const labelize = (value) => String(value || '-').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const formatIndianDateTime = formatInventoryDateTime;
-const movementOptions = [{ value: 'in', label: 'Stock In' }, { value: 'out', label: 'Stock Out' }];
+const movementOptions = [{ value: 'in', label: 'Stock In' }, { value: 'out', label: 'Stock Out' }, { value: 'transfer', label: 'Condition Transfer' }];
 const conditionOptions = [
     { value: 'saleable', label: 'Saleable' },
     { value: 'damaged', label: 'Damaged' },
@@ -108,13 +118,25 @@ const editReason = (row) => Object.assign(reason, {
     status: row.status || 'active',
 });
 const signedQty = (value) => `${Number(value || 0) > 0 ? '+' : ''}${qty(value)}`;
-const stockDelta = (item) => item.direction === 'out' ? -Number(item.adjustment_quantity || 0) : Number(item.adjustment_quantity || 0);
+const isConditionTransferLine = (item) => item.direction === 'transfer';
+const stockDelta = (item) => item.direction === 'out' ? -Number(item.adjustment_quantity || 0) : (item.direction === 'in' ? Number(item.adjustment_quantity || 0) : 0);
 const lineNewStock = (item) => Number(item.current_stock || 0) + stockDelta(item);
-const adjustmentTypeLabel = (value) => value === 'in' ? 'Stock In' : 'Stock Out';
+const adjustmentTypeLabel = (value) => optionLabel(movementOptions, value);
+const conditionName = (value) => optionLabel(conditionOptions, value);
+const lineSourceQty = (item) => Number(item.source_condition_quantity ?? 0);
+const lineDestinationQty = (item) => Number(item.destination_condition_quantity ?? 0);
+const conditionTransferResult = (item) => {
+    if (!item.product_id || !isConditionTransferLine(item)) return '';
+    const qtyValue = Number(item.adjustment_quantity || 0);
+    const from = item.source_condition_status || 'saleable';
+    const to = item.destination_condition_status || 'saleable';
+    return `${conditionName(from)} ${qty(lineSourceQty(item) - qtyValue)} / ${conditionName(to)} ${qty(lineDestinationQty(item) + qtyValue)}`;
+};
 const adjustmentSummary = computed(() => {
     const increases = adjustment.items.filter((item) => stockDelta(item) > 0).reduce((sum, item) => sum + stockDelta(item), 0);
     const decreases = Math.abs(adjustment.items.filter((item) => stockDelta(item) < 0).reduce((sum, item) => sum + stockDelta(item), 0));
-    return { products: adjustment.items.filter((item) => item.product_id).length, increases, decreases, net: increases - decreases };
+    const transfers = adjustment.items.filter((item) => isConditionTransferLine(item)).reduce((sum, item) => sum + Number(item.adjustment_quantity || 0), 0);
+    return { products: adjustment.items.filter((item) => item.product_id).length, increases, decreases, transfers, net: increases - decreases };
 });
 const kpiCards = computed(() => [
     { key: 'stock-value', label: 'Saleable Value', value: `Rs. ${money(dashboard.value.total_stock_value)}`, note: 'Saleable inventory valuation' },
@@ -209,6 +231,7 @@ const setVoucherType = () => {
         adjustment.items.forEach((item) => {
             item.direction = type.direction || item.direction;
             item.condition_status = type.condition_status || item.condition_status || 'saleable';
+            if (item.direction === 'transfer') adjustment.adjustment_type = 'condition_transfer';
         });
     }
 };
@@ -262,7 +285,11 @@ const validateAdjustmentClient = (status) => {
     if (!adjustment.items.length) return 'At least one product line is required.';
     const bad = adjustment.items.find((item) => !item.product_id || Number(item.adjustment_quantity || 0) <= 0);
     if (bad) return 'Each line must have product and quantity greater than zero.';
-    const mismatchedReason = selectedReason.value && adjustment.items.find((item) => item.direction !== selectedReason.value.default_direction);
+    const transferBad = adjustment.items.find((item) => isConditionTransferLine(item) && (!item.source_condition_status || !item.destination_condition_status || item.source_condition_status === item.destination_condition_status));
+    if (transferBad) return 'Condition transfer requires different From and To conditions.';
+    const transferOver = adjustment.items.find((item) => isConditionTransferLine(item) && lineSourceQty(item) < Number(item.adjustment_quantity || 0));
+    if (transferOver) return `Only ${qty(lineSourceQty(transferOver))} units are available in ${conditionName(transferOver.source_condition_status)} stock.`;
+    const mismatchedReason = selectedReason.value && adjustment.items.find((item) => !isConditionTransferLine(item) && item.direction !== selectedReason.value.default_direction);
     if (mismatchedReason) return `${selectedReason.value.reason_name} requires ${optionLabel(movementOptions, selectedReason.value.default_direction)}.`;
     const outWithoutStock = adjustment.items.find((item) => item.direction === 'out' && Number(item.current_stock || 0) < Number(item.adjustment_quantity || 0));
     if (outWithoutStock) return 'OUT quantity cannot be greater than available stock.';
@@ -343,6 +370,38 @@ const refreshLineStock = async (item, source = adjustment) => {
     item.current_stock = Number(value.available || value.quantity || 0);
     if (source === count) item.system_quantity = Number(value.quantity || value.available || 0);
     if (!Number(item.unit_cost || 0)) item.unit_cost = Number(value.average_cost || 0);
+    if (source === adjustment) await refreshConditionQuantities(item);
+};
+const refreshConditionQuantities = async (item) => {
+    if (!item.product_id || !adjustment.warehouse_id || !isConditionTransferLine(item)) return;
+    const base = { branch_id: adjustment.branch_id || '', warehouse_id: adjustment.warehouse_id, product_id: item.product_id, product_variant_id: item.product_variant_id || '', batch_id: item.batch_id || '' };
+    const [sourceValue, destinationValue, physicalValue, saleableValue] = await Promise.all([
+        InventoryApi.inventoryValuation({ ...base, stock_status: item.source_condition_status || 'saleable' }),
+        InventoryApi.inventoryValuation({ ...base, stock_status: item.destination_condition_status || 'saleable' }),
+        InventoryApi.inventoryValuation(base),
+        InventoryApi.inventoryValuation({ ...base, stock_status: 'saleable' }),
+    ]);
+    item.source_condition_quantity = Number(sourceValue.quantity || sourceValue.available || 0);
+    item.destination_condition_quantity = Number(destinationValue.quantity || destinationValue.available || 0);
+    item.physical_quantity = Number(physicalValue.quantity || 0);
+    item.saleable_quantity = Number(saleableValue.quantity || saleableValue.available || 0);
+};
+const onLineDirectionChange = async (item) => {
+    if (isConditionTransferLine(item)) {
+        adjustment.adjustment_type = 'condition_transfer';
+        adjustment.source = 'condition_transfer';
+        item.source_condition_status = item.source_condition_status || 'damaged';
+        item.destination_condition_status = item.destination_condition_status || 'saleable';
+        item.condition_status = item.destination_condition_status;
+        item.unit_cost = 0;
+        await refreshConditionQuantities(item);
+        return;
+    }
+
+    if (adjustment.adjustment_type === 'condition_transfer') {
+        adjustment.adjustment_type = 'mixed';
+        adjustment.source = 'manual';
+    }
 };
 onMounted(load);
 </script>
@@ -395,35 +454,44 @@ onMounted(load);
 
             <section v-if="!loading && tab === 'voucher'" class="panel">
                 <div class="section-head"><div><span>STOCK ADJUSTMENT WORKFLOW</span><h2>New {{ currentVoucherType.label }}</h2><p>Draft does not update stock. Posting creates immutable stock ledger entries.</p></div><span class="status-pill">{{ labelize(adjustment.status) }}</span></div>
-                <div class="form-grid"><input value="Auto generated on save" disabled /><select v-model="adjustment.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="adjustment.warehouse_id"><option value="">Source Warehouse</option><option v-for="w in filteredWarehouses(adjustment.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="adjustment.adjustment_date" type="date" /><select v-model="adjustment.adjustment_reason_id" @change="applyReason"><option value="">Select Reason</option><option v-for="r in refs.reasons" :key="r.id" :value="r.id">{{ reasonDisplayName(r) }}</option></select><select v-model="adjustment.adjustment_type"><option value="increase">Increase</option><option value="decrease">Decrease</option><option value="mixed">Mixed</option></select><input :value="currentVoucherType.label" disabled /><textarea v-model="adjustment.remarks" placeholder="Remarks / reason note"></textarea></div>
+                <div class="form-grid"><input value="Auto generated on save" disabled /><select v-model="adjustment.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="adjustment.warehouse_id"><option value="">Source Warehouse</option><option v-for="w in filteredWarehouses(adjustment.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="adjustment.adjustment_date" type="date" /><select v-model="adjustment.adjustment_reason_id" @change="applyReason"><option value="">Select Reason</option><option v-for="r in refs.reasons" :key="r.id" :value="r.id">{{ reasonDisplayName(r) }}</option></select><select v-model="adjustment.adjustment_type" @change="adjustment.adjustment_type === 'condition_transfer' && adjustment.items.forEach((item) => { item.direction = 'transfer'; onLineDirectionChange(item); })"><option value="increase">Stock In</option><option value="decrease">Stock Out</option><option value="condition_transfer">Condition Transfer</option><option value="mixed">Mixed</option></select><input :value="currentVoucherType.label" disabled /><textarea v-model="adjustment.remarks" placeholder="Remarks / reason note"></textarea></div>
                 <div class="hint-grid">
                     <span>Voucher number is generated when the voucher is saved.</span>
                     <span>Branch and source warehouse decide where stock is affected.</span>
                     <span>Reason is required before posting and is used for audit reports.</span>
                     <span>Draft vouchers remain editable and do not update stock.</span>
                 </div>
-                <div class="line-head adjustment-head"><span>Product</span><span>Current Stock</span><span>Adjustment Type</span><span>Quantity</span><span>New Stock</span><span>Unit Cost</span><span>Location</span><span>Condition</span><span>Remove</span></div>
+                <div class="line-head adjustment-head"><span>Product</span><span>Current / Source</span><span>Adjustment Type</span><span>Quantity</span><span>Result</span><span>Cost</span><span>Location</span><span>Condition</span><span>Remove</span></div>
                 <div v-for="(item, i) in adjustment.items" :key="i" class="line-grid adjustment-row">
                     <label class="line-field product-field"><span>Product</span><select v-model="item.product_id" @change="refreshLineStock(item)"><option value="">Select Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }} - {{ p.sku }}</option></select></label>
-                    <label class="line-field"><span>Current Stock</span><input :value="item.product_id ? qty(item.current_stock) : ''" disabled placeholder="Current Stock" /></label>
-                    <label class="line-field"><span>Adjustment Type</span><select v-model="item.direction"><option v-for="option in movementOptions" :key="option.value" :value="option.value">{{ adjustmentTypeLabel(option.value) }}</option></select></label>
+                    <label v-if="!isConditionTransferLine(item)" class="line-field"><span>Current Stock</span><input :value="item.product_id ? qty(item.current_stock) : ''" disabled placeholder="Current Stock" /></label>
+                    <label v-else class="line-field"><span>Source Qty</span><input :value="item.product_id ? qty(lineSourceQty(item)) : ''" disabled placeholder="Source Qty" /></label>
+                    <label class="line-field"><span>Adjustment Type</span><select v-model="item.direction" @change="onLineDirectionChange(item)"><option v-for="option in movementOptions" :key="option.value" :value="option.value">{{ adjustmentTypeLabel(option.value) }}</option></select></label>
                     <label class="line-field"><span>Quantity</span><input v-model.number="item.adjustment_quantity" type="number" step="0.001" placeholder="Qty" /></label>
-                    <label class="line-field"><span>New Stock</span><input :value="item.product_id ? qty(lineNewStock(item)) : ''" disabled :class="lineNewStock(item) < 0 ? 'stock-negative' : ''" placeholder="New Stock" /></label>
-                    <label class="line-field"><span>Unit Cost</span><input v-model.number="item.unit_cost" type="number" step="0.01" placeholder="Unit Cost" /></label>
+                    <label v-if="!isConditionTransferLine(item)" class="line-field"><span>New Stock</span><input :value="item.product_id ? qty(lineNewStock(item)) : ''" disabled :class="lineNewStock(item) < 0 ? 'stock-negative' : ''" placeholder="New Stock" /></label>
+                    <label v-else class="line-field result-field"><span>Result</span><input :value="conditionTransferResult(item)" disabled placeholder="Result" /></label>
+                    <label v-if="!isConditionTransferLine(item)" class="line-field"><span>Unit Cost</span><input v-model.number="item.unit_cost" type="number" step="0.01" placeholder="Unit Cost" /></label>
+                    <div v-else class="line-field transfer-physical-note"><span>Physical</span><strong>{{ item.product_id ? `${qty(item.physical_quantity)} -> ${qty(item.physical_quantity)}` : '-' }}</strong></div>
                     <label class="line-field"><span>Location</span><input v-model="item.warehouse_location" placeholder="Location" /></label>
-                    <label class="line-field"><span>Condition</span><select v-model="item.condition_status"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+                    <label v-if="!isConditionTransferLine(item)" class="line-field"><span>Condition</span><select v-model="item.condition_status"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+                    <div v-else class="condition-transfer-fields">
+                        <label class="line-field"><span>From</span><select v-model="item.source_condition_status" @change="refreshConditionQuantities(item)"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+                        <label class="line-field"><span>To</span><select v-model="item.destination_condition_status" @change="item.condition_status = item.destination_condition_status; refreshConditionQuantities(item)"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+                    </div>
                     <button class="remove-line" @click="adjustment.items.splice(i,1)" :disabled="adjustment.items.length === 1">Remove</button>
                 </div>
+                <div v-if="adjustment.items.some(isConditionTransferLine)" class="condition-transfer-help">Condition transfers reclassify existing physical inventory and do not change physical quantity.</div>
                 <section class="voucher-help-card">
                     <strong>Line guidance</strong>
                     <ul>
                         <li>Current stock is read-only and comes from the stock ledger.</li>
                         <li>IN increases stock; OUT decreases stock and cannot exceed available quantity.</li>
+                        <li>Condition Transfer moves quantity between stock conditions in the same branch and warehouse.</li>
                         <li>Cost is used only for this voucher valuation and does not update Product Master price.</li>
                         <li>Location and condition help separate saleable, damaged, expired or lost stock.</li>
                     </ul>
                 </section>
-                <div class="posting-summary"><strong>{{ adjustmentSummary.products }} products affected</strong><span>Stock Increase: +{{ qty(adjustmentSummary.increases) }}</span><span>Stock Decrease: -{{ qty(adjustmentSummary.decreases) }}</span><span>Net Difference: {{ signedQty(adjustmentSummary.net) }}</span></div><div class="actions"><button @click="addRow(adjustment.items, { product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', reason: '' })">Add Item</button><button :disabled="saving" @click="saveAdjustment('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="saveAdjustment('posted')">Post Adjustment</button></div>
+                <div class="posting-summary"><strong>{{ adjustmentSummary.products }} products affected</strong><span>Stock Increase: +{{ qty(adjustmentSummary.increases) }}</span><span>Stock Decrease: -{{ qty(adjustmentSummary.decreases) }}</span><span>Condition Transfer: {{ qty(adjustmentSummary.transfers) }}</span><span>Net Difference: {{ signedQty(adjustmentSummary.net) }}</span></div><div class="actions"><button @click="addRow(adjustment.items, { product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', source_condition_status: 'damaged', destination_condition_status: 'saleable', reason: '' })">Add Item</button><button :disabled="saving" @click="saveAdjustment('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="saveAdjustment('posted')">Post Adjustment</button></div>
             </section>
 
             <section v-if="!loading && tab === 'register'" class="panel">
@@ -504,5 +572,5 @@ onMounted(load);
 
 <style scoped>
 .inventory-control{padding:0 0 28px}.page-toolbar,.tabs,.actions,.barcode-capture{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.page-toolbar{justify-content:flex-end;margin:-6px 0 14px}.barcode-capture input{width:170px}.tabs{margin-bottom:14px}.tabs button.active{background:#173b77;color:#fff;border-color:#173b77}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.section-head{align-items:flex-start;display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.section-head span{color:#2457d6;font-size:10px;font-weight:900;letter-spacing:1px}.section-head h2{color:#142139;font-size:18px;margin:0}.section-head p{color:#758197;font-size:12px;margin:4px 0 0}.status-pill{background:#edf2ff;border-radius:7px;color:#2457d6;display:inline-flex;font-size:10px;font-weight:800;padding:5px 8px;text-transform:capitalize}.dashboard-stack{display:grid;gap:16px}.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpi-card{align-items:flex-start;display:grid;gap:6px;padding:15px;text-align:left;background:#fff;border:1px solid #e3e9f2;border-left:4px solid #2457d6;border-radius:8px}.kpi-card strong{color:#142139;font-size:21px}.kpi-card span,.cards span{color:#69758a;font-size:11px;font-weight:850;text-transform:uppercase}.kpi-card small{color:#758197}.kpi-card.warning{border-left-color:#d99000}.kpi-card.danger{border-left-color:#d23f49}.kpi-card.info{border-left-color:#0f8b8d}.dashboard-columns{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.alert-list{display:grid;gap:8px}.alert-row{align-items:center;display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:10px 0;border-bottom:1px solid #edf1f5}.alert-row span{color:#344159;font-weight:800}.alert-row strong{color:#142139}.healthy-state{padding:18px;color:#168757;background:#eaf8f1;border:1px solid #cceedd;border-radius:8px;font-weight:800}.quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.quick-grid button{text-align:left}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}.reason-form{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:10px}.reason-form label{display:grid;align-content:start;gap:6px;color:#344159;font-size:12px;font-weight:800}.reason-form label span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.reason-form small{color:#758197;font-size:11px;font-weight:600;line-height:1.4}.hint-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}.hint-grid span,.voucher-help-card{background:#f8fafc;border:1px dashed #d9e2ef;border-radius:8px;color:#6f7b90;font-size:11px;font-weight:650;line-height:1.45;padding:9px 11px}.voucher-help-card{margin:10px 0 12px}.voucher-help-card strong{color:#27344c;display:block;font-size:12px;margin-bottom:6px}.voucher-help-card ul{margin:0;padding-left:17px}.voucher-help-card li{margin:3px 0}.line-head,.line-grid{display:grid;gap:8px;align-items:center;margin-bottom:8px}.line-head{color:#69758a;font-size:10px;font-weight:800;text-transform:uppercase}.adjustment-row,.line-head{grid-template-columns:1.5fr .7fr .8fr .65fr .75fr .7fr 1fr 1fr .7fr}.count-row,.count-head{grid-template-columns:1.5fr .75fr .75fr .75fr .75fr .7fr .9fr .9fr .65fr}.transfer-row,.transfer-head{grid-template-columns:1.4fr .65fr .65fr .65fr .65fr .8fr .8fr .8fr .8fr .9fr .9fr .65fr}.location-row{grid-template-columns:1.8fr .8fr 1fr 1fr .7fr}.posting-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0;padding:12px;background:#f8fafc;border:1px solid #e5eaf2;border-radius:8px;color:#344159;font-size:12px}.posting-summary strong{color:#142139}.actions{justify-content:flex-end;margin:12px 0}.actions.inline{margin:0}.secondary{border-top:1px solid #edf1f5;margin-top:20px;padding-top:16px}.report-tabs{margin-bottom:10px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:38px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.alert{padding:10px 12px;margin-bottom:12px;border-radius:8px;background:#fff4f4;color:#b42318;border:1px solid #ffd5d5;font-size:12px}.empty{color:#8490a2;text-align:center}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:12px}tr{cursor:pointer}th,td{padding:11px 10px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap;font-size:12px}th{color:#69758a;background:#f8fafc;font-size:10px;text-transform:uppercase}.stock-negative{color:#d23f49!important}.qty-change.positive{color:#168757;font-weight:900}.qty-change.negative{color:#d23f49;font-weight:900}.qty-change.neutral{color:#344159;font-weight:900}.selector-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.operation-selector{width:min(980px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.operation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.operation-card{display:grid;align-content:start;gap:8px;min-height:170px;padding:14px;text-align:left;border:1px solid #dfe6ef}.operation-card strong{color:#142139;font-size:15px}.operation-card span{color:#536174;line-height:1.45}.operation-card small{color:#69758a;background:#f8fafc;border-radius:6px;padding:5px 7px}@media(max-width:1000px){.kpi-grid,.dashboard-columns,.form-grid,.reason-form,.hint-grid,.line-grid,.line-head,.adjustment-row,.count-row,.transfer-row,.location-row,.operation-grid{grid-template-columns:1fr}.page-toolbar{justify-content:flex-start}.barcode-capture input{width:100%}.quick-grid{grid-template-columns:1fr}.section-head{flex-direction:column}}
-.adjustment-row,.adjustment-head{grid-template-columns:minmax(220px,1.6fr) minmax(105px,.75fr) minmax(130px,.9fr) minmax(90px,.65fr) minmax(105px,.75fr) minmax(100px,.7fr) minmax(120px,.9fr) minmax(130px,.9fr) minmax(90px,.65fr)}.line-field{display:grid;gap:5px;min-width:0}.line-field span{display:none;color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.line-field input,.line-field select,.remove-line{width:100%;min-width:0}.product-field select{min-width:0}@media(max-width:1000px){.adjustment-head{display:none}.adjustment-row{align-items:stretch;padding:12px;background:#fff;border:1px solid #e3e9f2;border-radius:8px;grid-template-columns:1fr}.line-field span{display:block}.remove-line{justify-self:start;width:auto}}
+.adjustment-row,.adjustment-head{grid-template-columns:minmax(220px,1.6fr) minmax(105px,.75fr) minmax(130px,.9fr) minmax(90px,.65fr) minmax(150px,.95fr) minmax(110px,.75fr) minmax(120px,.9fr) minmax(180px,1.1fr) minmax(90px,.65fr)}.line-field{display:grid;gap:5px;min-width:0}.line-field span{display:none;color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.line-field input,.line-field select,.remove-line{width:100%;min-width:0}.product-field select{min-width:0}.condition-transfer-fields{display:grid;grid-template-columns:1fr 1fr;gap:6px}.condition-transfer-help{margin:8px 0 10px;padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:750}.transfer-physical-note{align-content:center;min-height:38px;padding:7px 10px;border:1px dashed #d8e0eb;border-radius:8px;background:#f8fafc}.transfer-physical-note strong{color:#142139;font-size:12px}.result-field input{font-weight:850;color:#142139}@media(max-width:1000px){.adjustment-head{display:none}.adjustment-row{align-items:stretch;padding:12px;background:#fff;border:1px solid #e3e9f2;border-radius:8px;grid-template-columns:1fr}.line-field span{display:block}.remove-line{justify-self:start;width:auto}.condition-transfer-fields{grid-template-columns:1fr}}
 </style>

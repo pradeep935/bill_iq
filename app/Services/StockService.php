@@ -732,18 +732,22 @@ class StockService
             $pair = $rows[$pairIndex];
             $out = ((float) $row['stock_out'] > 0) ? $row : $pair;
             $in = ((float) $row['stock_in'] > 0) ? $row : $pair;
-            $condition = $in['stock_status'] === 'saleable' ? $out['stock_status'] : $in['stock_status'];
+            $fromCondition = $out['stock_status'] ?: 'saleable';
+            $toCondition = $in['stock_status'] ?: 'saleable';
+            $condition = $toCondition === 'saleable' ? $fromCondition : $toCondition;
             $skip[$pairIndex] = true;
 
             $merged[] = [
                 ...$row,
-                'transaction_label' => $this->stockTransactionLabel($condition === 'damaged' ? 'damaged_stock' : 'stock_reclassification_out'),
-                'movement' => 'Saleable -> ' . str($condition)->replace('_', ' ')->title()->toString(),
+                'transaction_label' => $toCondition === 'saleable'
+                    ? 'Stock Adjustment / Recovery'
+                    : $this->stockTransactionLabel($condition === 'damaged' ? 'damaged_stock' : 'stock_reclassification_out'),
+                'movement' => str($fromCondition)->replace('_', ' ')->title() . ' -> ' . str($toCondition)->replace('_', ' ')->title(),
                 'stock_in' => 0,
                 'stock_out' => max((float) $out['stock_out'], (float) $in['stock_in']),
                 'quantity' => max((float) $out['stock_out'], (float) $in['stock_in']),
-                'running_balance' => $out['saleable_balance'],
-                'saleable_balance' => $out['saleable_balance'],
+                'running_balance' => $toCondition === 'saleable' ? $in['saleable_balance'] : $out['saleable_balance'],
+                'saleable_balance' => $toCondition === 'saleable' ? $in['saleable_balance'] : $out['saleable_balance'],
                 'physical_balance' => max($row['physical_balance'], $pair['physical_balance']),
             ];
         }

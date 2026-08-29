@@ -244,7 +244,7 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
                                 <td><span class="badge" :class="supplier.status">{{ supplier.deleted_at ? 'deleted' : supplier.status }}</span></td>
                                 <td>
                                     <div class="row-actions">
-                                        <RowActionMenu :open="openActionMenuId === supplier.id" :show-view="false" more-label="Actions" more-title="Supplier actions" placement="top" @toggle="toggleActionMenu(supplier)">
+                                        <RowActionMenu :open="openActionMenuId === supplier.id" :show-view="false" more-label="Actions" more-title="Supplier actions" @toggle="toggleActionMenu(supplier)">
                                             <button v-if="!supplier.deleted_at" type="button" @click="editSupplier(supplier); closeActionMenu()">Edit</button>
                                             <button v-if="!supplier.deleted_at" type="button" class="danger" @click="deleteSupplier(supplier); closeActionMenu()">Delete</button>
                                             <button v-else type="button" @click="restoreSupplier(supplier); closeActionMenu()">Restore</button>

@@ -48,7 +48,11 @@ const reason = reactive({ id: null, reason_code: '', reason_name: '', default_di
 
 const filteredWarehouses = (branchId) => !branchId ? refs.value.warehouses : refs.value.warehouses.filter((w) => Number(w.branch_id || 0) === Number(branchId));
 const money = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const qty = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const qty = (v) => {
+    const number = Number.isFinite(Number(v)) ? Number(v) : 0;
+    const isWhole = Math.abs(number - Math.round(number)) < 0.0004;
+    return number.toLocaleString('en-IN', { minimumFractionDigits: isWhole ? 0 : 3, maximumFractionDigits: 3 });
+};
 const capture = (e) => { errors.value = e?.response?.data?.errors || { form: [e?.response?.data?.message || 'Unable to save.'] }; };
 const clearErrors = () => { errors.value = {}; };
 const selectedReason = computed(() => refs.value.reasons.find((r) => Number(r.id) === Number(adjustment.adjustment_reason_id)));

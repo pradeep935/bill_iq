@@ -1,9 +1,17 @@
 <template>
   <div class="summary-grid">
-    <div v-for="card in cards" :key="card.label" class="summary-card">
+    <button
+      v-for="card in cards"
+      :key="card.label"
+      type="button"
+      class="summary-card"
+      :class="{ clickable: card.filter }"
+      :disabled="!card.filter"
+      @click="card.filter && emit('select', card)"
+    >
       <span>{{ card.label }}</span>
       <strong>{{ card.value }}</strong>
-    </div>
+    </button>
   </div>
 </template>
 
@@ -11,6 +19,7 @@
 defineProps({
   cards: { type: Array, default: () => [] },
 });
+const emit = defineEmits(['select']);
 </script>
 
 <style scoped>
@@ -26,7 +35,22 @@ defineProps({
   border: 1px solid #dfe6ef;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(25, 50, 84, .035);
+  cursor: default;
   padding: 16px 18px;
+  text-align: left;
+}
+
+.summary-card.clickable {
+  cursor: pointer;
+}
+
+.summary-card.clickable:hover {
+  border-color: #c7d5f6;
+  box-shadow: 0 10px 28px rgba(36, 87, 214, .08);
+}
+
+.summary-card:disabled {
+  opacity: 1;
 }
 
 .summary-card span {

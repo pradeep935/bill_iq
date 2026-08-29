@@ -57,6 +57,7 @@ const detailedColumns = [
     { key: 'warehouse', label: 'Warehouse' },
     { key: 'batch', label: 'Batch' },
     { key: 'quantity_on_hand', label: 'Saleable Qty' },
+    { key: 'non_saleable_quantity', label: 'Non-Saleable Qty' },
     { key: 'reserved_quantity', label: 'Reserved Qty' },
     { key: 'quantity_available', label: 'Available Qty' },
     { key: 'unit', label: 'Unit' },
@@ -97,7 +98,7 @@ const summaryCards = computed(() => [
     { label: 'Total Products', value: dashboard.value.total_products },
     { label: 'Physical Quantity', value: formatQty(dashboard.value.total_quantity) },
     { label: 'Saleable Quantity', value: formatQty(dashboard.value.saleable_quantity) },
-    { label: 'Non-Saleable Quantity', value: formatQty(dashboard.value.non_saleable_quantity) },
+    { label: 'Non-Saleable Quantity', value: formatQty(dashboard.value.non_saleable_quantity), filter: 'non_saleable' },
     { label: 'Saleable Value', value: `Rs. ${formatMoney(dashboard.value.inventory_value)}` },
     { label: 'Low Stock Products', value: dashboard.value.low_stock_products },
     { label: 'Out of Stock Products', value: dashboard.value.out_of_stock_products },
@@ -137,8 +138,25 @@ const clearFilters = () => {
     };
 };
 
+const setStockFilter = (card) => {
+    if (!card?.filter) return;
+    filters.value.stock_status = card.filter;
+};
+
 const valueFor = (row, column) => {
-    if (['quantity_on_hand', 'reserved_quantity', 'quantity_available'].includes(column.key)) return formatQty(row[column.key]);
+    if ([
+        'physical_quantity',
+        'quantity_on_hand',
+        'saleable_quantity',
+        'non_saleable_quantity',
+        'reserved_quantity',
+        'quantity_available',
+        'damaged_quantity',
+        'expired_quantity',
+        'defective_quantity',
+        'quarantined_quantity',
+        'lost_quantity',
+    ].includes(column.key)) return formatQty(row[column.key]);
     if (column.key === 'branch_count') return row.branch_count || '-';
     if (['average_cost', 'stock_value'].includes(column.key)) return `Rs. ${formatMoney(row[column.key])}`;
     if (column.key === 'last_updated') return formatDate(row.last_updated);
@@ -274,11 +292,60 @@ const exportRows = (type = 'csv') => {
     URL.revokeObjectURL(url);
 };
 
-const formatQty = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const conditionMeta = [
+    { key: 'damaged', label: 'Damaged' },
+    { key: 'expired', label: 'Expired' },
+    { key: 'defective', label: 'Defective' },
+    { key: 'quarantined', label: 'Quarantined' },
+    { key: 'lost', label: 'Lost' },
+];
+
+const numericValue = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+const hasQty = (value) => Math.abs(numericValue(value)) > 0.0004;
+const formatQty = (value) => {
+    const number = numericValue(value);
+    const isWhole = Math.abs(number - Math.round(number)) < 0.0004;
+    return number.toLocaleString('en-IN', {
+        minimumFractionDigits: isWhole ? 0 : 3,
+        maximumFractionDigits: 3,
+    });
+};
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const formatDate = (value) => value ? new Date(value).toLocaleString('en-IN') : '-';
-const formatDateTime = (value) => value ? new Date(value).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+const formatDateTime = (value) => value
+    ? new Intl.DateTimeFormat('en-IN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+    }).format(new Date(value)).replace(/\b(am|pm)\b/i, (match) => match.toUpperCase())
+    : '-';
+const formatDate = formatDateTime;
 const conditionQty = (row, condition) => Number((row.condition_stock || []).find((item) => item.condition === condition)?.quantity || 0);
+const visibleConditionStock = (rows = []) => rows.filter((row) => hasQty(row.quantity));
+const conditionClass = (condition) => `condition-${String(condition || 'saleable').replaceAll('_', '-')}`;
+const rowConditionMetrics = (row, includeValue = false) => {
+    const metrics = [
+        { label: 'Physical', value: formatQty(row.physical_quantity) },
+        { label: 'Saleable', value: formatQty(row.saleable_quantity ?? row.quantity_on_hand) },
+    ];
+
+    conditionMeta.forEach((condition) => {
+        const quantity = conditionQty(row, condition.key) || row[`${condition.key}_quantity`];
+        if (hasQty(quantity)) {
+            metrics.push({ label: condition.label, value: formatQty(quantity), tone: condition.key });
+        }
+    });
+
+    metrics.push({ label: 'Available', value: formatQty(row.available_quantity ?? row.quantity_available) });
+
+    if (includeValue) {
+        metrics.push({ label: 'Value', value: `Rs. ${formatMoney(row.value ?? row.stock_value)}` });
+    }
+
+    return metrics;
+};
 const movementText = (row) => {
     if (Number(row.stock_in || 0)) return `In to ${row.stock_status || 'saleable'}`;
     if (Number(row.stock_out || 0)) return `Out from ${row.stock_status || 'saleable'}`;
@@ -313,7 +380,7 @@ onMounted(async () => {
                 <button type="button" title="Export PDF" @click="exportRows('pdf')">PDF</button>
             </div>
 
-            <ListingSummaryCards :cards="summaryCards" />
+            <ListingSummaryCards :cards="summaryCards" @select="setStockFilter" />
 
             <ListingCard>
                 <div class="listing-toolbar">
@@ -347,12 +414,15 @@ onMounted(async () => {
                         <input v-model="filters.batch" type="text" placeholder="Batch" />
                         <select v-model="filters.stock_status">
                             <option value="">All Stock</option>
-                            <option value="in">In Stock</option>
+                            <option value="saleable">Saleable</option>
+                            <option value="non_saleable">Non-Saleable</option>
+                            <option value="damaged">Damaged</option>
+                            <option value="expired">Expired</option>
+                            <option value="defective">Defective</option>
+                            <option value="quarantined">Quarantined</option>
+                            <option value="lost">Lost</option>
                             <option value="low">Low Stock</option>
                             <option value="out">Out of Stock</option>
-                            <option value="negative">Negative Stock</option>
-                            <option value="reserved">Reserved</option>
-                            <option value="over">Over Stock</option>
                         </select>
                         <select v-model="filters.per_page">
                             <option :value="15">15 / page</option>
@@ -428,7 +498,17 @@ onMounted(async () => {
                         <div v-else>
                             <div class="mini-row" v-for="(stock, index) in expandedDetails[row.product_id].warehouse_stock" :key="index">
                                 <span>{{ stock.branch }} / {{ stock.warehouse }}</span>
-                                <strong>Physical {{ formatQty(stock.physical_quantity) }} | Saleable {{ formatQty(stock.saleable_quantity) }} | Rs. {{ formatMoney(stock.value) }}</strong>
+                                <div class="metric-chip-row">
+                                    <span
+                                        v-for="metric in rowConditionMetrics(stock, true)"
+                                        :key="`${index}-${metric.label}`"
+                                        class="metric-chip"
+                                        :class="metric.tone ? conditionClass(metric.tone) : ''"
+                                    >
+                                        <small>{{ metric.label }}</small>
+                                        <strong>{{ metric.value }}</strong>
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -490,11 +570,47 @@ onMounted(async () => {
                     </div>
                     <template v-if="detailMode === 'view'">
                         <h3>Stock By Condition</h3>
-                        <div class="mini-row" v-for="row in selectedDetail.condition_stock" :key="row.condition"><span>{{ row.label }}</span><strong>{{ formatQty(row.quantity) }} {{ selectedDetail.product.unit }}</strong></div>
+                        <div class="condition-grid">
+                            <div
+                                v-for="row in visibleConditionStock(selectedDetail.condition_stock)"
+                                :key="row.condition"
+                                class="condition-card"
+                                :class="conditionClass(row.condition)"
+                            >
+                                <span>{{ row.label }}</span>
+                                <strong>{{ formatQty(row.quantity) }} {{ selectedDetail.product.unit }}</strong>
+                            </div>
+                        </div>
                         <h3>Branch-wise Stock</h3>
-                        <div class="mini-row stock-breakdown-row" v-for="row in selectedDetail.branch_stock" :key="row.branch_id"><span>{{ row.branch }}</span><strong>Physical {{ formatQty(row.physical_quantity) }} | Saleable {{ formatQty(row.saleable_quantity) }} | Damaged {{ formatQty(conditionQty(row, 'damaged')) }} | Rs. {{ formatMoney(row.value) }}</strong></div>
+                        <div class="mini-row stock-breakdown-row" v-for="row in selectedDetail.branch_stock" :key="row.branch_id">
+                            <span>{{ row.branch }}</span>
+                            <div class="metric-chip-row">
+                                <span
+                                    v-for="metric in rowConditionMetrics(row, true)"
+                                    :key="`${row.branch_id}-${metric.label}`"
+                                    class="metric-chip"
+                                    :class="metric.tone ? conditionClass(metric.tone) : ''"
+                                >
+                                    <small>{{ metric.label }}</small>
+                                    <strong>{{ metric.value }}</strong>
+                                </span>
+                            </div>
+                        </div>
                         <h3>Warehouse-wise Stock</h3>
-                        <div class="mini-row stock-breakdown-row" v-for="(row, index) in selectedDetail.warehouse_stock" :key="index"><span>{{ row.branch }} / {{ row.warehouse }}</span><strong>Physical {{ formatQty(row.physical_quantity) }} | Saleable {{ formatQty(row.saleable_quantity) }} | Damaged {{ formatQty(conditionQty(row, 'damaged')) }} | Available {{ formatQty(row.available_quantity) }}</strong></div>
+                        <div class="mini-row stock-breakdown-row" v-for="(row, index) in selectedDetail.warehouse_stock" :key="index">
+                            <span>{{ row.branch }} / {{ row.warehouse }}</span>
+                            <div class="metric-chip-row">
+                                <span
+                                    v-for="metric in rowConditionMetrics(row)"
+                                    :key="`${index}-${metric.label}`"
+                                    class="metric-chip"
+                                    :class="metric.tone ? conditionClass(metric.tone) : ''"
+                                >
+                                    <small>{{ metric.label }}</small>
+                                    <strong>{{ metric.value }}</strong>
+                                </span>
+                            </div>
+                        </div>
                     </template>
                     <template v-if="detailMode === 'view' || detailMode === 'ledger'">
                         <h3>Recent Stock Movements / Stock Ledger</h3>
@@ -613,6 +729,19 @@ onMounted(async () => {
 .mini-row { align-items: center; border-bottom: 1px solid #edf1f5; display: flex; gap: 16px; justify-content: space-between; padding: 9px 0; }
 .mini-row span { color: #536179; }
 .mini-row strong { color: #142139; }
+.metric-chip-row { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 620px; }
+.metric-chip { align-items: center; background: #f8fafc; border: 1px solid #e1e7ef; border-radius: 7px; display: inline-flex; gap: 6px; min-height: 30px; padding: 5px 8px; }
+.metric-chip small { color: #7b879c; font-size: 10px; font-weight: 850; text-transform: uppercase; }
+.metric-chip strong { color: #142139; font-size: 11px; margin: 0; white-space: nowrap; }
+.condition-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.condition-card { background: #f8fafc; border: 1px solid #e1e7ef; border-left: 4px solid #2457d6; border-radius: 8px; padding: 10px; }
+.condition-card span { color: #536179; display: block; font-size: 11px; font-weight: 850; text-transform: uppercase; }
+.condition-card strong { color: #142139; display: block; font-size: 14px; margin-top: 4px; }
+.condition-damaged { border-color: #ffd9b3; border-left-color: #d97706; background: #fff8ed; }
+.condition-expired { border-color: #fecaca; border-left-color: #dc2626; background: #fff5f5; }
+.condition-defective { border-color: #fde68a; border-left-color: #ca8a04; background: #fffbeb; }
+.condition-quarantined { border-color: #bfdbfe; border-left-color: #2563eb; background: #eff6ff; }
+.condition-lost { border-color: #cbd5e1; border-left-color: #475569; background: #f8fafc; }
 .detail-empty { color: #8490a2; padding: 12px 0; text-align: center; }
 .ledger-table-wrap { border: 1px solid #e1e7ef; border-radius: 8px; overflow-x: auto; }
 .ledger-table { border-collapse: collapse; min-width: 620px; width: 100%; }
@@ -637,5 +766,5 @@ onMounted(async () => {
 .ledger-table tr:last-child td { border-bottom: 0; }
 .ledger-table .numeric { text-align: right; white-space: nowrap; }
 @media (max-width: 1100px) { .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .listing-toolbar { flex-direction: column; } }
-@media (max-width: 720px) { .summary-grid, .detail-cards, .detail-grid { grid-template-columns: 1fr; } .filter-group > * { width: 100%; } }
+@media (max-width: 720px) { .summary-grid, .detail-cards, .detail-grid { grid-template-columns: 1fr; } .filter-group > * { width: 100%; } .mini-row, .stock-breakdown-row { align-items: flex-start; flex-direction: column; } .metric-chip-row { justify-content: flex-start; } }
 </style>

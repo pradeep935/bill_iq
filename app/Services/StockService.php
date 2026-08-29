@@ -1066,7 +1066,20 @@ class StockService
 
     private function applyStockStatusFilter($query, string $status): void
     {
-        if ($status === 'out') {
+        $conditionColumns = [
+            'saleable' => 'quantity_on_hand',
+            'damaged' => 'damaged_quantity',
+            'expired' => 'expired_quantity',
+            'defective' => 'defective_quantity',
+            'quarantined' => 'quarantined_quantity',
+            'lost' => 'lost_quantity',
+        ];
+
+        if ($status === 'non_saleable') {
+            $query->where('non_saleable_quantity', '>', 0);
+        } elseif (array_key_exists($status, $conditionColumns)) {
+            $query->where($conditionColumns[$status], '>', 0);
+        } elseif ($status === 'out') {
             $query->where('quantity_on_hand', '=', 0);
         } elseif ($status === 'low') {
             $query->where('quantity_available', '>', 0)

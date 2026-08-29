@@ -75,7 +75,7 @@ class StockService
         $scopeWithoutCondition = $scope;
         unset($scopeWithoutCondition['stock_status']);
 
-        return $this->quantityQuery($scopeWithoutCondition)->value('available_quantity') ?: 0.0;
+        return $this->quantityQuery(array_merge($scopeWithoutCondition, ['exclude_stock_statuses' => ['lost']]))->value('available_quantity') ?: 0.0;
     }
 
     public function getActiveReservedQuantity(array $scope, ?int $excludeReferenceId = null, bool $lock = false): float
@@ -277,6 +277,9 @@ class StockService
             ? $filters['sort']
             : 'product_name';
         $direction = ($filters['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+        $imageSelect = DB::connection()->getDriverName() === 'mysql'
+            ? "product_id, SUBSTRING_INDEX(GROUP_CONCAT(image_path ORDER BY is_primary DESC, sort_order ASC, id DESC SEPARATOR '|'), '|', 1) as image_path"
+            : 'product_id, MIN(image_path) as image_path';
 
         $query = StockLedger::query()
             ->join('products', 'products.id', '=', 'stock_ledgers.product_id')
@@ -302,7 +305,7 @@ class StockService
             )
             ->leftJoinSub(
                 DB::table('product_images')
-                    ->selectRaw("product_id, SUBSTRING_INDEX(GROUP_CONCAT(image_path ORDER BY is_primary DESC, sort_order ASC, id DESC SEPARATOR '|'), '|', 1) as image_path")
+                    ->selectRaw($imageSelect)
                     ->whereNull('deleted_at')
                     ->groupBy('product_id'),
                 'product_images',
@@ -392,9 +395,9 @@ class StockService
                 MAX(stock_ledgers.updated_at) as last_updated,
                 MAX(stock_ledgers.created_by) as created_by_id,
                 NULL as updated_by_id,
-                COALESCE(SUM(stock_ledgers.quantity_in), 0) - COALESCE(SUM(stock_ledgers.quantity_out), 0) as physical_quantity,
+                COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") <> "lost" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as physical_quantity,
                 COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as saleable_quantity,
-                COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") <> "saleable" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as non_saleable_quantity,
+                COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") NOT IN ("saleable", "lost") THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as non_saleable_quantity,
                 COALESCE(SUM(CASE WHEN stock_ledgers.stock_status = "damaged" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as damaged_quantity,
                 COALESCE(SUM(CASE WHEN stock_ledgers.stock_status = "expired" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as expired_quantity,
                 COALESCE(SUM(CASE WHEN stock_ledgers.stock_status = "defective" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as defective_quantity,
@@ -1070,7 +1073,8 @@ class StockService
             ->when(!empty($scope['product_id']), fn (Builder $q) => $q->where('product_id', $scope['product_id']))
             ->when(array_key_exists('product_variant_id', $scope), fn (Builder $q) => $q->where('product_variant_id', $scope['product_variant_id']))
             ->when(array_key_exists('batch_id', $scope), fn (Builder $q) => $q->where('batch_id', $scope['batch_id']))
-            ->when(array_key_exists('stock_status', $scope), fn (Builder $q) => $q->where('stock_status', $scope['stock_status']));
+            ->when(array_key_exists('stock_status', $scope), fn (Builder $q) => $q->where('stock_status', $scope['stock_status']))
+            ->when(!empty($scope['exclude_stock_statuses']), fn (Builder $q) => $q->whereNotIn('stock_status', (array) $scope['exclude_stock_statuses']));
     }
 
     private function applyStockStatusFilter($query, string $status): void

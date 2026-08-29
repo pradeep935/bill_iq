@@ -499,8 +499,8 @@ class InventoryControlService
             'ledger' => $ledger,
             'movement_report' => $movementReport,
             'inventory_valuation' => $this->stock->summary(array_merge($filters, ['view_mode' => 'summary', 'per_page' => 100]))->getCollection()->values(),
-            'branch_report' => DB::table('stock_ledgers')->leftJoin('branches', 'branches.id', '=', 'stock_ledgers.branch_id')->where('stock_ledgers.business_id', $businessId)->selectRaw('COALESCE(branches.name, "Unassigned") as branch_name, SUM(quantity_in) as quantity_in, SUM(quantity_out) as quantity_out, SUM(quantity_in - quantity_out) as quantity_available, SUM(stock_value) as stock_value')->groupBy('branches.name')->orderBy('branches.name')->get(),
-            'warehouse_report' => DB::table('stock_ledgers')->leftJoin('warehouses', 'warehouses.id', '=', 'stock_ledgers.warehouse_id')->where('stock_ledgers.business_id', $businessId)->selectRaw('COALESCE(warehouses.name, "Unassigned") as warehouse_name, SUM(quantity_in) as quantity_in, SUM(quantity_out) as quantity_out, SUM(quantity_in - quantity_out) as quantity_available, SUM(stock_value) as stock_value')->groupBy('warehouses.name')->orderBy('warehouses.name')->get(),
+            'branch_report' => DB::table('stock_ledgers')->leftJoin('branches', 'branches.id', '=', 'stock_ledgers.branch_id')->where('stock_ledgers.business_id', $businessId)->selectRaw($this->conditionReportSelect('COALESCE(branches.name, "Unassigned") as branch_name'))->groupBy('branches.name')->orderBy('branches.name')->get(),
+            'warehouse_report' => DB::table('stock_ledgers')->leftJoin('warehouses', 'warehouses.id', '=', 'stock_ledgers.warehouse_id')->where('stock_ledgers.business_id', $businessId)->selectRaw($this->conditionReportSelect('COALESCE(warehouses.name, "Unassigned") as warehouse_name'))->groupBy('warehouses.name')->orderBy('warehouses.name')->get(),
             'adjustment_report' => StockAdjustmentVoucher::query()->with(['branch', 'warehouse', 'reason'])->where('business_id', $businessId)->latest('id')->limit(100)->get(),
             'transfer_report' => StockTransferVoucher::query()->with(['sourceWarehouse', 'destinationWarehouse'])->where('business_id', $businessId)->latest('id')->limit(100)->get(),
             'variance_report' => StockCountSession::query()->with('items.product')->where('business_id', $businessId)->latest('id')->limit(50)->get(),
@@ -751,6 +751,23 @@ class InventoryControlService
     private function availableStock(array $scope): float
     {
         return round($this->stock->getCurrentStock($scope) - $this->reservedStock($scope), 3);
+    }
+
+    private function conditionReportSelect(string $labelSelect): string
+    {
+        return $labelSelect . ',
+            SUM(quantity_in) as quantity_in,
+            SUM(quantity_out) as quantity_out,
+            SUM(CASE WHEN COALESCE(stock_status, "saleable") <> "lost" THEN quantity_in - quantity_out ELSE 0 END) as physical_quantity,
+            SUM(CASE WHEN COALESCE(stock_status, "saleable") = "saleable" THEN quantity_in - quantity_out ELSE 0 END) as saleable_quantity,
+            SUM(CASE WHEN COALESCE(stock_status, "saleable") NOT IN ("saleable", "lost") THEN quantity_in - quantity_out ELSE 0 END) as non_saleable_quantity,
+            SUM(CASE WHEN stock_status = "damaged" THEN quantity_in - quantity_out ELSE 0 END) as damaged_quantity,
+            SUM(CASE WHEN stock_status = "expired" THEN quantity_in - quantity_out ELSE 0 END) as expired_quantity,
+            SUM(CASE WHEN stock_status = "defective" THEN quantity_in - quantity_out ELSE 0 END) as defective_quantity,
+            SUM(CASE WHEN stock_status = "quarantined" THEN quantity_in - quantity_out ELSE 0 END) as quarantined_quantity,
+            SUM(CASE WHEN stock_status = "lost" THEN quantity_in - quantity_out ELSE 0 END) as lost_quantity,
+            SUM(quantity_in - quantity_out) as quantity_available,
+            SUM(stock_value) as stock_value';
     }
 
     private function outTypeForCondition(?string $condition): string

@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
     return {
         base: resolveViteBase(env),
         build: {
-            emptyOutDir: false,
+            emptyOutDir: true,
         },
         plugins: [
             laravel({

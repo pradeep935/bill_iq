@@ -129,8 +129,10 @@ const adjustmentSummary = computed(() => {
     return { products: adjustment.items.filter((item) => item.product_id).length, increases, decreases, net: increases - decreases };
 });
 const kpiCards = computed(() => [
-    { key: 'stock-value', label: 'Stock Value', value: `Rs. ${money(dashboard.value.total_stock_value)}`, note: 'Current inventory valuation' },
+    { key: 'stock-value', label: 'Saleable Value', value: `Rs. ${money(dashboard.value.total_stock_value)}`, note: 'Saleable inventory valuation' },
     { key: 'saleable', label: 'Saleable Stock', value: qty(dashboard.value.total_saleable_quantity), note: 'Units available for sale' },
+    { key: 'damaged', label: 'Damaged Stock', value: qty(dashboard.value.damaged_quantity), note: 'Physically present, not saleable', tone: 'danger', action: () => openCurrentStock('damaged') },
+    { key: 'physical', label: 'Physical Stock', value: qty(dashboard.value.physical_quantity), note: 'Saleable plus condition stock', tone: 'info', action: () => openCurrentStock('physical') },
     { key: 'low', label: 'Low Stock', value: dashboard.value.low_stock_items || 0, note: 'Below reorder level', tone: 'warning', action: () => openCurrentStock('low_stock') },
     { key: 'out', label: 'Out of Stock', value: dashboard.value.out_of_stock_items || 0, note: 'Products needing replenishment', tone: 'danger', action: () => openCurrentStock('out_of_stock') },
     { key: 'near-expiry', label: 'Near Expiry', value: dashboard.value.near_expiry_items || 0, note: 'Next 30 days', tone: 'warning', action: () => openBatchReport('near_expiry') },
@@ -143,6 +145,7 @@ const inventoryAlerts = computed(() => [
     { label: 'Low Stock', products: dashboard.value.low_stock_items || 0, action: () => openCurrentStock('low_stock') },
     { label: 'Near Expiry', products: dashboard.value.near_expiry_items || 0, action: () => openBatchReport('near_expiry') },
     { label: 'Expired', products: dashboard.value.expired_items || 0, action: () => openBatchReport('expired') },
+    { label: 'Damaged Stock', products: dashboard.value.damaged_quantity || 0, action: () => openCurrentStock('damaged') },
     { label: 'Pending Transfers', products: transfers.value.filter((row) => ['draft', 'approved', 'dispatched', 'partially_received'].includes(row.status)).length, action: () => switchTab('transfers') },
     { label: 'Count Variances', products: counts.value.filter((row) => row.status !== 'posted' && (row.items || []).some((item) => Number(item.variance_quantity || 0) !== 0)).length, action: () => switchTab('counts') },
 ].filter((alert) => Number(alert.products || 0) > 0));
@@ -203,7 +206,7 @@ const registerRows = computed(() => [
         productName: productNameForMovement(row),
         userName: userNameForMovement(row),
     })),
-    ...adjustments.value.map((row) => ({ id: `adjustment-${row.id}`, raw: row, type: row.source || 'stock_adjustment', number: row.voucher_number, date: row.adjustment_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: Number(row.total_quantity_in || 0) + Number(row.total_quantity_out || 0), status: row.status, action: 'adjustment', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
+    ...adjustments.value.map((row) => ({ id: `adjustment-${row.id}`, raw: row, type: row.reason?.reason_name || row.source || 'stock_adjustment', number: row.voucher_number, date: row.adjustment_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: Number(row.total_quantity_in || 0) + Number(row.total_quantity_out || 0), status: row.status, action: 'adjustment', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
     ...transfers.value.map((row) => ({ id: `transfer-${row.id}`, raw: row, type: row.transfer_type || 'stock_transfer', number: row.voucher_number, date: row.transfer_date, branch: `${row.source_branch?.name || '-'} -> ${row.destination_branch?.name || '-'}`, warehouse: `${row.source_warehouse?.name || '-'} -> ${row.destination_warehouse?.name || '-'}`, items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Number(item.approved_quantity || item.requested_quantity || 0), 0) || 0, status: row.status, action: 'transfer', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
     ...counts.value.map((row) => ({ id: `count-${row.id}`, raw: row, type: 'stock_count', number: row.session_number, date: row.count_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Math.abs(Number(item.variance_quantity || 0)), 0) || 0, status: row.status, action: 'count', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
     ...movements.value.map((row) => ({ id: `movement-${row.id}`, raw: row, type: 'location_movement', number: row.voucher_number, date: row.movement_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0, status: row.status, action: 'location', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),

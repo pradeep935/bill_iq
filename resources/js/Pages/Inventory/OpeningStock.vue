@@ -6,6 +6,7 @@ import AppToast from '../../Components/Common/AppToast.vue';
 import CrudTable from '../../Components/Common/CrudTable.vue';
 import DrawerField from '../../Components/Common/DrawerField.vue';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
+import { formatInventoryDateTime, formatInventoryQty } from './Shared/formatters';
 
 defineProps({
     page: { type: String, default: 'opening-stock' },
@@ -499,6 +500,8 @@ const formatMoney = (value) => Number(value || 0).toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
 });
+const formatQty = formatInventoryQty;
+const formatDateTime = formatInventoryDateTime;
 
 const printVoucher = (voucher) => {
     viewingVoucher.value = voucher;
@@ -566,7 +569,7 @@ onMounted(async () => {
                 </div>
                 <div class="summary-card">
                     <span>Total Quantity</span>
-                    <strong>{{ totalQuantity.toFixed(3) }}</strong>
+                    <strong>{{ formatQty(totalQuantity) }}</strong>
                 </div>
                 <div class="summary-card">
                     <span>Total Stock Value</span>
@@ -655,7 +658,7 @@ onMounted(async () => {
                         <div class="product-information">
                             <strong>{{ item.product_name }}</strong>
                             <span>{{ item.sku || '-' }}</span>
-                            <span>Current: {{ Number(item.current_stock || 0).toFixed(3) }} {{ item.unit || 'PCS' }}</span>
+                            <span>Current: {{ formatQty(item.current_stock) }} {{ item.unit || 'PCS' }}</span>
                         </div>
                     </template>
 
@@ -813,12 +816,12 @@ onMounted(async () => {
                 </header>
 
                 <div class="voucher-detail-grid">
-                    <div><span>Date</span><strong>{{ detailVoucher.opening_date || '-' }}</strong></div>
+                    <div><span>Date</span><strong>{{ formatDateTime(detailVoucher.opening_date) }}</strong></div>
                     <div><span>Status</span><strong>{{ detailVoucher.status || '-' }}</strong></div>
                     <div><span>Branch</span><strong>{{ detailVoucher.branch || '-' }}</strong></div>
                     <div><span>Warehouse</span><strong>{{ detailVoucher.warehouse || 'Default' }}</strong></div>
                     <div><span>Items</span><strong>{{ detailVoucher.items_count || 0 }}</strong></div>
-                    <div><span>Quantity</span><strong>{{ Number(detailVoucher.total_quantity || 0).toFixed(3) }}</strong></div>
+                    <div><span>Quantity</span><strong>{{ formatQty(detailVoucher.total_quantity) }}</strong></div>
                     <div><span>Value</span><strong>Rs. {{ formatMoney(detailVoucher.total_value) }}</strong></div>
                     <div><span>Posted By</span><strong>{{ detailVoucher.posted_by || '-' }}</strong></div>
                 </div>
@@ -850,7 +853,7 @@ onMounted(async () => {
                                 </td>
                                 <td>{{ item.variant || 'Default' }}</td>
                                 <td>{{ item.batch_no || '-' }}</td>
-                                <td>{{ Number(item.quantity || 0).toFixed(3) }} {{ item.unit || 'PCS' }}</td>
+                                <td>{{ formatQty(item.quantity) }} {{ item.unit || 'PCS' }}</td>
                                 <td>Rs. {{ formatMoney(item.purchase_cost) }}</td>
                                 <td>{{ item.mrp !== null && item.mrp !== undefined ? `Rs. ${formatMoney(item.mrp)}` : '-' }}</td>
                                 <td>{{ item.warehouse_location || '-' }}</td>
@@ -879,12 +882,12 @@ onMounted(async () => {
             </header>
             <div class="print-meta">
                 <span>Voucher: <strong>{{ printableVoucher.voucher_number || 'Draft' }}</strong></span>
-                <span>Date: <strong>{{ printableVoucher.opening_date }}</strong></span>
+                <span>Date: <strong>{{ formatDateTime(printableVoucher.opening_date) }}</strong></span>
                 <span>Branch: <strong>{{ printableVoucher.branch || '-' }}</strong></span>
                 <span>Warehouse: <strong>{{ printableVoucher.warehouse || '-' }}</strong></span>
                 <span>Created By: <strong>{{ printableVoucher.created_by || '-' }}</strong></span>
                 <span>Posted By: <strong>{{ printableVoucher.posted_by || '-' }}</strong></span>
-                <span>Posting Date: <strong>{{ printableVoucher.posted_at || '-' }}</strong></span>
+                <span>Posting Date: <strong>{{ formatDateTime(printableVoucher.posted_at) }}</strong></span>
                 <span>Remarks: <strong>{{ printableVoucher.remarks || '-' }}</strong></span>
             </div>
             <table>
@@ -892,17 +895,17 @@ onMounted(async () => {
                 <tbody>
                     <tr v-for="(item, index) in printableVoucher.items || []" :key="index">
                         <td>{{ item.product || item.product_name }}</td>
-                        <td>{{ item.quantity }}</td>
+                        <td>{{ formatQty(item.quantity) }}</td>
                         <td>{{ item.unit || 'PCS' }}</td>
                         <td>{{ item.batch_no || '-' }}</td>
-                        <td>{{ item.expiry_date || '-' }}</td>
+                        <td>{{ formatDateTime(item.expiry_date) }}</td>
                         <td>Rs. {{ formatMoney(item.purchase_cost) }}</td>
                         <td>Rs. {{ formatMoney(item.stock_value || Number(item.quantity || 0) * Number(item.purchase_cost || 0)) }}</td>
                     </tr>
                 </tbody>
             </table>
             <footer>
-                <span>Total Quantity: <strong>{{ Number(printableVoucher.total_quantity || 0).toFixed(3) }}</strong></span>
+                <span>Total Quantity: <strong>{{ formatQty(printableVoucher.total_quantity) }}</strong></span>
                 <span>Total Stock Value: <strong>Rs. {{ formatMoney(printableVoucher.total_value) }}</strong></span>
             </footer>
         </section>

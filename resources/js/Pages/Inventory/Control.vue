@@ -4,6 +4,7 @@ import Layout from '../Layout.vue';
 import InventoryApi from './InventoryApi';
 import AppToast from '../../Components/Common/AppToast.vue';
 import TableLoadingState from '../../Components/Common/TableLoadingState.vue';
+import { formatInventoryDateTime, formatInventoryQty } from './Shared/formatters';
 
 const props = defineProps({ page: { type: String, default: 'inventory' }, title: { type: String, default: 'Inventory Control' }, initial_tab: { type: String, default: 'dashboard' } });
 
@@ -48,11 +49,7 @@ const reason = reactive({ id: null, reason_code: '', reason_name: '', default_di
 
 const filteredWarehouses = (branchId) => !branchId ? refs.value.warehouses : refs.value.warehouses.filter((w) => Number(w.branch_id || 0) === Number(branchId));
 const money = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const qty = (v) => {
-    const number = Number.isFinite(Number(v)) ? Number(v) : 0;
-    const isWhole = Math.abs(number - Math.round(number)) < 0.0004;
-    return number.toLocaleString('en-IN', { minimumFractionDigits: isWhole ? 0 : 3, maximumFractionDigits: 3 });
-};
+const qty = formatInventoryQty;
 const capture = (e) => { errors.value = e?.response?.data?.errors || { form: [e?.response?.data?.message || 'Unable to save.'] }; };
 const clearErrors = () => { errors.value = {}; };
 const selectedReason = computed(() => refs.value.reasons.find((r) => Number(r.id) === Number(adjustment.adjustment_reason_id)));
@@ -86,20 +83,7 @@ const countDifference = (item) => Number(item.counted_quantity || 0) - Number(it
 const adjustmentQty = (item) => Math.abs(countDifference(item));
 
 const labelize = (value) => String(value || '-').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-const formatIndianDateTime = (value) => {
-    if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat('en-IN', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: 'Asia/Kolkata',
-    }).format(date);
-};
+const formatIndianDateTime = formatInventoryDateTime;
 const movementOptions = [{ value: 'in', label: 'Stock In' }, { value: 'out', label: 'Stock Out' }];
 const conditionOptions = [
     { value: 'saleable', label: 'Saleable' },
@@ -454,7 +438,7 @@ onMounted(load);
                 <div class="line-head count-head"><span>Product</span><span>System Qty</span><span>Physical Qty</span><span>Difference</span><span>Adjustment Qty</span><span>Cost</span><span>Location</span><span>Status</span><span></span></div>
                 <div v-for="(item, i) in count.items" :key="i" class="line-grid count-row"><select v-model="item.product_id" @change="refreshLineStock(item, count)"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select><input :value="qty(item.system_quantity || item.current_stock)" disabled /><input v-model.number="item.counted_quantity" type="number" step="0.001" placeholder="Physical" /><input :value="qty(countDifference(item))" disabled /><input :value="qty(adjustmentQty(item))" disabled /><input v-model.number="item.unit_cost" type="number" step="0.01" placeholder="Cost" /><input v-model="item.warehouse_location" placeholder="Location" /><select v-model="item.review_status"><option>pending</option><option>accepted</option><option>rejected</option><option>recount_required</option></select><button @click="count.items.splice(i,1)" :disabled="count.items.length === 1">Remove</button></div>
                 <div class="actions"><button @click="addRow(count.items, { product_id: '', system_quantity: 0, counted_quantity: 0, unit_cost: 0, warehouse_location: '', review_status: 'accepted' })">Add Line</button><button :disabled="saving" @click="saveCount('draft')">Save</button><button :disabled="saving" @click="saveCount('approved')">Approve</button></div>
-                <div class="table-wrapper"><table><tbody><tr v-for="c in counts" :key="c.id"><td>{{ c.session_number }}</td><td>{{ c.count_date }}</td><td>{{ c.warehouse?.name }}</td><td>{{ c.status }}</td><td><button @click="postVariance(c)">Post Variance</button></td></tr></tbody></table></div>
+                <div class="table-wrapper"><table><tbody><tr v-for="c in counts" :key="c.id"><td>{{ c.session_number }}</td><td>{{ formatIndianDateTime(c.count_date) }}</td><td>{{ c.warehouse?.name }}</td><td>{{ c.status }}</td><td><button @click="postVariance(c)">Post Variance</button></td></tr></tbody></table></div>
             </section>
 
             <section v-if="tab === 'transfers'" class="panel">
@@ -473,7 +457,7 @@ onMounted(load);
                 <div class="actions"><button :disabled="saving" @click="saveWarehouseLocation">{{ locationMaster.id ? 'Update Location' : 'Save Location' }}</button></div>
                 <div class="table-wrapper"><table><thead><tr><th>Warehouse</th><th>Zone</th><th>Aisle</th><th>Rack</th><th>Shelf</th><th>Bin</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="loc in warehouseLocations" :key="loc.id"><td>{{ loc.warehouse?.name || '-' }}</td><td>{{ loc.zone || '-' }}</td><td>{{ loc.aisle || '-' }}</td><td>{{ loc.rack }}</td><td>{{ loc.shelf }}</td><td>{{ loc.bin }}</td><td><span class="status-pill">{{ loc.status }}</span></td><td><button @click="editWarehouseLocation(loc)">Edit</button></td></tr><tr v-if="!warehouseLocations.length"><td colspan="8" class="empty">No warehouse locations found.</td></tr></tbody></table></div>
                 <div class="section-head secondary"><div><h2>Location Movement History</h2><p>Posted movement vouchers stay immutable and remain available for audit.</p></div></div>
-                <div class="table-wrapper"><table><thead><tr><th>Voucher</th><th>Warehouse</th><th>Date</th><th>Items</th><th>Status</th></tr></thead><tbody><tr v-for="m in movements" :key="m.id"><td>{{ m.voucher_number }}</td><td>{{ m.warehouse?.name }}</td><td>{{ m.movement_date }}</td><td>{{ m.items?.length || 0 }}</td><td>{{ m.status }}</td></tr></tbody></table></div>
+                <div class="table-wrapper"><table><thead><tr><th>Voucher</th><th>Warehouse</th><th>Date</th><th>Items</th><th>Status</th></tr></thead><tbody><tr v-for="m in movements" :key="m.id"><td>{{ m.voucher_number }}</td><td>{{ m.warehouse?.name }}</td><td>{{ formatIndianDateTime(m.movement_date) }}</td><td>{{ m.items?.length || 0 }}</td><td>{{ m.status }}</td></tr></tbody></table></div>
             </section>
 
             <section v-if="tab === 'reasons'" class="panel">

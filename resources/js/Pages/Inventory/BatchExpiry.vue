@@ -5,6 +5,7 @@ import InventoryApi from './InventoryApi';
 import AppToast from '../../Components/Common/AppToast.vue';
 import TableLoadingState from '../../Components/Common/TableLoadingState.vue';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
+import { formatInventoryDateTime, formatInventoryQty } from './Shared/formatters';
 
 defineProps({
     page: { type: String, default: 'inventory-batches' },
@@ -96,7 +97,8 @@ const reportRows = computed(() => reports.value?.[activeReport.value] || []);
 let timer = null;
 
 const money = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const qty = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const qty = formatInventoryQty;
+const dateTime = formatInventoryDateTime;
 const showToast = (message, type = 'success', title = 'Batch & Expiry') => { toast.value = { title, message, type }; };
 const rowActionId = (row) => `${row.id}-${row.branch_id || 0}-${row.warehouse_id || 0}`;
 const toggleActionMenu = (row) => {
@@ -343,7 +345,7 @@ onMounted(async () => {
                                 <td>{{ row.condition_status || 'saleable' }}</td>
                                 <td>{{ row.branch_name || '-' }}</td>
                                 <td>{{ row.warehouse_name || '-' }}</td>
-                                <td>{{ row.expiry_date || '-' }}</td>
+                                <td>{{ dateTime(row.expiry_date) }}</td>
                                 <td>{{ row.days_remaining ?? '-' }}</td>
                                 <td>{{ qty(row.quantity_on_hand) }}</td>
                                 <td>{{ qty(availableQty(row)) }}</td>
@@ -388,7 +390,7 @@ onMounted(async () => {
                 <div class="table-wrapper">
                     <table>
                         <thead><tr><th>Batch</th><th>Product</th><th>Branch</th><th>Warehouse</th><th>Expiry</th><th>Qty</th><th>Cost</th><th>Value</th><th>Status</th></tr></thead>
-                        <tbody><tr v-for="(row, index) in reportRows" :key="index"><td>{{ row.batch_number }}</td><td>{{ row.product_name }}</td><td>{{ row.branch_name || '-' }}</td><td>{{ row.warehouse_name || '-' }}</td><td>{{ row.expiry_date || '-' }}</td><td>{{ qty(row.quantity_on_hand || row.quantity) }}</td><td>Rs. {{ money(row.average_cost) }}</td><td>Rs. {{ money(row.batch_value) }}</td><td>{{ statusLabel(row.batch_status) }}</td></tr><tr v-if="!reportRows.length"><td colspan="9" class="empty">No report rows found.</td></tr></tbody>
+                        <tbody><tr v-for="(row, index) in reportRows" :key="index"><td>{{ row.batch_number }}</td><td>{{ row.product_name }}</td><td>{{ row.branch_name || '-' }}</td><td>{{ row.warehouse_name || '-' }}</td><td>{{ dateTime(row.expiry_date) }}</td><td>{{ qty(row.quantity_on_hand || row.quantity) }}</td><td>Rs. {{ money(row.average_cost) }}</td><td>Rs. {{ money(row.batch_value) }}</td><td>{{ statusLabel(row.batch_status) }}</td></tr><tr v-if="!reportRows.length"><td colspan="9" class="empty">No report rows found.</td></tr></tbody>
                     </table>
                 </div>
             </section>
@@ -404,8 +406,8 @@ onMounted(async () => {
                         </div>
                         <p class="detail-sub">{{ selected.batch.sku || '-' }} | {{ selected.batch.barcode || '-' }} | Condition: {{ selected.batch.condition_status || 'saleable' }}</p>
                         <div class="detail-grid">
-                            <div><span>MFG</span><strong>{{ selected.batch.mfg_date || '-' }}</strong></div>
-                            <div><span>Expiry</span><strong>{{ selected.batch.expiry_date || '-' }}</strong></div>
+                            <div><span>MFG</span><strong>{{ dateTime(selected.batch.mfg_date) }}</strong></div>
+                            <div><span>Expiry</span><strong>{{ dateTime(selected.batch.expiry_date) }}</strong></div>
                             <div><span>Current Qty</span><strong>{{ qty(selected.summary.current_qty) }}</strong></div>
                             <div><span>Reserved</span><strong>{{ qty(selected.summary.reserved_qty) }}</strong></div>
                             <div><span>Available</span><strong>{{ qty(selected.summary.available_qty) }}</strong></div>
@@ -422,12 +424,12 @@ onMounted(async () => {
                             <div><span>Produced</span><strong>{{ qty(selected.summary.produced_quantity) }}</strong></div>
                         </div>
                         <h3>Batch Ledger</h3>
-                        <div class="table-wrapper"><table><thead><tr><th>Date</th><th>Voucher</th><th>Type</th><th>Branch</th><th>Warehouse</th><th>IN</th><th>OUT</th><th>Balance</th><th>Cost</th><th>User</th></tr></thead><tbody><tr v-for="line in selected.ledger" :key="line.id"><td>{{ line.date }}</td><td>{{ line.voucher }}</td><td>{{ line.type }}</td><td>{{ line.branch || '-' }}</td><td>{{ line.warehouse || '-' }}</td><td>{{ qty(line.in) }}</td><td>{{ qty(line.out) }}</td><td>{{ qty(line.balance) }}</td><td>Rs. {{ money(line.cost) }}</td><td>{{ line.user }}</td></tr><tr v-if="!selected.ledger.length"><td colspan="10" class="empty">No ledger movement found.</td></tr></tbody></table></div>
+                        <div class="table-wrapper"><table><thead><tr><th>Date</th><th>Voucher</th><th>Type</th><th>Branch</th><th>Warehouse</th><th>IN</th><th>OUT</th><th>Balance</th><th>Cost</th><th>User</th></tr></thead><tbody><tr v-for="line in selected.ledger" :key="line.id"><td>{{ dateTime(line.date) }}</td><td>{{ line.voucher }}</td><td>{{ line.type }}</td><td>{{ line.branch || '-' }}</td><td>{{ line.warehouse || '-' }}</td><td>{{ qty(line.in) }}</td><td>{{ qty(line.out) }}</td><td>{{ qty(line.balance) }}</td><td>Rs. {{ money(line.cost) }}</td><td>{{ line.user }}</td></tr><tr v-if="!selected.ledger.length"><td colspan="10" class="empty">No ledger movement found.</td></tr></tbody></table></div>
                         <h3>Timeline</h3>
                         <div class="timeline">
                             <div v-for="event in selected.history" :key="event.id" class="timeline-item">
                                 <strong>{{ statusLabel(event.event_type) }}</strong>
-                                <span>{{ event.date }} | {{ event.user }} | {{ event.remarks || '-' }}</span>
+                                <span>{{ dateTime(event.date) }} | {{ event.user }} | {{ event.remarks || '-' }}</span>
                             </div>
                             <div v-if="!selected.history?.length" class="empty">No audit events found.</div>
                         </div>

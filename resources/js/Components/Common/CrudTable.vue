@@ -1,6 +1,6 @@
 <template>
-  <div class="crud-table-wrap">
-    <table class="crud-table">
+  <div class="crud-table-wrap" :class="wrapClass">
+    <table class="crud-table" :class="tableClass">
       <thead>
         <tr>
           <th v-if="selectable" class="crud-select-column">
@@ -82,6 +82,8 @@ const props = defineProps({
   loadingText: { type: String, default: 'Loading records...' },
   loadingDescription: { type: String, default: 'Please wait while data is loaded.' },
   emptyText: { type: String, default: 'No records found.' },
+  wrapClass: { type: [String, Array, Object], default: '' },
+  tableClass: { type: [String, Array, Object], default: '' },
 });
 
 defineEmits(['edit', 'delete', 'toggle-select-all', 'toggle-row']);

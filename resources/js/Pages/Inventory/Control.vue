@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 import InventoryApi from './InventoryApi';
 import AppToast from '../../Components/Common/AppToast.vue';
@@ -63,6 +63,7 @@ const applyReason = () => {
         item.direction = selectedReason.value.default_direction;
         item.condition_status = selectedReason.value.default_condition_status || 'saleable';
     });
+    refreshAdjustmentStocks();
 };
 const voucherTypes = [
     { key: 'stock_adjustment', label: 'Stock Adjustment', tab: 'voucher', source: 'manual', direction: 'out', adjustment_type: 'decrease' },
@@ -125,6 +126,7 @@ const adjustmentTypeLabel = (value) => optionLabel(movementOptions, value);
 const conditionName = (value) => optionLabel(conditionOptions, value);
 const lineSourceQty = (item) => Number(item.source_condition_quantity ?? 0);
 const lineDestinationQty = (item) => Number(item.destination_condition_quantity ?? 0);
+const lineStockCondition = (item) => item.condition_status || 'saleable';
 const conditionTransferResult = (item) => {
     if (!item.product_id || !isConditionTransferLine(item)) return '';
     const qtyValue = Number(item.adjustment_quantity || 0);
@@ -235,6 +237,7 @@ const setVoucherType = () => {
             item.condition_status = type.condition_status || item.condition_status || 'saleable';
             if (item.direction === 'transfer') adjustment.adjustment_type = 'condition_transfer';
         });
+        refreshAdjustmentStocks();
     }
 };
 
@@ -368,8 +371,10 @@ const exportRows = (format) => {
 };
 const refreshLineStock = async (item, source = adjustment) => {
     if (!item.product_id || !source.warehouse_id) return;
-    const value = await InventoryApi.inventoryValuation({ branch_id: source.branch_id || '', warehouse_id: source.warehouse_id, product_id: item.product_id, product_variant_id: item.product_variant_id || '', batch_id: item.batch_id || item.source_batch_id || '' });
-    item.current_stock = Number(value.available || value.quantity || 0);
+    const params = { branch_id: source.branch_id || '', warehouse_id: source.warehouse_id, product_id: item.product_id, product_variant_id: item.product_variant_id || '', batch_id: item.batch_id || item.source_batch_id || '' };
+    if (source === adjustment && !isConditionTransferLine(item)) params.stock_status = lineStockCondition(item);
+    const value = await InventoryApi.inventoryValuation(params);
+    item.current_stock = Number(value.quantity || value.available || 0);
     if (source === count) item.system_quantity = Number(value.quantity || value.available || 0);
     if (!Number(item.unit_cost || 0)) item.unit_cost = Number(value.average_cost || 0);
     if (source === adjustment) await refreshConditionQuantities(item);
@@ -388,6 +393,28 @@ const refreshConditionQuantities = async (item) => {
     item.physical_quantity = Number(physicalValue.quantity || 0);
     item.saleable_quantity = Number(saleableValue.quantity || saleableValue.available || 0);
 };
+const refreshAdjustmentStocks = async () => {
+    await Promise.all(adjustment.items.map((item) => refreshLineStock(item)));
+};
+const onAdjustmentTypeChange = async () => {
+    if (adjustment.adjustment_type === 'condition_transfer') {
+        await Promise.all(adjustment.items.map((item) => {
+            item.direction = 'transfer';
+            return onLineDirectionChange(item);
+        }));
+        return;
+    }
+
+    if (adjustment.adjustment_type === 'increase') {
+        adjustment.items.forEach((item) => { item.direction = 'in'; });
+    }
+
+    if (adjustment.adjustment_type === 'decrease') {
+        adjustment.items.forEach((item) => { item.direction = 'out'; });
+    }
+
+    await refreshAdjustmentStocks();
+};
 const onLineDirectionChange = async (item) => {
     if (isConditionTransferLine(item)) {
         adjustment.adjustment_type = 'condition_transfer';
@@ -404,7 +431,12 @@ const onLineDirectionChange = async (item) => {
         adjustment.adjustment_type = 'mixed';
         adjustment.source = 'manual';
     }
+    await refreshLineStock(item);
 };
+const onLineConditionChange = async (item) => {
+    await refreshLineStock(item);
+};
+watch(() => [adjustment.branch_id, adjustment.warehouse_id, adjustment.adjustment_type], refreshAdjustmentStocks);
 onMounted(load);
 </script>
 
@@ -456,7 +488,7 @@ onMounted(load);
 
             <section v-if="!loading && tab === 'voucher'" class="panel">
                 <div class="section-head"><div><span>STOCK ADJUSTMENT WORKFLOW</span><h2>New {{ currentVoucherType.label }}</h2><p>Draft does not update stock. Posting creates immutable stock ledger entries.</p></div><span class="status-pill">{{ labelize(adjustment.status) }}</span></div>
-                <div class="form-grid"><input value="Auto generated on save" disabled /><select v-model="adjustment.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="adjustment.warehouse_id"><option value="">Source Warehouse</option><option v-for="w in filteredWarehouses(adjustment.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="adjustment.adjustment_date" type="date" /><select v-model="adjustment.adjustment_reason_id" @change="applyReason"><option value="">Select Reason</option><option v-for="r in refs.reasons" :key="r.id" :value="r.id">{{ reasonDisplayName(r) }}</option></select><select v-model="adjustment.adjustment_type" @change="adjustment.adjustment_type === 'condition_transfer' && adjustment.items.forEach((item) => { item.direction = 'transfer'; onLineDirectionChange(item); })"><option value="increase">Stock In</option><option value="decrease">Stock Out</option><option value="condition_transfer">Condition Transfer</option><option value="mixed">Mixed</option></select><input :value="currentVoucherType.label" disabled /><textarea v-model="adjustment.remarks" placeholder="Remarks / reason note"></textarea></div>
+                <div class="form-grid"><input value="Auto generated on save" disabled /><select v-model="adjustment.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="adjustment.warehouse_id"><option value="">Source Warehouse</option><option v-for="w in filteredWarehouses(adjustment.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="adjustment.adjustment_date" type="date" /><select v-model="adjustment.adjustment_reason_id" @change="applyReason"><option value="">Select Reason</option><option v-for="r in refs.reasons" :key="r.id" :value="r.id">{{ reasonDisplayName(r) }}</option></select><select v-model="adjustment.adjustment_type" @change="onAdjustmentTypeChange"><option value="increase">Stock In</option><option value="decrease">Stock Out</option><option value="condition_transfer">Condition Transfer</option><option value="mixed">Mixed</option></select><input :value="currentVoucherType.label" disabled /><textarea v-model="adjustment.remarks" placeholder="Remarks / reason note"></textarea></div>
                 <div class="hint-grid">
                     <span>Voucher number is generated when the voucher is saved.</span>
                     <span>Branch and source warehouse decide where stock is affected.</span>
@@ -475,7 +507,7 @@ onMounted(load);
                     <label v-if="!isConditionTransferLine(item)" class="line-field"><span>Unit Cost</span><input v-model.number="item.unit_cost" type="number" step="0.01" placeholder="Unit Cost" /></label>
                     <div v-else class="line-field transfer-physical-note"><span>Physical</span><strong>{{ item.product_id ? `${qty(item.physical_quantity)} -> ${qty(item.physical_quantity)}` : '-' }}</strong></div>
                     <label class="line-field"><span>Location</span><input v-model="item.warehouse_location" placeholder="Location" /></label>
-                    <label v-if="!isConditionTransferLine(item)" class="line-field"><span>Condition</span><select v-model="item.condition_status"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+                    <label v-if="!isConditionTransferLine(item)" class="line-field"><span>Condition</span><select v-model="item.condition_status" @change="onLineConditionChange(item)"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
                     <div v-else class="condition-transfer-fields">
                         <label class="line-field"><span>From</span><select v-model="item.source_condition_status" @change="refreshConditionQuantities(item)"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
                         <label class="line-field"><span>To</span><select v-model="item.destination_condition_status" @change="item.condition_status = item.destination_condition_status; refreshConditionQuantities(item)"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>

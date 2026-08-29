@@ -219,20 +219,6 @@ class InventoryControlService
                     continue;
                 }
 
-                if ($item->direction === 'out' && $this->isConditionReclassification($condition, $voucher)) {
-                    $this->stock->decreaseStock($basePayload + [
-                        'transaction_type' => 'stock_reclassification_out',
-                        'stock_status' => 'saleable',
-                        'remarks' => trim(($item->reason ?: $voucher->remarks ?: '') . ' Saleable -> ' . str($condition)->replace('_', ' ')->title()),
-                    ]);
-                    $this->stock->increaseStock($basePayload + [
-                        'transaction_type' => 'stock_reclassification_in',
-                        'stock_status' => $condition,
-                        'remarks' => trim(($item->reason ?: $voucher->remarks ?: '') . ' Saleable -> ' . str($condition)->replace('_', ' ')->title()),
-                    ]);
-                    continue;
-                }
-
                 $payload = $basePayload + [
                     'transaction_type' => $item->direction === 'in' ? 'stock_adjustment_in' : $this->outTypeForCondition($condition),
                     'stock_status' => $condition,
@@ -542,16 +528,13 @@ class InventoryControlService
             $product = $this->assertProduct($row['product_id']);
             $scope = $this->scope($data['branch_id'] ?? null, $data['warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['batch_id'] ?? null);
             $isConditionTransfer = ($data['adjustment_type'] ?? null) === 'condition_transfer' || ($row['direction'] ?? null) === 'transfer';
-            $sourceCondition = $row['source_condition_status'] ?? ($isConditionTransfer ? ($row['condition_status'] ?? 'saleable') : 'saleable');
-            $destinationCondition = $row['destination_condition_status'] ?? ($row['condition_status'] ?? 'saleable');
-            $systemQty = $this->stock->getCurrentStock($scope);
+            $lineCondition = $row['condition_status'] ?? 'saleable';
+            $sourceCondition = $isConditionTransfer ? ($row['source_condition_status'] ?? $lineCondition) : $lineCondition;
+            $destinationCondition = $row['destination_condition_status'] ?? $lineCondition;
+            $systemQty = $this->stock->getConditionStock($scope, $isConditionTransfer ? $sourceCondition : $lineCondition);
             $sourceQty = $this->stock->getConditionStock($scope, $sourceCondition);
             if (($row['direction'] ?? null) === 'out') {
-                $outScope = $scope;
-                if ($this->isPhysicalConditionOut($row['condition_status'] ?? 'saleable', $data)) {
-                    $outScope['stock_status'] = $row['condition_status'] ?? 'saleable';
-                }
-                $this->stock->validateAvailableStock($outScope, (float) $row['adjustment_quantity']);
+                $this->stock->validateAvailableStock(array_merge($scope, ['stock_status' => $lineCondition]), (float) $row['adjustment_quantity']);
             }
             return array_merge($row, [
                 'unit_id' => $row['unit_id'] ?? $product->unit_id ?? null,
@@ -621,7 +604,21 @@ class InventoryControlService
                         "items.$index.adjustment_quantity" => 'Only ' . round($sourceQty, 3) . ' units are available in ' . str($sourceCondition)->replace('_', ' ')->title() . ' stock.',
                     ]);
                 }
-            } elseif ($reason && ($item['direction'] ?? null) !== $reason->default_direction) {
+            } elseif (($item['direction'] ?? null) === 'out') {
+                $condition = $item['condition_status'] ?? 'saleable';
+                $available = $this->stock->getConditionStock(
+                    $this->scope($data['branch_id'] ?? null, $data['warehouse_id'] ?? null, (int) ($item['product_id'] ?? 0), $item['product_variant_id'] ?? null, $item['batch_id'] ?? null),
+                    $condition
+                );
+
+                if ($available + 0.0004 < $quantity) {
+                    throw ValidationException::withMessages([
+                        "items.$index.adjustment_quantity" => 'Only ' . round($available, 3) . ' units are available in ' . str($condition)->replace('_', ' ')->title() . ' stock.',
+                    ]);
+                }
+            }
+
+            if (!$isConditionTransfer && $reason && ($item['direction'] ?? null) !== $reason->default_direction) {
                 throw ValidationException::withMessages(["items.$index.direction" => "{$reason->reason_name} requires {$reason->default_direction} movement."]);
             }
 

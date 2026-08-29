@@ -36,11 +36,10 @@ const props = defineProps({
   placement: { type: String, default: 'auto' },
 });
 
-defineEmits(['view', 'toggle']);
-
 const moreButton = ref(null);
 const menu = ref(null);
 const menuStyle = ref({});
+const emit = defineEmits(['view', 'toggle']);
 
 const positionMenu = async () => {
   if (!props.open) return;
@@ -76,12 +75,28 @@ const positionMenu = async () => {
 
 watch(() => props.open, positionMenu);
 
+const closeFromOutside = (event) => {
+  if (!props.open) return;
+  const target = event.target;
+  if (moreButton.value?.contains(target) || menu.value?.contains(target)) return;
+  emit('toggle');
+};
+
+const closeFromKeyboard = (event) => {
+  if (!props.open || event.key !== 'Escape') return;
+  emit('toggle');
+};
+
 onMounted(() => {
+  document.addEventListener('pointerdown', closeFromOutside);
+  document.addEventListener('keydown', closeFromKeyboard);
   window.addEventListener('resize', positionMenu);
   window.addEventListener('scroll', positionMenu, true);
 });
 
 onUnmounted(() => {
+  document.removeEventListener('pointerdown', closeFromOutside);
+  document.removeEventListener('keydown', closeFromKeyboard);
   window.removeEventListener('resize', positionMenu);
   window.removeEventListener('scroll', positionMenu, true);
 });

@@ -127,6 +127,9 @@ const conditionName = (value) => optionLabel(conditionOptions, value);
 const lineSourceQty = (item) => Number(item.source_condition_quantity ?? 0);
 const lineDestinationQty = (item) => Number(item.destination_condition_quantity ?? 0);
 const lineStockCondition = (item) => item.condition_status || 'saleable';
+const syncOutboundCondition = (item) => {
+    if (!isConditionTransferLine(item) && item.direction === 'out') item.source_condition_status = lineStockCondition(item);
+};
 const conditionTransferResult = (item) => {
     if (!item.product_id || !isConditionTransferLine(item)) return '';
     const qtyValue = Number(item.adjustment_quantity || 0);
@@ -371,6 +374,7 @@ const exportRows = (format) => {
 };
 const refreshLineStock = async (item, source = adjustment) => {
     if (!item.product_id || !source.warehouse_id) return;
+    if (source === adjustment) syncOutboundCondition(item);
     const params = { branch_id: source.branch_id || '', warehouse_id: source.warehouse_id, product_id: item.product_id, product_variant_id: item.product_variant_id || '', batch_id: item.batch_id || item.source_batch_id || '' };
     if (source === adjustment && !isConditionTransferLine(item)) params.stock_status = lineStockCondition(item);
     const value = await InventoryApi.inventoryValuation(params);
@@ -431,9 +435,11 @@ const onLineDirectionChange = async (item) => {
         adjustment.adjustment_type = 'mixed';
         adjustment.source = 'manual';
     }
+    syncOutboundCondition(item);
     await refreshLineStock(item);
 };
 const onLineConditionChange = async (item) => {
+    syncOutboundCondition(item);
     await refreshLineStock(item);
 };
 watch(() => [adjustment.branch_id, adjustment.warehouse_id, adjustment.adjustment_type], refreshAdjustmentStocks);

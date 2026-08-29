@@ -228,6 +228,40 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->assertLedgerOut($voucher, 'damaged', 2);
     }
 
+    public function test_stock_out_uses_source_condition_when_condition_status_is_stale(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 321);
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'damaged', 6);
+
+        $voucher = app(InventoryControlService::class)->saveAdjustment([
+            'branch_id' => $branch,
+            'warehouse_id' => $warehouse,
+            'adjustment_date' => now()->toDateString(),
+            'adjustment_reason_id' => null,
+            'adjustment_type' => 'decrease',
+            'source' => 'manual',
+            'status' => 'posted',
+            'remarks' => 'OTHER_OUT',
+            'items' => [[
+                'product_id' => $product->id,
+                'product_variant_id' => null,
+                'batch_id' => null,
+                'unit_id' => null,
+                'adjustment_quantity' => 2,
+                'direction' => 'out',
+                'unit_cost' => 10,
+                'warehouse_location' => null,
+                'condition_status' => 'saleable',
+                'source_condition_status' => 'damaged',
+                'reason' => null,
+            ]],
+        ]);
+
+        $this->assertConditionBalances($businessId, $branch, $warehouse, $product->id, saleable: 321, damaged: 4, physical: 325);
+        $this->assertLedgerOut($voucher, 'damaged', 2);
+    }
+
     public function test_damaged_to_saleable_condition_transfer_keeps_physical_stock(): void
     {
         [$businessId, $product, $branch, $warehouse] = $this->fixture();

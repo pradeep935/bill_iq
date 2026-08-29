@@ -190,8 +190,8 @@ class InventoryControlService
             if ($this->stockAlreadyPosted(StockAdjustmentVoucher::class, $voucher->id)) return $voucher;
             $this->validateAdjustmentVoucher($voucher->toArray(), $voucher->items->map(fn ($item) => $item->toArray())->all(), true);
             foreach ($voucher->items as $item) {
-                $condition = $item->condition_status ?: 'saleable';
                 $isConditionTransfer = $voucher->adjustment_type === 'condition_transfer' || $item->direction === 'transfer';
+                $condition = $this->adjustmentLineCondition($item->toArray(), $isConditionTransfer);
                 $basePayload = $this->stockPayload($voucher, $item, [
                     'reference_type' => StockAdjustmentVoucher::class,
                     'reference_id' => $voucher->id,
@@ -528,7 +528,7 @@ class InventoryControlService
             $product = $this->assertProduct($row['product_id']);
             $scope = $this->scope($data['branch_id'] ?? null, $data['warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['batch_id'] ?? null);
             $isConditionTransfer = ($data['adjustment_type'] ?? null) === 'condition_transfer' || ($row['direction'] ?? null) === 'transfer';
-            $lineCondition = $row['condition_status'] ?? 'saleable';
+            $lineCondition = $this->adjustmentLineCondition($row, $isConditionTransfer);
             $sourceCondition = $isConditionTransfer ? ($row['source_condition_status'] ?? $lineCondition) : $lineCondition;
             $destinationCondition = $row['destination_condition_status'] ?? $lineCondition;
             $systemQty = $this->stock->getConditionStock($scope, $isConditionTransfer ? $sourceCondition : $lineCondition);
@@ -540,8 +540,8 @@ class InventoryControlService
                 'unit_id' => $row['unit_id'] ?? $product->unit_id ?? null,
                 'system_quantity' => $systemQty,
                 'adjustment_value' => round((float) $row['adjustment_quantity'] * (float) $row['unit_cost'], 2),
-                'condition_status' => $destinationCondition,
-                'source_condition_status' => $isConditionTransfer ? $sourceCondition : null,
+                'condition_status' => $isConditionTransfer ? $destinationCondition : $lineCondition,
+                'source_condition_status' => ($isConditionTransfer || ($row['direction'] ?? null) === 'out') ? $sourceCondition : null,
                 'destination_condition_status' => $isConditionTransfer ? $destinationCondition : null,
                 'source_condition_quantity' => round((float) $sourceQty, 3),
             ]);
@@ -605,7 +605,7 @@ class InventoryControlService
                     ]);
                 }
             } elseif (($item['direction'] ?? null) === 'out') {
-                $condition = $item['condition_status'] ?? 'saleable';
+                $condition = $this->adjustmentLineCondition($item, false);
                 $available = $this->stock->getConditionStock(
                     $this->scope($data['branch_id'] ?? null, $data['warehouse_id'] ?? null, (int) ($item['product_id'] ?? 0), $item['product_variant_id'] ?? null, $item['batch_id'] ?? null),
                     $condition
@@ -759,6 +759,19 @@ class InventoryControlService
         if ($condition === 'expired') return 'expired_stock';
         if ($condition === 'lost') return 'lost_stock';
         return 'stock_adjustment_out';
+    }
+
+    private function adjustmentLineCondition(array $item, bool $isConditionTransfer = false): string
+    {
+        if ($isConditionTransfer) {
+            return $item['destination_condition_status'] ?? $item['condition_status'] ?? 'saleable';
+        }
+
+        if (($item['direction'] ?? null) === 'out' && !empty($item['source_condition_status'])) {
+            return $item['source_condition_status'];
+        }
+
+        return $item['condition_status'] ?? 'saleable';
     }
 
     private function isConditionReclassification(?string $condition, StockAdjustmentVoucher $voucher): bool

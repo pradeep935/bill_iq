@@ -9,6 +9,7 @@ import DispatchTable from '../../Components/Dispatch/DispatchTable.vue';
 import FilterPanel from '../../Components/Dispatch/FilterPanel.vue';
 import StatusBadge from '../../Components/Dispatch/StatusBadge.vue';
 import SummaryCards from '../../Components/Dispatch/SummaryCards.vue';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 const props = defineProps({
   page: String,
@@ -34,6 +35,7 @@ const drawerOpen = ref(false);
 const drawerLoading = ref(false);
 const drawerDispatch = ref(null);
 const barcodeScan = ref('');
+const openActionMenuId = ref(null);
 let timer = null;
 
 const filterForm = reactive({
@@ -65,6 +67,14 @@ const qty = (value) => Number(value || 0).toLocaleString('en-IN', { maximumFract
 const money = (value) => Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const urlWithId = (template, id) => template?.replace('__ID__', id);
 const tabLabel = (tab) => ({ sale_dispatch: 'Sale Dispatch', manual_outward: 'Manual Outward', active: 'Active', expiring: 'Expiring', consumed: 'Consumed', released: 'Released', ledger: 'History' }[tab] || tab.replaceAll('_', ' '));
+const rowActionId = (row) => `${row.row_type || activeTab.value}-${row.id}`;
+const toggleActionMenu = (row) => {
+  const id = rowActionId(row);
+  openActionMenuId.value = openActionMenuId.value === id ? null : id;
+};
+const closeActionMenu = () => {
+  openActionMenuId.value = null;
+};
 
 const summaryCards = computed(() => reservedMode.value ? [
   { label: 'Active Reservations', value: props.summary?.active_reservations || 0, tab: 'active' },
@@ -313,14 +323,16 @@ watch(() => [filterForm.per_page, filterForm.date_from, filterForm.date_to, filt
           <template #cell-status="{ value }"><StatusBadge :status="value" /></template>
           <template #actions="{ row }">
             <div class="row-actions">
-              <button v-if="!reservedMode" type="button" title="Open dispatch details" @click="openDrawer(row)">Details</button>
-              <button v-if="reservedMode && ['active','expiring'].includes(activeTab)" type="button" title="Extend reservation expiry" @click="extendReservation(row)">Extend</button>
-              <button v-if="reservedMode && ['active','expiring'].includes(activeTab)" type="button" title="Release reservation" @click="releaseReservation(row)">Release</button>
-              <button v-if="!reservedMode && row.row_type === 'challan' && ['draft','ready','ready_to_pick','pending'].includes(row.dispatch_status)" type="button" title="Start picking" @click="postWorkflow(row, 'pick', 'Picking started.')">Pick</button>
-              <button v-if="!reservedMode && row.row_type === 'challan' && ['picking'].includes(row.dispatch_status)" type="button" title="Mark packed" @click="postWorkflow(row, 'pack', 'Packing completed.')">Pack</button>
-              <button v-if="!reservedMode && row.row_type === 'challan' && row.dispatch_status === 'packed'" type="button" title="Post manual stock outward" @click="postWorkflow(row, 'dispatch', 'Manual stock outward posted.')">Post Outward</button>
-              <button v-if="!reservedMode && row.row_type === 'challan' && row.dispatch_status === 'dispatched'" type="button" title="Mark delivered" @click="postWorkflow(row, 'deliver', 'Delivery completed.')">Deliver</button>
-              <button v-if="!reservedMode && row.row_type === 'challan' && !['dispatched','delivered','cancelled'].includes(row.dispatch_status)" type="button" class="danger" title="Cancel dispatch" @click="postWorkflow(row, 'cancel', 'Dispatch cancelled.')">Cancel</button>
+              <RowActionMenu :open="openActionMenuId === rowActionId(row)" :show-view="false" more-label="Actions" more-title="Stock operation actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu">
+                <button v-if="!reservedMode" type="button" title="Open dispatch details" @click="openDrawer(row); closeActionMenu()">Details</button>
+                <button v-if="reservedMode && ['active','expiring'].includes(activeTab)" type="button" title="Extend reservation expiry" @click="extendReservation(row); closeActionMenu()">Extend</button>
+                <button v-if="reservedMode && ['active','expiring'].includes(activeTab)" type="button" title="Release reservation" @click="releaseReservation(row); closeActionMenu()">Release</button>
+                <button v-if="!reservedMode && row.row_type === 'challan' && ['draft','ready','ready_to_pick','pending'].includes(row.dispatch_status)" type="button" title="Start picking" @click="postWorkflow(row, 'pick', 'Picking started.'); closeActionMenu()">Pick</button>
+                <button v-if="!reservedMode && row.row_type === 'challan' && ['picking'].includes(row.dispatch_status)" type="button" title="Mark packed" @click="postWorkflow(row, 'pack', 'Packing completed.'); closeActionMenu()">Pack</button>
+                <button v-if="!reservedMode && row.row_type === 'challan' && row.dispatch_status === 'packed'" type="button" title="Post manual stock outward" @click="postWorkflow(row, 'dispatch', 'Manual stock outward posted.'); closeActionMenu()">Post Outward</button>
+                <button v-if="!reservedMode && row.row_type === 'challan' && row.dispatch_status === 'dispatched'" type="button" title="Mark delivered" @click="postWorkflow(row, 'deliver', 'Delivery completed.'); closeActionMenu()">Deliver</button>
+                <button v-if="!reservedMode && row.row_type === 'challan' && !['dispatched','delivered','cancelled'].includes(row.dispatch_status)" type="button" class="danger" title="Cancel dispatch" @click="postWorkflow(row, 'cancel', 'Dispatch cancelled.'); closeActionMenu()">Cancel</button>
+              </RowActionMenu>
             </div>
           </template>
         </DispatchTable>

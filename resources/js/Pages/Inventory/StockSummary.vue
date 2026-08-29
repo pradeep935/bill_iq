@@ -403,6 +403,7 @@ onMounted(async () => {
                             view-title="View product inventory"
                             @view="viewProduct(row)"
                             @toggle="toggleActionMenu(row)"
+                            @close="closeActionMenu"
                         >
                             <button type="button" title="Open stock ledger for this product, branch and warehouse" @click="showLedger(row)">Stock Ledger</button>
                             <button v-if="row.batch_required || row.batch_id" type="button" title="View batch-wise stock" @click="showBatch(row)">Batch Details</button>

@@ -5,6 +5,7 @@ import SalesApi from './SalesApi';
 import FilterCard from '../../Components/Billing/FilterCard.vue';
 import InvoiceHeader from '../../Components/Billing/InvoiceHeader.vue';
 import SummaryCard from '../../Components/Billing/SummaryCard.vue';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 const props = defineProps({ page: { type: String, default: 'sales-returns' }, title: { type: String, default: 'Sales Returns' } });
 
@@ -23,6 +24,7 @@ const errors = ref({});
 const invoiceSearchRef = ref(null);
 const refundPanelRef = ref(null);
 const lastReturn = ref(null);
+const openActionMenuId = ref(null);
 let invoiceSearchTimer = null;
 
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
@@ -76,6 +78,13 @@ const refundOptions = [
   { key: 'bank', label: 'Bank Transfer', settlement: 'bank_refund' },
   { key: 'credit', label: 'Customer Credit', settlement: 'customer_credit' },
 ];
+
+const toggleActionMenu = (row) => {
+  openActionMenuId.value = openActionMenuId.value === row.id ? null : row.id;
+};
+const closeActionMenu = () => {
+  openActionMenuId.value = null;
+};
 
 const filteredWarehouses = computed(() => !form.branch_id ? references.value.warehouses || [] : (references.value.warehouses || []).filter((w) => Number(w.branch_id || 0) === Number(form.branch_id)));
 const selectedCustomer = computed(() => (references.value.customers || []).find((c) => Number(c.id) === Number(form.customer_id)));
@@ -457,7 +466,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
                 <td><span class="bill-status-badge">{{ paymentStatus(row) }}</span></td>
                 <td><span class="bill-status-badge" :class="row.status">{{ statusLabel(row.status) }}</span></td>
                 <td>{{ formatMoney(row.grand_total) }}</td>
-                <td><div class="return-row-actions"><button type="button" title="Print credit note" @click="printCreditNote(row)">Print</button><button v-if="row.status === 'draft'" type="button" title="Edit draft return" @click="editReturn(row)">Edit</button><button v-if="row.status === 'draft'" type="button" title="Approve draft return" @click="simpleAction(SalesApi.approveSalesReturn,row,'Approve this return?')">Approve</button><button v-if="row.status === 'draft'" type="button" class="danger" title="Cancel draft return" @click="simpleAction(SalesApi.cancelSalesReturn,row,'Cancel this draft?')">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" class="danger" title="Reverse posted return" @click="reverseReturn(row)">Reverse</button></div></td>
+                <td><div class="return-row-actions"><RowActionMenu :open="openActionMenuId === row.id" :show-view="false" more-label="Actions" more-title="Sales return actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button type="button" title="Print credit note" @click="printCreditNote(row); closeActionMenu()">Print</button><button v-if="row.status === 'draft'" type="button" title="Edit draft return" @click="editReturn(row); closeActionMenu()">Edit</button><button v-if="row.status === 'draft'" type="button" title="Approve draft return" @click="simpleAction(SalesApi.approveSalesReturn,row,'Approve this return?'); closeActionMenu()">Approve</button><button v-if="row.status === 'draft'" type="button" class="danger" title="Cancel draft return" @click="simpleAction(SalesApi.cancelSalesReturn,row,'Cancel this draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" class="danger" title="Reverse posted return" @click="reverseReturn(row); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
               </tr>
               <tr v-if="!returns.length && !loading"><td colspan="8" class="return-empty">No returns found for the selected filters.</td></tr>
             </tbody>

@@ -10,6 +10,7 @@ import InventoryModal from './Shared/InventoryModal.vue';
 import BarcodePreview from './Shared/BarcodePreview.vue';
 import BarcodeScannerInput from './Shared/BarcodeScannerInput.vue';
 import { code128BarsHtml } from './Shared/barcodeRenderer';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 defineProps({ page: { type: String, default: 'inventory-barcode-center' }, title: { type: String, default: 'Barcode Center' } });
 
@@ -27,6 +28,7 @@ const current = ref(null);
 const scanResult = ref(null);
 const errors = ref({});
 const activeReport = ref('product_barcodes');
+const openActionMenuId = ref(null);
 const filters = ref({ search: '', product_id: '', category_id: '', brand_id: '', barcode_type: '', has_barcode: '', active_status: '', per_page: 15 });
 const form = ref({ product_id: '', barcode: '', format: 'CODE128', barcode_type: 'internal', is_primary: true, is_active: true, quantity: 1 });
 const label = ref({ product_id: '', barcode: '', labels_count: 10, template: '50x25', paper_size: 'A4', width: 50, height: 25, columns: 3, margin: 5, gap_x: 3, gap_y: 3, show_name: true, show_sku: true, show_price: true, show_mrp: false, show_business: false });
@@ -55,6 +57,12 @@ const labelTemplates = {
 const money = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const statusLabel = (v) => String(v || '-').replaceAll('_', ' ');
 const showToast = (message, type = 'success') => { toast.value = { title: 'Barcode Center', message, type }; };
+const toggleActionMenu = (id) => {
+    openActionMenuId.value = openActionMenuId.value === id ? null : id;
+};
+const closeActionMenu = () => {
+    openActionMenuId.value = null;
+};
 
 const loadRefs = async () => { refs.value = await InventoryApi.barcodeReferences(); };
 const load = async (page = 1) => {
@@ -163,7 +171,7 @@ onMounted(async () => { await loadRefs(); await load(); });
                 <template #cell-name="{ row }"><strong>{{ row.name }}</strong><span>{{ row.barcodes?.length || 0 }} barcode rows</span></template>
                 <template #cell-alternate_barcodes="{ value }">{{ (value || []).join(', ') || '-' }}</template>
                 <template #cell-selling_price="{ value }">Rs. {{ money(value) }}</template>
-                <template #actions="{ row }"><div class="row-actions"><button @click="openAssign(row)">Assign/Edit</button><button @click="generateBarcode(row)">Generate</button><button @click="openManage(row)">Manage</button><button @click="current = row; modal = 'preview'">Preview</button><button @click="openPrint(row)">Print Labels</button><button @click="activeReport = 'generation_history'">History</button></div></template>
+                <template #actions="{ row }"><div class="row-actions"><RowActionMenu :open="openActionMenuId === `product-${row.id}`" :show-view="false" more-label="Actions" more-title="Barcode actions" @toggle="toggleActionMenu(`product-${row.id}`)" @close="closeActionMenu"><button @click="openAssign(row); closeActionMenu()">Assign/Edit</button><button @click="generateBarcode(row); closeActionMenu()">Generate</button><button @click="openManage(row); closeActionMenu()">Manage</button><button @click="current = row; modal = 'preview'; closeActionMenu()">Preview</button><button @click="openPrint(row); closeActionMenu()">Print Labels</button><button @click="activeReport = 'generation_history'; closeActionMenu()">History</button></RowActionMenu></div></template>
             </InventoryTable>
             <section class="reports"><div class="tabs"><button v-for="r in ['product_barcodes','without_barcode','alternate_barcodes','generation_history','printing_history']" :key="r" :class="{active: activeReport === r}" @click="activeReport = r">{{ statusLabel(r) }}</button></div></section>
         </InventoryModuleScaffold>
@@ -176,7 +184,7 @@ onMounted(async () => { await loadRefs(); await load(); });
 
         <InventoryModal v-if="modal === 'manage' && current" title="Manage Barcodes" :subtitle="current.name" wide @close="modal = null">
             <InventoryTable :columns="[{key:'barcode',label:'Barcode'},{key:'format',label:'Format'},{key:'barcode_type',label:'Type'},{key:'is_primary',label:'Primary'},{key:'status',label:'Status'}]" :rows="current.barcodes || []">
-                <template #actions="{ row }"><div class="row-actions"><button @click="setPrimary(row.id)">Set Primary</button><button @click="toggle(row.id, !(row.is_active ?? row.status === 'active'))">{{ (row.is_active ?? row.status === 'active') ? 'Deactivate' : 'Activate' }}</button></div></template>
+                <template #actions="{ row }"><div class="row-actions"><RowActionMenu :open="openActionMenuId === `barcode-${row.id}`" :show-view="false" more-label="Actions" more-title="Alternate barcode actions" @toggle="toggleActionMenu(`barcode-${row.id}`)" @close="closeActionMenu"><button @click="setPrimary(row.id); closeActionMenu()">Set Primary</button><button @click="toggle(row.id, !(row.is_active ?? row.status === 'active')); closeActionMenu()">{{ (row.is_active ?? row.status === 'active') ? 'Deactivate' : 'Activate' }}</button></RowActionMenu></div></template>
             </InventoryTable>
         </InventoryModal>
 

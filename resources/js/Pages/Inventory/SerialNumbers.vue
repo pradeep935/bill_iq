@@ -9,6 +9,7 @@ import InventoryTable from './Shared/InventoryTable.vue';
 import InventoryModal from './Shared/InventoryModal.vue';
 import BarcodeScannerInput from './Shared/BarcodeScannerInput.vue';
 import BarcodePreview from './Shared/BarcodePreview.vue';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 defineProps({ page: { type: String, default: 'inventory-serials' }, title: { type: String, default: 'Serial Numbers' } });
 
@@ -28,6 +29,7 @@ const filters = ref({ search: '', product_id: '', branch_id: '', warehouse_id: '
 const form = ref({ product_id: '', branch_id: '', warehouse_id: '', batch_id: '', serial_number: '', secondary_serial_number: '', imei_1: '', imei_2: '', condition: 'new', purchase_reference: '', sale_reference: '', purchase_date: '', warranty_expiry_date: '', remarks: '' });
 const bulkText = ref('');
 const activeReport = ref('serial_stock');
+const openActionMenuId = ref(null);
 let timer = null;
 
 const columns = [
@@ -60,6 +62,12 @@ const filteredBatches = computed(() => !form.value.product_id ? refs.value.batch
 
 const statusLabel = (value) => String(value || '-').replaceAll('_', ' ');
 const showToast = (message, type = 'success') => { toast.value = { title: 'Serial Numbers', message, type }; };
+const toggleActionMenu = (row) => {
+    openActionMenuId.value = openActionMenuId.value === row.id ? null : row.id;
+};
+const closeActionMenu = () => {
+    openActionMenuId.value = null;
+};
 const cellRow = (row) => ({
     ...row,
     serial: row.serial_number,
@@ -169,7 +177,7 @@ onMounted(async () => { await loadRefs(); await load(); });
             <InventoryTable :columns="columns" :rows="rows" empty-text="No serial numbers found.">
                 <template #cell-serial="{ row }"><strong>{{ row.serial_number }}</strong><span>{{ row.imei_1 || row.imei_2 || '-' }}</span></template>
                 <template #cell-status="{ row }"><span class="status" :class="row.status">{{ statusLabel(row.status) }}</span></template>
-                <template #actions="{ row }"><div class="row-actions"><button @click="viewRow(row)">View</button><button @click="editRow(row)">Edit</button><button @click="viewRow(row)">History</button><button @click="openTransfer(row)">Transfer</button><button @click="printLabel(row)">Print</button><button @click="changeStatus(row, 'damaged')">Damaged</button><button @click="changeStatus(row, 'under_repair')">Repair</button><button @click="changeStatus(row, 'blocked')">Block</button></div></template>
+                <template #actions="{ row }"><div class="row-actions"><RowActionMenu :open="openActionMenuId === row.id" :show-view="false" more-label="Actions" more-title="Serial actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button @click="viewRow(row); closeActionMenu()">View</button><button @click="editRow(row); closeActionMenu()">Edit</button><button @click="viewRow(row); closeActionMenu()">History</button><button @click="openTransfer(row); closeActionMenu()">Transfer</button><button @click="printLabel(row); closeActionMenu()">Print</button><button @click="changeStatus(row, 'damaged'); closeActionMenu()">Damaged</button><button @click="changeStatus(row, 'under_repair'); closeActionMenu()">Repair</button><button @click="changeStatus(row, 'blocked'); closeActionMenu()">Block</button></RowActionMenu></div></template>
             </InventoryTable>
             <section class="reports"><div class="tabs"><button v-for="r in ['serial_stock','serial_movement','sold_serials','warranty_expiry','damaged_blocked']" :key="r" :class="{active: activeReport === r}" @click="activeReport = r">{{ statusLabel(r) }}</button></div></section>
         </InventoryModuleScaffold>

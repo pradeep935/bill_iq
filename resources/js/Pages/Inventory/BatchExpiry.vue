@@ -4,6 +4,7 @@ import Layout from '../Layout.vue';
 import InventoryApi from './InventoryApi';
 import AppToast from '../../Components/Common/AppToast.vue';
 import TableLoadingState from '../../Components/Common/TableLoadingState.vue';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 defineProps({
     page: { type: String, default: 'inventory-batches' },
@@ -22,6 +23,7 @@ const selected = ref(null);
 const reports = ref({});
 const activeReport = ref('batch_stock');
 const showActions = ref(null);
+const openActionMenuId = ref(null);
 const actionModal = ref(null);
 const actionForm = ref({});
 const actionSaving = ref(false);
@@ -96,6 +98,14 @@ let timer = null;
 const money = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const qty = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const showToast = (message, type = 'success', title = 'Batch & Expiry') => { toast.value = { title, message, type }; };
+const rowActionId = (row) => `${row.id}-${row.branch_id || 0}-${row.warehouse_id || 0}`;
+const toggleActionMenu = (row) => {
+    const id = rowActionId(row);
+    openActionMenuId.value = openActionMenuId.value === id ? null : id;
+};
+const closeActionMenu = () => {
+    openActionMenuId.value = null;
+};
 
 const loadReferences = async () => {
     references.value = await InventoryApi.batchReferences();
@@ -135,6 +145,7 @@ const closeDetail = () => { selected.value = null; };
 
 const openActionModal = (row, type) => {
     showActions.value = null;
+    closeActionMenu();
     actionModal.value = { row, type };
     actionForm.value = {
         reason: '',
@@ -340,20 +351,19 @@ onMounted(async () => {
                                 <td><span class="status" :class="row.batch_status">{{ statusLabel(row.batch_status) }}</span></td>
                                 <td class="actions-cell">
                                     <div class="row-actions">
-                                        <button title="View batch details" @click="openDetail(row)">View</button>
-                                        <button title="Open batch ledger" @click="openDetail(row)">Ledger</button>
-                                        <button v-if="permissions.print" title="Print batch label" @click="printBarcode(row)">Print</button>
-                                        <button v-if="permissions.block && !['blocked','empty','expired'].includes(row.batch_status)" title="Block batch from sale" @click="openActionModal(row, 'block')">Block</button>
-                                        <button v-if="permissions.unblock && row.batch_status === 'blocked'" title="Unblock batch" @click="openActionModal(row, 'release')">Unblock</button>
-                                        <button v-if="permissions.quarantine && !['quarantined','empty','expired'].includes(row.batch_status)" title="Move batch to quarantine" @click="openActionModal(row, 'quarantine')">QRT</button>
-                                        <button v-if="permissions.unblock && row.batch_status === 'quarantined'" title="Release quarantined batch" @click="openActionModal(row, 'release')">Release</button>
-                                        <button v-if="permissions.transfer && canMove(row)" title="Transfer batch stock" @click="openActionModal(row, 'transfer')">Move</button>
-                                        <button title="More batch actions" @click="showActions = showActions === row.id ? null : row.id">More</button>
-                                    </div>
-                                    <div v-if="showActions === row.id" class="action-menu">
-                                        <button v-if="permissions.split && canMove(row)" title="Split batch quantity" @click="openActionModal(row, 'split')">Split</button>
-                                        <button v-if="permissions.merge" title="Merge identical batch" @click="openActionModal(row, 'merge')">Merge</button>
-                                        <button title="Open batch history" @click="openDetail(row)">History</button>
+                                        <RowActionMenu :open="openActionMenuId === rowActionId(row)" :show-view="false" more-label="Actions" more-title="Batch actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu">
+                                            <button title="View batch details" @click="openDetail(row); closeActionMenu()">View</button>
+                                            <button title="Open batch ledger" @click="openDetail(row); closeActionMenu()">Ledger</button>
+                                            <button v-if="permissions.print" title="Print batch label" @click="printBarcode(row); closeActionMenu()">Print</button>
+                                            <button v-if="permissions.block && !['blocked','empty','expired'].includes(row.batch_status)" title="Block batch from sale" @click="openActionModal(row, 'block')">Block</button>
+                                            <button v-if="permissions.unblock && row.batch_status === 'blocked'" title="Unblock batch" @click="openActionModal(row, 'release')">Unblock</button>
+                                            <button v-if="permissions.quarantine && !['quarantined','empty','expired'].includes(row.batch_status)" title="Move batch to quarantine" @click="openActionModal(row, 'quarantine')">QRT</button>
+                                            <button v-if="permissions.unblock && row.batch_status === 'quarantined'" title="Release quarantined batch" @click="openActionModal(row, 'release')">Release</button>
+                                            <button v-if="permissions.transfer && canMove(row)" title="Transfer batch stock" @click="openActionModal(row, 'transfer')">Move</button>
+                                            <button v-if="permissions.split && canMove(row)" title="Split batch quantity" @click="openActionModal(row, 'split')">Split</button>
+                                            <button v-if="permissions.merge" title="Merge identical batch" @click="openActionModal(row, 'merge')">Merge</button>
+                                            <button title="Open batch history" @click="openDetail(row); closeActionMenu()">History</button>
+                                        </RowActionMenu>
                                     </div>
                                 </td>
                             </tr>

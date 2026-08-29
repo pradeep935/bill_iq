@@ -39,7 +39,7 @@ const props = defineProps({
 const moreButton = ref(null);
 const menu = ref(null);
 const menuStyle = ref({});
-const emit = defineEmits(['view', 'toggle']);
+const emit = defineEmits(['view', 'toggle', 'close']);
 
 const positionMenu = async () => {
   if (!props.open) return;
@@ -79,12 +79,12 @@ const closeFromOutside = (event) => {
   if (!props.open) return;
   const target = event.target;
   if (moreButton.value?.contains(target) || menu.value?.contains(target)) return;
-  emit('toggle');
+  emit('close');
 };
 
 const closeFromKeyboard = (event) => {
   if (!props.open || event.key !== 'Escape') return;
-  emit('toggle');
+  emit('close');
 };
 
 onMounted(() => {
@@ -169,30 +169,37 @@ onUnmounted(() => {
   z-index: 1000;
 }
 
-.action-menu :slotted(button) {
+.action-menu :slotted(button),
+.action-menu :slotted(a) {
   background: transparent;
   border: 0;
   border-radius: 8px;
   color: #344158;
   cursor: pointer;
+  display: flex;
+  align-items: center;
   font-size: 12px;
   font-weight: 800;
   min-height: 36px;
   padding: 0 12px;
   text-align: left;
+  text-decoration: none;
   width: 100%;
 }
 
-.action-menu :slotted(button:hover) {
+.action-menu :slotted(button:hover),
+.action-menu :slotted(a:hover) {
   background: #eef5ff;
   color: #2457d6;
 }
 
-.action-menu :slotted(button.danger) {
+.action-menu :slotted(button.danger),
+.action-menu :slotted(a.danger) {
   color: #c93645;
 }
 
-.action-menu :slotted(button.danger:hover) {
+.action-menu :slotted(button.danger:hover),
+.action-menu :slotted(a.danger:hover) {
   background: #fff0f2;
   color: #b42334;
 }

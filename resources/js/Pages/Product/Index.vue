@@ -7,6 +7,7 @@ import ProductForm from './ProductForm.vue';
 import BarcodeModal from './BarcodeModal.vue';
 import LabelModal from './LabelModal.vue';
 import CrudTable from '../../Components/Common/CrudTable.vue';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 const props = defineProps({
     page: {
@@ -547,6 +548,10 @@ const toggleActionMenu = (productId) => {
     openActionMenuId.value = openActionMenuId.value === productId ? null : productId;
 };
 
+const closeActionMenu = () => {
+    openActionMenuId.value = null;
+};
+
 const openAllLabels = () => {
     if (!rows.value.length) {
         showMessage('No Products Available', 'There are no products available to print.', 'warning');
@@ -1058,9 +1063,14 @@ onMounted(() => {
                         <button type="button" class="crud-action" title="Edit product" @click="editProduct(product)">Edit</button>
 
                         <div class="action-menu-wrap">
-                            <button type="button" class="crud-action more-action" title="More actions" @click="toggleActionMenu(product.id)">More</button>
-
-                            <div v-if="openActionMenuId === product.id" class="action-menu">
+                            <RowActionMenu
+                                :open="openActionMenuId === product.id"
+                                :show-view="false"
+                                more-label="Actions"
+                                more-title="Product actions"
+                                @toggle="toggleActionMenu(product.id)"
+                                @close="closeActionMenu"
+                            >
                                 <button type="button" @click="openView(product)">View</button>
                                 <button type="button" :disabled="duplicatingId === product.id" @click="duplicateProduct(product)">
                                     {{ duplicatingId === product.id ? 'Copying...' : 'Duplicate' }}
@@ -1073,7 +1083,7 @@ onMounted(() => {
                                 <button type="button" class="danger" :disabled="deletingId === product.id" @click="deleteProduct(product)">
                                     {{ deletingId === product.id ? 'Deleting...' : 'Delete' }}
                                 </button>
-                            </div>
+                            </RowActionMenu>
                         </div>
                     </template>
                 </CrudTable>

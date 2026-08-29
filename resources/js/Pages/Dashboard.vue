@@ -88,9 +88,11 @@
                 <td><span class="bill-badge">{{ sale.payment_status }}</span></td>
                 <td><span class="bill-badge" :class="{ danger: !postedStatuses.includes(sale.invoice_status.toLowerCase()) }">{{ sale.invoice_status }}</span></td>
                 <td class="bill-row-actions">
-                  <a :href="sale.links.view">View</a>
-                  <a v-if="sale.can_edit" :href="sale.links.edit">Edit</a>
-                  <a :href="sale.links.print">Print</a>
+                  <RowActionMenu :open="openActionMenuId === sale.id" :show-view="false" more-label="Actions" more-title="Sale actions" @toggle="toggleActionMenu(sale)" @close="closeActionMenu">
+                    <a :href="sale.links.view" @click="closeActionMenu">View</a>
+                    <a v-if="sale.can_edit" :href="sale.links.edit" @click="closeActionMenu">Edit</a>
+                    <a :href="sale.links.print" @click="closeActionMenu">Print</a>
+                  </RowActionMenu>
                 </td>
               </tr>
             </tbody>
@@ -201,7 +203,9 @@ import {
   Tooltip,
 } from 'chart.js';
 import { Line } from 'vue-chartjs';
+import { ref } from 'vue';
 import Layout from './Layout.vue';
+import RowActionMenu from '../Components/Common/RowActionMenu.vue';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -221,10 +225,17 @@ const props = defineProps({
 
 const postedStatuses = ['approved', 'confirmed', 'posted', 'completed'];
 const moneyFormatter = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
+const openActionMenuId = ref(null);
 
 const money = (value) => moneyFormatter.format(Number(value || 0));
 const displayValue = (item) => item?.format === 'currency' ? money(item.value) : Number(item?.value || 0).toLocaleString('en-IN');
 const routeUrl = (name) => props.routes?.[name]?.url || '#';
+const toggleActionMenu = (sale) => {
+  openActionMenuId.value = openActionMenuId.value === sale.id ? null : sale.id;
+};
+const closeActionMenu = () => {
+  openActionMenuId.value = null;
+};
 
 const chartOptions = {
   responsive: true,

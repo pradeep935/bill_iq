@@ -5,6 +5,7 @@ import InventoryApi from './InventoryApi';
 import AppToast from '../../Components/Common/AppToast.vue';
 import CrudTable from '../../Components/Common/CrudTable.vue';
 import DrawerField from '../../Components/Common/DrawerField.vue';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 defineProps({
     page: { type: String, default: 'opening-stock' },
@@ -26,6 +27,7 @@ const fillingForm = ref(false);
 const viewingVoucher = ref(null);
 const detailVoucher = ref(null);
 const toast = ref({ show: false, title: '', message: '', type: 'info' });
+const openActionMenuId = ref(null);
 let toastTimer = null;
 const filters = reactive({
     search: '',
@@ -74,6 +76,12 @@ const voucherColumns = [
 ];
 
 const makeRowUid = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const toggleActionMenu = (voucher) => {
+    openActionMenuId.value = openActionMenuId.value === voucher.id ? null : voucher.id;
+};
+const closeActionMenu = () => {
+    openActionMenuId.value = null;
+};
 
 const filteredWarehouses = computed(() => {
     if (!form.branch_id) {
@@ -767,13 +775,15 @@ onMounted(async () => {
                     empty-text="No opening stock vouchers found."
                 >
                     <template #actions="{ row: voucher }">
-                        <button type="button" class="crud-action" @click="viewVoucher(voucher)">View</button>
-                        <button v-if="voucher.status === 'draft'" type="button" class="crud-action" @click="editVoucher(voucher)">Edit</button>
-                        <button v-if="voucher.status !== 'draft'" type="button" class="crud-action" @click="copyVoucherAsNew(voucher)">Copy New</button>
-                        <button v-if="voucher.status !== 'draft'" type="button" class="crud-action" @click="printVoucher(voucher)">Print</button>
-                        <button v-if="voucher.status === 'draft'" type="button" class="crud-action" @click="approveVoucher(voucher)">Post</button>
-                        <button v-if="voucher.status === 'draft'" type="button" class="crud-action danger" @click="deleteVoucher(voucher)">Delete</button>
-                        <button v-if="voucher.status === 'posted'" type="button" class="crud-action danger" @click="reverseVoucher(voucher)">Cancel</button>
+                        <RowActionMenu :open="openActionMenuId === voucher.id" :show-view="false" more-label="Actions" more-title="Opening stock actions" @toggle="toggleActionMenu(voucher)" @close="closeActionMenu">
+                            <button type="button" @click="viewVoucher(voucher); closeActionMenu()">View</button>
+                            <button v-if="voucher.status === 'draft'" type="button" @click="editVoucher(voucher); closeActionMenu()">Edit</button>
+                            <button v-if="voucher.status !== 'draft'" type="button" @click="copyVoucherAsNew(voucher); closeActionMenu()">Copy New</button>
+                            <button v-if="voucher.status !== 'draft'" type="button" @click="printVoucher(voucher); closeActionMenu()">Print</button>
+                            <button v-if="voucher.status === 'draft'" type="button" @click="approveVoucher(voucher); closeActionMenu()">Post</button>
+                            <button v-if="voucher.status === 'draft'" type="button" class="danger" @click="deleteVoucher(voucher); closeActionMenu()">Delete</button>
+                            <button v-if="voucher.status === 'posted'" type="button" class="danger" @click="reverseVoucher(voucher); closeActionMenu()">Cancel</button>
+                        </RowActionMenu>
                     </template>
                 </CrudTable>
 

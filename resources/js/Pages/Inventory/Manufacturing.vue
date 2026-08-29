@@ -7,6 +7,7 @@ import TableLoadingState from '../../Components/Common/TableLoadingState.vue';
 import InventoryModuleScaffold from './Shared/InventoryModuleScaffold.vue';
 import InventoryTable from './Shared/InventoryTable.vue';
 import InventoryModal from './Shared/InventoryModal.vue';
+import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
 defineProps({ page: { type: String, default: 'inventory-manufacturing' }, title: { type: String, default: 'Manufacturing / BOM' } });
 
@@ -31,12 +32,21 @@ const filters = ref({ search: '', product_id: '', status: '', branch_id: '', per
 const bomForm = ref({ bom_name: '', bom_code: '', finished_product_id: '', finished_product_variant_id: '', output_quantity: 1, unit_id: '', wastage_percentage: 0, status: 'draft', effective_from: '', effective_to: '', notes: '', items: [{ raw_material_product_id: '', quantity_required: 1, unit_id: '', wastage_percentage: 0, warehouse_id: '', batch_selection_method: 'fefo', remarks: '' }] });
 const orderForm = ref({ bom_id: '', branch_id: '', source_warehouse_id: '', finished_goods_warehouse_id: '', planned_quantity: 1, start_date: '', expected_completion_date: '', status: 'draft', notes: '', additional_cost: 0, manufacturing_date: '', expiry_date: '' });
 const completeForm = ref({ produced_quantity: 1, rejected_quantity: 0, additional_cost: 0, finished_batch_number: '', manufacturing_date: '', expiry_date: '', items: {} });
+const openActionMenuId = ref(null);
 let timer = null;
 
 const money = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const qty = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const statusLabel = (v) => String(v || '-').replaceAll('_', ' ');
 const showToast = (message, type = 'success') => { toast.value = { title: 'Manufacturing', message, type }; };
+const rowActionId = (row) => `${tab.value}-${row.id}`;
+const toggleActionMenu = (row) => {
+    const id = rowActionId(row);
+    openActionMenuId.value = openActionMenuId.value === id ? null : id;
+};
+const closeActionMenu = () => {
+    openActionMenuId.value = null;
+};
 const cards = computed(() => tab.value === 'bom' ? [
     { label: 'Total BOMs', value: dashboard.value.bom?.total_boms || 0, tone: 'info' },
     { label: 'Active BOMs', value: dashboard.value.bom?.active_boms || 0, tone: 'good' },
@@ -137,11 +147,11 @@ onMounted(async () => { await loadRefs(); await load(); });
             <template #filters><input v-model="filters.search" placeholder="Search code, order, product" /><select v-model="filters.product_id"><option value="">All Products</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select><select v-model="filters.status"><option value="">All Status</option><option v-for="s in refs.statuses" :key="s" :value="s">{{ statusLabel(s) }}</option></select><select v-model="filters.branch_id"><option value="">All Branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="filters.per_page"><option :value="15">15 / page</option><option :value="25">25 / page</option><option :value="50">50 / page</option></select><button @click="clearFilters">Clear</button></template>
             <InventoryTable v-if="tab === 'bom'" :columns="bomColumns" :rows="displayRows" empty-text="No BOMs found.">
                 <template #cell-status="{ value }"><span class="status" :class="value">{{ statusLabel(value) }}</span></template>
-                <template #actions="{ row }"><div class="row-actions"><button @click="current=row; modal='bomDetail'">View</button><button v-if="row.status === 'draft'" @click="openBom(row)">Edit Draft</button><button @click="duplicateBom(row)">New Version</button><button @click="activateBom(row, row.status !== 'active')">{{ row.status === 'active' ? 'Deactivate' : 'Activate' }}</button><button @click="createOrderFromBom(row)">Create Order</button><button @click="printRow(row)">Print</button><button @click="current=row; modal='bomDetail'">History</button></div></template>
+                <template #actions="{ row }"><div class="row-actions"><RowActionMenu :open="openActionMenuId === rowActionId(row)" :show-view="false" more-label="Actions" more-title="BOM actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button @click="current=row; modal='bomDetail'; closeActionMenu()">View</button><button v-if="row.status === 'draft'" @click="openBom(row); closeActionMenu()">Edit Draft</button><button @click="duplicateBom(row); closeActionMenu()">New Version</button><button @click="activateBom(row, row.status !== 'active'); closeActionMenu()">{{ row.status === 'active' ? 'Deactivate' : 'Activate' }}</button><button @click="createOrderFromBom(row); closeActionMenu()">Create Order</button><button @click="printRow(row); closeActionMenu()">Print</button><button @click="current=row; modal='bomDetail'; closeActionMenu()">History</button></RowActionMenu></div></template>
             </InventoryTable>
             <InventoryTable v-else-if="tab === 'orders'" :columns="orderColumns" :rows="displayRows" empty-text="No production orders found.">
                 <template #cell-status="{ value }"><span class="status" :class="value">{{ statusLabel(value) }}</span></template>
-                <template #actions="{ row }"><div class="row-actions"><button @click="current=row; modal='orderDetail'">View</button><button v-if="row.status === 'draft'" @click="openOrder(row)">Edit Draft</button><button @click="checkMaterials(row)">Check Materials</button><button v-if="row.status === 'planned'" @click="transition(row,'material_reserved')">Reserve</button><button v-if="['planned','material_reserved'].includes(row.status)" @click="transition(row,'in_progress')">Start</button><button v-if="['planned','material_reserved','in_progress'].includes(row.status)" @click="openComplete(row)">Complete/Post</button><button v-if="row.status !== 'completed'" @click="transition(row,'cancelled')">Cancel</button><button @click="printRow(row)">Print</button></div></template>
+                <template #actions="{ row }"><div class="row-actions"><RowActionMenu :open="openActionMenuId === rowActionId(row)" :show-view="false" more-label="Actions" more-title="Production order actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button @click="current=row; modal='orderDetail'; closeActionMenu()">View</button><button v-if="row.status === 'draft'" @click="openOrder(row); closeActionMenu()">Edit Draft</button><button @click="checkMaterials(row); closeActionMenu()">Check Materials</button><button v-if="row.status === 'planned'" @click="transition(row,'material_reserved'); closeActionMenu()">Reserve</button><button v-if="['planned','material_reserved'].includes(row.status)" @click="transition(row,'in_progress'); closeActionMenu()">Start</button><button v-if="['planned','material_reserved','in_progress'].includes(row.status)" @click="openComplete(row); closeActionMenu()">Complete/Post</button><button v-if="row.status !== 'completed'" class="danger" @click="transition(row,'cancelled'); closeActionMenu()">Cancel</button><button @click="printRow(row); closeActionMenu()">Print</button></RowActionMenu></div></template>
             </InventoryTable>
             <InventoryTable v-else-if="tab === 'materials'" :columns="[{key:'raw_material',label:'Raw Material'},{key:'required_quantity',label:'Required Qty'},{key:'available_quantity',label:'Available Qty'},{key:'shortage_quantity',label:'Shortage Qty'},{key:'selected_batch',label:'Selected Batch'},{key:'unit_cost',label:'Unit Cost'},{key:'total_cost',label:'Total Cost'},{key:'availability_status',label:'Status'}]" :rows="requirements" empty-text="Use Check Materials on a production order." />
             <InventoryTable v-else :columns="[{key:'id',label:'ID'},{key:'status',label:'Status'},{key:'production_cost',label:'Cost'},{key:'created_at',label:'Date'}]" :rows="tab === 'wastage' ? (reports.wastage_scrap || []) : (reports.production_register || [])" empty-text="No production history found." />

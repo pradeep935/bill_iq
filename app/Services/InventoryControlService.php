@@ -473,6 +473,9 @@ class InventoryControlService
         return [
             'total_stock_value' => $dashboard['inventory_value'] ?? 0,
             'total_saleable_quantity' => $dashboard['saleable_quantity'] ?? $dashboard['total_quantity'] ?? 0,
+            'damaged_quantity' => $dashboard['damaged_quantity'] ?? 0,
+            'physical_quantity' => $dashboard['physical_quantity'] ?? $dashboard['total_quantity'] ?? 0,
+            'non_saleable_quantity' => $dashboard['non_saleable_quantity'] ?? 0,
             'low_stock_items' => $dashboard['low_stock_products'] ?? 0,
             'out_of_stock_items' => $dashboard['out_of_stock_products'] ?? 0,
             'near_expiry_items' => $this->ledgerQuery($filters)->join('product_batches', 'product_batches.id', '=', 'stock_ledgers.batch_id')->whereBetween('product_batches.expiry_date', [now(), now()->addDays(30)])->distinct('stock_ledgers.batch_id')->count('stock_ledgers.batch_id'),
@@ -502,12 +505,13 @@ class InventoryControlService
             $entry->product_name = $entry->product?->name;
             $entry->user_name = $entry->creator?->name ?: ($entry->created_by ? 'User' : 'System');
         });
+        $movementReport = $this->logicalMovementReport($ledger);
         $batchNumberColumn = Schema::hasColumn('product_batches', 'batch_number') ? 'product_batches.batch_number' : 'product_batches.batch_no';
 
         return [
             'stock_summary' => $this->stock->summary($filters),
             'ledger' => $ledger,
-            'movement_report' => $ledger,
+            'movement_report' => $movementReport,
             'inventory_valuation' => $this->stock->summary(array_merge($filters, ['view_mode' => 'summary', 'per_page' => 100]))->getCollection()->values(),
             'branch_report' => DB::table('stock_ledgers')->leftJoin('branches', 'branches.id', '=', 'stock_ledgers.branch_id')->where('stock_ledgers.business_id', $businessId)->selectRaw('COALESCE(branches.name, "Unassigned") as branch_name, SUM(quantity_in) as quantity_in, SUM(quantity_out) as quantity_out, SUM(quantity_in - quantity_out) as quantity_available, SUM(stock_value) as stock_value')->groupBy('branches.name')->orderBy('branches.name')->get(),
             'warehouse_report' => DB::table('stock_ledgers')->leftJoin('warehouses', 'warehouses.id', '=', 'stock_ledgers.warehouse_id')->where('stock_ledgers.business_id', $businessId)->selectRaw('COALESCE(warehouses.name, "Unassigned") as warehouse_name, SUM(quantity_in) as quantity_in, SUM(quantity_out) as quantity_out, SUM(quantity_in - quantity_out) as quantity_available, SUM(stock_value) as stock_value')->groupBy('warehouses.name')->orderBy('warehouses.name')->get(),
@@ -787,6 +791,73 @@ class InventoryControlService
             || str_contains($reasonText, 'disposal')
             || str_contains($reasonText, 'write-off')
             || str_contains($reasonText, 'write off');
+    }
+
+    private function logicalMovementReport($ledger)
+    {
+        $entries = $ledger->values();
+        $rows = collect();
+        $used = [];
+
+        foreach ($entries as $index => $entry) {
+            if (isset($used[$index])) {
+                continue;
+            }
+
+            $pairIndex = null;
+            if (
+                $entry->reference_type === StockAdjustmentVoucher::class
+                && in_array($entry->transaction_type, ['stock_reclassification_in', 'stock_reclassification_out'], true)
+            ) {
+                foreach ($entries as $candidateIndex => $candidate) {
+                    if ($candidateIndex === $index || isset($used[$candidateIndex])) {
+                        continue;
+                    }
+
+                    if (
+                        $candidate->reference_type === $entry->reference_type
+                        && (int) $candidate->reference_id === (int) $entry->reference_id
+                        && (int) $candidate->product_id === (int) $entry->product_id
+                        && (int) ($candidate->warehouse_id ?? 0) === (int) ($entry->warehouse_id ?? 0)
+                        && (int) ($candidate->branch_id ?? 0) === (int) ($entry->branch_id ?? 0)
+                        && (int) ($candidate->batch_id ?? 0) === (int) ($entry->batch_id ?? 0)
+                        && (int) ($candidate->product_variant_id ?? 0) === (int) ($entry->product_variant_id ?? 0)
+                        && $candidate->transaction_type !== $entry->transaction_type
+                        && round(abs(((float) $candidate->quantity_in + (float) $entry->quantity_in) - ((float) $candidate->quantity_out + (float) $entry->quantity_out)), 3) === 0.0
+                    ) {
+                        $pairIndex = $candidateIndex;
+                        break;
+                    }
+                }
+            }
+
+            if ($pairIndex === null) {
+                $row = clone $entry;
+                $row->display_quantity = abs((float) $entry->quantity_in - (float) $entry->quantity_out);
+                $row->movement = null;
+                $row->physical_change = (float) $entry->quantity_in - (float) $entry->quantity_out;
+                $rows->push($row);
+                continue;
+            }
+
+            $pair = $entries[$pairIndex];
+            $out = (float) $entry->quantity_out > 0 ? $entry : $pair;
+            $in = (float) $entry->quantity_in > 0 ? $entry : $pair;
+            $used[$pairIndex] = true;
+
+            $row = clone $entry;
+            $row->transaction_type = $in->stock_status === 'saleable' ? 'Recovered / Repaired Stock' : 'Stock Reclassification';
+            $row->stock_status = $in->stock_status;
+            $row->movement = str($out->stock_status ?: 'saleable')->replace('_', ' ')->title() . ' -> ' . str($in->stock_status ?: 'saleable')->replace('_', ' ')->title();
+            $row->quantity_in = 0;
+            $row->quantity_out = 0;
+            $row->display_quantity = max((float) $out->quantity_out, (float) $in->quantity_in);
+            $row->physical_change = 0;
+            $row->remarks = trim(($entry->remarks ?: '') . ' ' . $row->movement);
+            $rows->push($row);
+        }
+
+        return $rows->values();
     }
 
     private function stockAlreadyPosted(string $type, int $id): bool

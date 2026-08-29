@@ -516,12 +516,16 @@ class StockService
     {
         $rows = $this->summary(array_merge($filters, ['per_page' => 1000]))->getCollection();
 
+        $physicalQuantity = round((float) $rows->sum('physical_quantity'), 3);
+
         return [
             'total_products' => $rows->pluck('product_id')->unique()->count(),
-            'total_quantity' => round((float) $rows->sum('physical_quantity'), 3),
+            'total_quantity' => $physicalQuantity,
+            'physical_quantity' => $physicalQuantity,
             'saleable_quantity' => round((float) $rows->sum('quantity_on_hand'), 3),
             'available_quantity' => round((float) $rows->sum('quantity_available'), 3),
             'non_saleable_quantity' => round((float) $rows->sum('non_saleable_quantity'), 3),
+            'damaged_quantity' => round((float) $rows->sum('damaged_quantity'), 3),
             'inventory_value' => round((float) $rows->sum('stock_value'), 2),
             'low_stock_products' => $rows->where('stock_status', 'Low Stock')->pluck('product_id')->unique()->count(),
             'out_of_stock_products' => $rows->where('stock_status', 'Out of Stock')->pluck('product_id')->unique()->count(),

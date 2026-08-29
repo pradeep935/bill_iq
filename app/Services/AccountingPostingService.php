@@ -176,7 +176,7 @@ class AccountingPostingService
             $this->addDebitEntry($entries, $s->input_sgst_account_id, (float) $purchase->sgst_amount);
             $this->addDebitEntry($entries, $s->input_igst_account_id, (float) $purchase->igst_amount);
             $this->addDebitEntry($entries, $s->input_cess_account_id, (float) $purchase->cess_amount);
-            $this->round($entries, $s->round_off_account_id, (float) $purchase->round_off);
+            $this->roundForDebitSide($entries, $s->round_off_account_id, (float) $purchase->round_off);
             $this->addCreditEntry($entries, $purchase->purchase_type === 'cash' ? $s->cash_account_id : $s->accounts_payable_id, (float) $purchase->grand_total, ['supplier_id' => $purchase->supplier_id]);
             return $this->sourceVoucher('purchase', $purchase, $purchase->purchase_date, $purchase->voucher_number, $entries);
         });
@@ -193,6 +193,7 @@ class AccountingPostingService
             $this->addDebitEntry($entries, $s->output_sgst_account_id, (float) $return->sgst_amount);
             $this->addDebitEntry($entries, $s->output_igst_account_id, (float) $return->igst_amount);
             $this->addDebitEntry($entries, $s->output_cess_account_id, (float) $return->cess_amount);
+            $this->roundForDebitSide($entries, $s->round_off_account_id, (float) $return->round_off);
             $refund = min((float) $return->refund_amount, (float) $return->grand_total);
             $creditBalance = round((float) $return->grand_total - $refund, 2);
             $this->addCreditEntry($entries, $s->cash_account_id, $refund, ['customer_id' => $return->customer_id]);
@@ -213,6 +214,7 @@ class AccountingPostingService
             $this->addCreditEntry($entries, $s->input_sgst_account_id, (float) $return->sgst_amount);
             $this->addCreditEntry($entries, $s->input_igst_account_id, (float) $return->igst_amount);
             $this->addCreditEntry($entries, $s->input_cess_account_id, (float) $return->cess_amount);
+            $this->round($entries, $s->round_off_account_id, (float) $return->round_off);
             return $this->sourceVoucher('purchase_return', $return, $return->return_date, $return->voucher_number, $entries);
         });
     }
@@ -441,6 +443,12 @@ class AccountingPostingService
     {
         if (!$accountId || $amount == 0) return;
         $amount > 0 ? $this->addCreditEntry($entries, $accountId, abs($amount)) : $this->addDebitEntry($entries, $accountId, abs($amount));
+    }
+
+    private function roundForDebitSide(array &$entries, ?int $accountId, float $amount): void
+    {
+        if (!$accountId || $amount == 0) return;
+        $amount > 0 ? $this->addDebitEntry($entries, $accountId, abs($amount)) : $this->addCreditEntry($entries, $accountId, abs($amount));
     }
 
     private function partyOutstanding(string $party, ?int $id)

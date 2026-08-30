@@ -418,8 +418,8 @@ const productBarcode = (product) => product?.primary_barcode || product?.barcode
 const selectedTransferProduct = computed(() => productFor(transferItem.product_id));
 const transferProductResults = computed(() => {
     const q = transferProductSearch.value.trim().toLowerCase();
+    if (q.length < 2) return [];
     const products = refs.value.products || [];
-    if (!q) return products.slice(0, 30);
     return products.filter((p) => `${p.name || ''} ${p.sku || ''} ${productBarcode(p)}`.toLowerCase().includes(q)).slice(0, 30);
 });
 const isBatchTracked = (item) => Boolean(productFor(item.product_id).batch_required);
@@ -850,7 +850,7 @@ onMounted(load);
                 <aside class="transfer-drawer">
                     <div class="section-head drawer-head"><div><span>TRANSFER ITEM</span><h2>{{ editingTransferIndex === null ? 'Add Transfer Item' : 'Edit Transfer Item' }}</h2><p>Select a product and review the stock movement before adding it.</p></div><button class="icon-close" title="Close" @click="closeTransferDrawer">X</button></div>
                     <div class="drawer-fields">
-                        <label class="product-search"><span>Search Product</span><input v-model="transferProductSearch" :disabled="!transferRouteValid" placeholder="Search by product name, SKU or barcode" /><div v-if="transferRouteValid" class="product-results"><button v-for="p in transferProductResults" :key="p.id" type="button" :class="{selected: Number(p.id) === Number(transferItem.product_id)}" @click="selectTransferProduct(p)"><strong>{{ p.name }}</strong><small>SKU: {{ p.sku || '-' }} · Barcode: {{ productBarcode(p) || '-' }} · Unit: {{ productUnit(p) }}</small></button></div></label>
+                        <label class="product-search"><span>Search Product</span><input v-model="transferProductSearch" :disabled="!transferRouteValid" placeholder="Search by product name, SKU or barcode" /><small v-if="transferRouteValid && transferProductSearch.trim().length < 2 && !transferItem.product_id" class="search-helper">Type at least 2 characters to search products.</small><div v-if="transferRouteValid && transferProductResults.length" class="product-results"><button v-for="p in transferProductResults" :key="p.id" type="button" :class="{selected: Number(p.id) === Number(transferItem.product_id)}" @click="selectTransferProduct(p)"><strong>{{ p.name }}</strong><small>SKU: {{ p.sku || '-' }} · Barcode: {{ productBarcode(p) || '-' }} · Unit: {{ productUnit(p) }}</small></button></div></label>
                         <div v-if="transferItem.product_id" class="selected-product"><strong>{{ transferItem.product_name || selectedTransferProduct.name }}</strong><span>SKU: {{ transferItem.sku || selectedTransferProduct.sku || '-' }}</span><span>Barcode: {{ transferItem.barcode || productBarcode(selectedTransferProduct) || '-' }}</span><span>Unit: {{ transferItem.unit || productUnit(selectedTransferProduct) }}</span></div>
                         <label><span>Available Stock</span><input :value="transferItem.product_id ? `${qty(transferItem.current_stock)} ${transferItem.unit || productUnit(selectedTransferProduct)}` : ''" disabled /></label>
                         <label><span>Transfer Quantity</span><input v-model.number="transferItem.requested_quantity" type="number" min="0.001" step="0.001" :disabled="!transferItem.product_id || Number(transferItem.current_stock || 0) <= 0" /></label>

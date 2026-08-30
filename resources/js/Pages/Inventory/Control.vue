@@ -42,10 +42,16 @@ const transferDrawerOpen = ref(false);
 const editingTransferIndex = ref(null);
 const transferView = ref('new');
 const transferProductSearch = ref('');
+const countDrawerOpen = ref(false);
+const editingCountIndex = ref(null);
+const countView = ref('new');
+const countProductSearch = ref('');
 
 const today = new Date().toISOString().slice(0, 10);
 const adjustment = reactive({ branch_id: '', warehouse_id: '', adjustment_date: today, adjustment_reason_id: '', adjustment_type: 'mixed', source: 'manual', status: 'draft', remarks: '', items: [{ product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', source_condition_status: 'damaged', destination_condition_status: 'saleable', reason: '' }] });
-const count = reactive({ branch_id: '', warehouse_id: '', count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [{ product_id: '', counted_quantity: 0, unit_cost: 0, warehouse_location: '', review_status: 'accepted' }] });
+const count = reactive({ id: null, branch_id: '', warehouse_id: '', count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [] });
+const countItem = reactive({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', system_quantity: 0, counted_quantity: '', unit_cost: 0, warehouse_location: '', batch_id: '', serial_id: '', reason: '', review_status: 'accepted' });
+const countFilters = reactive({ search: '', branch_id: '', warehouse_id: '', status: '', count_type: '', date_from: '', date_to: '' });
 const transfer = reactive({ id: null, transfer_date: today, source_branch_id: '', source_warehouse_id: '', destination_branch_id: '', destination_warehouse_id: '', transfer_type: 'immediate', expected_delivery_date: '', status: 'draft', remarks: '', items: [] });
 const transferItem = reactive({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', destination_location: '', current_stock: 0, destination_stock: 0, source_before: 0, source_after: 0, destination_before: 0, destination_after: 0 });
 const transferFilters = reactive({ search: '', source_branch_id: '', destination_branch_id: '', status: '', date_from: '', date_to: '', transfer_type: '' });
@@ -100,6 +106,19 @@ const reportTabs = [
 const currentReportRows = computed(() => Array.isArray(reports.value?.[activeReport.value]) ? reports.value[activeReport.value] : []);
 const countDifference = (item) => Number(item.counted_quantity || 0) - Number(item.system_quantity || 0);
 const adjustmentQty = (item) => Math.abs(countDifference(item));
+const countTypeOptions = [
+    { value: 'full', label: 'Full Count' },
+    { value: 'cycle_count', label: 'Cycle Count' },
+    { value: 'selected_products', label: 'Spot Count' },
+    { value: 'category', label: 'Category Count' },
+    { value: 'brand', label: 'Brand Count' },
+    { value: 'location', label: 'Location Count' },
+];
+const countStatusLabel = (value) => ({ draft: 'Draft', assigned: 'Assigned', counting: 'Counting', submitted: 'Pending Approval', reviewed: 'Reviewed', approved: 'Approved', posted: 'Posted' }[value] || labelize(value));
+const countLineDifference = (item) => Number(item.counted_quantity === '' || item.counted_quantity === null ? 0 : item.counted_quantity) - Number(item.system_quantity || 0);
+const countExpectedAfter = (item) => Number(item.system_quantity || 0) + countLineDifference(item);
+const countAdjustmentLabel = (item) => countLineDifference(item) > 0 ? `Stock In ${qty(countLineDifference(item))}` : countLineDifference(item) < 0 ? `Stock Out ${qty(Math.abs(countLineDifference(item)))}` : 'No stock adjustment required';
+const countLineTone = (item) => countLineDifference(item) > 0 ? 'positive' : countLineDifference(item) < 0 ? 'negative' : 'neutral';
 
 const labelize = (value) => String(value || '-').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const formatIndianDateTime = formatInventoryDateTime;
@@ -343,7 +362,36 @@ const saveAdjustment = async (status) => {
 };
 const postAdjustment = async (row) => { saving.value = true; try { await InventoryApi.postStockAdjustment(row.id); showToast('Stock adjustment posted.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to post voucher.', 'error'); } finally { saving.value = false; } };
 const reverseAdjustment = async (row) => { const remarks = window.prompt('Cancellation reason'); if (!remarks) return; saving.value = true; try { await InventoryApi.reverseStockAdjustment(row.id, remarks); showToast('Voucher cancelled with reversal entries.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to cancel voucher.', 'error'); } finally { saving.value = false; } };
-const saveCount = async (status) => { saving.value = true; clearErrors(); try { count.status = status; await InventoryApi.saveStockCount({ ...count, items: count.items.map((i) => ({ ...i, variance_quantity: countDifference(i), variance_value: adjustmentQty(i) * Number(i.unit_cost || 0) })) }); showToast(status === 'draft' ? 'Count draft saved.' : 'Count approved.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to save count.', 'error'); } finally { saving.value = false; } };
+const validateCountClient = (status = 'draft') => {
+    if (!count.warehouse_id) return 'Warehouse is required.';
+    if (status === 'draft' && !count.items.length) return '';
+    if (!count.items.length) return 'Add at least one product to approve this count.';
+    const missing = count.items.find((item) => !item.product_id || item.counted_quantity === '' || item.counted_quantity === null || Number(item.counted_quantity) < 0);
+    if (missing) return 'Each count item needs a product and physical quantity of zero or more.';
+    const reasonMissing = count.items.find((item) => countLineDifference(item) !== 0 && !item.reason);
+    if (reasonMissing) return 'Variance reason is required when difference is not zero.';
+    return '';
+};
+const countPayloadItems = () => count.items.map((i) => ({ ...i, counted_quantity: Number(i.counted_quantity), variance_quantity: countLineDifference(i), variance_value: Math.abs(countLineDifference(i)) * Number(i.unit_cost || 0), review_status: 'accepted', reviewer_notes: i.reason || '' }));
+const saveCount = async (status) => {
+    const message = validateCountClient(status);
+    if (message) { errors.value = { form: [message] }; showToast(message, 'error', 'Validation'); return; }
+    saving.value = true; clearErrors();
+    try {
+        count.status = status;
+        const response = await InventoryApi.saveStockCount({ ...count, items: countPayloadItems() }, count.id);
+        const savedSession = response.session || response;
+        if (status === 'approved') {
+            await InventoryApi.postCountVariance(savedSession.id);
+            showToast('Count approved and variance posted.');
+            resetCountForm();
+        } else {
+            count.id = savedSession.id || count.id;
+            showToast('Count draft saved.');
+        }
+        await load();
+    } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to save count.', 'error'); } finally { saving.value = false; }
+};
 const postVariance = async (row) => { saving.value = true; try { await InventoryApi.postCountVariance(row.id); showToast('Count variance posted.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to post variance.', 'error'); } finally { saving.value = false; } };
 const validateTransferClient = (status = 'draft') => {
     if (status === 'draft' && !transfer.items.length) return '';
@@ -415,6 +463,147 @@ const refreshLineStock = async (item, source = adjustment) => {
 const productFor = (id) => refs.value.products?.find((product) => Number(product.id) === Number(id)) || {};
 const productUnit = (product) => product?.unit?.name || product?.unit_name || product?.unit || product?.unit_code || 'PCS';
 const productBarcode = (product) => product?.primary_barcode || product?.barcode || product?.barcodes?.[0]?.barcode || '';
+const selectedCountProduct = computed(() => productFor(countItem.product_id));
+const countProductResults = computed(() => {
+    const q = countProductSearch.value.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return (refs.value.products || []).filter((p) => `${p.name || ''} ${p.sku || ''} ${productBarcode(p)}`.toLowerCase().includes(q)).slice(0, 30);
+});
+const activeCountLocations = computed(() => activeLocationsForWarehouse(count.warehouse_id));
+const countReasonOptions = computed(() => {
+    const defaults = ['Physical Count Shortage', 'Physical Count Gain', 'Damaged', 'Missing / Lost', 'Found Stock', 'Counting Error', 'Other'];
+    const master = (refs.value.reasons || []).map((reason) => reason.reason_name).filter(Boolean);
+    return [...new Set([...master, ...defaults])];
+});
+const blankCountItem = () => ({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', system_quantity: 0, counted_quantity: '', unit_cost: 0, warehouse_location: '', batch_id: '', serial_id: '', reason: '', review_status: 'accepted' });
+const refreshCountLineStock = async (item) => {
+    if (!item.product_id || !count.warehouse_id) {
+        item.system_quantity = 0;
+        return;
+    }
+    await refreshLineStock(item, { branch_id: count.branch_id, warehouse_id: count.warehouse_id });
+    item.system_quantity = Number(item.system_quantity || item.current_stock || 0);
+};
+const selectCountProduct = async (product) => {
+    Object.assign(countItem, { ...blankCountItem(), product_id: product.id, product_name: product.name || '', sku: product.sku || '', barcode: productBarcode(product), unit: productUnit(product), counted_quantity: '' });
+    countProductSearch.value = product.name || '';
+    await refreshCountLineStock(countItem);
+};
+const countDuplicateIndex = (row) => count.items.findIndex((item, index) => index !== editingCountIndex.value
+    && Number(item.product_id) === Number(row.product_id)
+    && Number(item.product_variant_id || 0) === Number(row.product_variant_id || 0)
+    && String(item.warehouse_location || '') === String(row.warehouse_location || '')
+    && Number(item.batch_id || 0) === Number(row.batch_id || 0));
+const countLineError = (item) => {
+    if (!count.warehouse_id) return 'Choose a warehouse first.';
+    if (!item.product_id) return 'Select a product.';
+    if (item.counted_quantity === '' || item.counted_quantity === null) return 'Enter physical quantity.';
+    if (Number(item.counted_quantity) < 0) return 'Physical quantity cannot be negative.';
+    if (activeCountLocations.value.length && !item.warehouse_location) return 'Location is required.';
+    if (isBatchTracked(item) && !item.batch_id) return 'Batch is required.';
+    if (countLineDifference(item) !== 0 && !item.reason) return 'Variance reason is required.';
+    return '';
+};
+const canAddCountItem = computed(() => Boolean(countItem.product_id) && !countLineError(countItem));
+const countRowSnapshot = () => {
+    const product = selectedCountProduct.value || {};
+    return {
+        ...blankCountItem(),
+        ...countItem,
+        product_id: Number(countItem.product_id),
+        product_variant_id: countItem.product_variant_id || null,
+        product_name: countItem.product_name || product.name || '',
+        sku: countItem.sku || product.sku || '',
+        barcode: countItem.barcode || productBarcode(product),
+        unit: countItem.unit || productUnit(product),
+        system_quantity: Number(countItem.system_quantity || 0),
+        counted_quantity: Number(countItem.counted_quantity),
+        variance_quantity: countLineDifference(countItem),
+        variance_value: Math.abs(countLineDifference(countItem)) * Number(countItem.unit_cost || 0),
+        review_status: 'accepted',
+    };
+};
+const openCountDrawer = (item = null, index = null) => {
+    Object.assign(countItem, blankCountItem(), item || {});
+    countProductSearch.value = item?.product_name || '';
+    editingCountIndex.value = index;
+    countDrawerOpen.value = true;
+    refreshCountLineStock(countItem);
+};
+const closeCountDrawer = () => {
+    countDrawerOpen.value = false;
+    editingCountIndex.value = null;
+    countProductSearch.value = '';
+    Object.assign(countItem, blankCountItem());
+};
+const addCountItemFromDrawer = () => {
+    const message = countLineError(countItem);
+    if (message) { errors.value = { form: [message] }; showToast(message, 'error', 'Validation'); return; }
+    const row = countRowSnapshot();
+    if (countDuplicateIndex(row) !== -1) {
+        const duplicateMessage = 'This product is already included in this stock count.';
+        errors.value = { form: [duplicateMessage] };
+        showToast(duplicateMessage, 'error', 'Validation');
+        return;
+    }
+    if (editingCountIndex.value === null) count.items.push(row);
+    else count.items.splice(editingCountIndex.value, 1, row);
+    closeCountDrawer();
+};
+const resetCountForm = () => {
+    Object.assign(count, { id: null, branch_id: count.branch_id, warehouse_id: count.warehouse_id, count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [] });
+    closeCountDrawer();
+};
+const editCount = async (row) => {
+    Object.assign(count, {
+        id: row.id || null,
+        branch_id: row.branch_id || '',
+        warehouse_id: row.warehouse_id || '',
+        count_date: String(row.count_date || today).slice(0, 10),
+        count_type: row.count_type || 'full',
+        freeze_stock: Boolean(row.freeze_stock),
+        status: row.status || 'draft',
+        remarks: row.remarks || '',
+        items: (row.items || []).map((item) => ({
+            ...blankCountItem(),
+            product_id: item.product_id || '',
+            product_variant_id: item.product_variant_id || '',
+            product_name: item.product?.name || '',
+            sku: item.product?.sku || '',
+            barcode: productBarcode(item.product || {}),
+            unit: productUnit(item.product || {}),
+            system_quantity: Number(item.system_quantity || 0),
+            counted_quantity: item.counted_quantity ?? '',
+            unit_cost: Number(item.unit_cost || 0),
+            warehouse_location: item.warehouse_location || '',
+            batch_id: item.batch_id || '',
+            serial_id: item.serial_id || '',
+            reason: item.reviewer_notes || item.reason || '',
+            review_status: 'accepted',
+        })),
+    });
+    countView.value = 'new';
+};
+const countSummary = computed(() => {
+    const lines = count.items.filter((item) => item.product_id);
+    const matched = lines.filter((item) => countLineDifference(item) === 0).length;
+    const shortages = lines.filter((item) => countLineDifference(item) < 0);
+    const gains = lines.filter((item) => countLineDifference(item) > 0);
+    const systemTotal = lines.reduce((sum, item) => sum + Number(item.system_quantity || 0), 0);
+    const physicalTotal = lines.reduce((sum, item) => sum + Number(item.counted_quantity || 0), 0);
+    return { products: lines.length, matched, shortageItems: shortages.length, gainItems: gains.length, systemTotal, physicalTotal, shortageQty: Math.abs(shortages.reduce((sum, item) => sum + countLineDifference(item), 0)), gainQty: gains.reduce((sum, item) => sum + countLineDifference(item), 0), net: physicalTotal - systemTotal };
+});
+const countHistoryRows = computed(() => counts.value.filter((row) => {
+    const search = countFilters.search.trim().toLowerCase();
+    if (search && !`${row.session_number || ''} ${row.remarks || ''} ${row.items?.[0]?.product?.name || ''}`.toLowerCase().includes(search)) return false;
+    if (countFilters.branch_id && Number(row.branch_id) !== Number(countFilters.branch_id)) return false;
+    if (countFilters.warehouse_id && Number(row.warehouse_id) !== Number(countFilters.warehouse_id)) return false;
+    if (countFilters.status && row.status !== countFilters.status) return false;
+    if (countFilters.count_type && row.count_type !== countFilters.count_type) return false;
+    if (countFilters.date_from && String(row.count_date || '') < countFilters.date_from) return false;
+    if (countFilters.date_to && String(row.count_date || '') > countFilters.date_to) return false;
+    return true;
+}));
 const selectedTransferProduct = computed(() => productFor(transferItem.product_id));
 const transferProductResults = computed(() => {
     const q = transferProductSearch.value.trim().toLowerCase();
@@ -765,13 +954,30 @@ onMounted(load);
                 <div class="table-wrapper sticky-register-table"><table><thead><tr><th>Voucher No</th><th>Type</th><th>Date</th><th>Branch</th><th>Warehouse</th><th>Product</th><th>Movement</th><th>Quantity</th><th>Physical</th><th>User</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in registerRows" :key="row.id"><td>{{ row.number }}</td><td>{{ labelize(row.type) }}</td><td>{{ formatIndianDateTime(row.date) }}</td><td>{{ row.branch }}</td><td>{{ row.warehouse }}</td><td>{{ row.productName }}</td><td>{{ row.movement || '-' }}</td><td>{{ activityQty(row) }}</td><td>{{ row.physicalChange === 0 ? '0' : signedQty(row.physicalChange || row.quantity) }}</td><td>{{ row.userName }}</td><td><span class="status-pill">{{ labelize(row.status) }}</span></td><td><button @click="tab = 'reports'; activeReport = 'movement_report'">Ledger</button><button v-if="permissions.approve && row.action === 'adjustment' && ['draft','submitted','approved'].includes(row.status)" @click="postAdjustment(row.raw)">Post</button><button v-if="permissions.approve && row.action === 'transfer' && ['approved','draft','submitted'].includes(row.status)" @click="dispatchTransfer(row.raw)">Dispatch</button><button v-if="permissions.approve && row.action === 'transfer' && ['dispatched','partially_received'].includes(row.status)" @click="receiveTransfer(row.raw)">Receive</button><button v-if="permissions.approve && row.action === 'count' && row.status !== 'posted'" @click="postVariance(row.raw)">Post Variance</button><button v-if="permissions.cancel && row.action === 'adjustment' && row.status === 'posted'" @click="reverseAdjustment(row.raw)">Cancel</button><button v-if="permissions.print" @click="printPage">Print</button></td></tr><tr v-if="!registerRows.length"><td colspan="12" class="empty">No inventory vouchers found.</td></tr></tbody></table></div>
             </section>
 
-            <section v-if="tab === 'counts'" class="panel">
-                <div class="form-grid"><select v-model="count.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="count.warehouse_id"><option value="">Warehouse</option><option v-for="w in filteredWarehouses(count.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="count.count_date" type="date" /><select v-model="count.count_type"><option>full</option><option>cycle_count</option><option>category</option><option>brand</option><option>location</option><option>selected_products</option></select><label><input v-model="count.freeze_stock" type="checkbox" /> Freeze</label><textarea v-model="count.remarks" placeholder="Remarks"></textarea></div>
-                <div class="hint-grid"><span>System Qty is read from current stock and remains read-only.</span><span>Physical Qty is the quantity counted by the user.</span><span>Difference = Physical Qty - System Qty.</span><span>Adjustment Qty is posted only after approval.</span></div>
-                <div class="line-head count-head"><span>Product</span><span>System Qty</span><span>Physical Qty</span><span>Difference</span><span>Adjustment Qty</span><span>Cost</span><span>Location</span><span>Status</span><span></span></div>
-                <div v-for="(item, i) in count.items" :key="i" class="line-grid count-row"><select v-model="item.product_id" @change="refreshLineStock(item, count)"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select><input :value="qty(item.system_quantity || item.current_stock)" disabled /><input v-model.number="item.counted_quantity" type="number" step="0.001" placeholder="Physical" /><input :value="qty(countDifference(item))" disabled /><input :value="qty(adjustmentQty(item))" disabled /><input v-model.number="item.unit_cost" type="number" step="0.01" placeholder="Cost" /><input v-model="item.warehouse_location" placeholder="Location" /><select v-model="item.review_status"><option>pending</option><option>accepted</option><option>rejected</option><option>recount_required</option></select><button @click="count.items.splice(i,1)" :disabled="count.items.length === 1">Remove</button></div>
-                <div class="actions"><button @click="addRow(count.items, { product_id: '', system_quantity: 0, counted_quantity: 0, unit_cost: 0, warehouse_location: '', review_status: 'accepted' })">Add Line</button><button :disabled="saving" @click="saveCount('draft')">Save</button><button :disabled="saving" @click="saveCount('approved')">Approve</button></div>
-                <div class="table-wrapper"><table><tbody><tr v-for="c in counts" :key="c.id"><td>{{ c.session_number }}</td><td>{{ formatIndianDateTime(c.count_date) }}</td><td>{{ c.warehouse?.name }}</td><td>{{ c.status }}</td><td><button @click="postVariance(c)">Post Variance</button></td></tr></tbody></table></div>
+            <section v-if="tab === 'counts'" class="count-page">
+                <div class="section-head"><div><span>NEW STOCK COUNT</span><h2>Stock Count</h2><p>Compare physical inventory with system stock and post approved differences.</p></div></div>
+                <div class="tabs transfer-view-tabs"><button :class="{active: countView === 'new'}" @click="countView = 'new'">New Stock Count</button><button :class="{active: countView === 'history'}" @click="countView = 'history'">Count History</button></div>
+                <template v-if="countView === 'new'">
+                    <section class="panel count-card">
+                        <div class="section-head"><div><h2>Count Details</h2><p>Select the warehouse and count method before adding products.</p></div><span class="status-pill">{{ countStatusLabel(count.status) }}</span></div>
+                        <div class="form-grid count-details-grid"><label><span>Branch</span><select v-model="count.branch_id" @change="count.warehouse_id = ''; count.items = []"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label><label><span>Warehouse</span><select v-model="count.warehouse_id" @change="count.items = []"><option value="">Warehouse</option><option v-for="w in filteredWarehouses(count.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select></label><label><span>Count Date</span><input v-model="count.count_date" type="date" /></label><label><span>Count Type</span><select v-model="count.count_type"><option v-for="option in countTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><label class="count-freeze"><input v-model="count.freeze_stock" type="checkbox" /> <strong>Freeze stock movements during count</strong><small>Prevents inventory movements in the selected warehouse while this count is in progress.</small></label><label class="count-remarks"><span>Remarks</span><textarea v-model="count.remarks" placeholder="Remarks"></textarea></label></div>
+                    </section>
+                    <section class="panel count-card">
+                        <div class="section-head"><div><h2>Count Items</h2><p>Products included in this physical count.</p></div><button v-if="count.items.length" class="primary" @click="openCountDrawer()">+ Add Product</button></div>
+                        <div v-if="!count.items.length" class="transfer-empty-state"><strong>No products added yet</strong><span>Add products to begin the physical stock count.</span><button class="primary" @click="openCountDrawer()">+ Add Product</button></div>
+                        <div v-else class="table-wrapper"><table><thead><tr><th>Product</th><th>System Qty</th><th>Physical Qty</th><th>Difference</th><th>Location</th><th>Batch / Serial</th><th>Variance Reason</th><th>Expected After</th><th>Action</th></tr></thead><tbody><tr v-for="(item, i) in count.items" :key="`count-row-${i}`"><td><strong>{{ item.product_name || productFor(item.product_id).name || '-' }}</strong><small>{{ item.sku || productFor(item.product_id).sku || '' }}</small></td><td>{{ qty(item.system_quantity) }}</td><td>{{ qty(item.counted_quantity) }}</td><td :class="['qty-change', countLineTone(item)]">{{ signedQty(countLineDifference(item)) }}</td><td>{{ item.warehouse_location || '-' }}</td><td>{{ item.batch_id || item.serial_id || '-' }}</td><td>{{ item.reason || '-' }}</td><td>{{ qty(countExpectedAfter(item)) }}</td><td><button @click="openCountDrawer(item, i)">Edit</button><button @click="count.items.splice(i, 1)">Remove</button></td></tr></tbody></table></div>
+                    </section>
+                    <section v-if="count.items.length" class="panel count-card">
+                        <div class="section-head"><div><h2>Count Summary</h2><p>Only approved variance lines will create stock ledger movement.</p></div></div>
+                        <div class="posting-summary count-summary"><strong>Products Counted: {{ countSummary.products }}</strong><span>Matched: {{ countSummary.matched }}</span><span>Shortage Items: {{ countSummary.shortageItems }}</span><span>Gain Items: {{ countSummary.gainItems }}</span><span>System Qty Total: {{ qty(countSummary.systemTotal) }}</span><span>Physical Qty Total: {{ qty(countSummary.physicalTotal) }}</span><span>Net Difference: {{ signedQty(countSummary.net) }}</span><span>Total Shortage Qty: {{ qty(countSummary.shortageQty) }}</span><span>Total Gain Qty: {{ qty(countSummary.gainQty) }}</span></div>
+                    </section>
+                    <div class="transfer-action-bar"><button @click="resetCountForm">Cancel</button><button :disabled="saving" @click="saveCount('draft')">Save Draft</button><button class="primary" :disabled="saving || validateCountClient('approved')" @click="saveCount('approved')">Approve & Post</button></div>
+                </template>
+                <section v-if="countView === 'history'" class="panel count-card">
+                    <div class="section-head"><div><h2>Count History</h2><p>Draft, pending and posted stock count sessions.</p></div></div>
+                    <div class="form-grid filters"><input v-model="countFilters.search" placeholder="Search count no or product" /><select v-model="countFilters.branch_id"><option value="">All Branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="countFilters.warehouse_id"><option value="">All Warehouses</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select><select v-model="countFilters.status"><option value="">All Status</option><option>draft</option><option>counting</option><option>submitted</option><option>approved</option><option>posted</option></select><select v-model="countFilters.count_type"><option value="">All Types</option><option v-for="option in countTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select><input v-model="countFilters.date_from" type="date" /><input v-model="countFilters.date_to" type="date" /></div>
+                    <div class="table-wrapper"><table><thead><tr><th>Count No.</th><th>Date</th><th>Branch</th><th>Warehouse</th><th>Type</th><th>Products</th><th>Matched</th><th>Variance Items</th><th>Net Difference</th><th>Status</th><th>Created By</th><th>Actions</th></tr></thead><tbody><tr v-for="session in countHistoryRows" :key="session.id"><td>{{ session.session_number }}</td><td>{{ formatIndianDateTime(session.count_date) }}</td><td>{{ session.branch?.name || '-' }}</td><td>{{ session.warehouse?.name || '-' }}</td><td>{{ optionLabel(countTypeOptions, session.count_type) }}</td><td>{{ session.items?.length || 0 }}</td><td>{{ (session.items || []).filter((item) => Number(item.variance_quantity || 0) === 0).length }}</td><td>{{ (session.items || []).filter((item) => Number(item.variance_quantity || 0) !== 0).length }}</td><td>{{ signedQty((session.items || []).reduce((sum, item) => sum + Number(item.variance_quantity || 0), 0)) }}</td><td><span class="status-pill">{{ countStatusLabel(session.status) }}</span></td><td>{{ userNameForMovement(session) }}</td><td><button @click="tab = 'register'">View</button><button v-if="session.status === 'draft'" @click="editCount(session)">Edit</button><button v-if="session.status !== 'posted'" @click="postVariance(session)">Approve</button><button @click="printPage">Print</button></td></tr><tr v-if="!countHistoryRows.length"><td colspan="12" class="empty">No stock counts found.</td></tr></tbody></table></div>
+                </section>
             </section>
 
             <section v-if="tab === 'transfers'" class="transfer-page">
@@ -846,6 +1052,27 @@ onMounted(load);
                 <div class="table-wrapper"><table><thead><tr><th>Date</th><th>Type</th><th>Product / Voucher</th><th>Branch</th><th>Warehouse</th><th>Movement</th><th>In</th><th>Out</th><th>Qty</th><th>Physical</th><th>Value</th><th>Status</th></tr></thead><tbody><tr v-for="(row, index) in currentReportRows" :key="row.id || index"><td>{{ formatIndianDateTime(row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date) }}</td><td>{{ labelize(row.transaction_type || row.source || row.transfer_type || activeReport) }}</td><td>{{ row.product?.name || row.product_name || row.voucher_number || row.name || '-' }}</td><td>{{ row.branch?.name || row.branch_name || row.source_branch?.name || '-' }}</td><td>{{ row.warehouse?.name || row.warehouse_name || row.source_warehouse?.name || '-' }}</td><td>{{ row.movement || '-' }}</td><td>{{ qty(row.quantity_in) }}</td><td>{{ qty(row.quantity_out) }}</td><td>{{ qty(row.display_quantity || row.quantity_available || row.total_quantity_in || row.total_quantity_out) }}</td><td>{{ row.physical_change === 0 ? '0' : signedQty(row.physical_change || 0) }}</td><td>Rs. {{ money(row.stock_value || row.total_value_in || row.total_value_out) }}</td><td>{{ labelize(row.status || row.stock_status || '-') }}</td></tr><tr v-if="!currentReportRows.length"><td colspan="12" class="empty">No report data found.</td></tr></tbody></table></div>
             </section>
 
+            <div v-if="countDrawerOpen" class="drawer-backdrop" @click.self="closeCountDrawer">
+                <aside class="transfer-drawer">
+                    <div class="section-head drawer-head"><div><span>COUNT ITEM</span><h2>{{ editingCountIndex === null ? 'Add Count Item' : 'Edit Count Item' }}</h2><p>Select a product and enter the physical quantity you counted.</p></div><button class="icon-close" title="Close" @click="closeCountDrawer">X</button></div>
+                    <div class="drawer-fields">
+                        <label class="product-search"><span>Search Product</span><input v-model="countProductSearch" :disabled="!count.warehouse_id" placeholder="Search by product name, SKU or barcode" /><small v-if="count.warehouse_id && countProductSearch.trim().length < 2 && !countItem.product_id" class="search-helper">Type at least 2 characters to search products.</small><div v-if="count.warehouse_id && countProductResults.length" class="product-results"><button v-for="p in countProductResults" :key="p.id" type="button" :class="{selected: Number(p.id) === Number(countItem.product_id)}" @click="selectCountProduct(p)"><strong>{{ p.name }}</strong><small>SKU: {{ p.sku || '-' }} · Barcode: {{ productBarcode(p) || '-' }} · Unit: {{ productUnit(p) }}</small></button></div></label>
+                        <div v-if="countItem.product_id" class="selected-product"><strong>{{ countItem.product_name || selectedCountProduct.name }}</strong><span>SKU: {{ countItem.sku || selectedCountProduct.sku || '-' }}</span><span>Barcode: {{ countItem.barcode || productBarcode(selectedCountProduct) || '-' }}</span><span>Unit: {{ countItem.unit || productUnit(selectedCountProduct) }}</span></div>
+                        <label><span>System Quantity</span><input :value="countItem.product_id ? `${qty(countItem.system_quantity)} ${countItem.unit || productUnit(selectedCountProduct)}` : ''" disabled /></label>
+                        <label><span>Physical Quantity</span><input v-model.number="countItem.counted_quantity" type="number" min="0" step="0.001" :disabled="!countItem.product_id" placeholder="Enter counted quantity" /></label>
+                        <label><span>Location</span><select v-if="activeCountLocations.length" v-model="countItem.warehouse_location" :disabled="!countItem.product_id"><option value="">Optional</option><option v-for="loc in activeCountLocations" :key="loc.id" :value="locationLabel(loc)">{{ locationLabel(loc) }}</option></select><input v-else value="Optional" disabled /></label>
+                        <label v-if="isBatchTracked(countItem)"><span>Batch</span><input v-model="countItem.batch_id" :disabled="!countItem.product_id" placeholder="Select batch" @change="refreshCountLineStock(countItem)" /></label>
+                        <label v-if="isSerialTracked(countItem)"><span>Serial Numbers</span><input v-model="countItem.serial_id" :disabled="!countItem.product_id" placeholder="Scan or select serial" /></label>
+                        <label v-if="countItem.product_id && countLineDifference(countItem) !== 0"><span>Variance Reason</span><select v-model="countItem.reason"><option value="">Select reason</option><option v-for="reasonName in countReasonOptions" :key="reasonName" :value="reasonName">{{ reasonName }}</option></select></label>
+                        <label><span>Unit Cost</span><input :value="money(countItem.unit_cost)" disabled /></label>
+                    </div>
+                    <div v-if="!countItem.product_id" class="drawer-empty-note">Select a product to view warehouse system stock.</div>
+                    <div v-else-if="countItem.counted_quantity !== '' && countItem.counted_quantity !== null && !countLineError(countItem)" class="drawer-preview count-preview"><h3>Count Preview</h3><div><span>System Stock</span><b>{{ qty(countItem.system_quantity) }}</b></div><div><span>Physical Count</span><b>{{ qty(countItem.counted_quantity) }}</b></div><div><span>Difference</span><b :class="['qty-change', countLineTone(countItem)]">{{ signedQty(countLineDifference(countItem)) }}</b></div><div><span>Expected Stock After Approval</span><b>{{ qty(countExpectedAfter(countItem)) }}</b></div><div><span>Adjustment</span><strong>{{ countAdjustmentLabel(countItem) }}</strong></div></div>
+                    <small v-if="countItem.product_id && countLineError(countItem)" class="line-error">{{ countLineError(countItem) }}</small>
+                    <div class="drawer-footer"><button @click="closeCountDrawer">Cancel</button><button class="primary" :disabled="!canAddCountItem" @click="addCountItemFromDrawer">Add to Count</button></div>
+                </aside>
+            </div>
+
             <div v-if="transferDrawerOpen" class="drawer-backdrop" @click.self="closeTransferDrawer">
                 <aside class="transfer-drawer">
                     <div class="section-head drawer-head"><div><span>TRANSFER ITEM</span><h2>{{ editingTransferIndex === null ? 'Add Transfer Item' : 'Edit Transfer Item' }}</h2><p>Select a product and review the stock movement before adding it.</p></div><button class="icon-close" title="Close" @click="closeTransferDrawer">X</button></div>
@@ -887,5 +1114,5 @@ onMounted(load);
 .inventory-control{padding:0 0 28px}.page-toolbar,.tabs,.actions,.barcode-capture{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.page-toolbar{justify-content:flex-end;margin:-6px 0 14px}.barcode-capture input{width:170px}.tabs{margin-bottom:14px}.tabs button.active{background:#173b77;color:#fff;border-color:#173b77}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.section-head{align-items:flex-start;display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.section-head span{color:#2457d6;font-size:10px;font-weight:900;letter-spacing:1px}.section-head h2{color:#142139;font-size:18px;margin:0}.section-head p{color:#758197;font-size:12px;margin:4px 0 0}.status-pill{background:#edf2ff;border-radius:7px;color:#2457d6;display:inline-flex;font-size:10px;font-weight:800;padding:5px 8px;text-transform:capitalize}.dashboard-stack{display:grid;gap:16px}.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpi-card{align-items:flex-start;display:grid;gap:6px;padding:15px;text-align:left;background:#fff;border:1px solid #e3e9f2;border-left:4px solid #2457d6;border-radius:8px}.kpi-card strong{color:#142139;font-size:21px}.kpi-card span,.cards span{color:#69758a;font-size:11px;font-weight:850;text-transform:uppercase}.kpi-card small{color:#758197}.kpi-card.warning{border-left-color:#d99000}.kpi-card.danger{border-left-color:#d23f49}.kpi-card.info{border-left-color:#0f8b8d}.dashboard-columns{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.alert-list{display:grid;gap:8px}.alert-row{align-items:center;display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:10px 0;border-bottom:1px solid #edf1f5}.alert-row span{color:#344159;font-weight:800}.alert-row strong{color:#142139}.healthy-state{padding:18px;color:#168757;background:#eaf8f1;border:1px solid #cceedd;border-radius:8px;font-weight:800}.quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.quick-grid button{text-align:left}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}.reason-form{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:10px}.reason-form label{display:grid;align-content:start;gap:6px;color:#344159;font-size:12px;font-weight:800}.reason-form label span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.reason-form small{color:#758197;font-size:11px;font-weight:600;line-height:1.4}.hint-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}.hint-grid span,.voucher-help-card{background:#f8fafc;border:1px dashed #d9e2ef;border-radius:8px;color:#6f7b90;font-size:11px;font-weight:650;line-height:1.45;padding:9px 11px}.voucher-help-card{margin:10px 0 12px}.voucher-help-card strong{color:#27344c;display:block;font-size:12px;margin-bottom:6px}.voucher-help-card ul{margin:0;padding-left:17px}.voucher-help-card li{margin:3px 0}.line-head,.line-grid{display:grid;gap:8px;align-items:center;margin-bottom:8px}.line-head{color:#69758a;font-size:10px;font-weight:800;text-transform:uppercase}.adjustment-row,.line-head{grid-template-columns:1.5fr .7fr .8fr .65fr .75fr .7fr 1fr 1fr .7fr}.count-row,.count-head{grid-template-columns:1.5fr .75fr .75fr .75fr .75fr .7fr .9fr .9fr .65fr}.transfer-row,.transfer-head{grid-template-columns:1.4fr .65fr .65fr .65fr .65fr .8fr .8fr .8fr .8fr .9fr .9fr .65fr}.location-row{grid-template-columns:1.8fr .8fr 1fr 1fr .7fr}.posting-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0;padding:12px;background:#f8fafc;border:1px solid #e5eaf2;border-radius:8px;color:#344159;font-size:12px}.posting-summary strong{color:#142139}.actions{justify-content:flex-end;margin:12px 0}.actions.inline{margin:0}.secondary{border-top:1px solid #edf1f5;margin-top:20px;padding-top:16px}.report-tabs{margin-bottom:10px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:38px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.alert{padding:10px 12px;margin-bottom:12px;border-radius:8px;background:#fff4f4;color:#b42318;border:1px solid #ffd5d5;font-size:12px}.empty{color:#8490a2;text-align:center}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:12px}tr{cursor:pointer}th,td{padding:11px 10px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap;font-size:12px}th{color:#69758a;background:#f8fafc;font-size:10px;text-transform:uppercase}.stock-negative{color:#d23f49!important}.qty-change.positive{color:#168757;font-weight:900}.qty-change.negative{color:#d23f49;font-weight:900}.qty-change.neutral{color:#344159;font-weight:900}.selector-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.operation-selector{width:min(980px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.operation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.operation-card{display:grid;align-content:start;gap:8px;min-height:170px;padding:14px;text-align:left;border:1px solid #dfe6ef}.operation-card strong{color:#142139;font-size:15px}.operation-card span{color:#536174;line-height:1.45}.operation-card small{color:#69758a;background:#f8fafc;border-radius:6px;padding:5px 7px}@media(max-width:1000px){.kpi-grid,.dashboard-columns,.form-grid,.reason-form,.hint-grid,.line-grid,.line-head,.adjustment-row,.count-row,.transfer-row,.location-row,.operation-grid{grid-template-columns:1fr}.page-toolbar{justify-content:flex-start}.barcode-capture input{width:100%}.quick-grid{grid-template-columns:1fr}.section-head{flex-direction:column}}
 .adjustment-row,.adjustment-head{grid-template-columns:minmax(220px,1.6fr) minmax(105px,.75fr) minmax(130px,.9fr) minmax(90px,.65fr) minmax(150px,.95fr) minmax(110px,.75fr) minmax(120px,.9fr) minmax(180px,1.1fr) minmax(90px,.65fr)}.line-field{display:grid;gap:5px;min-width:0}.line-field span{display:none;color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.line-field input,.line-field select,.remove-line{width:100%;min-width:0}.product-field select{min-width:0}.condition-transfer-fields{display:grid;grid-template-columns:1fr 1fr;gap:6px}.condition-transfer-help{margin:8px 0 10px;padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:750}.transfer-physical-note{align-content:center;min-height:38px;padding:7px 10px;border:1px dashed #d8e0eb;border-radius:8px;background:#f8fafc}.transfer-physical-note strong{color:#142139;font-size:12px}.result-field input{font-weight:850;color:#142139}@media(max-width:1000px){.adjustment-head{display:none}.adjustment-row{align-items:stretch;padding:12px;background:#fff;border:1px solid #e3e9f2;border-radius:8px;grid-template-columns:1fr}.line-field span{display:block}.remove-line{justify-self:start;width:auto}.condition-transfer-fields{grid-template-columns:1fr}}
 .transfer-route{display:grid;grid-template-columns:minmax(0,1fr) 42px minmax(0,1fr);align-items:stretch;gap:12px;margin-bottom:12px}.route-side{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);align-items:end;gap:10px;padding:12px;background:#f8fafc;border:1px solid #e3e9f2;border-radius:8px}.route-side strong{align-self:center;color:#2457d6;font-size:11px;font-weight:900;letter-spacing:.8px}.route-side label,.transfer-meta label,.transfer-main-grid label,.tracking-box label{display:grid;gap:5px;min-width:0;color:#344159;font-size:12px;font-weight:800}.route-side span,.transfer-meta span,.transfer-main-grid span,.tracking-box span,.transfer-preview span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.route-arrow{display:grid;place-items:center;color:#2457d6;font-weight:900}.transfer-meta label{margin:0}.transfer-items-card{margin:14px 0;padding:14px;background:#fbfcfe;border:1px solid #e3e9f2;border-radius:8px}.transfer-item{display:grid;gap:12px;margin-bottom:12px;padding:14px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.transfer-main-grid{display:grid;grid-template-columns:minmax(260px,1.8fr) minmax(130px,.75fr) minmax(130px,.75fr) minmax(130px,.75fr);gap:10px}.location-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tracking-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tracking-box{display:grid;grid-template-columns:140px minmax(0,1fr) minmax(0,1fr);align-items:end;gap:10px;padding:11px;background:#f8fafc;border:1px dashed #d8e0eb;border-radius:8px}.tracking-box strong{align-self:center;color:#27344c;font-size:12px}.transfer-preview{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.transfer-preview div{display:grid;gap:4px;padding:10px;background:#f8fafc;border:1px solid #edf1f5;border-radius:8px}.transfer-preview strong{color:#142139;font-size:14px}.transfer-item-footer{display:flex;align-items:center;justify-content:space-between;gap:10px}.line-error{color:#b42318;font-weight:800}.transfer-summary{justify-content:flex-end}.transfer-row,.transfer-head{grid-template-columns:none}@media(max-width:1180px){.transfer-main-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.transfer-preview{grid-template-columns:repeat(3,minmax(0,1fr))}.route-side,.tracking-box{grid-template-columns:1fr}}@media(max-width:760px){.transfer-route,.tracking-grid,.location-grid,.transfer-main-grid,.transfer-preview{grid-template-columns:1fr}.route-arrow{display:none}.transfer-item-footer{align-items:flex-start;flex-direction:column}.transfer-summary{justify-content:flex-start}}
-.transfer-page{display:grid;gap:14px}.transfer-card{margin-bottom:0}.transfer-view-tabs{margin-bottom:0}.transfer-meta{grid-template-columns:repeat(3,minmax(0,1fr))}.transfer-remarks{grid-column:auto}.transfer-empty-state,.drawer-empty-note{display:grid;justify-items:center;gap:8px;padding:24px;background:#f8fafc;border:1px dashed #d8e0eb;border-radius:8px;color:#69758a;text-align:center}.transfer-empty-state strong{color:#142139;font-size:15px}.transfer-empty-state span,.drawer-empty-note{font-size:12px;font-weight:750}.transfer-action-bar{position:sticky;bottom:0;z-index:50;display:flex;justify-content:flex-end;gap:10px;margin:0 -18px;padding:12px 18px;background:rgba(255,255,255,.96);border-top:1px solid #dfe6ef;box-shadow:0 -10px 28px rgba(15,23,42,.08)}.transfer-history{margin-top:8px}.sticky-register-table{max-height:calc(100vh - 355px);min-height:320px;overflow:auto;border:1px solid #edf1f5;border-radius:8px}.sticky-register-table table{min-width:1480px;margin-top:0}.sticky-register-table th{position:sticky;top:0;z-index:4}.sticky-register-table th:first-child,.sticky-register-table td:first-child{position:sticky;left:0;z-index:3;min-width:145px;background:#fff;box-shadow:8px 0 14px rgba(15,23,42,.05)}.sticky-register-table th:first-child{z-index:5;background:#f8fafc}.sticky-register-table th:last-child,.sticky-register-table td:last-child{position:sticky;right:0;z-index:3;min-width:185px;background:#fff;box-shadow:-8px 0 14px rgba(15,23,42,.05)}.sticky-register-table th:last-child{z-index:5;background:#f8fafc}.sticky-register-table td:last-child{display:flex;gap:6px;align-items:center}.drawer-backdrop{position:fixed;z-index:1100;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.32)}.transfer-drawer{display:flex;flex-direction:column;width:min(520px,100%);height:100%;padding:18px 18px 0;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-18px 0 50px rgba(15,23,42,.18);overflow:hidden}.drawer-head{flex:0 0 auto}.icon-close{min-height:34px;width:38px;padding:0}.drawer-fields{display:grid;gap:10px;overflow:auto;padding-bottom:12px}.drawer-fields label{display:grid;gap:5px;color:#344159;font-size:12px;font-weight:800}.drawer-fields span,.drawer-preview span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.product-search{position:relative}.product-results{display:grid;max-height:230px;overflow:auto;border:1px solid #e3e9f2;border-radius:8px;background:#fff}.product-results button{display:grid;gap:3px;min-height:auto;padding:10px;text-align:left;border:0;border-bottom:1px solid #edf1f5;border-radius:0}.product-results button.selected{background:#edf2ff}.product-results strong,.selected-product strong{color:#142139}.product-results small,.selected-product span,td small{display:block;color:#69758a;font-size:11px;font-weight:650}.selected-product{display:grid;gap:4px;padding:11px;background:#f8fafc;border:1px solid #e3e9f2;border-radius:8px}.drawer-preview{display:grid;gap:8px;margin:14px 0}.drawer-preview h3{margin:0;color:#142139;font-size:14px}.drawer-preview div{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:11px;background:#f8fafc;border:1px solid #edf1f5;border-radius:8px}.drawer-preview span,.drawer-preview strong{grid-column:1}.drawer-preview b{grid-column:2;grid-row:1 / span 2;color:#142139;font-size:16px;align-self:center}.drawer-preview small{color:#168757;font-weight:800}.drawer-empty-note{justify-items:start;margin:14px 0;text-align:left}.drawer-footer{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;margin:0 -18px;padding:12px 18px;background:#fff;border-top:1px solid #dfe6ef;box-shadow:0 -10px 24px rgba(15,23,42,.08)}@media(max-width:1180px){.transfer-meta{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.transfer-meta{grid-template-columns:1fr}.transfer-action-bar{justify-content:flex-start;flex-wrap:wrap}.transfer-drawer{width:100%}.drawer-preview div{grid-template-columns:1fr}.drawer-preview b{grid-column:auto;grid-row:auto}.sticky-register-table{max-height:calc(100vh - 300px)}}
+.transfer-page,.count-page{display:grid;gap:14px;min-width:0}.transfer-card,.count-card{margin-bottom:0;min-width:0}.transfer-view-tabs{margin-bottom:0}.transfer-meta{grid-template-columns:repeat(3,minmax(0,1fr))}.transfer-remarks{grid-column:auto}.count-details-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.count-details-grid label{display:grid;gap:5px;min-width:0;color:#344159;font-size:12px;font-weight:800}.count-details-grid label span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.count-freeze{grid-column:span 2;align-content:start;padding:10px 12px;background:#f8fafc;border:1px dashed #d8e0eb;border-radius:8px}.count-freeze input{min-height:auto}.count-freeze small{color:#758197;font-weight:650}.count-remarks{grid-column:span 2}.count-summary{justify-content:flex-start}.transfer-empty-state,.drawer-empty-note{display:grid;justify-items:center;gap:8px;padding:24px;background:#f8fafc;border:1px dashed #d8e0eb;border-radius:8px;color:#69758a;text-align:center}.transfer-empty-state strong{color:#142139;font-size:15px}.transfer-empty-state span,.drawer-empty-note{font-size:12px;font-weight:750}.transfer-action-bar{position:sticky;bottom:0;z-index:50;display:flex;justify-content:flex-end;gap:10px;margin:0 -18px;padding:12px 18px;background:rgba(255,255,255,.96);border-top:1px solid #dfe6ef;box-shadow:0 -10px 28px rgba(15,23,42,.08)}.transfer-history{margin-top:8px}.sticky-register-table{max-height:calc(100vh - 355px);min-height:320px;overflow:auto;border:1px solid #edf1f5;border-radius:8px}.sticky-register-table table{min-width:1480px;margin-top:0}.sticky-register-table th{position:sticky;top:0;z-index:4}.sticky-register-table th:first-child,.sticky-register-table td:first-child{position:sticky;left:0;z-index:3;min-width:145px;background:#fff;box-shadow:8px 0 14px rgba(15,23,42,.05)}.sticky-register-table th:first-child{z-index:5;background:#f8fafc}.sticky-register-table th:last-child,.sticky-register-table td:last-child{position:sticky;right:0;z-index:3;min-width:185px;background:#fff;box-shadow:-8px 0 14px rgba(15,23,42,.05)}.sticky-register-table th:last-child{z-index:5;background:#f8fafc}.sticky-register-table td:last-child{display:flex;gap:6px;align-items:center}.drawer-backdrop{position:fixed;z-index:1100;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.32)}.transfer-drawer{display:flex;flex-direction:column;width:min(520px,100%);height:100%;padding:18px 18px 0;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-18px 0 50px rgba(15,23,42,.18);overflow:hidden}.drawer-head{flex:0 0 auto}.icon-close{min-height:34px;width:38px;padding:0}.drawer-fields{display:grid;gap:10px;overflow:auto;padding-bottom:12px}.drawer-fields label{display:grid;gap:5px;color:#344159;font-size:12px;font-weight:800}.drawer-fields span,.drawer-preview span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.product-search{position:relative}.product-results{display:grid;max-height:230px;overflow:auto;border:1px solid #e3e9f2;border-radius:8px;background:#fff}.product-results button{display:grid;gap:3px;min-height:auto;padding:10px;text-align:left;border:0;border-bottom:1px solid #edf1f5;border-radius:0}.product-results button.selected{background:#edf2ff}.product-results strong,.selected-product strong{color:#142139}.product-results small,.selected-product span,td small,.search-helper{display:block;color:#69758a;font-size:11px;font-weight:650}.selected-product{display:grid;gap:4px;padding:11px;background:#f8fafc;border:1px solid #e3e9f2;border-radius:8px}.drawer-preview{display:grid;gap:8px;margin:14px 0}.drawer-preview h3{margin:0;color:#142139;font-size:14px}.drawer-preview div{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:11px;background:#f8fafc;border:1px solid #edf1f5;border-radius:8px}.drawer-preview span,.drawer-preview strong{grid-column:1}.drawer-preview b{grid-column:2;grid-row:1 / span 2;color:#142139;font-size:16px;align-self:center}.count-preview div{grid-template-columns:1fr auto}.drawer-preview small{color:#168757;font-weight:800}.drawer-empty-note{justify-items:start;margin:14px 0;text-align:left}.drawer-footer{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;margin:0 -18px;padding:12px 18px;background:#fff;border-top:1px solid #dfe6ef;box-shadow:0 -10px 24px rgba(15,23,42,.08)}@media(max-width:1180px){.transfer-meta,.count-details-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.transfer-meta,.count-details-grid{grid-template-columns:1fr}.count-freeze,.count-remarks{grid-column:auto}.transfer-action-bar{justify-content:flex-start;flex-wrap:wrap}.transfer-drawer{width:100%}.drawer-preview div{grid-template-columns:1fr}.drawer-preview b{grid-column:auto;grid-row:auto}.sticky-register-table{max-height:calc(100vh - 300px)}}
 </style>

@@ -245,7 +245,22 @@ class InventoryControlService
 
     public function countSessions(array $filters)
     {
-        return StockCountSession::query()->with(['branch', 'warehouse', 'items.product'])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
+        return StockCountSession::query()->with(['branch', 'warehouse', 'items.product'])->where('business_id', AppController::businessId())
+            ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
+            ->when(!empty($filters['count_type']), fn (Builder $q) => $q->where('count_type', $filters['count_type']))
+            ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('count_date', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('count_date', '<=', $filters['date_to']))
+            ->when(!empty($filters['search']), function (Builder $q) use ($filters) {
+                $search = '%' . $filters['search'] . '%';
+                $q->where(function (Builder $query) use ($search) {
+                    $query->where('session_number', 'like', $search)
+                        ->orWhere('remarks', 'like', $search)
+                        ->orWhereHas('items.product', fn (Builder $product) => $product->where('name', 'like', $search)->orWhere('sku', 'like', $search));
+                });
+            })
+            ->latest('id')->paginate(20);
     }
 
     public function saveCountSession(array $data, ?int $id = null): StockCountSession
@@ -288,17 +303,23 @@ class InventoryControlService
         });
     }
 
-    public function postCountVariance(int $sessionId): StockAdjustmentVoucher
+    public function postCountVariance(int $sessionId)
     {
         return DB::transaction(function () use ($sessionId) {
             $session = StockCountSession::query()->where('business_id', AppController::businessId())->with('items')->findOrFail($sessionId);
+            if ($session->status === 'posted') {
+                throw ValidationException::withMessages(['status' => 'Posted count sessions cannot be edited.']);
+            }
             $items = $session->items->filter(fn ($i) => $i->review_status === 'accepted' && round((float) $i->variance_quantity, 3) != 0.0)->map(fn ($i) => [
                 'product_id' => $i->product_id, 'product_variant_id' => $i->product_variant_id, 'batch_id' => $i->batch_id,
                 'unit_id' => null, 'adjustment_quantity' => abs((float) $i->variance_quantity), 'direction' => (float) $i->variance_quantity > 0 ? 'in' : 'out',
                 'unit_cost' => (float) $i->unit_cost, 'warehouse_location' => $i->warehouse_location, 'condition_status' => 'saleable',
                 'reason' => 'Physical count variance', 'actual_quantity' => $i->counted_quantity,
             ])->values()->all();
-            if (!$items) throw ValidationException::withMessages(['items' => 'No accepted variances to post.']);
+            if (!$items) {
+                $session->update(['status' => 'posted', 'approved_by' => Auth::id(), 'approved_at' => now(), 'completed_at' => now()]);
+                return null;
+            }
             $voucher = $this->saveAdjustment([
                 'branch_id' => $session->branch_id, 'warehouse_id' => $session->warehouse_id, 'adjustment_date' => now()->toDateString(),
                 'adjustment_reason_id' => null, 'adjustment_type' => 'mixed', 'source' => 'physical_count', 'status' => 'posted',

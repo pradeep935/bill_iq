@@ -4,6 +4,7 @@ import Layout from '../Layout.vue';
 import InventoryApi from '../Inventory/InventoryApi';
 import InventoryModuleScaffold from '../Inventory/Shared/InventoryModuleScaffold.vue';
 import InventoryTable from '../Inventory/Shared/InventoryTable.vue';
+import { formatInventoryDateTime } from '../Inventory/Shared/formatters';
 
 const props = defineProps({ page: String, title: String, initial_tab: { type: String, default: 'inventory' } });
 const tab = ref(props.initial_tab);
@@ -96,7 +97,8 @@ onMounted(load);
                 <template #cell-product="{ row }">{{ row.product?.name || row.product_name || '-' }}</template>
             </InventoryTable>
             <InventoryTable v-else-if="tab === 'manufacturing'" :columns="[{key:'order_number',label:'Order'},{key:'bom_code',label:'BOM'},{key:'finished_product',label:'Finished Product'},{key:'planned_quantity',label:'Planned'},{key:'produced_quantity',label:'Produced'},{key:'status',label:'Status'}]" :rows="activeRows" />
-            <InventoryTable v-else :columns="[{key:'transaction_date',label:'Date'},{key:'transaction_type',label:'Type'},{key:'product',label:'Product'},{key:'movement',label:'Movement'},{key:'quantity_in',label:'In'},{key:'quantity_out',label:'Out'},{key:'reference_number',label:'Reference'}]" :rows="activeRows">
+            <InventoryTable v-else :columns="[{key:'posted_at',label:'Date & Time'},{key:'transaction_date',label:'Document Date'},{key:'transaction_type',label:'Type'},{key:'product',label:'Product'},{key:'movement',label:'Movement'},{key:'quantity_in',label:'In'},{key:'quantity_out',label:'Out'},{key:'reference_number',label:'Reference'}]" :rows="activeRows">
+                <template #cell-posted_at="{ row }">{{ formatInventoryDateTime(row.posted_at || row.created_at) }}</template>
                 <template #cell-product="{ row }">{{ row.product?.name || row.product_name || '-' }}</template>
             </InventoryTable>
         </InventoryModuleScaffold>

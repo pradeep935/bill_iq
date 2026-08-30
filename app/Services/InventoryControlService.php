@@ -521,7 +521,7 @@ class InventoryControlService
             ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('transaction_date', '<=', $filters['date_to']))
             ->when(!empty($filters['search']), fn (Builder $q) => $this->applyLedgerRegisterSearch($q, (string) $filters['search']))
             ->when(!empty($filters['voucher_type']), fn (Builder $q) => $this->applyLedgerRegisterType($q, (string) $filters['voucher_type']))
-            ->latest('transaction_date')
+            ->orderByDesc(DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'))
             ->limit(200)
             ->get();
         $references = $this->stock->stockReferenceNumbers($ledger);
@@ -544,8 +544,8 @@ class InventoryControlService
             'adjustment_report' => StockAdjustmentVoucher::query()->with(['branch', 'warehouse', 'reason'])->where('business_id', $businessId)->latest('id')->limit(100)->get(),
             'transfer_report' => StockTransferVoucher::query()->with(['sourceWarehouse', 'destinationWarehouse'])->where('business_id', $businessId)->latest('id')->limit(100)->get(),
             'variance_report' => StockCountSession::query()->with('items.product')->where('business_id', $businessId)->latest('id')->limit(50)->get(),
-            'damage_report' => StockLedger::query()->with(['product', 'warehouse', 'branch'])->where('business_id', $businessId)->where(fn (Builder $q) => $q->where('transaction_type', 'damaged_stock')->orWhere('stock_status', 'damaged'))->latest('transaction_date')->limit(100)->get(),
-            'expiry_report' => StockLedger::query()->with(['product', 'warehouse', 'branch'])->where('business_id', $businessId)->where(fn (Builder $q) => $q->where('transaction_type', 'expired_stock')->orWhere('stock_status', 'expired'))->latest('transaction_date')->limit(100)->get(),
+            'damage_report' => StockLedger::query()->with(['product', 'warehouse', 'branch'])->where('business_id', $businessId)->where(fn (Builder $q) => $q->where('transaction_type', 'damaged_stock')->orWhere('stock_status', 'damaged'))->orderByDesc(DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'))->limit(100)->get(),
+            'expiry_report' => StockLedger::query()->with(['product', 'warehouse', 'branch'])->where('business_id', $businessId)->where(fn (Builder $q) => $q->where('transaction_type', 'expired_stock')->orWhere('stock_status', 'expired'))->orderByDesc(DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'))->limit(100)->get(),
             'batch_report' => DB::table('stock_ledgers')->join('products', 'products.id', '=', 'stock_ledgers.product_id')->leftJoin('product_batches', 'product_batches.id', '=', 'stock_ledgers.batch_id')->where('stock_ledgers.business_id', $businessId)->selectRaw("products.name as product_name, {$batchNumberColumn} as batch_number, product_batches.expiry_date, SUM(quantity_in) as quantity_in, SUM(quantity_out) as quantity_out, SUM(quantity_in - quantity_out) as available_quantity, SUM(stock_value) as stock_value")->groupBy('products.name', DB::raw($batchNumberColumn), 'product_batches.expiry_date')->limit(100)->get(),
         ];
     }
@@ -1077,7 +1077,7 @@ class InventoryControlService
         $entry->variance_quantity = $countItem?->variance_quantity ?? $variance;
         $entry->variance_reason = $countItem?->reviewer_notes ?: $fallbackReason ?: ($variance < 0 ? 'Physical Count Shortage' : 'Physical Count Gain');
         $entry->posted_by_name = $entry->creator?->name ?: ($count?->approved_by ? 'User' : 'System');
-        $entry->posted_at = $count?->approved_at?->toDateTimeString() ?: optional($entry->transaction_date)->toDateTimeString();
+        $entry->posted_at = optional($entry->posted_at ?: $entry->created_at)->toDateTimeString();
         $entry->remarks = trim(($entry->variance_reason ?: '') . ' ' . ($countNumber ?: ''));
     }
 

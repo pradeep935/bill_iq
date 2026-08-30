@@ -11,6 +11,7 @@ class StockLedger extends Model
 
     protected $casts = [
         'transaction_date' => 'datetime',
+        'posted_at' => 'datetime',
         'quantity_in' => 'decimal:3',
         'quantity_out' => 'decimal:3',
         'unit_cost' => 'decimal:2',

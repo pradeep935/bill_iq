@@ -557,7 +557,7 @@ class StockService
             ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
             ->when(array_key_exists('product_variant_id', $filters) && $filters['product_variant_id'] !== '', fn (Builder $q) => $q->where('product_variant_id', $filters['product_variant_id']))
             ->when(array_key_exists('batch_id', $filters) && $filters['batch_id'] !== '', fn (Builder $q) => $q->where('batch_id', $filters['batch_id']))
-            ->latest('transaction_date')
+            ->orderByDesc(DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'))
             ->latest('id')
             ->limit(100)
             ->get();
@@ -626,10 +626,10 @@ class StockService
                 'value' => round((float) $rows->sum('stock_value'), 2),
             ],
             'condition_stock' => $this->conditionBreakdownFromRows($rows),
-            'last_movement' => optional($ledger->first())->transaction_date?->toDateTimeString(),
-            'last_purchase' => optional($ledger->firstWhere('transaction_type', 'purchase') ?: $ledger->firstWhere('transaction_type', 'goods_receipt'))->transaction_date?->toDateTimeString(),
-            'last_sale' => optional($ledger->firstWhere('transaction_type', 'sale') ?: $ledger->firstWhere('transaction_type', 'delivery_challan'))->transaction_date?->toDateTimeString(),
-            'last_adjustment' => optional($lastAdjustment)->transaction_date?->toDateTimeString(),
+            'last_movement' => $this->ledgerTimestamp($ledger->first()),
+            'last_purchase' => $this->ledgerTimestamp($ledger->firstWhere('transaction_type', 'purchase') ?: $ledger->firstWhere('transaction_type', 'goods_receipt')),
+            'last_sale' => $this->ledgerTimestamp($ledger->firstWhere('transaction_type', 'sale') ?: $ledger->firstWhere('transaction_type', 'delivery_challan')),
+            'last_adjustment' => $this->ledgerTimestamp($lastAdjustment),
             'last_adjustment_reference' => $lastAdjustment ? ($this->stockReferenceNumbers(collect([$lastAdjustment]))[$lastAdjustment->reference_type . ':' . $lastAdjustment->reference_id] ?? (string) $lastAdjustment->reference_id) : null,
             'ledger' => $ledger->map(fn ($entry) => [
                 'date' => optional($entry->transaction_date)->format('Y-m-d'),
@@ -673,7 +673,7 @@ class StockService
             ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
             ->when(array_key_exists('product_variant_id', $filters) && $filters['product_variant_id'] !== '', fn (Builder $q) => $q->where('product_variant_id', $filters['product_variant_id']))
             ->when(array_key_exists('batch_id', $filters) && $filters['batch_id'] !== '', fn (Builder $q) => $q->where('batch_id', $filters['batch_id']))
-            ->orderBy('transaction_date')
+            ->orderBy(DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'))
             ->orderBy('id')
             ->get();
 
@@ -699,7 +699,9 @@ class StockService
 
             $rows[] = [
                 'id' => $entry->id,
-                'date_time' => optional($entry->transaction_date)->toDateTimeString(),
+                'date_time' => $this->ledgerTimestamp($entry),
+                'transaction_date' => optional($entry->transaction_date)->format('Y-m-d'),
+                'posted_at' => $this->ledgerTimestamp($entry),
                 'transaction_type' => $entry->transaction_type,
                 'transaction_label' => $isCountMovement
                     ? ($net < 0 ? 'Physical Count Shortage' : 'Physical Count Gain')
@@ -1037,7 +1039,7 @@ class StockService
             $this->validateOwnership($businessId, $data);
         }
 
-        $ledger = StockLedger::query()->create([
+        $payload = [
             'business_id' => $businessId,
             'branch_id' => $data['branch_id'] ?? null,
             'warehouse_id' => $data['warehouse_id'] ?? null,
@@ -1057,11 +1059,22 @@ class StockService
             'transaction_date' => $data['transaction_date'] ?? now(),
             'remarks' => $data['remarks'] ?? null,
             'created_by' => Auth::id(),
-        ]);
+        ];
+
+        if (Schema::hasColumn('stock_ledgers', 'posted_at')) {
+            $payload['posted_at'] = $data['posted_at'] ?? now();
+        }
+
+        $ledger = StockLedger::query()->create($payload);
 
         $this->refreshStockBalances($ledger);
 
         return $ledger;
+    }
+
+    private function ledgerTimestamp(?StockLedger $entry): ?string
+    {
+        return $entry ? optional($entry->posted_at ?: $entry->created_at)->toDateTimeString() : null;
     }
 
     public function refreshStockBalances(StockLedger $ledger): void

@@ -305,7 +305,8 @@ const registerRawRows = computed(() => [
         raw: row,
         type: row.transaction_type || 'stock_movement',
         number: referenceForMovement(row),
-        date: row.transaction_date,
+        date: row.posted_at || row.created_at,
+        documentDate: row.transaction_date,
         branch: row.branch?.name || '-',
         warehouse: row.warehouse?.name || '-',
         items: 1,
@@ -481,7 +482,8 @@ const seedDefaultReasons = async () => {
 const printPage = () => window.print();
 const exportRows = (format) => {
     const rows = currentReportRows.value.map((row) => ({
-        date: row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date || '',
+        date: row.posted_at || row.created_at || '',
+        document_date: row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date || '',
         type: row.transaction_type || row.source || row.transfer_type || activeReport.value,
         product: row.product?.name || row.product_name || row.name || '',
         branch: row.branch?.name || row.branch_name || row.source_branch?.name || '',
@@ -1099,7 +1101,7 @@ onMounted(load);
             <section v-if="tab === 'reports'" class="panel">
                 <div class="section-head"><div><h2>Inventory Reports</h2><p>Ledger-backed stock movement, valuation, branch, warehouse, adjustment, transfer, damage and expiry reports.</p></div><div class="actions inline"><button @click="exportRows('csv')">CSV</button><button @click="exportRows('excel')">Excel</button><button @click="exportRows('pdf')">PDF</button></div></div>
                 <div class="tabs report-tabs"><button v-for="report in reportTabs" :key="report.key" :class="{active: activeReport === report.key}" @click="activeReport = report.key">{{ report.label }}</button></div>
-                <div class="table-wrapper"><table><thead><tr><th>Date</th><th>Type</th><th>Product / Voucher</th><th>Branch</th><th>Warehouse</th><th>Movement</th><th>In</th><th>Out</th><th>Qty</th><th>Physical</th><th>Value</th><th>Status</th></tr></thead><tbody><tr v-for="(row, index) in currentReportRows" :key="row.id || index"><td>{{ formatIndianDateTime(row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date) }}</td><td>{{ labelize(row.transaction_type || row.source || row.transfer_type || activeReport) }}</td><td>{{ row.product?.name || row.product_name || row.voucher_number || row.name || '-' }}</td><td>{{ row.branch?.name || row.branch_name || row.source_branch?.name || '-' }}</td><td>{{ row.warehouse?.name || row.warehouse_name || row.source_warehouse?.name || '-' }}</td><td>{{ row.movement || '-' }}</td><td>{{ qty(row.quantity_in) }}</td><td>{{ qty(row.quantity_out) }}</td><td>{{ qty(row.display_quantity || row.quantity_available || row.total_quantity_in || row.total_quantity_out) }}</td><td>{{ row.physical_change === 0 ? '0' : signedQty(row.physical_change || 0) }}</td><td>Rs. {{ money(row.stock_value || row.total_value_in || row.total_value_out) }}</td><td>{{ labelize(row.status || row.stock_status || '-') }}</td></tr><tr v-if="!currentReportRows.length"><td colspan="12" class="empty">No report data found.</td></tr></tbody></table></div>
+                <div class="table-wrapper"><table><thead><tr><th>Date & Time</th><th>Document Date</th><th>Type</th><th>Product / Voucher</th><th>Branch</th><th>Warehouse</th><th>Movement</th><th>In</th><th>Out</th><th>Qty</th><th>Physical</th><th>Value</th><th>Status</th></tr></thead><tbody><tr v-for="(row, index) in currentReportRows" :key="row.id || index"><td>{{ formatIndianDateTime(row.posted_at || row.created_at) }}</td><td>{{ row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date || '-' }}</td><td>{{ labelize(row.transaction_type || row.source || row.transfer_type || activeReport) }}</td><td>{{ row.product?.name || row.product_name || row.voucher_number || row.name || '-' }}</td><td>{{ row.branch?.name || row.branch_name || row.source_branch?.name || '-' }}</td><td>{{ row.warehouse?.name || row.warehouse_name || row.source_warehouse?.name || '-' }}</td><td>{{ row.movement || '-' }}</td><td>{{ qty(row.quantity_in) }}</td><td>{{ qty(row.quantity_out) }}</td><td>{{ qty(row.display_quantity || row.quantity_available || row.total_quantity_in || row.total_quantity_out) }}</td><td>{{ row.physical_change === 0 ? '0' : signedQty(row.physical_change || 0) }}</td><td>Rs. {{ money(row.stock_value || row.total_value_in || row.total_value_out) }}</td><td>{{ labelize(row.status || row.stock_status || '-') }}</td></tr><tr v-if="!currentReportRows.length"><td colspan="13" class="empty">No report data found.</td></tr></tbody></table></div>
             </section>
 
             <div v-if="countDrawerOpen" class="drawer-backdrop" @click.self="closeCountDrawer">

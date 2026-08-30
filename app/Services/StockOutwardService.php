@@ -76,7 +76,7 @@ class StockOutwardService
         $filters = $this->filters($filters);
         $sort = in_array($filters['sort'], self::LEDGER_SORTS, true) ? $filters['sort'] : 'date';
         $column = [
-            'date' => 'stock_ledgers.transaction_date',
+            'date' => DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'),
             'product' => 'products.name',
             'quantity' => 'stock_ledgers.quantity_out',
             'value' => 'stock_ledgers.stock_value',
@@ -140,8 +140,8 @@ class StockOutwardService
             $rows = $this->reservedQuery($filters)->orderBy('reserved_date')->limit(5000)->get();
             $headers = ['Reservation number', 'Source type', 'Source number', 'Customer', 'Warehouse', 'Reserved quantity', 'Dispatched quantity', 'Remaining quantity', 'Expiry', 'Status'];
         } elseif ($tab === 'ledger') {
-            $rows = $this->ledgerQuery($filters)->orderBy('stock_ledgers.transaction_date')->limit(5000)->get();
-            $headers = ['Date', 'Product', 'SKU', 'Variant', 'Batch', 'Branch', 'Warehouse', 'Quantity out', 'Unit cost', 'Value', 'Transaction type', 'Reference'];
+            $rows = $this->ledgerQuery($filters)->orderBy(DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'))->limit(5000)->get();
+            $headers = ['Date & Time', 'Document Date', 'Product', 'SKU', 'Variant', 'Batch', 'Branch', 'Warehouse', 'Quantity out', 'Unit cost', 'Value', 'Transaction type', 'Reference'];
         } else {
             $rows = $this->outwardQuery($filters)->orderBy('document_date')->limit(5000)->get();
             $headers = ['Outward number', 'Date', 'Reference type', 'Reference number', 'Customer', 'Branch', 'Warehouse', 'Product lines', 'Total quantity', 'Status', 'Created by'];
@@ -152,7 +152,7 @@ class StockOutwardService
                 return [$row->reservation_number, $row->source_type, $row->source_number, $row->customer_name, $row->warehouse_name, $row->reserved_quantity, $row->consumed_quantity, $row->remaining_quantity, $row->expiry, $row->status];
             }
             if ($tab === 'ledger') {
-                return [$row->date, $row->product_name, $row->sku, $row->variant_name, $row->batch_number, $row->branch_name, $row->warehouse_name, $row->quantity_out, $row->unit_cost, $row->value, $row->transaction_type, trim($row->reference_type . ' ' . $row->reference_number)];
+                return [$row->date, $row->document_date, $row->product_name, $row->sku, $row->variant_name, $row->batch_number, $row->branch_name, $row->warehouse_name, $row->quantity_out, $row->unit_cost, $row->value, $row->transaction_type, trim($row->reference_type . ' ' . $row->reference_number)];
             }
 
             return [$row->number, $row->date, $row->reference_type, $row->reference_number, $row->customer_name, $row->branch_name, $row->warehouse_name, $row->total_lines, $row->total_quantity, $row->dispatch_status, $row->created_by_name];
@@ -359,7 +359,7 @@ class StockOutwardService
             $data = $this->reservedQuery($filters)->orderBy('reserved_date')->limit(500)->get();
             $title = 'Reserved Stock Report';
         } elseif ($filters['tab'] === 'ledger') {
-            $data = $this->ledgerQuery($filters)->orderBy('stock_ledgers.transaction_date')->limit(500)->get();
+            $data = $this->ledgerQuery($filters)->orderBy(DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'))->limit(500)->get();
             $title = 'Stock Outward Ledger Report';
         } else {
             $data = $this->outwardQuery($filters)->orderBy('document_date')->limit(500)->get();
@@ -489,7 +489,7 @@ class StockOutwardService
             ->leftJoin('users', 'users.id', '=', 'stock_ledgers.created_by')
             ->where('stock_ledgers.business_id', AppController::businessId())
             ->where('stock_ledgers.quantity_out', '>', 0)
-            ->selectRaw("stock_ledgers.id, stock_ledgers.transaction_date as date, products.name as product_name, products.sku, product_variant_items.sku as variant_name, COALESCE(product_batches.batch_no, product_batches.batch_number) as batch_number, branches.name as branch_name, warehouses.name as warehouse_name, stock_ledgers.quantity_out, stock_ledgers.unit_cost, stock_ledgers.stock_value as value, stock_ledgers.transaction_type, stock_ledgers.reference_type, stock_ledgers.reference_id, stock_ledgers.reference_id as reference_number, users.name as created_by_name");
+            ->selectRaw("stock_ledgers.id, COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at) as date, stock_ledgers.transaction_date as document_date, products.name as product_name, products.sku, product_variant_items.sku as variant_name, COALESCE(product_batches.batch_no, product_batches.batch_number) as batch_number, branches.name as branch_name, warehouses.name as warehouse_name, stock_ledgers.quantity_out, stock_ledgers.unit_cost, stock_ledgers.stock_value as value, stock_ledgers.transaction_type, stock_ledgers.reference_type, stock_ledgers.reference_id, stock_ledgers.reference_id as reference_number, users.name as created_by_name");
         AppController::applyTenantScope($query, 'stock_ledgers');
 
         $this->applyCommon($query, $filters, 'stock_ledgers.transaction_date', 'stock_ledgers');

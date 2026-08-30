@@ -392,6 +392,7 @@ const saveCount = async (status) => {
         await load();
     } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to save count.', 'error'); } finally { saving.value = false; }
 };
+const approveCount = () => saveCount('approved');
 const postVariance = async (row) => { saving.value = true; try { await InventoryApi.postCountVariance(row.id); showToast('Count variance posted.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to post variance.', 'error'); } finally { saving.value = false; } };
 const validateTransferClient = (status = 'draft') => {
     if (status === 'draft' && !transfer.items.length) return '';
@@ -971,7 +972,7 @@ onMounted(load);
                         <div class="section-head"><div><h2>Count Summary</h2><p>Only approved variance lines will create stock ledger movement.</p></div></div>
                         <div class="posting-summary count-summary"><strong>Products Counted: {{ countSummary.products }}</strong><span>Matched: {{ countSummary.matched }}</span><span>Shortage Items: {{ countSummary.shortageItems }}</span><span>Gain Items: {{ countSummary.gainItems }}</span><span>System Qty Total: {{ qty(countSummary.systemTotal) }}</span><span>Physical Qty Total: {{ qty(countSummary.physicalTotal) }}</span><span>Net Difference: {{ signedQty(countSummary.net) }}</span><span>Total Shortage Qty: {{ qty(countSummary.shortageQty) }}</span><span>Total Gain Qty: {{ qty(countSummary.gainQty) }}</span></div>
                     </section>
-                    <div class="transfer-action-bar"><button @click="resetCountForm">Cancel</button><button :disabled="saving" @click="saveCount('draft')">Save Draft</button><button class="primary" :disabled="saving || validateCountClient('approved')" @click="saveCount('approved')">Approve & Post</button></div>
+                    <div class="transfer-action-bar"><button @click="resetCountForm">Cancel</button><button :disabled="saving" @click="saveCount('draft')">Save Draft</button><button class="primary" :disabled="saving || !count.items.length" @click="approveCount">Approve & Post</button></div>
                 </template>
                 <section v-if="countView === 'history'" class="panel count-card">
                     <div class="section-head"><div><h2>Count History</h2><p>Draft, pending and posted stock count sessions.</p></div></div>

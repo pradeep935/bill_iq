@@ -784,10 +784,6 @@ class InventoryControlService
             return $item['destination_condition_status'] ?? $item['condition_status'] ?? 'saleable';
         }
 
-        if (($item['direction'] ?? null) === 'out' && !empty($item['source_condition_status'])) {
-            return $item['source_condition_status'];
-        }
-
         return $item['condition_status'] ?? 'saleable';
     }
 

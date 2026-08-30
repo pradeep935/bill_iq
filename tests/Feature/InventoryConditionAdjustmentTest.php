@@ -299,6 +299,7 @@ class InventoryConditionAdjustmentTest extends TestCase
 
         $this->assertConditionBalances($businessId, $branch, $warehouse, $product->id, saleable: 7, damaged: 6, physical: 13);
         $this->assertLedgerOut($voucher, 'saleable', 3);
+        $this->assertMovementRow($product->id, 'Saleable -> Out', -3, -3);
     }
 
     public function test_damaged_stock_out_reduces_damaged_and_physical_stock(): void
@@ -311,6 +312,22 @@ class InventoryConditionAdjustmentTest extends TestCase
 
         $this->assertConditionBalances($businessId, $branch, $warehouse, $product->id, saleable: 323, damaged: 4, physical: 327);
         $this->assertLedgerOut($voucher, 'damaged', 2);
+        $this->assertMovementRow($product->id, 'Damaged -> Out', -2, -2);
+    }
+
+    public function test_expired_stock_out_shows_expired_to_out_movement(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 10);
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'expired', 5);
+
+        $voucher = $this->postAdjustment($branch, $warehouse, $product->id, 'expired', 2);
+
+        $this->assertSame(10.0, app(StockService::class)->getConditionStock(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $product->id], 'saleable'));
+        $this->assertSame(3.0, app(StockService::class)->getConditionStock(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $product->id], 'expired'));
+        $this->assertSame(13.0, app(StockService::class)->getPhysicalStock(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $product->id]));
+        $this->assertLedgerOut($voucher, 'expired', 2);
+        $this->assertMovementRow($product->id, 'Expired -> Out', -2, -2);
     }
 
     public function test_exact_mustard_oil_damaged_stock_out_result_is_319_4_323(): void
@@ -327,7 +344,7 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->assertMovementRow($product->id, 'Damaged -> Out', -2, -2);
     }
 
-    public function test_stock_out_uses_source_condition_when_condition_status_is_stale(): void
+    public function test_stock_out_uses_selected_condition_when_source_metadata_is_stale(): void
     {
         [$businessId, $product, $branch, $warehouse] = $this->fixture();
         $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 321);
@@ -351,14 +368,19 @@ class InventoryConditionAdjustmentTest extends TestCase
                 'direction' => 'out',
                 'unit_cost' => 10,
                 'warehouse_location' => null,
-                'condition_status' => 'saleable',
-                'source_condition_status' => 'damaged',
+                'condition_status' => 'damaged',
+                'source_condition_status' => 'saleable',
                 'reason' => null,
             ]],
         ]);
 
         $this->assertConditionBalances($businessId, $branch, $warehouse, $product->id, saleable: 321, damaged: 4, physical: 325);
         $this->assertLedgerOut($voucher, 'damaged', 2);
+        $this->assertDatabaseHas('stock_adjustment_items', [
+            'stock_adjustment_voucher_id' => $voucher->id,
+            'condition_status' => 'damaged',
+            'source_condition_status' => 'damaged',
+        ]);
     }
 
     public function test_damaged_to_saleable_condition_transfer_keeps_physical_stock(): void
@@ -370,6 +392,7 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->postConditionTransfer($branch, $warehouse, $product->id, 'damaged', 'saleable', 2);
 
         $this->assertConditionBalances($businessId, $branch, $warehouse, $product->id, saleable: 12, damaged: 4, physical: 16);
+        $this->assertMovementRow($product->id, 'Damaged -> Saleable', 2, 0);
     }
 
     public function test_saleable_to_damaged_condition_transfer_keeps_physical_stock(): void
@@ -381,6 +404,7 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->postConditionTransfer($branch, $warehouse, $product->id, 'saleable', 'damaged', 2);
 
         $this->assertConditionBalances($businessId, $branch, $warehouse, $product->id, saleable: 8, damaged: 8, physical: 16);
+        $this->assertMovementRow($product->id, 'Saleable -> Damaged', 2, 0);
     }
 
     public function test_lost_stock_is_not_counted_as_physical_stock(): void

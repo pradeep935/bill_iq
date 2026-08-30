@@ -514,6 +514,8 @@ class InventoryControlService
             ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
             ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('transaction_date', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('transaction_date', '<=', $filters['date_to']))
+            ->when(!empty($filters['search']), fn (Builder $q) => $this->applyLedgerRegisterSearch($q, (string) $filters['search']))
+            ->when(!empty($filters['voucher_type']), fn (Builder $q) => $this->applyLedgerRegisterType($q, (string) $filters['voucher_type']))
             ->latest('transaction_date')
             ->limit(200)
             ->get();
@@ -1001,6 +1003,83 @@ class InventoryControlService
             $entry->variance_quantity = $countItem?->variance_quantity ?? $variance;
             $entry->variance_reason = $countItem?->reviewer_notes ?: $item?->reason ?: ($variance < 0 ? 'Physical Count Shortage' : 'Physical Count Gain');
             $entry->remarks = trim(($entry->variance_reason ?: '') . ' ' . ($countNumber ?: ''));
+        });
+    }
+
+    private function applyLedgerRegisterSearch(Builder $query, string $search): void
+    {
+        $term = '%' . trim($search) . '%';
+
+        $query->where(function (Builder $q) use ($term) {
+            $q->where('transaction_type', 'like', $term)
+                ->orWhere('remarks', 'like', $term)
+                ->orWhereHas('product', function (Builder $product) use ($term) {
+                    $product->where('name', 'like', $term)
+                        ->orWhere('sku', 'like', $term)
+                        ->orWhere('barcode', 'like', $term)
+                        ->orWhere('primary_barcode', 'like', $term);
+                })
+                ->orWhereExists(function ($sub) use ($term) {
+                    $sub->selectRaw('1')
+                        ->from('stock_adjustment_vouchers')
+                        ->whereColumn('stock_adjustment_vouchers.id', 'stock_ledgers.reference_id')
+                        ->where('stock_ledgers.reference_type', StockAdjustmentVoucher::class)
+                        ->where(function ($adjustment) use ($term) {
+                            $adjustment->where('voucher_number', 'like', $term)
+                                ->orWhere('remarks', 'like', $term)
+                                ->orWhere('source', 'like', $term);
+                        });
+                })
+                ->orWhereExists(function ($sub) use ($term) {
+                    $sub->selectRaw('1')
+                        ->from('stock_transfer_vouchers')
+                        ->whereColumn('stock_transfer_vouchers.id', 'stock_ledgers.reference_id')
+                        ->where('stock_ledgers.reference_type', StockTransferVoucher::class)
+                        ->where(function ($transfer) use ($term) {
+                            $transfer->where('voucher_number', 'like', $term)
+                                ->orWhere('remarks', 'like', $term)
+                                ->orWhere('transfer_type', 'like', $term);
+                        });
+                });
+        });
+    }
+
+    private function applyLedgerRegisterType(Builder $query, string $type): void
+    {
+        $normalized = str($type)->lower()->replace(['-', '_'], ' ')->toString();
+
+        if (str_contains($normalized, 'physical count')) {
+            $query->whereExists(function ($sub) {
+                $sub->selectRaw('1')
+                    ->from('stock_adjustment_vouchers')
+                    ->whereColumn('stock_adjustment_vouchers.id', 'stock_ledgers.reference_id')
+                    ->where('stock_ledgers.reference_type', StockAdjustmentVoucher::class)
+                    ->where('stock_adjustment_vouchers.source', 'physical_count');
+            });
+
+            if (str_contains($normalized, 'shortage')) {
+                $query->whereColumn('quantity_out', '>', 'quantity_in');
+            } elseif (str_contains($normalized, 'gain')) {
+                $query->whereColumn('quantity_in', '>', 'quantity_out');
+            }
+
+            return;
+        }
+
+        if (str_contains($normalized, 'transfer')) {
+            $query->where('reference_type', StockTransferVoucher::class);
+            return;
+        }
+
+        $query->where(function (Builder $q) use ($type) {
+            $q->where('transaction_type', 'like', '%' . $type . '%')
+                ->orWhereExists(function ($sub) use ($type) {
+                    $sub->selectRaw('1')
+                        ->from('stock_adjustment_vouchers')
+                        ->whereColumn('stock_adjustment_vouchers.id', 'stock_ledgers.reference_id')
+                        ->where('stock_ledgers.reference_type', StockAdjustmentVoucher::class)
+                        ->where('stock_adjustment_vouchers.source', 'like', '%' . $type . '%');
+                });
         });
     }
 

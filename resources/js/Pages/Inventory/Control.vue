@@ -197,7 +197,7 @@ const inventoryAlerts = computed(() => [
     { label: 'Pending Transfers', products: transfers.value.filter((row) => ['draft', 'approved', 'dispatched', 'partially_received'].includes(row.status)).length, action: () => switchTab('transfers') },
     { label: 'Count Variances', products: counts.value.filter((row) => row.status !== 'posted' && (row.items || []).some((item) => Number(item.variance_quantity || 0) !== 0)).length, action: () => switchTab('counts') },
 ].filter((alert) => Number(alert.products || 0) > 0));
-const recentActivity = computed(() => registerRows.value.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8));
+const recentActivity = computed(() => registerRawRows.value.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, 8));
 const operationCards = [
     { key: 'stock_adjustment', label: 'Stock Adjustment', tab: 'voucher', detail: 'Correct available stock for damaged, lost, found, expired or manual correction cases.', bullets: ['Increase or decrease stock', 'Reason and warehouse required', 'Posts immutable ledger entries'] },
     { key: 'stock_transfer', label: 'Stock Transfer', tab: 'transfers', detail: 'Move stock between branches, warehouses or locations with dispatch and receive stages.', bullets: ['Source to destination', 'Tracks in-transit stock', 'Supports partial receive'] },
@@ -238,6 +238,54 @@ const exportDashboard = () => exportRows('csv');
 const productNameForMovement = (row) => row.product_name || row.product?.name || row.raw?.product?.name || row.items?.[0]?.product?.name || '-';
 const userNameForMovement = (row) => row.user_name || row.poster?.name || row.approver?.name || row.creator?.name || row.created_by?.name || row.approved_by?.name || (row.created_by || row.approved_by ? 'User' : 'System');
 const referenceForMovement = (row) => row.reference_number || row.voucher_number || row.session_number || row.remarks || `Ledger #${row.id}`;
+const rowDateOnly = (value) => String(value || '').slice(0, 10);
+const rowMatchesOption = (value, selected) => !selected || Number(value || 0) === Number(selected);
+const rowSearchText = (row) => [
+    row.number,
+    row.type,
+    row.movement,
+    row.productName,
+    row.branch,
+    row.warehouse,
+    row.status,
+    row.raw?.source_number,
+    row.raw?.reference_number,
+    row.raw?.linked_adjustment_number,
+    row.raw?.voucher_number,
+    row.raw?.session_number,
+    row.raw?.remarks,
+    row.raw?.variance_reason,
+    row.raw?.reason?.reason_name,
+    row.raw?.product?.name,
+    row.raw?.product?.sku,
+    row.raw?.product?.barcode,
+    row.raw?.product?.primary_barcode,
+    ...(row.raw?.items || []).flatMap((item) => [item.product?.name, item.product_name, item.sku, item.reason, item.reviewer_notes]),
+].filter(Boolean).join(' ').toLowerCase();
+const rowTypeText = (row) => [
+    row.type,
+    row.raw?.transaction_type,
+    row.raw?.source,
+    row.raw?.source_document,
+    row.raw?.transfer_type,
+    row.raw?.count_type,
+    row.movement,
+].filter(Boolean).join(' ').toLowerCase();
+const registerRowMatchesFilters = (row) => {
+    const search = registerFilters.search.trim().toLowerCase();
+    if (search && !rowSearchText(row).includes(search)) return false;
+    if (registerFilters.voucher_type && !rowTypeText(row).includes(registerFilters.voucher_type.toLowerCase())) return false;
+    if (registerFilters.status && row.status !== registerFilters.status) return false;
+    if (registerFilters.branch_id && ![row.raw?.branch_id, row.raw?.source_branch_id, row.raw?.destination_branch_id].some((id) => rowMatchesOption(id, registerFilters.branch_id))) return false;
+    if (registerFilters.warehouse_id && ![row.raw?.warehouse_id, row.raw?.source_warehouse_id, row.raw?.destination_warehouse_id].some((id) => rowMatchesOption(id, registerFilters.warehouse_id))) return false;
+    if (registerFilters.date_from && rowDateOnly(row.date) < registerFilters.date_from) return false;
+    if (registerFilters.date_to && rowDateOnly(row.date) > registerFilters.date_to) return false;
+    return true;
+};
+const clearRegisterFilters = () => {
+    Object.assign(registerFilters, { search: '', voucher_type: '', status: '', branch_id: '', warehouse_id: '', date_from: '', date_to: '' });
+    load();
+};
 const adjustmentSignedQuantity = (row) => Number(row.total_quantity_in || 0) - Number(row.total_quantity_out || 0);
 const adjustmentMovement = (row) => {
     if ((row.items?.length || 0) !== 1) return '';
@@ -251,7 +299,7 @@ const postedLedgerAdjustmentReferences = computed(() => new Set(
         .filter((row) => row.reference_type === 'App\\Models\\StockAdjustmentVoucher' && row.reference_id)
         .map((row) => Number(row.reference_id))
 ));
-const registerRows = computed(() => [
+const registerRawRows = computed(() => [
     ...(reports.value.movement_report || []).map((row) => ({
         id: `ledger-${row.id}`,
         raw: row,
@@ -274,6 +322,7 @@ const registerRows = computed(() => [
     ...counts.value.map((row) => ({ id: `count-${row.id}`, raw: row, type: 'stock_count', number: row.session_number, date: row.count_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Math.abs(Number(item.variance_quantity || 0)), 0) || 0, status: row.status, action: 'count', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
     ...movements.value.map((row) => ({ id: `movement-${row.id}`, raw: row, type: 'location_movement', number: row.voucher_number, date: row.movement_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0, status: row.status, action: 'location', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
 ]);
+const registerRows = computed(() => registerRawRows.value.filter(registerRowMatchesFilters));
 
 const setVoucherType = () => {
     const type = currentVoucherType.value;
@@ -951,8 +1000,8 @@ onMounted(load);
 
             <section v-if="!loading && tab === 'register'" class="panel">
                 <div class="section-head"><div><h2>Voucher Register</h2><p>Search, filter, view, post and cancel inventory stock operation vouchers.</p></div></div>
-                <div class="form-grid filters"><input v-model="registerFilters.search" placeholder="Voucher no, product, reason, remarks" /><select v-model="registerFilters.voucher_type"><option value="">All Types</option><option value="manual">Stock Adjustment</option><option value="damage">Damage</option><option value="expired_stock">Expired</option><option value="production_consumption">Production Consumption</option><option value="production_output">Production Output</option></select><select v-model="registerFilters.status"><option value="">All Status</option><option>draft</option><option>posted</option><option>reversed</option><option>cancelled</option></select><select v-model="registerFilters.branch_id"><option value="">All Branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="registerFilters.warehouse_id"><option value="">All Warehouses</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="registerFilters.date_from" type="date" /><input v-model="registerFilters.date_to" type="date" /><button @click="load">Apply</button></div>
-                <div class="table-wrapper sticky-register-table"><table><thead><tr><th>Voucher No</th><th>Type</th><th>Date</th><th>Branch</th><th>Warehouse</th><th>Product</th><th>Movement</th><th>Quantity</th><th>Physical</th><th>User</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in registerRows" :key="row.id"><td>{{ row.number }}</td><td>{{ labelize(row.type) }}</td><td>{{ formatIndianDateTime(row.date) }}</td><td>{{ row.branch }}</td><td>{{ row.warehouse }}</td><td>{{ row.productName }}</td><td>{{ row.movement || '-' }}</td><td>{{ activityQty(row) }}</td><td>{{ row.physicalChange === 0 ? '0' : signedQty(row.physicalChange || row.quantity) }}</td><td>{{ row.userName }}</td><td><span class="status-pill">{{ labelize(row.status) }}</span></td><td><button @click="tab = 'reports'; activeReport = 'movement_report'">Ledger</button><button v-if="permissions.approve && row.action === 'adjustment' && ['draft','submitted','approved'].includes(row.status)" @click="postAdjustment(row.raw)">Post</button><button v-if="permissions.approve && row.action === 'transfer' && ['approved','draft','submitted'].includes(row.status)" @click="dispatchTransfer(row.raw)">Dispatch</button><button v-if="permissions.approve && row.action === 'transfer' && ['dispatched','partially_received'].includes(row.status)" @click="receiveTransfer(row.raw)">Receive</button><button v-if="permissions.approve && row.action === 'count' && row.status !== 'posted'" @click="postVariance(row.raw)">Post Variance</button><button v-if="permissions.cancel && row.action === 'adjustment' && row.status === 'posted'" @click="reverseAdjustment(row.raw)">Cancel</button><button v-if="permissions.print" @click="printPage">Print</button></td></tr><tr v-if="!registerRows.length"><td colspan="12" class="empty">No inventory vouchers found.</td></tr></tbody></table></div>
+                <div class="form-grid filters"><input v-model="registerFilters.search" @keyup.enter="load" placeholder="Voucher no, count no, product, reason, remarks" /><select v-model="registerFilters.voucher_type"><option value="">All Types</option><option value="stock_adjustment">Stock Adjustment</option><option value="physical count shortage">Physical Count Shortage</option><option value="physical count gain">Physical Count Gain</option><option value="stock transfer">Stock Transfer</option><option value="stock_transfer">Stock Transfer Voucher</option><option value="location_movement">Location Movement</option><option value="damage">Damage</option><option value="expired_stock">Expired</option><option value="opening_stock">Opening Stock</option><option value="production_consumption">Production Consumption</option><option value="production_output">Production Output</option></select><select v-model="registerFilters.status"><option value="">All Status</option><option>draft</option><option>posted</option><option>reversed</option><option>cancelled</option><option>approved</option><option>dispatched</option><option>received</option></select><select v-model="registerFilters.branch_id"><option value="">All Branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="registerFilters.warehouse_id"><option value="">All Warehouses</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="registerFilters.date_from" type="date" /><input v-model="registerFilters.date_to" type="date" /><button @click="load">Apply</button><button @click="clearRegisterFilters">Clear</button></div>
+                <div class="table-wrapper sticky-register-table"><table><thead><tr><th>Voucher No</th><th>Type</th><th>Date</th><th>Branch</th><th>Warehouse</th><th>Product</th><th>Movement</th><th>Quantity</th><th>Physical</th><th>User</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in registerRows" :key="row.id"><td>{{ row.number }}</td><td>{{ labelize(row.type) }}</td><td>{{ formatIndianDateTime(row.date) }}</td><td>{{ row.branch }}</td><td>{{ row.warehouse }}</td><td>{{ row.productName }}</td><td>{{ row.movement || '-' }}</td><td>{{ activityQty(row) }}</td><td>{{ row.physicalChange === 0 ? '0' : signedQty(row.physicalChange || row.quantity) }}</td><td>{{ row.userName }}</td><td><span class="status-pill">{{ labelize(row.status) }}</span></td><td><button @click="tab = 'reports'; activeReport = 'movement_report'">Ledger</button><button v-if="permissions.approve && row.action === 'adjustment' && ['draft','submitted','approved'].includes(row.status)" @click="postAdjustment(row.raw)">Post</button><button v-if="permissions.approve && row.action === 'transfer' && ['approved','draft','submitted'].includes(row.status)" @click="dispatchTransfer(row.raw)">Dispatch</button><button v-if="permissions.approve && row.action === 'transfer' && ['dispatched','partially_received'].includes(row.status)" @click="receiveTransfer(row.raw)">Receive</button><button v-if="permissions.approve && row.action === 'count' && row.status !== 'posted'" @click="postVariance(row.raw)">Post Variance</button><button v-if="permissions.cancel && row.action === 'adjustment' && row.status === 'posted'" @click="reverseAdjustment(row.raw)">Cancel</button><button v-if="permissions.print" @click="printPage">Print</button></td></tr><tr v-if="!registerRows.length"><td colspan="12" class="empty">No movement records found.</td></tr></tbody></table></div>
             </section>
 
             <section v-if="tab === 'counts'" class="count-page">

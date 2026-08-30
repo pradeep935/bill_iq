@@ -308,13 +308,16 @@ class InventoryControlService
         return DB::transaction(function () use ($sessionId) {
             $session = StockCountSession::query()->where('business_id', AppController::businessId())->with('items')->findOrFail($sessionId);
             if ($session->status === 'posted') {
-                throw ValidationException::withMessages(['status' => 'Posted count sessions cannot be edited.']);
+                throw ValidationException::withMessages(['status' => 'This stock count has already been posted.']);
+            }
+            if (!$session->items->count()) {
+                throw ValidationException::withMessages(['items' => 'Stock count must have at least one item before posting.']);
             }
             $items = $session->items->filter(fn ($i) => $i->review_status === 'accepted' && round((float) $i->variance_quantity, 3) != 0.0)->map(fn ($i) => [
                 'product_id' => $i->product_id, 'product_variant_id' => $i->product_variant_id, 'batch_id' => $i->batch_id,
                 'unit_id' => null, 'adjustment_quantity' => abs((float) $i->variance_quantity), 'direction' => (float) $i->variance_quantity > 0 ? 'in' : 'out',
                 'unit_cost' => (float) $i->unit_cost, 'warehouse_location' => $i->warehouse_location, 'condition_status' => 'saleable',
-                'reason' => 'Physical count variance', 'actual_quantity' => $i->counted_quantity,
+                'reason' => $i->reviewer_notes ?: ((float) $i->variance_quantity > 0 ? 'Physical Count Gain' : 'Physical Count Shortage'), 'actual_quantity' => $i->counted_quantity,
             ])->values()->all();
             if (!$items) {
                 $session->update(['status' => 'posted', 'approved_by' => Auth::id(), 'approved_at' => now(), 'completed_at' => now()]);
@@ -323,7 +326,7 @@ class InventoryControlService
             $voucher = $this->saveAdjustment([
                 'branch_id' => $session->branch_id, 'warehouse_id' => $session->warehouse_id, 'adjustment_date' => now()->toDateString(),
                 'adjustment_reason_id' => null, 'adjustment_type' => 'mixed', 'source' => 'physical_count', 'status' => 'posted',
-                'remarks' => 'Variance posting for ' . $session->session_number, 'items' => $items,
+                'remarks' => 'Stock Count ' . $session->session_number, 'items' => $items,
             ]);
             $session->update(['status' => 'posted', 'approved_by' => Auth::id(), 'approved_at' => now(), 'completed_at' => now()]);
             return $voucher;
@@ -520,6 +523,7 @@ class InventoryControlService
             $entry->product_name = $entry->product?->name;
             $entry->user_name = $entry->creator?->name ?: ($entry->created_by ? 'User' : 'System');
         });
+        $this->annotatePhysicalCountLedger($ledger);
         $movementReport = $this->logicalMovementReport($ledger);
         $batchNumberColumn = Schema::hasColumn('product_batches', 'batch_number') ? 'product_batches.batch_number' : 'product_batches.batch_no';
 
@@ -927,6 +931,86 @@ class InventoryControlService
         }
 
         return $rows->values();
+    }
+
+    private function annotatePhysicalCountLedger($ledger): void
+    {
+        $adjustmentIds = $ledger
+            ->filter(fn ($entry) => $entry->reference_type === StockAdjustmentVoucher::class && $entry->reference_id)
+            ->pluck('reference_id')
+            ->unique()
+            ->values();
+
+        if ($adjustmentIds->isEmpty()) {
+            return;
+        }
+
+        $adjustments = StockAdjustmentVoucher::query()
+            ->with('items')
+            ->where('business_id', AppController::businessId())
+            ->whereIn('id', $adjustmentIds)
+            ->where('source', 'physical_count')
+            ->get()
+            ->keyBy('id');
+
+        if ($adjustments->isEmpty()) {
+            return;
+        }
+
+        $countNumbers = $adjustments
+            ->map(fn ($adjustment) => $this->countNumberFromAdjustment($adjustment))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $counts = StockCountSession::query()
+            ->where('business_id', AppController::businessId())
+            ->whereIn('session_number', $countNumbers)
+            ->with('items')
+            ->get()
+            ->keyBy('session_number');
+
+        $ledger->each(function (StockLedger $entry) use ($adjustments, $counts) {
+            $adjustment = $adjustments->get((int) $entry->reference_id);
+            if (!$adjustment) {
+                return;
+            }
+
+            $countNumber = $this->countNumberFromAdjustment($adjustment);
+            $count = $countNumber ? $counts->get($countNumber) : null;
+            $variance = (float) $entry->quantity_in - (float) $entry->quantity_out;
+            $item = $adjustment->items
+                ->first(fn ($line) => (int) $line->product_id === (int) $entry->product_id
+                    && (int) ($line->product_variant_id ?? 0) === (int) ($entry->product_variant_id ?? 0)
+                    && (int) ($line->batch_id ?? 0) === (int) ($entry->batch_id ?? 0));
+            $countItem = $count?->items
+                ->first(fn ($line) => (int) $line->product_id === (int) $entry->product_id
+                    && (int) ($line->product_variant_id ?? 0) === (int) ($entry->product_variant_id ?? 0)
+                    && (int) ($line->batch_id ?? 0) === (int) ($entry->batch_id ?? 0));
+
+            $entry->reference_number = $countNumber ?: $entry->reference_number;
+            $entry->source_document = 'Stock Count';
+            $entry->source_number = $countNumber;
+            $entry->linked_adjustment_number = $adjustment->voucher_number;
+            $entry->transaction_type = $variance < 0 ? 'Physical Count Shortage' : 'Physical Count Gain';
+            $entry->movement = $variance < 0 ? 'Saleable -> Out' : 'In -> Saleable';
+            $entry->physical_change = $variance;
+            $entry->count_type = $count?->count_type;
+            $entry->system_quantity = $countItem?->system_quantity;
+            $entry->physical_quantity = $countItem?->counted_quantity;
+            $entry->variance_quantity = $countItem?->variance_quantity ?? $variance;
+            $entry->variance_reason = $countItem?->reviewer_notes ?: $item?->reason ?: ($variance < 0 ? 'Physical Count Shortage' : 'Physical Count Gain');
+            $entry->remarks = trim(($entry->variance_reason ?: '') . ' ' . ($countNumber ?: ''));
+        });
+    }
+
+    private function countNumberFromAdjustment(StockAdjustmentVoucher $adjustment): ?string
+    {
+        if (preg_match('/CNT-\d{4}-\d+/i', (string) $adjustment->remarks, $matches)) {
+            return strtoupper($matches[0]);
+        }
+
+        return null;
     }
 
     private function stockAlreadyPosted(string $type, int $id): bool

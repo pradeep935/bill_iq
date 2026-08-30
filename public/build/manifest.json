@@ -1,6 +1,6 @@
 {
-  "_AccountingApi-x3WvczX_.js": {
-    "file": "assets/AccountingApi-x3WvczX_.js",
+  "_AccountingApi-BDCCsb_G.js": {
+    "file": "assets/AccountingApi-BDCCsb_G.js",
     "name": "AccountingApi",
     "imports": [
       "resources/js/app.js"
@@ -10,8 +10,8 @@
     "file": "assets/AppToast-CJ9-lWCB.css",
     "src": "_AppToast-CJ9-lWCB.css"
   },
-  "_AppToast-Cktu8kp4.js": {
-    "file": "assets/AppToast-Cktu8kp4.js",
+  "_AppToast-peK_eP4i.js": {
+    "file": "assets/AppToast-peK_eP4i.js",
     "name": "AppToast",
     "imports": [
       "resources/js/app.js"
@@ -24,8 +24,8 @@
     "file": "assets/BarcodePreview-Bn0uYT9y.css",
     "src": "_BarcodePreview-Bn0uYT9y.css"
   },
-  "_BarcodePreview-Ng8miUie.js": {
-    "file": "assets/BarcodePreview-Ng8miUie.js",
+  "_BarcodePreview-E1l5xzy4.js": {
+    "file": "assets/BarcodePreview-E1l5xzy4.js",
     "name": "BarcodePreview",
     "isDynamicEntry": true,
     "imports": [
@@ -39,8 +39,8 @@
     "file": "assets/CrudDrawer-DcOu_Vcz.css",
     "src": "_CrudDrawer-DcOu_Vcz.css"
   },
-  "_CrudDrawer-XdzSGg_D.js": {
-    "file": "assets/CrudDrawer-XdzSGg_D.js",
+  "_CrudDrawer-DloOjvDo.js": {
+    "file": "assets/CrudDrawer-DloOjvDo.js",
     "name": "CrudDrawer",
     "imports": [
       "resources/js/app.js"
@@ -53,19 +53,23 @@
     "file": "assets/CrudTable-BSzu-Xje.css",
     "src": "_CrudTable-BSzu-Xje.css"
   },
-  "_CrudTable-i76i6Zab.js": {
-    "file": "assets/CrudTable-i76i6Zab.js",
+  "_CrudTable-COxrBYLg.js": {
+    "file": "assets/CrudTable-COxrBYLg.js",
     "name": "CrudTable",
     "imports": [
-      "_TableLoadingState-Bm3f-_vv.js",
+      "_TableLoadingState-Bl5ilKIv.js",
       "resources/js/app.js"
     ],
     "css": [
       "assets/CrudTable-BSzu-Xje.css"
     ]
   },
-  "_DrawerField-B4dM6beX.js": {
-    "file": "assets/DrawerField-B4dM6beX.js",
+  "_DrawerField-C7eB3Teq.css": {
+    "file": "assets/DrawerField-C7eB3Teq.css",
+    "src": "_DrawerField-C7eB3Teq.css"
+  },
+  "_DrawerField-CtreERYe.js": {
+    "file": "assets/DrawerField-CtreERYe.js",
     "name": "DrawerField",
     "imports": [
       "resources/js/app.js"
@@ -74,26 +78,22 @@
       "assets/DrawerField-C7eB3Teq.css"
     ]
   },
-  "_DrawerField-C7eB3Teq.css": {
-    "file": "assets/DrawerField-C7eB3Teq.css",
-    "src": "_DrawerField-C7eB3Teq.css"
-  },
-  "_InventoryApi-BFcNOqAk.js": {
-    "file": "assets/InventoryApi-BFcNOqAk.js",
+  "_InventoryApi-XV7uucpI.js": {
+    "file": "assets/InventoryApi-XV7uucpI.js",
     "name": "InventoryApi",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_OrderApi-CJwLBkm7.js": {
-    "file": "assets/OrderApi-CJwLBkm7.js",
+  "_OrderApi-DGDOLKT7.js": {
+    "file": "assets/OrderApi-DGDOLKT7.js",
     "name": "OrderApi",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_ProductForm-Ct6Dct0M.js": {
-    "file": "assets/ProductForm-Ct6Dct0M.js",
+  "_ProductForm-DkutsODR.js": {
+    "file": "assets/ProductForm-DkutsODR.js",
     "name": "ProductForm",
     "isDynamicEntry": true,
     "imports": [
@@ -107,19 +107,15 @@
     "file": "assets/ProductForm-awPiyHE_.css",
     "src": "_ProductForm-awPiyHE_.css"
   },
-  "_PurchaseApi-D72yeLJS.js": {
-    "file": "assets/PurchaseApi-D72yeLJS.js",
+  "_PurchaseApi-DW7KcY9w.js": {
+    "file": "assets/PurchaseApi-DW7KcY9w.js",
     "name": "PurchaseApi",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_RowActionMenu-CLZTkp_q.css": {
-    "file": "assets/RowActionMenu-CLZTkp_q.css",
-    "src": "_RowActionMenu-CLZTkp_q.css"
-  },
-  "_RowActionMenu-D2vTjyjv.js": {
-    "file": "assets/RowActionMenu-D2vTjyjv.js",
+  "_RowActionMenu-B2P6x4Uu.js": {
+    "file": "assets/RowActionMenu-B2P6x4Uu.js",
     "name": "RowActionMenu",
     "imports": [
       "resources/js/app.js"
@@ -128,19 +124,19 @@
       "assets/RowActionMenu-CLZTkp_q.css"
     ]
   },
-  "_SalesApi-Bu2Nn4Vy.js": {
-    "file": "assets/SalesApi-Bu2Nn4Vy.js",
+  "_RowActionMenu-CLZTkp_q.css": {
+    "file": "assets/RowActionMenu-CLZTkp_q.css",
+    "src": "_RowActionMenu-CLZTkp_q.css"
+  },
+  "_SalesApi-Bl1Z-k-0.js": {
+    "file": "assets/SalesApi-Bl1Z-k-0.js",
     "name": "SalesApi",
     "imports": [
       "resources/js/app.js"
     ]
   },
-  "_SearchSelect-D0JirZRl.css": {
-    "file": "assets/SearchSelect-D0JirZRl.css",
-    "src": "_SearchSelect-D0JirZRl.css"
-  },
-  "_SearchSelect-D508q1gx.js": {
-    "file": "assets/SearchSelect-D508q1gx.js",
+  "_SearchSelect-Cf2jy2kk.js": {
+    "file": "assets/SearchSelect-Cf2jy2kk.js",
     "name": "SearchSelect",
     "imports": [
       "resources/js/app.js"
@@ -149,8 +145,12 @@
       "assets/SearchSelect-D0JirZRl.css"
     ]
   },
-  "_SummaryCard-LRSVBqTX.js": {
-    "file": "assets/SummaryCard-LRSVBqTX.js",
+  "_SearchSelect-D0JirZRl.css": {
+    "file": "assets/SearchSelect-D0JirZRl.css",
+    "src": "_SearchSelect-D0JirZRl.css"
+  },
+  "_SummaryCard-DYZ6Xohx.js": {
+    "file": "assets/SummaryCard-DYZ6Xohx.js",
     "name": "SummaryCard",
     "imports": [
       "resources/js/app.js"
@@ -160,8 +160,8 @@
     "file": "assets/TableLoadingState-B_dNAbfc.css",
     "src": "_TableLoadingState-B_dNAbfc.css"
   },
-  "_TableLoadingState-Bm3f-_vv.js": {
-    "file": "assets/TableLoadingState-Bm3f-_vv.js",
+  "_TableLoadingState-Bl5ilKIv.js": {
+    "file": "assets/TableLoadingState-Bl5ilKIv.js",
     "name": "TableLoadingState",
     "imports": [
       "resources/js/app.js"
@@ -180,35 +180,35 @@
     "isEntry": true
   },
   "resources/js/Pages/Accounting/Accounts.vue": {
-    "file": "assets/Accounts-DgxQsrOt.js",
+    "file": "assets/Accounts-Pvuutuzb.js",
     "name": "Accounts",
     "src": "resources/js/Pages/Accounting/Accounts.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_AccountingApi-x3WvczX_.js"
+      "_AccountingApi-BDCCsb_G.js"
     ],
     "css": [
       "assets/Accounts-CfCxIF8Y.css"
     ]
   },
   "resources/js/Pages/Accounting/Expenses.vue": {
-    "file": "assets/Expenses-aatfOvtT.js",
+    "file": "assets/Expenses-OpltaVp-.js",
     "name": "Expenses",
     "src": "resources/js/Pages/Accounting/Expenses.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_AccountingApi-x3WvczX_.js"
+      "_AccountingApi-BDCCsb_G.js"
     ],
     "css": [
       "assets/Expenses-WiAa673z.css"
     ]
   },
   "resources/js/Pages/Accounting/Gst.vue": {
-    "file": "assets/Gst-DXHB-vK9.js",
+    "file": "assets/Gst-hAIc7p3a.js",
     "name": "Gst",
     "src": "resources/js/Pages/Accounting/Gst.vue",
     "isDynamicEntry": true,
@@ -223,35 +223,35 @@
     ]
   },
   "resources/js/Pages/Accounting/Ledgers.vue": {
-    "file": "assets/Ledgers-BYaCfuM2.js",
+    "file": "assets/Ledgers-Cv8PAEoi.js",
     "name": "Ledgers",
     "src": "resources/js/Pages/Accounting/Ledgers.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_AccountingApi-x3WvczX_.js"
+      "_AccountingApi-BDCCsb_G.js"
     ],
     "css": [
       "assets/Ledgers-DmlBU2KX.css"
     ]
   },
   "resources/js/Pages/Accounting/Vouchers.vue": {
-    "file": "assets/Vouchers-BbgKLcWg.js",
+    "file": "assets/Vouchers-4Zb-ShyH.js",
     "name": "Vouchers",
     "src": "resources/js/Pages/Accounting/Vouchers.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_AccountingApi-x3WvczX_.js"
+      "_AccountingApi-BDCCsb_G.js"
     ],
     "css": [
       "assets/Vouchers-CZouljvX.css"
     ]
   },
   "resources/js/Pages/Admin/Onboarding/Index.vue": {
-    "file": "assets/Index-WIZ4oFm9.js",
+    "file": "assets/Index-Lids4MJX.js",
     "name": "Index",
     "src": "resources/js/Pages/Admin/Onboarding/Index.vue",
     "isDynamicEntry": true,
@@ -264,7 +264,7 @@
     ]
   },
   "resources/js/Pages/Crm/Index.vue": {
-    "file": "assets/Index-CSG_oyI6.js",
+    "file": "assets/Index-BmgwqxUl.js",
     "name": "Index",
     "src": "resources/js/Pages/Crm/Index.vue",
     "isDynamicEntry": true,
@@ -277,18 +277,18 @@
     ]
   },
   "resources/js/Pages/Dashboard.vue": {
-    "file": "assets/Dashboard-QfNN0ESP.js",
+    "file": "assets/Dashboard-fyoSQkzr.js",
     "name": "Dashboard",
     "src": "resources/js/Pages/Dashboard.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_RowActionMenu-D2vTjyjv.js"
+      "_RowActionMenu-B2P6x4Uu.js"
     ]
   },
   "resources/js/Pages/FixedAssets/Index.vue": {
-    "file": "assets/Index-CWdlxwYn.js",
+    "file": "assets/Index-YPe6Q3hE.js",
     "name": "Index",
     "src": "resources/js/Pages/FixedAssets/Index.vue",
     "isDynamicEntry": true,
@@ -301,39 +301,39 @@
     ]
   },
   "resources/js/Pages/Inventory/BarcodeCenter.vue": {
-    "file": "assets/BarcodeCenter-BN_8IM5c.js",
+    "file": "assets/BarcodeCenter-BA182RXu.js",
     "name": "BarcodeCenter",
     "src": "resources/js/Pages/Inventory/BarcodeCenter.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_InventoryApi-BFcNOqAk.js",
-      "_AppToast-Cktu8kp4.js",
-      "_TableLoadingState-Bm3f-_vv.js",
+      "_InventoryApi-XV7uucpI.js",
+      "_AppToast-peK_eP4i.js",
+      "_TableLoadingState-Bl5ilKIv.js",
       "resources/js/Pages/Inventory/Shared/InventoryModuleScaffold.vue",
       "resources/js/Pages/Inventory/Shared/InventoryTable.vue",
       "resources/js/Pages/Inventory/Shared/InventoryModal.vue",
-      "_BarcodePreview-Ng8miUie.js",
+      "_BarcodePreview-E1l5xzy4.js",
       "resources/js/Pages/Inventory/Shared/BarcodeScannerInput.vue",
-      "_RowActionMenu-D2vTjyjv.js"
+      "_RowActionMenu-B2P6x4Uu.js"
     ],
     "css": [
       "assets/BarcodeCenter-BIBF3spq.css"
     ]
   },
   "resources/js/Pages/Inventory/BatchExpiry.vue": {
-    "file": "assets/BatchExpiry-BoYIdxX2.js",
+    "file": "assets/BatchExpiry-BrfeHDWH.js",
     "name": "BatchExpiry",
     "src": "resources/js/Pages/Inventory/BatchExpiry.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_InventoryApi-BFcNOqAk.js",
-      "_AppToast-Cktu8kp4.js",
-      "_TableLoadingState-Bm3f-_vv.js",
-      "_RowActionMenu-D2vTjyjv.js",
+      "_InventoryApi-XV7uucpI.js",
+      "_AppToast-peK_eP4i.js",
+      "_TableLoadingState-Bl5ilKIv.js",
+      "_RowActionMenu-B2P6x4Uu.js",
       "_formatters-Bkw5-39E.js"
     ],
     "css": [
@@ -341,86 +341,86 @@
     ]
   },
   "resources/js/Pages/Inventory/Control.vue": {
-    "file": "assets/Control-C7yJqm81.js",
+    "file": "assets/Control-DodqDSDZ.js",
     "name": "Control",
     "src": "resources/js/Pages/Inventory/Control.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_InventoryApi-BFcNOqAk.js",
-      "_AppToast-Cktu8kp4.js",
-      "_TableLoadingState-Bm3f-_vv.js",
+      "_InventoryApi-XV7uucpI.js",
+      "_AppToast-peK_eP4i.js",
+      "_TableLoadingState-Bl5ilKIv.js",
       "_formatters-Bkw5-39E.js"
     ],
     "css": [
-      "assets/Control-D1SUzDu3.css"
+      "assets/Control-cPTkkVVk.css"
     ]
   },
   "resources/js/Pages/Inventory/Manufacturing.vue": {
-    "file": "assets/Manufacturing-B0rGEFtv.js",
+    "file": "assets/Manufacturing-BKDol4Ki.js",
     "name": "Manufacturing",
     "src": "resources/js/Pages/Inventory/Manufacturing.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_InventoryApi-BFcNOqAk.js",
-      "_AppToast-Cktu8kp4.js",
-      "_TableLoadingState-Bm3f-_vv.js",
+      "_InventoryApi-XV7uucpI.js",
+      "_AppToast-peK_eP4i.js",
+      "_TableLoadingState-Bl5ilKIv.js",
       "resources/js/Pages/Inventory/Shared/InventoryModuleScaffold.vue",
       "resources/js/Pages/Inventory/Shared/InventoryTable.vue",
       "resources/js/Pages/Inventory/Shared/InventoryModal.vue",
-      "_RowActionMenu-D2vTjyjv.js"
+      "_RowActionMenu-B2P6x4Uu.js"
     ],
     "css": [
       "assets/Manufacturing-6dNhy6PQ.css"
     ]
   },
   "resources/js/Pages/Inventory/OpeningStock.vue": {
-    "file": "assets/OpeningStock-BH5GgKZu.js",
+    "file": "assets/OpeningStock-B5IKUVng.js",
     "name": "OpeningStock",
     "src": "resources/js/Pages/Inventory/OpeningStock.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_InventoryApi-BFcNOqAk.js",
-      "_AppToast-Cktu8kp4.js",
-      "_CrudTable-i76i6Zab.js",
-      "_DrawerField-B4dM6beX.js",
-      "_RowActionMenu-D2vTjyjv.js",
+      "_InventoryApi-XV7uucpI.js",
+      "_AppToast-peK_eP4i.js",
+      "_CrudTable-COxrBYLg.js",
+      "_DrawerField-CtreERYe.js",
+      "_RowActionMenu-B2P6x4Uu.js",
       "_formatters-Bkw5-39E.js",
-      "_TableLoadingState-Bm3f-_vv.js"
+      "_TableLoadingState-Bl5ilKIv.js"
     ],
     "css": [
       "assets/OpeningStock-DWLyQpzD.css"
     ]
   },
   "resources/js/Pages/Inventory/SerialNumbers.vue": {
-    "file": "assets/SerialNumbers-Dufvq3wU.js",
+    "file": "assets/SerialNumbers-Bt05PICT.js",
     "name": "SerialNumbers",
     "src": "resources/js/Pages/Inventory/SerialNumbers.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_InventoryApi-BFcNOqAk.js",
-      "_AppToast-Cktu8kp4.js",
-      "_TableLoadingState-Bm3f-_vv.js",
+      "_InventoryApi-XV7uucpI.js",
+      "_AppToast-peK_eP4i.js",
+      "_TableLoadingState-Bl5ilKIv.js",
       "resources/js/Pages/Inventory/Shared/InventoryModuleScaffold.vue",
       "resources/js/Pages/Inventory/Shared/InventoryTable.vue",
       "resources/js/Pages/Inventory/Shared/InventoryModal.vue",
       "resources/js/Pages/Inventory/Shared/BarcodeScannerInput.vue",
-      "_BarcodePreview-Ng8miUie.js",
-      "_RowActionMenu-D2vTjyjv.js"
+      "_BarcodePreview-E1l5xzy4.js",
+      "_RowActionMenu-B2P6x4Uu.js"
     ],
     "css": [
       "assets/SerialNumbers-au43MxqL.css"
     ]
   },
   "resources/js/Pages/Inventory/Shared/BarcodeScannerInput.vue": {
-    "file": "assets/BarcodeScannerInput-DEYVGlJu.js",
+    "file": "assets/BarcodeScannerInput-CQz_wGKV.js",
     "name": "BarcodeScannerInput",
     "src": "resources/js/Pages/Inventory/Shared/BarcodeScannerInput.vue",
     "isDynamicEntry": true,
@@ -429,7 +429,7 @@
     ]
   },
   "resources/js/Pages/Inventory/Shared/InventoryModal.vue": {
-    "file": "assets/InventoryModal-7zw4d50Q.js",
+    "file": "assets/InventoryModal-BgN-fHDN.js",
     "name": "InventoryModal",
     "src": "resources/js/Pages/Inventory/Shared/InventoryModal.vue",
     "isDynamicEntry": true,
@@ -441,7 +441,7 @@
     ]
   },
   "resources/js/Pages/Inventory/Shared/InventoryModuleScaffold.vue": {
-    "file": "assets/InventoryModuleScaffold-nyC9j7iF.js",
+    "file": "assets/InventoryModuleScaffold-DFJU6_BM.js",
     "name": "InventoryModuleScaffold",
     "src": "resources/js/Pages/Inventory/Shared/InventoryModuleScaffold.vue",
     "isDynamicEntry": true,
@@ -453,7 +453,7 @@
     ]
   },
   "resources/js/Pages/Inventory/Shared/InventoryTable.vue": {
-    "file": "assets/InventoryTable-BgyMEhej.js",
+    "file": "assets/InventoryTable-BG1Jzz8S.js",
     "name": "InventoryTable",
     "src": "resources/js/Pages/Inventory/Shared/InventoryTable.vue",
     "isDynamicEntry": true,
@@ -465,18 +465,18 @@
     ]
   },
   "resources/js/Pages/Inventory/StockSummary.vue": {
-    "file": "assets/StockSummary-WgEevRIP.js",
+    "file": "assets/StockSummary-BoGr0DNg.js",
     "name": "StockSummary",
     "src": "resources/js/Pages/Inventory/StockSummary.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_InventoryApi-BFcNOqAk.js",
-      "_CrudTable-i76i6Zab.js",
-      "_CrudDrawer-XdzSGg_D.js",
-      "_RowActionMenu-D2vTjyjv.js",
-      "_TableLoadingState-Bm3f-_vv.js",
+      "_InventoryApi-XV7uucpI.js",
+      "_CrudTable-COxrBYLg.js",
+      "_CrudDrawer-DloOjvDo.js",
+      "_RowActionMenu-B2P6x4Uu.js",
+      "_TableLoadingState-Bl5ilKIv.js",
       "_formatters-Bkw5-39E.js"
     ],
     "css": [
@@ -484,7 +484,7 @@
     ]
   },
   "resources/js/Pages/Layout.vue": {
-    "file": "assets/Layout-IxQfWdLb.js",
+    "file": "assets/Layout-BRswRPPK.js",
     "name": "Layout",
     "src": "resources/js/Pages/Layout.vue",
     "isDynamicEntry": true,
@@ -493,21 +493,21 @@
     ]
   },
   "resources/js/Pages/Orders/Management.vue": {
-    "file": "assets/Management-cs5qr9Js.js",
+    "file": "assets/Management-31EY4xyg.js",
     "name": "Management",
     "src": "resources/js/Pages/Orders/Management.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_OrderApi-CJwLBkm7.js"
+      "_OrderApi-DGDOLKT7.js"
     ],
     "css": [
       "assets/Management-DXZAEGfk.css"
     ]
   },
   "resources/js/Pages/Payroll/Index.vue": {
-    "file": "assets/Index-BuhboNNb.js",
+    "file": "assets/Index-LXuOi5fY.js",
     "name": "Index",
     "src": "resources/js/Pages/Payroll/Index.vue",
     "isDynamicEntry": true,
@@ -520,7 +520,7 @@
     ]
   },
   "resources/js/Pages/Placeholder.vue": {
-    "file": "assets/Placeholder-IWltJArT.js",
+    "file": "assets/Placeholder-D0bPreUu.js",
     "name": "Placeholder",
     "src": "resources/js/Pages/Placeholder.vue",
     "isDynamicEntry": true,
@@ -530,23 +530,23 @@
     ]
   },
   "resources/js/Pages/Pos.vue": {
-    "file": "assets/Pos-3cLrg2My.js",
+    "file": "assets/Pos-Bf2-EjuE.js",
     "name": "Pos",
     "src": "resources/js/Pages/Pos.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_SalesApi-Bu2Nn4Vy.js",
-      "_SummaryCard-LRSVBqTX.js",
-      "_AppToast-Cktu8kp4.js"
+      "_SalesApi-Bl1Z-k-0.js",
+      "_SummaryCard-DYZ6Xohx.js",
+      "_AppToast-peK_eP4i.js"
     ],
     "css": [
       "assets/Pos-CyA03fTo.css"
     ]
   },
   "resources/js/Pages/Product/BarcodeModal.vue": {
-    "file": "assets/BarcodeModal-D0LR-S3R.js",
+    "file": "assets/BarcodeModal-DOcK6H6n.js",
     "name": "BarcodeModal",
     "src": "resources/js/Pages/Product/BarcodeModal.vue",
     "isDynamicEntry": true,
@@ -558,26 +558,26 @@
     ]
   },
   "resources/js/Pages/Product/Index.vue": {
-    "file": "assets/Index-siWeCl_F.js",
+    "file": "assets/Index-D4hq6eDV.js",
     "name": "Index",
     "src": "resources/js/Pages/Product/Index.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_ProductForm-Ct6Dct0M.js",
+      "_ProductForm-DkutsODR.js",
       "resources/js/Pages/Product/BarcodeModal.vue",
       "resources/js/Pages/Product/LabelModal.vue",
-      "_CrudTable-i76i6Zab.js",
-      "_RowActionMenu-D2vTjyjv.js",
-      "_TableLoadingState-Bm3f-_vv.js"
+      "_CrudTable-COxrBYLg.js",
+      "_RowActionMenu-B2P6x4Uu.js",
+      "_TableLoadingState-Bl5ilKIv.js"
     ],
     "css": [
       "assets/Index-BZM1lV6y.css"
     ]
   },
   "resources/js/Pages/Product/LabelModal.vue": {
-    "file": "assets/LabelModal-DCDofPSE.js",
+    "file": "assets/LabelModal-UrD-oeP1.js",
     "name": "LabelModal",
     "src": "resources/js/Pages/Product/LabelModal.vue",
     "isDynamicEntry": true,
@@ -589,7 +589,7 @@
     ]
   },
   "resources/js/Pages/Profile/Edit.vue": {
-    "file": "assets/Edit-DBo1LsMZ.js",
+    "file": "assets/Edit-DmvCmqkU.js",
     "name": "Edit",
     "src": "resources/js/Pages/Profile/Edit.vue",
     "isDynamicEntry": true,
@@ -599,99 +599,99 @@
     ]
   },
   "resources/js/Pages/Purchase/InventoryOrders.vue": {
-    "file": "assets/InventoryOrders-Bqd2fieN.js",
+    "file": "assets/InventoryOrders-Cq9d5zIb.js",
     "name": "InventoryOrders",
     "src": "resources/js/Pages/Purchase/InventoryOrders.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_PurchaseApi-D72yeLJS.js",
-      "_RowActionMenu-D2vTjyjv.js"
+      "_PurchaseApi-DW7KcY9w.js",
+      "_RowActionMenu-B2P6x4Uu.js"
     ],
     "css": [
       "assets/InventoryOrders-C1eR3OEK.css"
     ]
   },
   "resources/js/Pages/Purchase/PurchaseReturns.vue": {
-    "file": "assets/PurchaseReturns-BZV1W9Pm.js",
+    "file": "assets/PurchaseReturns-X7YJse1R.js",
     "name": "PurchaseReturns",
     "src": "resources/js/Pages/Purchase/PurchaseReturns.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_PurchaseApi-D72yeLJS.js",
-      "_RowActionMenu-D2vTjyjv.js",
-      "_SearchSelect-D508q1gx.js"
+      "_PurchaseApi-DW7KcY9w.js",
+      "_RowActionMenu-B2P6x4Uu.js",
+      "_SearchSelect-Cf2jy2kk.js"
     ],
     "css": [
       "assets/PurchaseReturns-B4lpFR-5.css"
     ]
   },
   "resources/js/Pages/Purchase/Purchases.vue": {
-    "file": "assets/Purchases-C2uXhSi3.js",
+    "file": "assets/Purchases-CHaAgKKp.js",
     "name": "Purchases",
     "src": "resources/js/Pages/Purchase/Purchases.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_PurchaseApi-D72yeLJS.js",
-      "_RowActionMenu-D2vTjyjv.js",
-      "_SearchSelect-D508q1gx.js"
+      "_PurchaseApi-DW7KcY9w.js",
+      "_RowActionMenu-B2P6x4Uu.js",
+      "_SearchSelect-Cf2jy2kk.js"
     ],
     "css": [
       "assets/Purchases-WRsuU2Fv.css"
     ]
   },
   "resources/js/Pages/Purchase/ReorderSuggestions.vue": {
-    "file": "assets/ReorderSuggestions-CsFW_rZd.js",
+    "file": "assets/ReorderSuggestions-BMA_eBxC.js",
     "name": "ReorderSuggestions",
     "src": "resources/js/Pages/Purchase/ReorderSuggestions.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_PurchaseApi-D72yeLJS.js",
-      "_RowActionMenu-D2vTjyjv.js"
+      "_PurchaseApi-DW7KcY9w.js",
+      "_RowActionMenu-B2P6x4Uu.js"
     ],
     "css": [
       "assets/ReorderSuggestions-DIW2xp_s.css"
     ]
   },
   "resources/js/Pages/Purchase/Suppliers.vue": {
-    "file": "assets/Suppliers-wbjmZlcx.js",
+    "file": "assets/Suppliers-B4kavSGc.js",
     "name": "Suppliers",
     "src": "resources/js/Pages/Purchase/Suppliers.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_PurchaseApi-D72yeLJS.js",
-      "_RowActionMenu-D2vTjyjv.js",
-      "_SearchSelect-D508q1gx.js"
+      "_PurchaseApi-DW7KcY9w.js",
+      "_RowActionMenu-B2P6x4Uu.js",
+      "_SearchSelect-Cf2jy2kk.js"
     ],
     "css": [
       "assets/Suppliers-1VK9X_uP.css"
     ]
   },
   "resources/js/Pages/Purchase/Workflow.vue": {
-    "file": "assets/Workflow-DxZuya_K.js",
+    "file": "assets/Workflow-C5P40IUs.js",
     "name": "Workflow",
     "src": "resources/js/Pages/Purchase/Workflow.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_OrderApi-CJwLBkm7.js"
+      "_OrderApi-DGDOLKT7.js"
     ],
     "css": [
       "assets/Workflow-B_OFAARA.css"
     ]
   },
   "resources/js/Pages/Reports/Financial.vue": {
-    "file": "assets/Financial-Bzyc9Q6o.js",
+    "file": "assets/Financial-DZP9ACAI.js",
     "name": "Financial",
     "src": "resources/js/Pages/Reports/Financial.vue",
     "isDynamicEntry": true,
@@ -704,14 +704,14 @@
     ]
   },
   "resources/js/Pages/Reports/InventoryReports.vue": {
-    "file": "assets/InventoryReports-xhm-f8nD.js",
+    "file": "assets/InventoryReports-CnzAOY7J.js",
     "name": "InventoryReports",
     "src": "resources/js/Pages/Reports/InventoryReports.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_InventoryApi-BFcNOqAk.js",
+      "_InventoryApi-XV7uucpI.js",
       "resources/js/Pages/Inventory/Shared/InventoryModuleScaffold.vue",
       "resources/js/Pages/Inventory/Shared/InventoryTable.vue"
     ],
@@ -720,86 +720,86 @@
     ]
   },
   "resources/js/Pages/Sales/Customers.vue": {
-    "file": "assets/Customers-CDD2yp31.js",
+    "file": "assets/Customers-Bl0llEsb.js",
     "name": "Customers",
     "src": "resources/js/Pages/Sales/Customers.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_SalesApi-Bu2Nn4Vy.js",
-      "_RowActionMenu-D2vTjyjv.js",
-      "_SearchSelect-D508q1gx.js"
+      "_SalesApi-Bl1Z-k-0.js",
+      "_RowActionMenu-B2P6x4Uu.js",
+      "_SearchSelect-Cf2jy2kk.js"
     ],
     "css": [
       "assets/Customers-CaBkLFbd.css"
     ]
   },
   "resources/js/Pages/Sales/SalesInvoices.vue": {
-    "file": "assets/SalesInvoices-DpinaQVU.js",
+    "file": "assets/SalesInvoices-BaLJ3Sv_.js",
     "name": "SalesInvoices",
     "src": "resources/js/Pages/Sales/SalesInvoices.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_SalesApi-Bu2Nn4Vy.js",
-      "_RowActionMenu-D2vTjyjv.js"
+      "_SalesApi-Bl1Z-k-0.js",
+      "_RowActionMenu-B2P6x4Uu.js"
     ],
     "css": [
       "assets/SalesInvoices-DGUp5J6X.css"
     ]
   },
   "resources/js/Pages/Sales/SalesReturns.vue": {
-    "file": "assets/SalesReturns-DxRPVYPp.js",
+    "file": "assets/SalesReturns-OP4o1z0S.js",
     "name": "SalesReturns",
     "src": "resources/js/Pages/Sales/SalesReturns.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_SalesApi-Bu2Nn4Vy.js",
-      "_SummaryCard-LRSVBqTX.js",
-      "_RowActionMenu-D2vTjyjv.js"
+      "_SalesApi-Bl1Z-k-0.js",
+      "_SummaryCard-DYZ6Xohx.js",
+      "_RowActionMenu-B2P6x4Uu.js"
     ],
     "css": [
       "assets/SalesReturns-Dn8i6V4c.css"
     ]
   },
   "resources/js/Pages/Sales/StockOperations.vue": {
-    "file": "assets/StockOperations-pJOvKQ_e.js",
+    "file": "assets/StockOperations-Ok0L5tSe.js",
     "name": "StockOperations",
     "src": "resources/js/Pages/Sales/StockOperations.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_RowActionMenu-D2vTjyjv.js"
+      "_RowActionMenu-B2P6x4Uu.js"
     ],
     "css": [
       "assets/StockOperations-BahLhZxB.css"
     ]
   },
   "resources/js/Pages/Setup/Masters.vue": {
-    "file": "assets/Masters-BB38J5gL.js",
+    "file": "assets/Masters-C9j_pL1X.js",
     "name": "Masters",
     "src": "resources/js/Pages/Setup/Masters.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
-      "_CrudDrawer-XdzSGg_D.js",
-      "_CrudTable-i76i6Zab.js",
-      "_DrawerField-B4dM6beX.js",
-      "_SearchSelect-D508q1gx.js",
+      "_CrudDrawer-DloOjvDo.js",
+      "_CrudTable-COxrBYLg.js",
+      "_DrawerField-CtreERYe.js",
+      "_SearchSelect-Cf2jy2kk.js",
       "resources/js/Pages/Layout.vue",
-      "_TableLoadingState-Bm3f-_vv.js"
+      "_TableLoadingState-Bl5ilKIv.js"
     ],
     "css": [
       "assets/Masters-DcqIOEbq.css"
     ]
   },
   "resources/js/Pages/Setup/Workspace.vue": {
-    "file": "assets/Workspace-DGP8nZ85.js",
+    "file": "assets/Workspace-CcEQW_Gy.js",
     "name": "Workspace",
     "src": "resources/js/Pages/Setup/Workspace.vue",
     "isDynamicEntry": true,
@@ -812,7 +812,7 @@
     ]
   },
   "resources/js/Pages/Staff/Workspace.vue": {
-    "file": "assets/Workspace-DfvmVSqz.js",
+    "file": "assets/Workspace-FoHy9h_b.js",
     "name": "Workspace",
     "src": "resources/js/Pages/Staff/Workspace.vue",
     "isDynamicEntry": true,
@@ -825,14 +825,14 @@
     ]
   },
   "resources/js/Pages/Warehouse/Operations.vue": {
-    "file": "assets/Operations-v-F_qt3k.js",
+    "file": "assets/Operations-DkzGNSnL.js",
     "name": "Operations",
     "src": "resources/js/Pages/Warehouse/Operations.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/app.js",
       "resources/js/Pages/Layout.vue",
-      "_InventoryApi-BFcNOqAk.js",
+      "_InventoryApi-XV7uucpI.js",
       "resources/js/Pages/Inventory/Shared/InventoryModuleScaffold.vue",
       "resources/js/Pages/Inventory/Shared/InventoryTable.vue"
     ],
@@ -841,7 +841,7 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-Dp-Ospvv.js",
+    "file": "assets/app-2CbgllzH.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -861,7 +861,7 @@
       "resources/js/Pages/Inventory/Manufacturing.vue",
       "resources/js/Pages/Inventory/OpeningStock.vue",
       "resources/js/Pages/Inventory/SerialNumbers.vue",
-      "_BarcodePreview-Ng8miUie.js",
+      "_BarcodePreview-E1l5xzy4.js",
       "resources/js/Pages/Inventory/Shared/BarcodeScannerInput.vue",
       "resources/js/Pages/Inventory/Shared/InventoryModal.vue",
       "resources/js/Pages/Inventory/Shared/InventoryModuleScaffold.vue",
@@ -875,7 +875,7 @@
       "resources/js/Pages/Product/BarcodeModal.vue",
       "resources/js/Pages/Product/Index.vue",
       "resources/js/Pages/Product/LabelModal.vue",
-      "_ProductForm-Ct6Dct0M.js",
+      "_ProductForm-DkutsODR.js",
       "resources/js/Pages/Profile/Edit.vue",
       "resources/js/Pages/Purchase/InventoryOrders.vue",
       "resources/js/Pages/Purchase/PurchaseReturns.vue",

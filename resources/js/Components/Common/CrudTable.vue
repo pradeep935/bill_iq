@@ -1,5 +1,5 @@
 <template>
-  <div class="crud-table-wrap" :class="wrapClass">
+  <div class="crud-table-wrap" :class="[wrapClass, { 'has-selection': selectable, 'has-actions': showActions }]">
     <table class="crud-table" :class="tableClass">
       <thead>
         <tr>
@@ -112,20 +112,28 @@ const statusLabel = (status) => String(status).charAt(0).toUpperCase() + String(
 
 <style scoped>
 .crud-table-wrap {
+  max-height: calc(100vh - 340px);
+  min-height: 280px;
   margin-bottom: -170px;
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: auto;
   padding-bottom: 170px;
+  position: relative;
 }
 
 .crud-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   color: #27344c;
   font-size: 12px;
+  min-width: 100%;
   width: 100%;
 }
 
 .crud-table th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   background: #f8fafc;
   border-bottom: 1px solid #e7ecf2;
   color: #69758a;
@@ -145,6 +153,7 @@ const statusLabel = (status) => String(status).charAt(0).toUpperCase() + String(
 }
 
 .crud-table td {
+  background: #fff;
   border-bottom: 1px solid #edf1f5;
   color: #27344c;
   font-size: 12px;
@@ -154,11 +163,49 @@ const statusLabel = (status) => String(status).charAt(0).toUpperCase() + String(
 }
 
 .crud-select-column {
+  background: #fff;
+  left: 0;
+  min-width: 44px;
+  position: sticky;
+  z-index: 18;
   text-align: center !important;
-  width: 38px;
+  width: 44px;
+}
+
+thead .crud-select-column {
+  background: #f8fafc;
+  z-index: 32;
+}
+
+.crud-table-wrap.has-selection .crud-table th:nth-child(2),
+.crud-table-wrap.has-selection .crud-table td:nth-child(2) {
+  left: 44px;
+}
+
+.crud-table-wrap:not(.has-selection) .crud-table th:first-child,
+.crud-table-wrap:not(.has-selection) .crud-table td:first-child,
+.crud-table-wrap.has-selection .crud-table th:nth-child(2),
+.crud-table-wrap.has-selection .crud-table td:nth-child(2) {
+  background: #fff;
+  min-width: 180px;
+  position: sticky;
+  z-index: 17;
+  box-shadow: 8px 0 14px rgba(15, 23, 42, .06);
+}
+
+.crud-table-wrap:not(.has-selection) .crud-table th:first-child,
+.crud-table-wrap.has-selection .crud-table th:nth-child(2) {
+  background: #f8fafc;
+  z-index: 31;
 }
 
 .crud-table tbody tr:hover {
+  background: #fbfcff;
+}
+
+.crud-table tbody tr:hover td,
+.crud-table tbody tr:hover .crud-select-column,
+.crud-table tbody tr:hover .crud-action-column {
   background: #fbfcff;
 }
 
@@ -258,8 +305,19 @@ const statusLabel = (status) => String(status).charAt(0).toUpperCase() + String(
 }
 
 .crud-action-column {
+  background: #fff;
+  min-width: 138px;
+  position: sticky;
+  right: 0;
+  z-index: 18;
+  box-shadow: -8px 0 14px rgba(15, 23, 42, .06);
   text-align: right !important;
   width: 150px;
+}
+
+thead .crud-action-column {
+  background: #f8fafc;
+  z-index: 32;
 }
 
 .crud-row-actions {
@@ -306,5 +364,26 @@ const statusLabel = (status) => String(status).charAt(0).toUpperCase() + String(
 :slotted(.crud-action:disabled) {
   cursor: not-allowed;
   opacity: .65;
+}
+
+@media (max-width: 760px) {
+  .crud-table-wrap {
+    max-height: none;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .crud-table th,
+  .crud-table td,
+  .crud-select-column,
+  .crud-action-column,
+  .crud-table-wrap:not(.has-selection) .crud-table th:first-child,
+  .crud-table-wrap:not(.has-selection) .crud-table td:first-child,
+  .crud-table-wrap.has-selection .crud-table th:nth-child(2),
+  .crud-table-wrap.has-selection .crud-table td:nth-child(2) {
+    position: static;
+    box-shadow: none;
+  }
 }
 </style>

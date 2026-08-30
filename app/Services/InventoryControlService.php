@@ -460,6 +460,10 @@ class InventoryControlService
             'total_stock_value' => $dashboard['inventory_value'] ?? 0,
             'total_saleable_quantity' => $dashboard['saleable_quantity'] ?? $dashboard['total_quantity'] ?? 0,
             'damaged_quantity' => $dashboard['damaged_quantity'] ?? 0,
+            'expired_quantity' => $dashboard['expired_quantity'] ?? 0,
+            'defective_quantity' => $dashboard['defective_quantity'] ?? 0,
+            'quarantined_quantity' => $dashboard['quarantined_quantity'] ?? 0,
+            'lost_quantity' => $dashboard['lost_quantity'] ?? 0,
             'physical_quantity' => $dashboard['physical_quantity'] ?? $dashboard['total_quantity'] ?? 0,
             'non_saleable_quantity' => $dashboard['non_saleable_quantity'] ?? 0,
             'low_stock_items' => $dashboard['low_stock_products'] ?? 0,
@@ -499,8 +503,8 @@ class InventoryControlService
             'ledger' => $ledger,
             'movement_report' => $movementReport,
             'inventory_valuation' => $this->stock->summary(array_merge($filters, ['view_mode' => 'summary', 'per_page' => 100]))->getCollection()->values(),
-            'branch_report' => DB::table('stock_ledgers')->leftJoin('branches', 'branches.id', '=', 'stock_ledgers.branch_id')->where('stock_ledgers.business_id', $businessId)->selectRaw($this->conditionReportSelect('COALESCE(branches.name, "Unassigned") as branch_name'))->groupBy('branches.name')->orderBy('branches.name')->get(),
-            'warehouse_report' => DB::table('stock_ledgers')->leftJoin('warehouses', 'warehouses.id', '=', 'stock_ledgers.warehouse_id')->where('stock_ledgers.business_id', $businessId)->selectRaw($this->conditionReportSelect('COALESCE(warehouses.name, "Unassigned") as warehouse_name'))->groupBy('warehouses.name')->orderBy('warehouses.name')->get(),
+            'branch_report' => $this->conditionReportQuery($filters)->leftJoin('branches', 'branches.id', '=', 'stock_ledgers.branch_id')->selectRaw($this->conditionReportSelect('COALESCE(branches.name, "Unassigned") as branch_name'))->groupBy('branches.name')->orderBy('branches.name')->get(),
+            'warehouse_report' => $this->conditionReportQuery($filters)->leftJoin('warehouses', 'warehouses.id', '=', 'stock_ledgers.warehouse_id')->selectRaw($this->conditionReportSelect('COALESCE(warehouses.name, "Unassigned") as warehouse_name'))->groupBy('warehouses.name')->orderBy('warehouses.name')->get(),
             'adjustment_report' => StockAdjustmentVoucher::query()->with(['branch', 'warehouse', 'reason'])->where('business_id', $businessId)->latest('id')->limit(100)->get(),
             'transfer_report' => StockTransferVoucher::query()->with(['sourceWarehouse', 'destinationWarehouse'])->where('business_id', $businessId)->latest('id')->limit(100)->get(),
             'variance_report' => StockCountSession::query()->with('items.product')->where('business_id', $businessId)->latest('id')->limit(50)->get(),
@@ -768,6 +772,17 @@ class InventoryControlService
             SUM(CASE WHEN stock_status = "lost" THEN quantity_in - quantity_out ELSE 0 END) as lost_quantity,
             SUM(quantity_in - quantity_out) as quantity_available,
             SUM(stock_value) as stock_value';
+    }
+
+    private function conditionReportQuery(array $filters)
+    {
+        return DB::table('stock_ledgers')
+            ->where('stock_ledgers.business_id', AppController::businessId())
+            ->when(!empty($filters['branch_id']), fn ($q) => $q->where('stock_ledgers.branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn ($q) => $q->where('stock_ledgers.warehouse_id', $filters['warehouse_id']))
+            ->when(!empty($filters['product_id']), fn ($q) => $q->where('stock_ledgers.product_id', $filters['product_id']))
+            ->when(array_key_exists('product_variant_id', $filters) && $filters['product_variant_id'] !== '', fn ($q) => $q->where('stock_ledgers.product_variant_id', $filters['product_variant_id']))
+            ->when(array_key_exists('batch_id', $filters) && $filters['batch_id'] !== '', fn ($q) => $q->where('stock_ledgers.batch_id', $filters['batch_id']));
     }
 
     private function outTypeForCondition(?string $condition): string

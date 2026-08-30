@@ -407,6 +407,19 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->assertMovementRow($product->id, 'Saleable -> Damaged', 2, 0);
     }
 
+    public function test_saleable_to_expired_condition_transfer_updates_expired_without_reducing_physical_stock(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 319);
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'damaged', 4);
+
+        $this->postConditionTransfer($branch, $warehouse, $product->id, 'saleable', 'expired', 2);
+
+        $this->assertConditionBalances($businessId, $branch, $warehouse, $product->id, saleable: 317, damaged: 4, physical: 323, expired: 2);
+        $this->assertConditionSurfaces($businessId, $branch, $warehouse, $product->id, saleable: 317, damaged: 4, physical: 323, expired: 2);
+        $this->assertMovementRow($product->id, 'Saleable -> Expired', 2, 0);
+    }
+
     public function test_lost_stock_is_not_counted_as_physical_stock(): void
     {
         [$businessId, $product, $branch, $warehouse] = $this->fixture();
@@ -524,17 +537,18 @@ class InventoryConditionAdjustmentTest extends TestCase
         ]);
     }
 
-    private function assertConditionBalances(int $businessId, int $branch, int $warehouse, int $productId, float $saleable, float $damaged, float $physical): void
+    private function assertConditionBalances(int $businessId, int $branch, int $warehouse, int $productId, float $saleable, float $damaged, float $physical, float $expired = 0): void
     {
         $stock = app(StockService::class);
         $scope = ['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $productId];
 
         $this->assertSame($saleable, $stock->getConditionStock($scope, 'saleable'));
         $this->assertSame($damaged, $stock->getConditionStock($scope, 'damaged'));
+        $this->assertSame($expired, $stock->getConditionStock($scope, 'expired'));
         $this->assertSame($physical, $stock->getPhysicalStock($scope));
     }
 
-    private function assertConditionSurfaces(int $businessId, int $branch, int $warehouse, int $productId, float $saleable, float $damaged, float $physical): void
+    private function assertConditionSurfaces(int $businessId, int $branch, int $warehouse, int $productId, float $saleable, float $damaged, float $physical, float $expired = 0): void
     {
         $stock = app(StockService::class);
         $inventory = app(InventoryControlService::class);
@@ -550,18 +564,27 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->assertSame($saleable, $stock->getCurrentStock($scope));
         $this->assertSame($saleable, (float) $summary->saleable_quantity);
         $this->assertSame($damaged, (float) $summary->damaged_quantity);
+        $this->assertSame($expired, (float) $summary->expired_quantity);
         $this->assertSame($physical, (float) $summary->physical_quantity);
         $this->assertSame($saleable, (float) $dashboard['saleable_quantity']);
         $this->assertSame($damaged, (float) $dashboard['damaged_quantity']);
+        $this->assertSame($expired, (float) $dashboard['expired_quantity']);
         $this->assertSame($physical, (float) $dashboard['physical_quantity']);
         $this->assertSame($saleable, (float) $branchRow->saleable_quantity);
         $this->assertSame($damaged, (float) $branchRow->damaged_quantity);
+        $this->assertSame($expired, (float) $branchRow->expired_quantity);
         $this->assertSame($physical, (float) $branchRow->physical_quantity);
         $this->assertSame($saleable, (float) $warehouseRow->saleable_quantity);
         $this->assertSame($damaged, (float) $warehouseRow->damaged_quantity);
+        $this->assertSame($expired, (float) $warehouseRow->expired_quantity);
         $this->assertSame($physical, (float) $warehouseRow->physical_quantity);
         $this->assertSame($saleable, (float) $conditionRows['saleable']['quantity']);
         $this->assertSame($damaged, (float) $conditionRows['damaged']['quantity']);
+        if ($expired > 0) {
+            $this->assertSame($expired, (float) $conditionRows['expired']['quantity']);
+        } else {
+            $this->assertArrayNotHasKey('expired', $conditionRows->all());
+        }
         $this->assertGreaterThanOrEqual(3, $reports['ledger']->count());
     }
 

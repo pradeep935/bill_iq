@@ -222,6 +222,7 @@ class InventoryConditionAdjustmentTest extends TestCase
             $table->string('warehouse_location')->nullable();
             $table->string('stock_status', 30)->default('saleable');
             $table->timestamp('transaction_date')->nullable();
+            $table->timestamp('posted_at')->nullable();
             $table->text('remarks')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();
             $table->timestamps();
@@ -290,7 +291,14 @@ class InventoryConditionAdjustmentTest extends TestCase
         Schema::create('stock_count_sessions', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('business_id');
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->unsignedBigInteger('warehouse_id')->nullable();
+            $table->string('session_number')->nullable();
+            $table->date('count_date')->nullable();
+            $table->boolean('freeze_stock')->default(false);
             $table->string('status')->default('draft');
+            $table->timestamp('approved_at')->nullable();
+            $table->timestamp('completed_at')->nullable();
             $table->timestamps();
         });
 
@@ -483,6 +491,102 @@ class InventoryConditionAdjustmentTest extends TestCase
         }
     }
 
+    public function test_frozen_stock_count_blocks_stock_out_without_changing_stock_or_ledger(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 90);
+        $beforeLedgerCount = StockLedger::query()->count();
+
+        $this->freezeWarehouse($businessId, $branch, $warehouse, 'CNT-2026-00004');
+
+        try {
+            $this->postAdjustment($branch, $warehouse, $product->id, 'saleable', 1);
+            $this->fail('Frozen warehouse allowed a stock adjustment to post.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('Default warehouse is currently frozen due to active stock count CNT-2026-00004', $exception->getMessage());
+        }
+
+        $this->assertSame(90.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $product->id]));
+        $this->assertSame($beforeLedgerCount, StockLedger::query()->count());
+    }
+
+    public function test_stock_out_succeeds_after_frozen_count_is_posted(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 90);
+        $countId = $this->freezeWarehouse($businessId, $branch, $warehouse, 'CNT-2026-00004');
+
+        DB::table('stock_count_sessions')->where('id', $countId)->update(['status' => 'posted', 'completed_at' => now(), 'updated_at' => now()]);
+
+        $this->postAdjustment($branch, $warehouse, $product->id, 'saleable', 1);
+
+        $this->assertSame(89.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $product->id]));
+    }
+
+    public function test_immediate_transfer_is_blocked_when_source_warehouse_is_frozen(): void
+    {
+        [$businessId, $product, $sourceBranch, $sourceWarehouse] = $this->fixture();
+        [$destinationBranch, $destinationWarehouse] = $this->destinationWarehouse($businessId);
+        $this->seedConditionStock($businessId, $sourceBranch, $sourceWarehouse, $product->id, 'saleable', 90);
+        $this->freezeWarehouse($businessId, $sourceBranch, $sourceWarehouse, 'CNT-SOURCE');
+
+        $this->expectException(ValidationException::class);
+
+        try {
+            $this->postTransfer($sourceBranch, $sourceWarehouse, $destinationBranch, $destinationWarehouse, $product->id);
+        } finally {
+            $this->assertSame(90.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $sourceBranch, 'warehouse_id' => $sourceWarehouse, 'product_id' => $product->id]));
+            $this->assertSame(0.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $destinationBranch, 'warehouse_id' => $destinationWarehouse, 'product_id' => $product->id]));
+        }
+    }
+
+    public function test_immediate_transfer_is_blocked_when_destination_warehouse_is_frozen(): void
+    {
+        [$businessId, $product, $sourceBranch, $sourceWarehouse] = $this->fixture();
+        [$destinationBranch, $destinationWarehouse] = $this->destinationWarehouse($businessId);
+        $this->seedConditionStock($businessId, $sourceBranch, $sourceWarehouse, $product->id, 'saleable', 90);
+        $this->freezeWarehouse($businessId, $destinationBranch, $destinationWarehouse, 'CNT-DESTINATION');
+
+        $this->expectException(ValidationException::class);
+
+        try {
+            $this->postTransfer($sourceBranch, $sourceWarehouse, $destinationBranch, $destinationWarehouse, $product->id);
+        } finally {
+            $this->assertSame(90.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $sourceBranch, 'warehouse_id' => $sourceWarehouse, 'product_id' => $product->id]));
+            $this->assertSame(0.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $destinationBranch, 'warehouse_id' => $destinationWarehouse, 'product_id' => $product->id]));
+        }
+    }
+
+    public function test_immediate_transfer_is_blocked_when_both_warehouses_are_frozen(): void
+    {
+        [$businessId, $product, $sourceBranch, $sourceWarehouse] = $this->fixture();
+        [$destinationBranch, $destinationWarehouse] = $this->destinationWarehouse($businessId);
+        $this->seedConditionStock($businessId, $sourceBranch, $sourceWarehouse, $product->id, 'saleable', 90);
+        $this->freezeWarehouse($businessId, $sourceBranch, $sourceWarehouse, 'CNT-SOURCE');
+        $this->freezeWarehouse($businessId, $destinationBranch, $destinationWarehouse, 'CNT-DESTINATION');
+
+        $this->expectException(ValidationException::class);
+
+        try {
+            $this->postTransfer($sourceBranch, $sourceWarehouse, $destinationBranch, $destinationWarehouse, $product->id);
+        } finally {
+            $this->assertSame(90.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $sourceBranch, 'warehouse_id' => $sourceWarehouse, 'product_id' => $product->id]));
+            $this->assertSame(0.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $destinationBranch, 'warehouse_id' => $destinationWarehouse, 'product_id' => $product->id]));
+        }
+    }
+
+    public function test_immediate_transfer_succeeds_when_neither_warehouse_is_frozen(): void
+    {
+        [$businessId, $product, $sourceBranch, $sourceWarehouse] = $this->fixture();
+        [$destinationBranch, $destinationWarehouse] = $this->destinationWarehouse($businessId);
+        $this->seedConditionStock($businessId, $sourceBranch, $sourceWarehouse, $product->id, 'saleable', 90);
+
+        $this->postTransfer($sourceBranch, $sourceWarehouse, $destinationBranch, $destinationWarehouse, $product->id);
+
+        $this->assertSame(89.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $sourceBranch, 'warehouse_id' => $sourceWarehouse, 'product_id' => $product->id]));
+        $this->assertSame(1.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $destinationBranch, 'warehouse_id' => $destinationWarehouse, 'product_id' => $product->id]));
+    }
+
     public function test_stock_transfer_posts_source_out_destination_in_and_keeps_company_physical_stock(): void
     {
         [$businessId, $product, $sourceBranch, $sourceWarehouse] = $this->fixture();
@@ -524,8 +628,8 @@ class InventoryConditionAdjustmentTest extends TestCase
     private function fixture(): array
     {
         $businessId = DB::table('companies')->insertGetId(['name' => 'Bill IQ Test', 'created_at' => now(), 'updated_at' => now()]);
-        $branch = DB::table('branches')->insertGetId(['business_id' => $businessId, 'name' => 'Main', 'code' => 'MAIN', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
-        $warehouse = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'name' => 'Store', 'code' => 'ST', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $branch = DB::table('branches')->insertGetId(['business_id' => $businessId, 'name' => 'Default Branch', 'code' => 'MAIN', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $warehouse = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'name' => 'Default warehouse', 'code' => 'ST', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $product = Product::query()->create(['business_id' => $businessId, 'company_id' => $businessId, 'name' => 'Mustard Oil 1L', 'sku' => 'MO-1L', 'product_type' => 'goods', 'item_type' => 'stock', 'track_inventory' => true, 'tracking_type' => 'none', 'status' => 'active']);
 
         session(['business_id' => $businessId]);
@@ -547,6 +651,7 @@ class InventoryConditionAdjustmentTest extends TestCase
             'unit_cost' => 10,
             'stock_status' => $condition,
             'transaction_date' => now(),
+            'skip_freeze_check' => true,
         ]);
     }
 
@@ -672,6 +777,56 @@ class InventoryConditionAdjustmentTest extends TestCase
             'reference_id' => $voucher->id,
             'stock_status' => $condition,
             'quantity_out' => $quantity,
+        ]);
+    }
+
+    private function freezeWarehouse(int $businessId, int $branch, int $warehouse, string $number): int
+    {
+        return DB::table('stock_count_sessions')->insertGetId([
+            'business_id' => $businessId,
+            'branch_id' => $branch,
+            'warehouse_id' => $warehouse,
+            'session_number' => $number,
+            'count_date' => now()->toDateString(),
+            'freeze_stock' => true,
+            'status' => 'draft',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function destinationWarehouse(int $businessId): array
+    {
+        $branch = DB::table('branches')->insertGetId(['business_id' => $businessId, 'name' => 'Destination Branch', 'created_at' => now(), 'updated_at' => now()]);
+        $warehouse = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'name' => 'Destination warehouse', 'created_at' => now(), 'updated_at' => now()]);
+
+        return [$branch, $warehouse];
+    }
+
+    private function postTransfer(int $sourceBranch, int $sourceWarehouse, int $destinationBranch, int $destinationWarehouse, int $productId): void
+    {
+        app(InventoryControlService::class)->saveTransfer([
+            'source_branch_id' => $sourceBranch,
+            'source_warehouse_id' => $sourceWarehouse,
+            'destination_branch_id' => $destinationBranch,
+            'destination_warehouse_id' => $destinationWarehouse,
+            'transfer_date' => now()->toDateString(),
+            'transfer_type' => 'immediate',
+            'status' => 'approved',
+            'remarks' => 'Freeze transfer test',
+            'items' => [[
+                'product_id' => $productId,
+                'product_variant_id' => null,
+                'source_batch_id' => null,
+                'destination_batch_id' => null,
+                'source_serial_id' => null,
+                'destination_serial_id' => null,
+                'requested_quantity' => 1,
+                'approved_quantity' => 1,
+                'unit_cost' => 10,
+                'source_location' => null,
+                'destination_location' => null,
+            ]],
         ]);
     }
 }

@@ -30,11 +30,13 @@ class InventoryControlService
 {
     private StockService $stock;
     private AccountingPostingService $accounting;
+    private InventoryFreezeService $freeze;
 
-    public function __construct(StockService $stock, AccountingPostingService $accounting)
+    public function __construct(StockService $stock, AccountingPostingService $accounting, InventoryFreezeService $freeze)
     {
         $this->stock = $stock;
         $this->accounting = $accounting;
+        $this->freeze = $freeze;
     }
 
     public function references(): array
@@ -167,7 +169,9 @@ class InventoryControlService
             if (!empty($data['adjustment_reason_id'])) $this->assertReason($data['adjustment_reason_id']);
             $items = $this->prepareAdjustmentItems($data);
             $this->validateAdjustmentVoucher($data, $items);
+            $skipFreezeCheck = !empty($data['skip_freeze_check']);
             unset($data['items']);
+            unset($data['skip_freeze_check']);
             $voucher = $id ? StockAdjustmentVoucher::query()->where('business_id', $businessId)->with('items')->findOrFail($id) : new StockAdjustmentVoucher(['business_id' => $businessId, 'voucher_number' => $this->nextNumber('ADJ', StockAdjustmentVoucher::class, 'voucher_number'), 'created_by' => Auth::id()]);
             if (in_array($voucher->status, ['posted', 'reversed', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Posted stock adjustments cannot be edited.']);
             $totals = $this->adjustmentTotals($items);
@@ -178,17 +182,21 @@ class InventoryControlService
             $voucher->fill(array_merge($data, $totals))->save();
             $voucher->items()->delete();
             $voucher->items()->createMany($items);
-            if (in_array($data['status'], ['approved', 'posted'], true)) $this->postAdjustment($voucher->id);
+            if (in_array($data['status'], ['approved', 'posted'], true)) $this->postAdjustment($voucher->id, $skipFreezeCheck);
             return $voucher->fresh(['items.product', 'warehouse', 'reason']);
         });
     }
 
-    public function postAdjustment(int $id): StockAdjustmentVoucher
+    public function postAdjustment(int $id, bool $skipFreezeCheck = false): StockAdjustmentVoucher
     {
-        return DB::transaction(function () use ($id) {
+        return DB::transaction(function () use ($id, $skipFreezeCheck) {
             $voucher = StockAdjustmentVoucher::query()->where('business_id', AppController::businessId())->with('items')->findOrFail($id);
             if ($this->stockAlreadyPosted(StockAdjustmentVoucher::class, $voucher->id)) return $voucher;
             $this->validateAdjustmentVoucher($voucher->toArray(), $voucher->items->map(fn ($item) => $item->toArray())->all(), true);
+            $isCountPosting = $skipFreezeCheck && $voucher->source === 'physical_count';
+            if (!$isCountPosting) {
+                $this->freeze->assertWarehouseAvailable($voucher->branch_id, $voucher->warehouse_id, $voucher->business_id);
+            }
             foreach ($voucher->items as $item) {
                 $isConditionTransfer = $voucher->adjustment_type === 'condition_transfer' || $item->direction === 'transfer';
                 $condition = $this->adjustmentLineCondition($item->toArray(), $isConditionTransfer);
@@ -199,6 +207,7 @@ class InventoryControlService
                     'unit_cost' => (float) $item->unit_cost,
                     'warehouse_location' => $item->warehouse_location,
                     'remarks' => $item->reason ?: $voucher->remarks,
+                    'skip_freeze_check' => $isCountPosting,
                 ]);
 
                 if ($isConditionTransfer) {
@@ -330,7 +339,7 @@ class InventoryControlService
             $voucher = $this->saveAdjustment([
                 'branch_id' => $session->branch_id, 'warehouse_id' => $session->warehouse_id, 'adjustment_date' => now()->toDateString(),
                 'adjustment_reason_id' => null, 'adjustment_type' => 'mixed', 'source' => 'physical_count', 'status' => 'posted',
-                'remarks' => 'Stock Count ' . $session->session_number, 'items' => $items,
+                'remarks' => 'Stock Count ' . $session->session_number, 'skip_freeze_check' => true, 'items' => $items,
             ]);
             $this->mapCountAdjustmentLedgerToSession($voucher, $session);
             $session->update(['status' => 'posted', 'approved_by' => Auth::id(), 'approved_at' => now(), 'completed_at' => now()]);
@@ -383,6 +392,10 @@ class InventoryControlService
         return DB::transaction(function () use ($id) {
             $voucher = StockTransferVoucher::query()->where('business_id', AppController::businessId())->with('items')->findOrFail($id);
             if ($this->stockAlreadyPosted(StockTransferVoucher::class, $voucher->id)) return $voucher;
+            $this->freeze->assertWarehousesAvailable([
+                ['branch_id' => $voucher->source_branch_id, 'warehouse_id' => $voucher->source_warehouse_id],
+                ['branch_id' => $voucher->destination_branch_id, 'warehouse_id' => $voucher->destination_warehouse_id],
+            ], $voucher->business_id);
             foreach ($voucher->items as $item) {
                 $qty = (float) ($item->approved_quantity ?: $item->requested_quantity);
                 $sourceScope = $this->scope($voucher->source_branch_id, $voucher->source_warehouse_id, (int) $item->product_id, $item->product_variant_id, $item->source_batch_id);
@@ -401,6 +414,7 @@ class InventoryControlService
         return DB::transaction(function () use ($id) {
             $voucher = StockTransferVoucher::query()->where('business_id', AppController::businessId())->with('items')->findOrFail($id);
             if (StockLedger::query()->where('business_id', $voucher->business_id)->where('reference_type', StockTransferVoucher::class)->where('reference_id', $voucher->id)->where('transaction_type', 'stock_transfer_out')->exists()) return $voucher;
+            $this->freeze->assertWarehouseAvailable($voucher->source_branch_id, $voucher->source_warehouse_id, $voucher->business_id);
             foreach ($voucher->items as $item) {
                 $qty = (float) ($item->approved_quantity ?: $item->requested_quantity);
                 $sourceScope = $this->scope($voucher->source_branch_id, $voucher->source_warehouse_id, (int) $item->product_id, $item->product_variant_id, $item->source_batch_id);
@@ -417,6 +431,7 @@ class InventoryControlService
     {
         return DB::transaction(function () use ($id, $data) {
             $voucher = StockTransferVoucher::query()->where('business_id', AppController::businessId())->with('items')->findOrFail($id);
+            $this->freeze->assertWarehouseAvailable($voucher->destination_branch_id, $voucher->destination_warehouse_id, $voucher->business_id);
             foreach ($data['items'] as $row) {
                 $item = $voucher->items->firstWhere('id', (int) $row['id']);
                 if (!$item) continue;

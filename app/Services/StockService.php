@@ -1039,6 +1039,14 @@ class StockService
             $this->validateOwnership($businessId, $data);
         }
 
+        if (empty($data['skip_freeze_check'])) {
+            app(InventoryFreezeService::class)->assertWarehouseAvailable(
+                $data['branch_id'] ?? null,
+                $data['warehouse_id'] ?? null,
+                $businessId
+            );
+        }
+
         $payload = [
             'business_id' => $businessId,
             'branch_id' => $data['branch_id'] ?? null,

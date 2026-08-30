@@ -205,6 +205,14 @@ const exportDashboard = () => exportRows('csv');
 const productNameForMovement = (row) => row.product_name || row.product?.name || row.raw?.product?.name || row.items?.[0]?.product?.name || '-';
 const userNameForMovement = (row) => row.user_name || row.poster?.name || row.approver?.name || row.creator?.name || row.created_by?.name || row.approved_by?.name || (row.created_by || row.approved_by ? 'User' : 'System');
 const referenceForMovement = (row) => row.reference_number || row.voucher_number || row.session_number || row.remarks || `Ledger #${row.id}`;
+const adjustmentSignedQuantity = (row) => Number(row.total_quantity_in || 0) - Number(row.total_quantity_out || 0);
+const adjustmentMovement = (row) => {
+    if ((row.items?.length || 0) !== 1) return '';
+    const item = row.items[0];
+    if (item.direction === 'transfer') return `${conditionName(item.source_condition_status)} -> ${conditionName(item.destination_condition_status)}`;
+    const condition = conditionName(item.source_condition_status || item.condition_status || 'saleable');
+    return item.direction === 'out' ? `${condition} -> Out` : `In -> ${condition}`;
+};
 const registerRows = computed(() => [
     ...(reports.value.movement_report || []).map((row) => ({
         id: `ledger-${row.id}`,
@@ -223,7 +231,7 @@ const registerRows = computed(() => [
         productName: productNameForMovement(row),
         userName: userNameForMovement(row),
     })),
-    ...adjustments.value.map((row) => ({ id: `adjustment-${row.id}`, raw: row, type: row.reason?.reason_name || row.source || 'stock_adjustment', number: row.voucher_number, date: row.adjustment_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: Number(row.total_quantity_in || 0) + Number(row.total_quantity_out || 0), status: row.status, action: 'adjustment', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
+    ...adjustments.value.map((row) => ({ id: `adjustment-${row.id}`, raw: row, type: row.reason?.reason_name || row.source || 'stock_adjustment', number: row.voucher_number, date: row.adjustment_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: adjustmentSignedQuantity(row), physicalChange: adjustmentSignedQuantity(row), movement: adjustmentMovement(row), status: row.status, action: 'adjustment', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
     ...transfers.value.map((row) => ({ id: `transfer-${row.id}`, raw: row, type: row.transfer_type || 'stock_transfer', number: row.voucher_number, date: row.transfer_date, branch: `${row.source_branch?.name || '-'} -> ${row.destination_branch?.name || '-'}`, warehouse: `${row.source_warehouse?.name || '-'} -> ${row.destination_warehouse?.name || '-'}`, items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Number(item.approved_quantity || item.requested_quantity || 0), 0) || 0, status: row.status, action: 'transfer', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
     ...counts.value.map((row) => ({ id: `count-${row.id}`, raw: row, type: 'stock_count', number: row.session_number, date: row.count_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Math.abs(Number(item.variance_quantity || 0)), 0) || 0, status: row.status, action: 'count', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),
     ...movements.value.map((row) => ({ id: `movement-${row.id}`, raw: row, type: 'location_movement', number: row.voucher_number, date: row.movement_date, branch: row.branch?.name || '-', warehouse: row.warehouse?.name || '-', items: row.items?.length || 0, quantity: row.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0, status: row.status, action: 'location', productName: row.items?.length === 1 ? productNameForMovement(row.items[0]) : `${row.items?.length || 0} Products`, userName: userNameForMovement(row) })),

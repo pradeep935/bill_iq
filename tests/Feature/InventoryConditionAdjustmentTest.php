@@ -324,6 +324,7 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->assertConditionBalances($businessId, $branch, $warehouse, $product->id, saleable: 319, damaged: 4, physical: 323);
         $this->assertLedgerOut($voucher, 'damaged', 2);
         $this->assertConditionSurfaces($businessId, $branch, $warehouse, $product->id, saleable: 319, damaged: 4, physical: 323);
+        $this->assertMovementRow($product->id, 'Damaged -> Out', -2, -2);
     }
 
     public function test_stock_out_uses_source_condition_when_condition_status_is_stale(): void
@@ -538,6 +539,16 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->assertSame($saleable, (float) $conditionRows['saleable']['quantity']);
         $this->assertSame($damaged, (float) $conditionRows['damaged']['quantity']);
         $this->assertGreaterThanOrEqual(3, $reports['ledger']->count());
+    }
+
+    private function assertMovementRow(int $productId, string $movement, float $quantity, float $physicalChange): void
+    {
+        $reports = app(InventoryControlService::class)->reports(['product_id' => $productId]);
+        $row = collect($reports['movement_report'])
+            ->first(fn ($item) => $item->movement === $movement && (float) $item->display_quantity === $quantity);
+
+        $this->assertNotNull($row, "Missing movement row {$movement} / {$quantity}.");
+        $this->assertSame($physicalChange, (float) $row->physical_change);
     }
 
     private function assertLedgerOut(StockAdjustmentVoucher $voucher, string $condition, float $quantity): void

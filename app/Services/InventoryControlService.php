@@ -860,9 +860,11 @@ class InventoryControlService
 
             if ($pairIndex === null) {
                 $row = clone $entry;
-                $row->display_quantity = abs((float) $entry->quantity_in - (float) $entry->quantity_out);
-                $row->movement = null;
-                $row->physical_change = (float) $entry->quantity_in - (float) $entry->quantity_out;
+                $signedQuantity = (float) $entry->quantity_in - (float) $entry->quantity_out;
+                $condition = str($entry->stock_status ?: 'saleable')->replace('_', ' ')->title();
+                $row->display_quantity = $signedQuantity;
+                $row->movement = $signedQuantity < 0 ? $condition . ' -> Out' : 'In -> ' . $condition;
+                $row->physical_change = $signedQuantity;
                 $rows->push($row);
                 continue;
             }

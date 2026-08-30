@@ -245,9 +245,24 @@ class InventoryConditionAdjustmentTest extends TestCase
         Schema::create('stock_transfer_vouchers', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('business_id');
+            $table->string('voucher_number')->nullable();
+            $table->date('transfer_date')->nullable();
+            $table->unsignedBigInteger('source_branch_id')->nullable();
             $table->unsignedBigInteger('source_warehouse_id')->nullable();
+            $table->unsignedBigInteger('destination_branch_id')->nullable();
             $table->unsignedBigInteger('destination_warehouse_id')->nullable();
+            $table->string('transfer_type')->default('immediate');
+            $table->date('expected_delivery_date')->nullable();
             $table->string('status')->default('draft');
+            $table->text('remarks')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('approved_by')->nullable();
+            $table->timestamp('approved_at')->nullable();
+            $table->unsignedBigInteger('dispatched_by')->nullable();
+            $table->timestamp('dispatched_at')->nullable();
+            $table->unsignedBigInteger('received_by')->nullable();
+            $table->timestamp('received_at')->nullable();
             $table->timestamps();
         });
 
@@ -255,6 +270,20 @@ class InventoryConditionAdjustmentTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('stock_transfer_voucher_id');
             $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('product_variant_id')->nullable();
+            $table->unsignedBigInteger('source_batch_id')->nullable();
+            $table->unsignedBigInteger('destination_batch_id')->nullable();
+            $table->unsignedBigInteger('source_serial_id')->nullable();
+            $table->unsignedBigInteger('destination_serial_id')->nullable();
+            $table->unsignedBigInteger('unit_id')->nullable();
+            $table->decimal('requested_quantity', 15, 3)->default(0);
+            $table->decimal('approved_quantity', 15, 3)->default(0);
+            $table->decimal('dispatched_quantity', 15, 3)->default(0);
+            $table->decimal('received_quantity', 15, 3)->default(0);
+            $table->decimal('rejected_quantity', 15, 3)->default(0);
+            $table->decimal('unit_cost', 15, 2)->default(0);
+            $table->string('source_location')->nullable();
+            $table->string('destination_location')->nullable();
             $table->timestamps();
         });
 
@@ -452,6 +481,44 @@ class InventoryConditionAdjustmentTest extends TestCase
         } finally {
             $this->assertConditionBalances($businessId, $branch, $warehouse, $product->id, saleable: 10, damaged: 1, physical: 11);
         }
+    }
+
+    public function test_stock_transfer_posts_source_out_destination_in_and_keeps_company_physical_stock(): void
+    {
+        [$businessId, $product, $sourceBranch, $sourceWarehouse] = $this->fixture();
+        $destinationBranch = DB::table('branches')->insertGetId(['business_id' => $businessId, 'name' => 'Test Branch', 'created_at' => now(), 'updated_at' => now()]);
+        $destinationWarehouse = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $destinationBranch, 'name' => 'Default warehouse', 'created_at' => now(), 'updated_at' => now()]);
+        $this->seedConditionStock($businessId, $sourceBranch, $sourceWarehouse, $product->id, 'saleable', 92);
+
+        $voucher = app(InventoryControlService::class)->saveTransfer([
+            'source_branch_id' => $sourceBranch,
+            'source_warehouse_id' => $sourceWarehouse,
+            'destination_branch_id' => $destinationBranch,
+            'destination_warehouse_id' => $destinationWarehouse,
+            'transfer_date' => now()->toDateString(),
+            'transfer_type' => 'immediate',
+            'status' => 'approved',
+            'remarks' => 'Default warehouse to Test Branch Default warehouse',
+            'items' => [[
+                'product_id' => $product->id,
+                'product_variant_id' => null,
+                'source_batch_id' => null,
+                'destination_batch_id' => null,
+                'source_serial_id' => null,
+                'destination_serial_id' => null,
+                'requested_quantity' => 2,
+                'approved_quantity' => 2,
+                'unit_cost' => 96.15,
+                'source_location' => null,
+                'destination_location' => null,
+            ]],
+        ]);
+
+        $this->assertSame(90.0, app(StockService::class)->getPhysicalStock(['business_id' => $businessId, 'branch_id' => $sourceBranch, 'warehouse_id' => $sourceWarehouse, 'product_id' => $product->id]));
+        $this->assertSame(2.0, app(StockService::class)->getPhysicalStock(['business_id' => $businessId, 'branch_id' => $destinationBranch, 'warehouse_id' => $destinationWarehouse, 'product_id' => $product->id]));
+        $this->assertSame(92.0, app(StockService::class)->getPhysicalStock(['business_id' => $businessId, 'product_id' => $product->id]));
+        $this->assertDatabaseHas('stock_ledgers', ['reference_type' => \App\Models\StockTransferVoucher::class, 'reference_id' => $voucher->id, 'warehouse_id' => $sourceWarehouse, 'transaction_type' => 'stock_transfer_out', 'quantity_out' => 2]);
+        $this->assertDatabaseHas('stock_ledgers', ['reference_type' => \App\Models\StockTransferVoucher::class, 'reference_id' => $voucher->id, 'warehouse_id' => $destinationWarehouse, 'transaction_type' => 'stock_transfer_in', 'quantity_in' => 2]);
     }
 
     private function fixture(): array

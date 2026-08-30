@@ -243,6 +243,16 @@ const viewProduct = async (row, mode = 'view') => {
 const showLedger = (row) => viewProduct(row, 'ledger');
 const showBatch = (row) => viewProduct(row, 'batch');
 const showSerial = (row) => viewProduct(row, 'serial');
+const canReorder = (row) => ['low-stock', 'out-of-stock', 'negative-stock'].includes(stockStatus(row));
+const openReorderSuggestion = (row) => {
+    closeActionMenu();
+    const params = new URLSearchParams();
+    if (row.product_id) params.set('product_id', row.product_id);
+    if (row.branch_id) params.set('branch_id', row.branch_id);
+    if (row.warehouse_id) params.set('warehouse_id', row.warehouse_id);
+    if (row.product_name) params.set('search', row.product_name);
+    window.location.href = `/app/purchase/reorder?${params.toString()}`;
+};
 
 const closeDetail = () => {
     selectedDetail.value = null;
@@ -491,6 +501,7 @@ onMounted(async () => {
                             @toggle="toggleActionMenu(row)"
                             @close="closeActionMenu"
                         >
+                            <button v-if="canReorder(row)" type="button" title="Create replenishment from Purchase Reorder Suggestions" @click="openReorderSuggestion(row)">Create Purchase Order</button>
                             <button type="button" title="Open stock ledger for this product, branch and warehouse" @click="showLedger(row)">Stock Ledger</button>
                             <button v-if="row.batch_required || row.batch_id" type="button" title="View batch-wise stock" @click="showBatch(row)">Batch Details</button>
                             <button v-if="row.serial_required" type="button" title="View serial numbers" @click="showSerial(row)">Serial Details</button>

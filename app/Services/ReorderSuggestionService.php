@@ -106,8 +106,7 @@ class ReorderSuggestionService
             return $rows->groupBy(fn ($row) => implode(':', [$row['supplier_id'], $row['branch_id'] ?? 0, $row['warehouse_id']]))
                 ->map(function (Collection $supplierRows) use ($status, $expectedDeliveryDate) {
                 $first = $supplierRows->first();
-
-                return $this->orders->savePurchaseOrder([
+                $payload = [
                     'branch_id' => $first['branch_id'] ?? null,
                     'warehouse_id' => $first['warehouse_id'],
                     'purchase_requisition_id' => null,
@@ -129,7 +128,17 @@ class ReorderSuggestionService
                         'gst_rate' => $row['gst_rate'] ?? 0,
                         'remarks' => 'Created from Reorder Suggestions',
                     ])->values()->all(),
-                ]);
+                ];
+
+                if (Schema::hasColumn('purchase_orders', 'source_type')) {
+                    $payload['source_type'] = 'reorder_suggestion';
+                }
+
+                if (Schema::hasColumn('purchase_orders', 'source_reference')) {
+                    $payload['source_reference'] = 'Reorder Suggestions';
+                }
+
+                return $this->orders->savePurchaseOrder($payload);
             })->values();
         });
     }
@@ -141,7 +150,14 @@ class ReorderSuggestionService
         $productBusinessColumn = in_array('business_id', $productColumns, true) ? 'business_id' : 'company_id';
 
         $stock = DB::table('stock_ledgers')
-            ->selectRaw('business_id, product_id, branch_id, warehouse_id, COALESCE(SUM(quantity_in),0) - COALESCE(SUM(quantity_out),0) as available_stock')
+            ->selectRaw('
+                business_id,
+                product_id,
+                branch_id,
+                warehouse_id,
+                COALESCE(SUM(CASE WHEN COALESCE(stock_status, "saleable") = "saleable" THEN quantity_in - quantity_out ELSE 0 END), 0) as saleable_stock,
+                COALESCE(SUM(CASE WHEN COALESCE(stock_status, "saleable") <> "lost" THEN quantity_in - quantity_out ELSE 0 END), 0) as physical_stock
+            ')
             ->where('business_id', $businessId)
             ->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('branch_id', $id))
             ->when($filters['warehouse_id'] ?? null, fn ($q, $id) => $q->where('warehouse_id', $id))
@@ -157,11 +173,12 @@ class ReorderSuggestionService
 
         $incoming = DB::table('purchase_order_items')
             ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
-            ->selectRaw('purchase_orders.business_id, purchase_order_items.product_id, purchase_orders.branch_id, purchase_orders.warehouse_id, COALESCE(SUM(purchase_order_items.ordered_quantity - purchase_order_items.received_quantity),0) as incoming_po_qty')
+            ->selectRaw('purchase_orders.business_id, purchase_order_items.product_id, purchase_orders.branch_id, purchase_orders.warehouse_id, COALESCE(SUM(CASE WHEN purchase_order_items.ordered_quantity > purchase_order_items.received_quantity THEN purchase_order_items.ordered_quantity - purchase_order_items.received_quantity ELSE 0 END),0) as incoming_po_qty')
             ->where('purchase_orders.business_id', $businessId)
-            ->whereIn('purchase_orders.status', ['approved', 'sent', 'confirmed', 'partially_received'])
+            ->whereIn('purchase_orders.status', ['draft', 'approved', 'sent', 'confirmed', 'partially_received'])
             ->when($filters['branch_id'] ?? null, fn ($q, $id) => $q->where('purchase_orders.branch_id', $id))
             ->when($filters['warehouse_id'] ?? null, fn ($q, $id) => $q->where('purchase_orders.warehouse_id', $id))
+            ->when(Schema::hasColumn('purchase_orders', 'source_type'), fn ($q) => $q->whereIn(DB::raw('COALESCE(purchase_orders.source_type, "manual")'), ['manual', 'reorder_suggestion', 'requisition']))
             ->groupBy('purchase_orders.business_id', 'purchase_order_items.product_id', 'purchase_orders.branch_id', 'purchase_orders.warehouse_id');
 
         $pendingReq = DB::table('purchase_requisition_items')
@@ -196,6 +213,7 @@ class ReorderSuggestionService
             ->where('products.status', 'active')
             ->where('products.product_type', 'goods')
             ->where('products.item_type', 'stock')
+            ->when($filters['product_id'] ?? null, fn ($q, $id) => $q->where('products.id', $id))
             ->when($filters['search'] ?? null, function ($q, string $search) {
                 $q->where(function ($inner) use ($search) {
                     $inner->where('products.name', 'like', "%$search%")
@@ -221,14 +239,15 @@ class ReorderSuggestionService
                 stock.warehouse_id,
                 branches.name as branch_name,
                 warehouses.name as warehouse_name,
-                COALESCE(stock.available_stock, 0) as available_stock,
+                COALESCE(stock.saleable_stock, 0) as current_stock,
+                COALESCE(stock.physical_stock, 0) as physical_stock,
                 COALESCE(reserved.reserved_stock, 0) as reserved_stock,
                 COALESCE(incoming.incoming_po_qty, 0) as incoming_po_qty,
                 COALESCE(pending_req.pending_requisition_qty, 0) as pending_requisition_qty,
-                COALESCE(NULLIF(products.reorder_stock, 0), products.reorder_level, 0) as reorder_level,
+                COALESCE(NULLIF(products.reorder_stock, 0), NULLIF(products.reorder_level, 0), products.minimum_stock, 0) as reorder_level,
                 products.minimum_stock,
                 products.maximum_stock,
-                COALESCE(NULLIF(products.maximum_stock, 0), NULLIF(products.reorder_stock, 0), products.reorder_level, products.minimum_stock, 0) as target_stock,
+                COALESCE(NULLIF(products.maximum_stock, 0), NULLIF(products.reorder_stock, 0), NULLIF(products.reorder_level, 0), products.minimum_stock, 0) as target_stock,
                 COALESCE(last_purchase.unit_cost, products.purchase_price, products.cost_price, products.default_purchase_price, 0) as purchase_rate,
                 last_purchase.supplier_id as preferred_supplier_id,
                 COALESCE(suppliers.supplier_name, suppliers.name) as preferred_supplier,
@@ -240,15 +259,18 @@ class ReorderSuggestionService
 
     private function present(object $row): array
     {
-        $available = round((float) $row->available_stock, 3);
+        $current = round((float) $row->current_stock, 3);
+        $physical = round((float) $row->physical_stock, 3);
         $reserved = round((float) $row->reserved_stock, 3);
         $incoming = round((float) $row->incoming_po_qty, 3);
         $pendingReq = round((float) $row->pending_requisition_qty, 3);
-        $effective = round($available - $reserved, 3);
-        $projected = round($effective + $incoming + $pendingReq, 3);
+        $available = round($current - $reserved, 3);
+        $pendingOrder = round($incoming, 3);
+        $projected = round($available + $pendingOrder + $pendingReq, 3);
         $target = (float) $row->target_stock;
         $suggested = round(max(0, $target - $projected), 3);
         $rate = round((float) $row->purchase_rate, 2);
+        $statusKey = $this->statusKey($available, $suggested, (float) $row->reorder_level);
 
         return [
             'product_id' => (int) $row->product_id,
@@ -262,10 +284,12 @@ class ReorderSuggestionService
             'branch' => $row->branch_name ?: 'All Branches',
             'warehouse_id' => $row->warehouse_id,
             'warehouse' => $row->warehouse_name ?: 'All Warehouses',
-            'available_stock' => $available,
+            'current_stock' => $current,
+            'physical_stock' => $physical,
             'reserved_stock' => $reserved,
-            'effective_stock' => $effective,
+            'available_stock' => $available,
             'incoming_po_qty' => $incoming,
+            'pending_order_qty' => $pendingOrder,
             'pending_requisition_qty' => $pendingReq,
             'projected_stock' => $projected,
             'reorder_level' => round((float) $row->reorder_level, 3),
@@ -278,8 +302,8 @@ class ReorderSuggestionService
             'preferred_supplier' => $row->preferred_supplier ?: 'Not assigned',
             'last_purchase_date' => $row->purchase_date,
             'gst_rate' => (float) $row->gst_rate,
-            'status_key' => $this->statusKey($available, $suggested, (float) $row->reorder_level),
-            'status' => $this->statusLabel($this->statusKey($available, $suggested, (float) $row->reorder_level)),
+            'status_key' => $statusKey,
+            'status' => $this->statusLabel($statusKey),
         ];
     }
 
@@ -327,7 +351,10 @@ class ReorderSuggestionService
     {
         $businessId = AppController::businessId();
         $rows = collect($items)->map(function ($item, int $index) use ($businessId) {
-            $quantity = (float) ($item['quantity'] ?? $item['suggested_quantity'] ?? 0);
+            $quantity = (float) ($item['final_order_quantity'] ?? $item['quantity'] ?? $item['suggested_quantity'] ?? 0);
+            if ($quantity < 0) {
+                throw ValidationException::withMessages(["items.$index.quantity" => 'Final order quantity cannot be negative.']);
+            }
             if ($quantity <= 0) {
                 throw ValidationException::withMessages(["items.$index.quantity" => 'Quantity must be greater than 0.']);
             }
@@ -360,6 +387,35 @@ class ReorderSuggestionService
             throw ValidationException::withMessages(['items' => 'Select at least one reorder item.']);
         }
 
+        $this->assertQuantitiesStillRequired($rows);
+
         return $rows;
+    }
+
+    private function assertQuantitiesStillRequired(Collection $rows): void
+    {
+        foreach ($rows->groupBy(fn ($row) => implode(':', [$row['product_id'], $row['branch_id'] ?? 0, $row['warehouse_id'] ?? 0])) as $group) {
+            $first = $group->first();
+            $requested = round($group->sum('quantity'), 3);
+            $latest = $this->suggestionQuery([
+                'product_id' => $first['product_id'],
+                'branch_id' => $first['branch_id'],
+                'warehouse_id' => $first['warehouse_id'],
+            ])->get()->map(fn ($row) => $this->present($row))->first();
+
+            $remaining = round((float) ($latest['suggested_quantity'] ?? 0), 3);
+
+            if ($remaining <= 0) {
+                throw ValidationException::withMessages([
+                    'items' => sprintf('%s already has enough saleable stock or pending order quantity. Refresh reorder suggestions before creating another order.', $latest['product_name'] ?? 'Selected product'),
+                ]);
+            }
+
+            if ($requested > $remaining) {
+                throw ValidationException::withMessages([
+                    'items' => sprintf('Requested reorder quantity %.3f exceeds the current remaining requirement %.3f for %s.', $requested, $remaining, $latest['product_name'] ?? 'selected product'),
+                ]);
+            }
+        }
     }
 }

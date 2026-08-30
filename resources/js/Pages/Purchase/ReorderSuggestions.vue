@@ -18,7 +18,7 @@ const detailRow = ref(null);
 const previewOpen = ref(false);
 const expectedDeliveryDate = ref('');
 const lastResult = ref('');
-const filters = reactive({ search: '', branch_id: '', warehouse_id: '', stock_status: '', supplier_id: '', category_id: '', per_page: 50 });
+const filters = reactive({ search: '', product_id: '', branch_id: '', warehouse_id: '', stock_status: '', supplier_id: '', category_id: '', per_page: 50 });
 
 const perPageOptions = [25, 50, 100];
 const statusOptions = [
@@ -68,7 +68,9 @@ const selectedPayload = () => selectedRows.value.map((row) => ({
     quantity: Number(row.order_quantity || row.suggested_quantity || 0),
     purchase_rate: Number(row.purchase_rate || 0),
     gst_rate: Number(row.gst_rate || 0),
+    final_order_quantity: Number(row.order_quantity || 0),
 }));
+const invalidSelectedQuantity = () => selectedRows.value.some((row) => Number(row.order_quantity || 0) <= 0);
 
 const load = async (page = 1) => {
     loading.value = true;
@@ -76,7 +78,7 @@ const load = async (page = 1) => {
         const response = await PurchaseApi.reorderSuggestions({ ...filters, page });
         rows.value = (response.suggestions || []).map((row) => ({
             ...row,
-            order_quantity: Number(row.suggested_quantity || 0),
+            order_quantity: Math.max(0, Number(row.suggested_quantity || 0)),
             supplier_id: row.preferred_supplier_id || '',
         }));
         summary.value = response.summary || {};
@@ -91,7 +93,7 @@ const loadReferences = async () => {
 };
 
 const clearFilters = async () => {
-    Object.assign(filters, { search: '', branch_id: '', warehouse_id: '', stock_status: '', supplier_id: '', category_id: '', per_page: 50 });
+    Object.assign(filters, { search: '', product_id: '', branch_id: '', warehouse_id: '', stock_status: '', supplier_id: '', category_id: '', per_page: 50 });
     await load(1);
 };
 
@@ -103,7 +105,7 @@ const toggleAllVisible = () => {
 };
 
 const exportRows = (exportRowsValue = rows.value, filename = 'reorder-suggestions.csv') => {
-    const headers = ['product_name', 'sku', 'branch', 'warehouse', 'available_stock', 'reserved_stock', 'incoming_po_qty', 'reorder_level', 'target_stock', 'suggested_quantity', 'preferred_supplier', 'purchase_rate', 'estimated_value', 'status'];
+    const headers = ['product_name', 'sku', 'branch', 'warehouse', 'current_stock', 'reserved_stock', 'available_stock', 'pending_order_qty', 'pending_requisition_qty', 'reorder_level', 'target_stock', 'suggested_quantity', 'preferred_supplier', 'purchase_rate', 'estimated_value', 'status'];
     const csv = [headers.join(','), ...exportRowsValue.map((row) => headers.map((header) => `"${String(row[header] ?? '').replaceAll('"', '""')}"`).join(','))].join('\n');
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -113,6 +115,10 @@ const exportRows = (exportRowsValue = rows.value, filename = 'reorder-suggestion
 
 const createRequisition = async () => {
     if (!selectedRows.value.length) return;
+    if (invalidSelectedQuantity()) {
+        alert('Final order quantity must be greater than 0.');
+        return;
+    }
     saving.value = true;
     try {
         const response = await PurchaseApi.createReorderRequisition(selectedPayload());
@@ -130,6 +136,10 @@ const openPoPreview = () => {
     if (!selectedRows.value.length) return;
     if (selectedRows.value.some((row) => !row.warehouse_id)) {
         alert('Select a warehouse filter or use rows with a specific warehouse before creating a purchase order.');
+        return;
+    }
+    if (invalidSelectedQuantity()) {
+        alert('Final order quantity must be greater than 0.');
         return;
     }
     previewOpen.value = true;
@@ -151,6 +161,10 @@ const createPurchaseOrders = async (status = 'draft') => {
 };
 
 onMounted(async () => {
+    const params = new URLSearchParams(window.location.search);
+    ['search', 'product_id', 'branch_id', 'warehouse_id', 'stock_status', 'supplier_id', 'category_id'].forEach((key) => {
+        if (params.has(key)) filters[key] = params.get(key) || '';
+    });
     await Promise.all([loadReferences(), load()]);
 });
 </script>
@@ -193,7 +207,7 @@ onMounted(async () => {
                 <div class="table-head"><div>Showing {{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }} products</div><button :disabled="!selectedRows.length" @click="exportRows(selectedRows, 'selected-reorder-suggestions.csv')">Export Selected</button></div>
                 <div class="table-scroll">
                     <table class="reorder-table">
-                        <thead><tr><th><input type="checkbox" :checked="allVisibleSelected" @change="toggleAllVisible" /></th><th>Product</th><th>SKU</th><th>Branch</th><th>Warehouse</th><th>Available</th><th>Reserved</th><th>Incoming PO Qty</th><th>Reorder Level</th><th>Target Stock</th><th>Suggested Qty</th><th>Purchase Rate</th><th>Est. Value</th><th>Preferred Supplier</th><th>Status</th><th>Action</th></tr></thead>
+                        <thead><tr><th><input type="checkbox" :checked="allVisibleSelected" @change="toggleAllVisible" /></th><th>Product</th><th>SKU</th><th>Branch</th><th>Warehouse</th><th>Current Stock</th><th>Reserved</th><th>Available</th><th>Pending Order Qty</th><th>Reorder Level</th><th>Target/Maximum Stock</th><th>Suggested Qty</th><th>Final Order Qty</th><th>Supplier</th><th>Purchase Rate</th><th>Est. Value</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody :class="{ loading }">
                             <tr v-for="row in rows" :key="rowKey(row)">
                                 <td data-label="Select"><input v-model="selected[rowKey(row)]" type="checkbox" /></td>
@@ -201,19 +215,21 @@ onMounted(async () => {
                                 <td data-label="SKU">{{ row.sku || '-' }}</td>
                                 <td data-label="Branch">{{ row.branch }}</td>
                                 <td data-label="Warehouse">{{ row.warehouse }}</td>
-                                <td data-label="Available">{{ qty(row.available_stock) }} {{ row.unit }}</td>
+                                <td data-label="Current Stock">{{ qty(row.current_stock ?? row.available_stock) }} {{ row.unit }}</td>
                                 <td data-label="Reserved">{{ qty(row.reserved_stock) }}</td>
-                                <td data-label="Incoming PO Qty"><span v-if="row.incoming_po_qty > 0" class="mini-pill">{{ qty(row.incoming_po_qty) }} incoming</span><span v-else>0</span></td>
+                                <td data-label="Available">{{ qty(row.available_stock) }} {{ row.unit }}</td>
+                                <td data-label="Pending Order Qty"><span v-if="row.pending_order_qty > 0" class="mini-pill">{{ qty(row.pending_order_qty) }} pending</span><span v-else>0</span></td>
                                 <td data-label="Reorder Level">{{ qty(row.reorder_level) }}</td>
-                                <td data-label="Target Stock">{{ qty(row.target_stock) }}</td>
-                                <td data-label="Suggested Qty"><input v-model.number="row.order_quantity" type="number" min="0.001" step="0.001" /></td>
+                                <td data-label="Target/Maximum Stock">{{ qty(row.target_stock) }}</td>
+                                <td data-label="Suggested Qty">{{ qty(row.suggested_quantity) }} {{ row.unit }}</td>
+                                <td data-label="Final Order Qty"><input v-model.number="row.order_quantity" type="number" min="0.001" step="0.001" /></td>
+                                <td data-label="Supplier"><select v-model="row.supplier_id"><option value="">Select Supplier</option><option v-for="supplier in refs.suppliers" :key="supplier.id" :value="supplier.id">{{ supplierName(supplier) }}</option></select></td>
                                 <td data-label="Purchase Rate"><input v-model.number="row.purchase_rate" type="number" min="0" step="0.01" /></td>
                                 <td data-label="Est. Value">Rs. {{ money(Number(row.order_quantity || 0) * Number(row.purchase_rate || 0)) }}</td>
-                                <td data-label="Preferred Supplier"><select v-model="row.supplier_id"><option value="">Select Supplier</option><option v-for="supplier in refs.suppliers" :key="supplier.id" :value="supplier.id">{{ supplierName(supplier) }}</option></select></td>
                                 <td data-label="Status"><span class="badge" :class="row.status_key">{{ row.status }}</span></td>
                                 <td data-label="Action" class="action-cell"><div class="row-menu"><RowActionMenu :open="openActionMenuId === rowKey(row)" :show-view="false" more-label="Actions" more-title="Reorder actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button type="button" @click="selectSingleRow(row); createRequisition(); closeActionMenu()">Create Requisition</button><button type="button" @click="selectSingleRow(row); openPoPreview(); closeActionMenu()">Create PO</button><button type="button" @click="viewProduct(row); closeActionMenu()">View Product</button><button type="button" @click="detailRow = row; closeActionMenu()">Stock History</button><button type="button" @click="detailRow = row; closeActionMenu()">Purchase History</button></RowActionMenu></div></td>
                             </tr>
-                            <tr v-if="!rows.length && !loading"><td colspan="16" class="empty"><strong>{{ filters.search || filters.branch_id || filters.warehouse_id || filters.stock_status || filters.supplier_id || filters.category_id ? 'No matching products' : 'Stock levels look healthy' }}</strong><span>{{ filters.search || filters.branch_id || filters.warehouse_id || filters.stock_status || filters.supplier_id || filters.category_id ? 'Try changing your search or filters.' : 'There are currently no products below their configured reorder levels.' }}</span><button @click="clearFilters">{{ filters.search || filters.branch_id || filters.warehouse_id || filters.stock_status || filters.supplier_id || filters.category_id ? 'Clear Filters' : 'Review Stock Settings' }}</button></td></tr>
+                            <tr v-if="!rows.length && !loading"><td colspan="18" class="empty"><strong>{{ filters.search || filters.product_id || filters.branch_id || filters.warehouse_id || filters.stock_status || filters.supplier_id || filters.category_id ? 'No matching products' : 'Stock levels look healthy' }}</strong><span>{{ filters.search || filters.product_id || filters.branch_id || filters.warehouse_id || filters.stock_status || filters.supplier_id || filters.category_id ? 'Try changing your search or filters.' : 'There are currently no products below their configured reorder levels.' }}</span><button @click="clearFilters">{{ filters.search || filters.product_id || filters.branch_id || filters.warehouse_id || filters.stock_status || filters.supplier_id || filters.category_id ? 'Clear Filters' : 'Review Stock Settings' }}</button></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -225,7 +241,7 @@ onMounted(async () => {
             <aside v-if="detailRow" class="drawer-backdrop" @click.self="detailRow = null">
                 <section class="drawer">
                     <div class="drawer-head"><div><span>Recommendation Details</span><h3>{{ detailRow.product_name }}</h3></div><button @click="detailRow = null">Close</button></div>
-                    <div class="detail-grid"><article><h4>Current Stock</h4><p>Available: {{ qty(detailRow.available_stock) }} {{ detailRow.unit }}</p><p>Reserved: {{ qty(detailRow.reserved_stock) }} {{ detailRow.unit }}</p><p>Incoming: {{ qty(detailRow.incoming_po_qty) }} {{ detailRow.unit }}</p><p>Projected: {{ qty(detailRow.projected_stock) }} {{ detailRow.unit }}</p></article><article><h4>Stock Settings</h4><p>Reorder Level: {{ qty(detailRow.reorder_level) }}</p><p>Minimum: {{ qty(detailRow.minimum_stock) }}</p><p>Target: {{ qty(detailRow.target_stock) }}</p></article><article><h4>Purchase Information</h4><p>Last Purchase Rate: Rs. {{ money(detailRow.purchase_rate) }}</p><p>Last Supplier: {{ detailRow.preferred_supplier }}</p><p>Last Purchase: {{ detailRow.last_purchase_date || '-' }}</p></article></div>
+                    <div class="detail-grid"><article><h4>Current Stock</h4><p>Saleable: {{ qty(detailRow.current_stock) }} {{ detailRow.unit }}</p><p>Reserved: {{ qty(detailRow.reserved_stock) }} {{ detailRow.unit }}</p><p>Available: {{ qty(detailRow.available_stock) }} {{ detailRow.unit }}</p><p>Pending Orders: {{ qty(detailRow.pending_order_qty) }} {{ detailRow.unit }}</p><p>Projected: {{ qty(detailRow.projected_stock) }} {{ detailRow.unit }}</p></article><article><h4>Stock Settings</h4><p>Reorder Level: {{ qty(detailRow.reorder_level) }}</p><p>Minimum: {{ qty(detailRow.minimum_stock) }}</p><p>Target: {{ qty(detailRow.target_stock) }}</p></article><article><h4>Purchase Information</h4><p>Last Purchase Rate: Rs. {{ money(detailRow.purchase_rate) }}</p><p>Last Supplier: {{ detailRow.preferred_supplier }}</p><p>Last Purchase: {{ detailRow.last_purchase_date || '-' }}</p></article></div>
                 </section>
             </aside>
 

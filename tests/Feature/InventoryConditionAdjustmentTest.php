@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Product;
 use App\Models\StockAdjustmentVoucher;
+use App\Models\StockCountSession;
 use App\Models\StockLedger;
 use App\Services\InventoryControlService;
 use App\Services\StockService;
@@ -294,8 +295,13 @@ class InventoryConditionAdjustmentTest extends TestCase
             $table->unsignedBigInteger('branch_id')->nullable();
             $table->unsignedBigInteger('warehouse_id')->nullable();
             $table->string('session_number')->nullable();
+            $table->string('client_token')->nullable();
             $table->date('count_date')->nullable();
+            $table->string('count_type')->default('full');
             $table->boolean('freeze_stock')->default(false);
+            $table->text('remarks')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('approved_by')->nullable();
             $table->string('status')->default('draft');
             $table->timestamp('approved_at')->nullable();
             $table->timestamp('completed_at')->nullable();
@@ -306,6 +312,17 @@ class InventoryConditionAdjustmentTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('stock_count_session_id');
             $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('product_variant_id')->nullable();
+            $table->unsignedBigInteger('batch_id')->nullable();
+            $table->unsignedBigInteger('serial_id')->nullable();
+            $table->decimal('system_quantity', 15, 3)->default(0);
+            $table->decimal('counted_quantity', 15, 3)->nullable();
+            $table->decimal('variance_quantity', 15, 3)->default(0);
+            $table->decimal('unit_cost', 15, 2)->default(0);
+            $table->decimal('variance_value', 15, 2)->default(0);
+            $table->string('warehouse_location')->nullable();
+            $table->string('review_status')->default('pending');
+            $table->text('reviewer_notes')->nullable();
             $table->timestamps();
         });
 
@@ -521,6 +538,111 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->postAdjustment($branch, $warehouse, $product->id, 'saleable', 1);
 
         $this->assertSame(89.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $product->id]));
+    }
+
+    public function test_stock_count_draft_save_updates_same_session_and_replaces_items(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 90);
+        $service = app(InventoryControlService::class);
+        $token = 'draft-token-001';
+
+        $first = $service->saveCountSession($this->countPayload($branch, $warehouse, $token, 'Initial draft', []));
+        $number = $first->session_number;
+
+        $second = $service->saveCountSession($this->countPayload($branch, $warehouse, $token, 'Changed remarks', []), $first->id);
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame($number, $second->session_number);
+        $this->assertSame('Changed remarks', $second->remarks);
+        $this->assertSame(1, StockCountSession::query()->where('business_id', $businessId)->count());
+
+        $third = $service->saveCountSession($this->countPayload($branch, $warehouse, $token, 'Added product', [[
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'batch_id' => null,
+            'serial_id' => null,
+            'system_quantity' => 90,
+            'counted_quantity' => 89,
+            'variance_quantity' => -1,
+            'variance_value' => 10,
+            'unit_cost' => 10,
+            'warehouse_location' => null,
+            'review_status' => 'accepted',
+            'reviewer_notes' => 'Count shortage',
+        ]]), $first->id);
+
+        $this->assertSame($first->id, $third->id);
+        $this->assertSame($number, $third->session_number);
+        $this->assertSame(1, $third->items->count());
+        $this->assertSame(1, DB::table('stock_count_items')->where('stock_count_session_id', $first->id)->count());
+
+        $fourth = $service->saveCountSession($this->countPayload($branch, $warehouse, $token, 'Removed product', []), $first->id);
+
+        $this->assertSame($first->id, $fourth->id);
+        $this->assertSame($number, $fourth->session_number);
+        $this->assertSame(0, DB::table('stock_count_items')->where('stock_count_session_id', $first->id)->count());
+    }
+
+    public function test_repeated_create_with_same_client_token_reuses_existing_draft(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 90);
+        $service = app(InventoryControlService::class);
+        $token = 'double-click-token';
+
+        $first = $service->saveCountSession($this->countPayload($branch, $warehouse, $token, 'First request', []));
+        $second = $service->saveCountSession($this->countPayload($branch, $warehouse, $token, 'Second request', []));
+
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame($first->session_number, $second->session_number);
+        $this->assertSame(1, StockCountSession::query()->where('business_id', $businessId)->count());
+    }
+
+    public function test_approve_posts_same_stock_count_without_creating_duplicate(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 90);
+        $service = app(InventoryControlService::class);
+
+        $draft = $service->saveCountSession($this->countPayload($branch, $warehouse, 'approve-token', 'Draft to post', [[
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'batch_id' => null,
+            'serial_id' => null,
+            'system_quantity' => 90,
+            'counted_quantity' => 89,
+            'variance_quantity' => -1,
+            'variance_value' => 10,
+            'unit_cost' => 10,
+            'warehouse_location' => null,
+            'review_status' => 'accepted',
+            'reviewer_notes' => 'Count shortage',
+        ]]));
+        $number = $draft->session_number;
+
+        $service->saveCountSession($this->countPayload($branch, $warehouse, 'approve-token', 'Approve now', [[
+            'product_id' => $product->id,
+            'product_variant_id' => null,
+            'batch_id' => null,
+            'serial_id' => null,
+            'system_quantity' => 90,
+            'counted_quantity' => 89,
+            'variance_quantity' => -1,
+            'variance_value' => 10,
+            'unit_cost' => 10,
+            'warehouse_location' => null,
+            'review_status' => 'accepted',
+            'reviewer_notes' => 'Count shortage',
+        ]], 'approved'), $draft->id);
+        $service->postCountVariance($draft->id);
+
+        $posted = StockCountSession::query()->with('items')->findOrFail($draft->id);
+        $this->assertSame($number, $posted->session_number);
+        $this->assertSame('posted', $posted->status);
+        $this->assertSame(1, StockCountSession::query()->where('business_id', $businessId)->count());
+        $this->assertSame(89.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $product->id]));
+        $this->assertSame(1, StockLedger::query()->where('reference_type', StockCountSession::class)->where('reference_id', $draft->id)->where('transaction_type', 'physical_count_shortage')->count());
     }
 
     public function test_immediate_transfer_is_blocked_when_source_warehouse_is_frozen(): void
@@ -828,5 +950,20 @@ class InventoryConditionAdjustmentTest extends TestCase
                 'destination_location' => null,
             ]],
         ]);
+    }
+
+    private function countPayload(int $branch, int $warehouse, string $token, string $remarks, array $items, string $status = 'draft'): array
+    {
+        return [
+            'branch_id' => $branch,
+            'warehouse_id' => $warehouse,
+            'client_token' => $token,
+            'count_date' => now()->toDateString(),
+            'count_type' => 'full',
+            'freeze_stock' => false,
+            'status' => $status,
+            'remarks' => $remarks,
+            'items' => $items,
+        ];
     }
 }

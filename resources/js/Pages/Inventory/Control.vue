@@ -49,7 +49,8 @@ const countProductSearch = ref('');
 
 const today = new Date().toISOString().slice(0, 10);
 const adjustment = reactive({ branch_id: '', warehouse_id: '', adjustment_date: today, adjustment_reason_id: '', adjustment_type: 'mixed', source: 'manual', status: 'draft', remarks: '', items: [{ product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', source_condition_status: 'damaged', destination_condition_status: 'saleable', reason: '' }] });
-const count = reactive({ id: null, branch_id: '', warehouse_id: '', count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [] });
+const newCountToken = () => `count-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+const count = reactive({ id: null, client_token: newCountToken(), session_number: '', branch_id: '', warehouse_id: '', count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [] });
 const countItem = reactive({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', system_quantity: 0, counted_quantity: '', unit_cost: 0, warehouse_location: '', batch_id: '', serial_id: '', reason: '', review_status: 'accepted' });
 const countFilters = reactive({ search: '', branch_id: '', warehouse_id: '', status: '', count_type: '', date_from: '', date_to: '' });
 const transfer = reactive({ id: null, transfer_date: today, source_branch_id: '', source_warehouse_id: '', destination_branch_id: '', destination_warehouse_id: '', transfer_type: 'immediate', expected_delivery_date: '', status: 'draft', remarks: '', items: [] });
@@ -424,6 +425,7 @@ const validateCountClient = (status = 'draft') => {
 };
 const countPayloadItems = () => count.items.map((i) => ({ ...i, counted_quantity: Number(i.counted_quantity), variance_quantity: countLineDifference(i), variance_value: Math.abs(countLineDifference(i)) * Number(i.unit_cost || 0), review_status: 'accepted', reviewer_notes: i.reason || '' }));
 const saveCount = async (status) => {
+    if (saving.value) return;
     const message = validateCountClient(status);
     if (message) { errors.value = { form: [message] }; showToast(message, 'error', 'Validation'); return; }
     saving.value = true; clearErrors();
@@ -437,6 +439,9 @@ const saveCount = async (status) => {
             resetCountForm();
         } else {
             count.id = savedSession.id || count.id;
+            count.client_token = savedSession.client_token || count.client_token;
+            count.session_number = savedSession.session_number || count.session_number;
+            count.status = savedSession.status || count.status;
             showToast('Count draft saved.');
         }
         await load();
@@ -603,12 +608,14 @@ const addCountItemFromDrawer = () => {
     closeCountDrawer();
 };
 const resetCountForm = () => {
-    Object.assign(count, { id: null, branch_id: count.branch_id, warehouse_id: count.warehouse_id, count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [] });
+    Object.assign(count, { id: null, client_token: newCountToken(), session_number: '', branch_id: count.branch_id, warehouse_id: count.warehouse_id, count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [] });
     closeCountDrawer();
 };
 const editCount = async (row) => {
     Object.assign(count, {
         id: row.id || null,
+        client_token: row.client_token || newCountToken(),
+        session_number: row.session_number || '',
         branch_id: row.branch_id || '',
         warehouse_id: row.warehouse_id || '',
         count_date: String(row.count_date || today).slice(0, 10),

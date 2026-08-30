@@ -140,7 +140,10 @@ class InventoryController extends Controller
 
     public function saveCountSession(StockCountSessionRequest $request, ?int $session = null)
     {
-        return response()->json(['message' => 'Stock count session saved.', 'session' => $this->inventory->saveCountSession($request->validated(), $session)], $session ? 200 : 201);
+        $data = $request->validated();
+        $sessionId = $session ?: ($data['id'] ?? null);
+
+        return response()->json(['message' => 'Stock count session saved.', 'session' => $this->inventory->saveCountSession($data, $sessionId)], $sessionId ? 200 : 201);
     }
 
     public function scanCountLine(Request $request, int $session)

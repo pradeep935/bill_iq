@@ -278,14 +278,32 @@ class InventoryControlService
             $businessId = AppController::businessId();
             $this->assertWarehouse($data['warehouse_id'], $data['branch_id'] ?? null);
             $items = $this->prepareCountItems($data);
+            $clientToken = trim((string) ($data['client_token'] ?? ''));
             unset($data['items']);
-            $session = $id ? StockCountSession::query()->where('business_id', $businessId)->with('items')->findOrFail($id) : new StockCountSession(['business_id' => $businessId, 'session_number' => $this->nextNumber('CNT', StockCountSession::class, 'session_number'), 'created_by' => Auth::id()]);
+            unset($data['id']);
+            $session = $id
+                ? StockCountSession::query()->where('business_id', $businessId)->with('items')->lockForUpdate()->findOrFail($id)
+                : null;
+            if (!$session && $clientToken !== '') {
+                $session = StockCountSession::query()
+                    ->where('business_id', $businessId)
+                    ->where('client_token', $clientToken)
+                    ->whereNotIn('status', ['posted', 'cancelled'])
+                    ->with('items')
+                    ->lockForUpdate()
+                    ->first();
+            }
+            if (!$session) {
+                $session = new StockCountSession([
+                    'business_id' => $businessId,
+                    'session_number' => $this->nextNumber('CNT', StockCountSession::class, 'session_number'),
+                    'created_by' => Auth::id(),
+                ]);
+            }
             if (in_array($session->status, ['posted', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Posted count sessions cannot be edited.']);
             $session->fill($data)->save();
-            if ($items) {
-                $session->items()->delete();
-                $session->items()->createMany($items);
-            }
+            $session->items()->delete();
+            if ($items) $session->items()->createMany($items);
             return $session->fresh(['items.product', 'warehouse']);
         });
     }
@@ -315,7 +333,7 @@ class InventoryControlService
     public function postCountVariance(int $sessionId)
     {
         return DB::transaction(function () use ($sessionId) {
-            $session = StockCountSession::query()->where('business_id', AppController::businessId())->with('items')->findOrFail($sessionId);
+            $session = StockCountSession::query()->where('business_id', AppController::businessId())->with('items')->lockForUpdate()->findOrFail($sessionId);
             if ($session->status === 'posted') {
                 throw ValidationException::withMessages(['status' => 'This stock count has already been posted.']);
             }

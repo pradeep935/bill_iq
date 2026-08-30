@@ -12,6 +12,8 @@ class StockCountSessionRequest extends FormRequest
         return [
             'branch_id' => ['nullable', 'integer'],
             'warehouse_id' => ['required', 'integer'],
+            'id' => ['nullable', 'integer'],
+            'client_token' => ['nullable', 'string', 'max:80'],
             'count_date' => ['required', 'date'],
             'count_type' => ['required', 'in:full,cycle_count,category,brand,location,selected_products'],
             'category_id' => ['nullable', 'integer'],

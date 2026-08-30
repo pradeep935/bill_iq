@@ -41,12 +41,13 @@ const activeReport = ref('movement_report');
 const transferDrawerOpen = ref(false);
 const editingTransferIndex = ref(null);
 const transferView = ref('new');
+const transferProductSearch = ref('');
 
 const today = new Date().toISOString().slice(0, 10);
 const adjustment = reactive({ branch_id: '', warehouse_id: '', adjustment_date: today, adjustment_reason_id: '', adjustment_type: 'mixed', source: 'manual', status: 'draft', remarks: '', items: [{ product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', source_condition_status: 'damaged', destination_condition_status: 'saleable', reason: '' }] });
 const count = reactive({ branch_id: '', warehouse_id: '', count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [{ product_id: '', counted_quantity: 0, unit_cost: 0, warehouse_location: '', review_status: 'accepted' }] });
-const transfer = reactive({ transfer_date: today, source_branch_id: '', source_warehouse_id: '', destination_branch_id: '', destination_warehouse_id: '', transfer_type: 'immediate', expected_delivery_date: '', status: 'draft', remarks: '', items: [] });
-const transferItem = reactive({ product_id: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', destination_location: '', current_stock: 0, destination_stock: 0 });
+const transfer = reactive({ id: null, transfer_date: today, source_branch_id: '', source_warehouse_id: '', destination_branch_id: '', destination_warehouse_id: '', transfer_type: 'immediate', expected_delivery_date: '', status: 'draft', remarks: '', items: [] });
+const transferItem = reactive({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', destination_location: '', current_stock: 0, destination_stock: 0, source_before: 0, source_after: 0, destination_before: 0, destination_after: 0 });
 const transferFilters = reactive({ search: '', source_branch_id: '', destination_branch_id: '', status: '', date_from: '', date_to: '', transfer_type: '' });
 const location = reactive({ branch_id: '', warehouse_id: '', movement_date: today, status: 'draft', remarks: '', items: [{ product_id: '', quantity: 1, from_location: '', to_location: '' }] });
 const locationMaster = reactive({ id: null, branch_id: '', warehouse_id: '', zone: '', aisle: '', rack: '', shelf: '', bin: '', status: 'active' });
@@ -353,7 +354,7 @@ const validateTransferClient = (status = 'draft') => {
     if (bad) return transferLineError(bad);
     return '';
 };
-const saveTransfer = async (status) => { const message = validateTransferClient(status); if (message) { errors.value = { form: [message] }; showToast(message, 'error', 'Validation'); return; } saving.value = true; clearErrors(); try { transfer.status = status; await InventoryApi.saveStockTransfer({ ...transfer, items: transfer.items.map((i) => ({ ...i, approved_quantity: i.approved_quantity || i.requested_quantity })) }); showToast(status === 'draft' ? 'Transfer draft saved.' : 'Transfer posted.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to save transfer.', 'error'); } finally { saving.value = false; } };
+const saveTransfer = async (status) => { const message = validateTransferClient(status); if (message) { errors.value = { form: [message] }; showToast(message, 'error', 'Validation'); return; } saving.value = true; clearErrors(); try { transfer.status = status; await InventoryApi.saveStockTransfer({ ...transfer, items: transfer.items.map((i) => ({ ...i, approved_quantity: i.approved_quantity || i.requested_quantity })) }, transfer.id); showToast(status === 'draft' ? 'Transfer draft saved.' : 'Transfer posted.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to save transfer.', 'error'); } finally { saving.value = false; } };
 const dispatchTransfer = async (row) => { saving.value = true; try { await InventoryApi.dispatchStockTransfer(row.id); showToast('Transfer dispatched.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to dispatch transfer.', 'error'); } finally { saving.value = false; } };
 const receiveTransfer = async (row) => { saving.value = true; try { await InventoryApi.receiveStockTransfer(row.id, { items: row.items?.map((i) => ({ id: i.id, received_quantity: i.dispatched_quantity || i.approved_quantity || i.requested_quantity, rejected_quantity: 0 })) || [] }); showToast('Transfer received.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to receive transfer.', 'error'); } finally { saving.value = false; } };
 const saveLocation = async (status) => { saving.value = true; clearErrors(); try { location.status = status; await InventoryApi.saveLocationTransfer({ ...location, items: location.items.map((i) => ({ ...i })) }); showToast('Location movement posted.'); await load(); } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to post location movement.', 'error'); } finally { saving.value = false; } };
@@ -412,14 +413,22 @@ const refreshLineStock = async (item, source = adjustment) => {
     if (source === adjustment) await refreshConditionQuantities(item);
 };
 const productFor = (id) => refs.value.products?.find((product) => Number(product.id) === Number(id)) || {};
+const productUnit = (product) => product?.unit?.name || product?.unit_name || product?.unit || product?.unit_code || 'PCS';
+const productBarcode = (product) => product?.primary_barcode || product?.barcode || product?.barcodes?.[0]?.barcode || '';
+const selectedTransferProduct = computed(() => productFor(transferItem.product_id));
+const transferProductResults = computed(() => {
+    const q = transferProductSearch.value.trim().toLowerCase();
+    const products = refs.value.products || [];
+    if (!q) return products.slice(0, 30);
+    return products.filter((p) => `${p.name || ''} ${p.sku || ''} ${productBarcode(p)}`.toLowerCase().includes(q)).slice(0, 30);
+});
 const isBatchTracked = (item) => Boolean(productFor(item.product_id).batch_required);
 const isSerialTracked = (item) => Boolean(productFor(item.product_id).serial_required);
 const transferQty = (item) => Number(item.approved_quantity || item.requested_quantity || 0);
 const sourceAfterTransfer = (item) => Number(item.current_stock || 0) - transferQty(item);
-const safeSourceAfterTransfer = (item) => Math.max(0, sourceAfterTransfer(item));
 const destinationAfterTransfer = (item) => Number(item.destination_stock || 0) + transferQty(item);
 const transferPhysicalBefore = (item) => Number(item.current_stock || 0) + Number(item.destination_stock || 0);
-const transferPhysicalAfter = (item) => safeSourceAfterTransfer(item) + destinationAfterTransfer(item);
+const transferPhysicalAfter = (item) => sourceAfterTransfer(item) + destinationAfterTransfer(item);
 const locationLabel = (loc) => [loc.zone, loc.aisle, loc.rack, loc.shelf, loc.bin].filter(Boolean).join(' / ') || loc.name || `Location #${loc.id}`;
 const activeLocationsForWarehouse = (warehouseId) => warehouseLocations.value.filter((loc) => Number(loc.warehouse_id) === Number(warehouseId) && (loc.status || 'active') === 'active');
 const sourceLocationOptions = computed(() => activeLocationsForWarehouse(transfer.source_warehouse_id));
@@ -427,6 +436,7 @@ const destinationLocationOptions = computed(() => activeLocationsForWarehouse(tr
 const hasSourceLocations = computed(() => sourceLocationOptions.value.length > 0);
 const hasDestinationLocations = computed(() => destinationLocationOptions.value.length > 0);
 const transferLineError = (item) => {
+    if (!transferRouteValid.value) return 'Choose different source and destination warehouses.';
     if (!item.product_id) return 'Select a product.';
     if (Number(item.current_stock || 0) <= 0) return `Out of stock at ${warehouseName(transfer.source_warehouse_id)}.`;
     if (transferQty(item) <= 0) return 'Quantity must be greater than zero.';
@@ -457,6 +467,11 @@ const transferHistoryRows = computed(() => transfers.value.filter((row) => {
     return true;
 }));
 const refreshTransferLineStocks = async (item) => {
+    if (!item.product_id || !transfer.source_warehouse_id) {
+        item.current_stock = 0;
+        item.destination_stock = 0;
+        return;
+    }
     await refreshLineStock(item, { branch_id: transfer.source_branch_id, warehouse_id: transfer.source_warehouse_id });
     if (!item.product_id || !transfer.destination_warehouse_id) return;
     const value = await InventoryApi.inventoryValuation({ branch_id: transfer.destination_branch_id || '', warehouse_id: transfer.destination_warehouse_id, product_id: item.product_id, product_variant_id: item.product_variant_id || '', batch_id: item.destination_batch_id || item.source_batch_id || '' });
@@ -473,9 +488,10 @@ const onTransferBranchChange = async (side) => {
 const onTransferWarehouseChange = async () => {
     await refreshTransferStocks();
 };
-const blankTransferItem = () => ({ product_id: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', destination_location: '', current_stock: 0, destination_stock: 0 });
+const blankTransferItem = () => ({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', destination_location: '', current_stock: 0, destination_stock: 0, source_before: 0, source_after: 0, destination_before: 0, destination_after: 0 });
 const openTransferDrawer = (item = null, index = null) => {
     Object.assign(transferItem, blankTransferItem(), item || {});
+    transferProductSearch.value = '';
     editingTransferIndex.value = index;
     transferDrawerOpen.value = true;
     refreshTransferLineStocks(transferItem);
@@ -483,22 +499,80 @@ const openTransferDrawer = (item = null, index = null) => {
 const closeTransferDrawer = () => {
     transferDrawerOpen.value = false;
     editingTransferIndex.value = null;
+    transferProductSearch.value = '';
     Object.assign(transferItem, blankTransferItem());
+};
+const selectTransferProduct = async (product) => {
+    Object.assign(transferItem, {
+        product_id: product.id,
+        product_name: product.name || '',
+        sku: product.sku || '',
+        barcode: productBarcode(product),
+        unit: productUnit(product),
+        source_batch_id: '',
+        destination_batch_id: '',
+        source_serial_id: '',
+        destination_serial_id: '',
+        current_stock: 0,
+        destination_stock: 0,
+    });
+    transferProductSearch.value = product.name || '';
+    await refreshTransferLineStocks(transferItem);
+};
+const transferDuplicateIndex = (row) => transfer.items.findIndex((item, index) => index !== editingTransferIndex.value
+    && Number(item.product_id) === Number(row.product_id)
+    && Number(item.product_variant_id || 0) === Number(row.product_variant_id || 0)
+    && Number(item.source_warehouse_id || transfer.source_warehouse_id || 0) === Number(row.source_warehouse_id || transfer.source_warehouse_id || 0)
+    && Number(item.destination_warehouse_id || transfer.destination_warehouse_id || 0) === Number(row.destination_warehouse_id || transfer.destination_warehouse_id || 0)
+    && String(item.source_location || '') === String(row.source_location || '')
+    && String(item.destination_location || '') === String(row.destination_location || '')
+    && Number(item.source_batch_id || 0) === Number(row.source_batch_id || 0));
+const transferRowSnapshot = () => {
+    const product = selectedTransferProduct.value || {};
+    const qtyValue = transferQty(transferItem);
+    return {
+        ...blankTransferItem(),
+        ...transferItem,
+        product_id: Number(transferItem.product_id),
+        product_variant_id: transferItem.product_variant_id || null,
+        product_name: transferItem.product_name || product.name || '',
+        sku: transferItem.sku || product.sku || '',
+        barcode: transferItem.barcode || productBarcode(product),
+        unit: transferItem.unit || productUnit(product),
+        source_branch_id: transfer.source_branch_id,
+        source_warehouse_id: transfer.source_warehouse_id,
+        destination_branch_id: transfer.destination_branch_id,
+        destination_warehouse_id: transfer.destination_warehouse_id,
+        requested_quantity: qtyValue,
+        approved_quantity: qtyValue,
+        available_qty: Number(transferItem.current_stock || 0),
+        source_before: Number(transferItem.current_stock || 0),
+        source_after: sourceAfterTransfer(transferItem),
+        destination_before: Number(transferItem.destination_stock || 0),
+        destination_after: destinationAfterTransfer(transferItem),
+    };
 };
 const addTransferItemFromDrawer = () => {
     const message = transferLineError(transferItem);
     if (message) { errors.value = { form: [message] }; showToast(message, 'error', 'Validation'); return; }
-    const row = { ...transferItem, approved_quantity: transferItem.approved_quantity || transferItem.requested_quantity };
+    const row = transferRowSnapshot();
+    if (transferDuplicateIndex(row) !== -1) {
+        const duplicateMessage = 'This product is already added to the transfer.';
+        errors.value = { form: [duplicateMessage] };
+        showToast(duplicateMessage, 'error', 'Validation');
+        return;
+    }
     if (editingTransferIndex.value === null) transfer.items.push(row);
     else transfer.items.splice(editingTransferIndex.value, 1, row);
     closeTransferDrawer();
 };
 const resetTransferForm = () => {
-    Object.assign(transfer, { transfer_date: today, transfer_type: 'immediate', expected_delivery_date: '', status: 'draft', remarks: '', items: [], source_branch_id: transfer.source_branch_id, source_warehouse_id: transfer.source_warehouse_id, destination_branch_id: transfer.destination_branch_id, destination_warehouse_id: transfer.destination_warehouse_id });
+    Object.assign(transfer, { id: null, transfer_date: today, transfer_type: 'immediate', expected_delivery_date: '', status: 'draft', remarks: '', items: [], source_branch_id: transfer.source_branch_id, source_warehouse_id: transfer.source_warehouse_id, destination_branch_id: transfer.destination_branch_id, destination_warehouse_id: transfer.destination_warehouse_id });
     closeTransferDrawer();
 };
 const editTransfer = async (row) => {
     Object.assign(transfer, {
+        id: row.id || null,
         transfer_date: String(row.transfer_date || today).slice(0, 10),
         source_branch_id: row.source_branch_id || '',
         source_warehouse_id: row.source_warehouse_id || '',
@@ -510,6 +584,11 @@ const editTransfer = async (row) => {
         remarks: row.remarks || '',
         items: (row.items || []).map((item) => ({
             product_id: item.product_id || '',
+            product_variant_id: item.product_variant_id || '',
+            product_name: item.product?.name || item.product_name || '',
+            sku: item.product?.sku || item.sku || '',
+            barcode: item.product?.primary_barcode || item.product?.barcode || item.barcode || '',
+            unit: item.unit || productUnit(item.product || productFor(item.product_id)),
             requested_quantity: Number(item.requested_quantity || 1),
             approved_quantity: item.approved_quantity || '',
             unit_cost: Number(item.unit_cost || 0),
@@ -521,6 +600,10 @@ const editTransfer = async (row) => {
             destination_location: item.destination_location || '',
             current_stock: 0,
             destination_stock: 0,
+            source_before: item.source_before || 0,
+            source_after: item.source_after || 0,
+            destination_before: item.destination_before || 0,
+            destination_after: item.destination_after || 0,
         })),
     });
     await refreshTransferStocks();
@@ -706,9 +789,9 @@ onMounted(load);
                 </section>
 
                 <section class="panel transfer-card">
-                    <div class="section-head"><div><h2>Transfer Items</h2><p>Products selected for this transfer.</p></div><button class="primary" @click="openTransferDrawer()">+ Add Product</button></div>
+                    <div class="section-head"><div><h2>Transfer Items</h2><p>Products selected for this transfer.</p></div><button v-if="transfer.items.some((line) => line.product_id)" class="primary" @click="openTransferDrawer()">+ Add Product</button></div>
                     <div v-if="!transfer.items.some((line) => line.product_id)" class="transfer-empty-state"><strong>No products added yet</strong><span>Add one or more products to this stock transfer.</span><button class="primary" @click="openTransferDrawer()">+ Add Product</button></div>
-                    <div v-else class="table-wrapper"><table><thead><tr><th>Product</th><th>Available</th><th>Transfer Qty</th><th>From Location</th><th>To Location</th><th>Unit Cost</th><th>Batch/Serial</th><th>Action</th></tr></thead><tbody><tr v-for="(item, i) in transfer.items.filter((line) => line.product_id)" :key="`transfer-summary-${i}`"><td>{{ productFor(item.product_id).name || '-' }}</td><td>{{ qty(item.current_stock) }}</td><td>{{ qty(transferQty(item)) }}</td><td>{{ item.source_location || '-' }}</td><td>{{ item.destination_location || '-' }}</td><td>Rs. {{ money(item.unit_cost) }}</td><td>{{ item.source_batch_id || item.source_serial_id || '-' }}</td><td><button @click="openTransferDrawer(item, transfer.items.indexOf(item))">Edit</button><button @click="transfer.items.splice(transfer.items.indexOf(item),1)">Remove</button></td></tr></tbody></table></div>
+                    <div v-else class="table-wrapper"><table><thead><tr><th>Product</th><th>Available</th><th>Transfer Qty</th><th>From Location</th><th>To Location</th><th>Unit Cost</th><th>Batch / Serial</th><th>Source After</th><th>Destination After</th><th>Action</th></tr></thead><tbody><tr v-for="(item, i) in transfer.items.filter((line) => line.product_id)" :key="`transfer-summary-${i}`"><td><strong>{{ item.product_name || productFor(item.product_id).name || '-' }}</strong><small>{{ item.sku || productFor(item.product_id).sku || '' }}</small></td><td>{{ qty(item.available_qty ?? item.current_stock) }}</td><td>{{ qty(transferQty(item)) }}</td><td>{{ item.source_location || '-' }}</td><td>{{ item.destination_location || '-' }}</td><td>Rs. {{ money(item.unit_cost) }}</td><td>{{ item.source_batch_id || item.source_serial_id || '-' }}</td><td>{{ qty(item.source_after ?? sourceAfterTransfer(item)) }}</td><td>{{ qty(item.destination_after ?? destinationAfterTransfer(item)) }}</td><td><button @click="openTransferDrawer(item, transfer.items.indexOf(item))">Edit</button><button @click="transfer.items.splice(transfer.items.indexOf(item),1)">Remove</button></td></tr></tbody></table></div>
                 </section>
 
                 <section v-if="transfer.items.some((line) => line.product_id)" class="panel transfer-card">
@@ -765,22 +848,23 @@ onMounted(load);
 
             <div v-if="transferDrawerOpen" class="drawer-backdrop" @click.self="closeTransferDrawer">
                 <aside class="transfer-drawer">
-                    <div class="section-head"><div><span>TRANSFER ITEM</span><h2>{{ editingTransferIndex === null ? 'Add Transfer Item' : 'Edit Transfer Item' }}</h2><p>Select one product and confirm the stock movement preview.</p></div><button @click="closeTransferDrawer">Cancel</button></div>
+                    <div class="section-head drawer-head"><div><span>TRANSFER ITEM</span><h2>{{ editingTransferIndex === null ? 'Add Transfer Item' : 'Edit Transfer Item' }}</h2><p>Select a product and review the stock movement before adding it.</p></div><button class="icon-close" title="Close" @click="closeTransferDrawer">X</button></div>
                     <div class="drawer-fields">
-                        <label><span>Search Product</span><select v-model="transferItem.product_id" @change="refreshTransferLineStocks(transferItem)"><option value="">Search by product name, SKU or barcode</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}{{ p.sku ? ` - ${p.sku}` : '' }}</option></select></label>
-                        <label><span>Available Stock</span><input :value="qty(transferItem.current_stock)" disabled /></label>
-                        <label><span>Transfer Quantity</span><input v-model.number="transferItem.requested_quantity" type="number" min="0.001" step="0.001" :disabled="!transferItem.product_id || Number(transferItem.current_stock || 0) <= 0" @input="refreshTransferLineStocks(transferItem)" /></label>
-                        <label><span>From Location</span><select v-if="hasSourceLocations" v-model="transferItem.source_location" :disabled="!transferItem.product_id"><option value="">Select source location</option><option v-for="loc in sourceLocationOptions" :key="loc.id" :value="locationLabel(loc)">{{ locationLabel(loc) }}</option></select><input v-else v-model="transferItem.source_location" :disabled="!transferItem.product_id" placeholder="From location" /></label>
-                        <label><span>To Location</span><select v-if="hasDestinationLocations" v-model="transferItem.destination_location" :disabled="!transferItem.product_id"><option value="">Select destination location</option><option v-for="loc in destinationLocationOptions" :key="loc.id" :value="locationLabel(loc)">{{ locationLabel(loc) }}</option></select><input v-else v-model="transferItem.destination_location" :disabled="!transferItem.product_id" placeholder="To location" /></label>
+                        <label class="product-search"><span>Search Product</span><input v-model="transferProductSearch" :disabled="!transferRouteValid" placeholder="Search by product name, SKU or barcode" /><div v-if="transferRouteValid" class="product-results"><button v-for="p in transferProductResults" :key="p.id" type="button" :class="{selected: Number(p.id) === Number(transferItem.product_id)}" @click="selectTransferProduct(p)"><strong>{{ p.name }}</strong><small>SKU: {{ p.sku || '-' }} · Barcode: {{ productBarcode(p) || '-' }} · Unit: {{ productUnit(p) }}</small></button></div></label>
+                        <div v-if="transferItem.product_id" class="selected-product"><strong>{{ transferItem.product_name || selectedTransferProduct.name }}</strong><span>SKU: {{ transferItem.sku || selectedTransferProduct.sku || '-' }}</span><span>Barcode: {{ transferItem.barcode || productBarcode(selectedTransferProduct) || '-' }}</span><span>Unit: {{ transferItem.unit || productUnit(selectedTransferProduct) }}</span></div>
+                        <label><span>Available Stock</span><input :value="transferItem.product_id ? `${qty(transferItem.current_stock)} ${transferItem.unit || productUnit(selectedTransferProduct)}` : ''" disabled /></label>
+                        <label><span>Transfer Quantity</span><input v-model.number="transferItem.requested_quantity" type="number" min="0.001" step="0.001" :disabled="!transferItem.product_id || Number(transferItem.current_stock || 0) <= 0" /></label>
+                        <label><span>From Location</span><select v-if="hasSourceLocations" v-model="transferItem.source_location" :disabled="!transferItem.product_id"><option value="">Optional</option><option v-for="loc in sourceLocationOptions" :key="loc.id" :value="locationLabel(loc)">{{ locationLabel(loc) }}</option></select><input v-else value="Optional" disabled /></label>
+                        <label><span>To Location</span><select v-if="hasDestinationLocations" v-model="transferItem.destination_location" :disabled="!transferItem.product_id"><option value="">Optional</option><option v-for="loc in destinationLocationOptions" :key="loc.id" :value="locationLabel(loc)">{{ locationLabel(loc) }}</option></select><input v-else value="Optional" disabled /></label>
                         <label v-if="isBatchTracked(transferItem)"><span>Source Batch</span><input v-model="transferItem.source_batch_id" :disabled="!transferItem.product_id" placeholder="Source batch" @change="refreshTransferLineStocks(transferItem)" /></label>
                         <label v-if="isBatchTracked(transferItem)"><span>Destination Batch</span><input v-model="transferItem.destination_batch_id" :disabled="!transferItem.product_id" placeholder="Destination batch" /></label>
                         <label v-if="isSerialTracked(transferItem)"><span>Serial</span><input v-model="transferItem.source_serial_id" :disabled="!transferItem.product_id" placeholder="Select serial" /></label>
                         <label><span>Unit Cost</span><input :value="money(transferItem.unit_cost)" disabled /></label>
                     </div>
-                    <div v-if="!transferItem.product_id" class="drawer-empty-note">Select a product to view stock availability.</div>
-                    <div v-else-if="canAddTransferItem" class="drawer-preview"><div><span>Source</span><strong>{{ qty(transferItem.current_stock) }} -> {{ qty(sourceAfterTransfer(transferItem)) }}</strong><small>{{ signedQty(-transferQty(transferItem)) }}</small></div><div><span>Destination</span><strong>{{ qty(transferItem.destination_stock) }} -> {{ qty(destinationAfterTransfer(transferItem)) }}</strong><small>{{ signedQty(transferQty(transferItem)) }}</small></div><div><span>Total Physical Stock</span><strong>{{ qty(transferPhysicalBefore(transferItem)) }} -> {{ qty(transferPhysicalAfter(transferItem)) }}</strong><small>No physical stock change</small></div></div>
+                    <div v-if="!transferItem.product_id" class="drawer-empty-note">Select a product to view source stock availability.</div>
+                    <div v-else-if="transferQty(transferItem) > 0 && !transferLineError(transferItem)" class="drawer-preview"><h3>Stock Movement Preview</h3><div><span>Source</span><strong>{{ warehouseName(transfer.source_warehouse_id) }}</strong><b>{{ qty(transferItem.current_stock) }} -> {{ qty(sourceAfterTransfer(transferItem)) }}</b><small>{{ signedQty(-transferQty(transferItem)) }}</small></div><div><span>Destination</span><strong>{{ warehouseName(transfer.destination_warehouse_id) }}</strong><b>{{ qty(transferItem.destination_stock) }} -> {{ qty(destinationAfterTransfer(transferItem)) }}</b><small>{{ signedQty(transferQty(transferItem)) }}</small></div><div><span>Total Physical Stock</span><strong>{{ qty(transferPhysicalBefore(transferItem)) }} -> {{ qty(transferPhysicalAfter(transferItem)) }}</strong><small>No physical stock change</small></div></div>
                     <small v-if="transferItem.product_id && transferLineError(transferItem)" class="line-error">{{ transferLineError(transferItem) }}</small>
-                    <div class="actions"><button @click="closeTransferDrawer">Cancel</button><button class="primary" :disabled="!canAddTransferItem" @click="addTransferItemFromDrawer">Add to Transfer</button></div>
+                    <div class="drawer-footer"><button @click="closeTransferDrawer">Cancel</button><button class="primary" :disabled="!canAddTransferItem" @click="addTransferItemFromDrawer">Add to Transfer</button></div>
                 </aside>
             </div>
 
@@ -803,5 +887,5 @@ onMounted(load);
 .inventory-control{padding:0 0 28px}.page-toolbar,.tabs,.actions,.barcode-capture{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.page-toolbar{justify-content:flex-end;margin:-6px 0 14px}.barcode-capture input{width:170px}.tabs{margin-bottom:14px}.tabs button.active{background:#173b77;color:#fff;border-color:#173b77}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.section-head{align-items:flex-start;display:flex;justify-content:space-between;gap:12px;margin-bottom:14px}.section-head span{color:#2457d6;font-size:10px;font-weight:900;letter-spacing:1px}.section-head h2{color:#142139;font-size:18px;margin:0}.section-head p{color:#758197;font-size:12px;margin:4px 0 0}.status-pill{background:#edf2ff;border-radius:7px;color:#2457d6;display:inline-flex;font-size:10px;font-weight:800;padding:5px 8px;text-transform:capitalize}.dashboard-stack{display:grid;gap:16px}.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpi-card{align-items:flex-start;display:grid;gap:6px;padding:15px;text-align:left;background:#fff;border:1px solid #e3e9f2;border-left:4px solid #2457d6;border-radius:8px}.kpi-card strong{color:#142139;font-size:21px}.kpi-card span,.cards span{color:#69758a;font-size:11px;font-weight:850;text-transform:uppercase}.kpi-card small{color:#758197}.kpi-card.warning{border-left-color:#d99000}.kpi-card.danger{border-left-color:#d23f49}.kpi-card.info{border-left-color:#0f8b8d}.dashboard-columns{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}.alert-list{display:grid;gap:8px}.alert-row{align-items:center;display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:10px 0;border-bottom:1px solid #edf1f5}.alert-row span{color:#344159;font-weight:800}.alert-row strong{color:#142139}.healthy-state{padding:18px;color:#168757;background:#eaf8f1;border:1px solid #cceedd;border-radius:8px;font-weight:800}.quick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.quick-grid button{text-align:left}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:10px}.reason-form{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:10px}.reason-form label{display:grid;align-content:start;gap:6px;color:#344159;font-size:12px;font-weight:800}.reason-form label span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.reason-form small{color:#758197;font-size:11px;font-weight:600;line-height:1.4}.hint-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}.hint-grid span,.voucher-help-card{background:#f8fafc;border:1px dashed #d9e2ef;border-radius:8px;color:#6f7b90;font-size:11px;font-weight:650;line-height:1.45;padding:9px 11px}.voucher-help-card{margin:10px 0 12px}.voucher-help-card strong{color:#27344c;display:block;font-size:12px;margin-bottom:6px}.voucher-help-card ul{margin:0;padding-left:17px}.voucher-help-card li{margin:3px 0}.line-head,.line-grid{display:grid;gap:8px;align-items:center;margin-bottom:8px}.line-head{color:#69758a;font-size:10px;font-weight:800;text-transform:uppercase}.adjustment-row,.line-head{grid-template-columns:1.5fr .7fr .8fr .65fr .75fr .7fr 1fr 1fr .7fr}.count-row,.count-head{grid-template-columns:1.5fr .75fr .75fr .75fr .75fr .7fr .9fr .9fr .65fr}.transfer-row,.transfer-head{grid-template-columns:1.4fr .65fr .65fr .65fr .65fr .8fr .8fr .8fr .8fr .9fr .9fr .65fr}.location-row{grid-template-columns:1.8fr .8fr 1fr 1fr .7fr}.posting-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0;padding:12px;background:#f8fafc;border:1px solid #e5eaf2;border-radius:8px;color:#344159;font-size:12px}.posting-summary strong{color:#142139}.actions{justify-content:flex-end;margin:12px 0}.actions.inline{margin:0}.secondary{border-top:1px solid #edf1f5;margin-top:20px;padding-top:16px}.report-tabs{margin-bottom:10px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:38px}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.alert{padding:10px 12px;margin-bottom:12px;border-radius:8px;background:#fff4f4;color:#b42318;border:1px solid #ffd5d5;font-size:12px}.empty{color:#8490a2;text-align:center}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:12px}tr{cursor:pointer}th,td{padding:11px 10px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap;font-size:12px}th{color:#69758a;background:#f8fafc;font-size:10px;text-transform:uppercase}.stock-negative{color:#d23f49!important}.qty-change.positive{color:#168757;font-weight:900}.qty-change.negative{color:#d23f49;font-weight:900}.qty-change.neutral{color:#344159;font-weight:900}.selector-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.operation-selector{width:min(980px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.operation-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.operation-card{display:grid;align-content:start;gap:8px;min-height:170px;padding:14px;text-align:left;border:1px solid #dfe6ef}.operation-card strong{color:#142139;font-size:15px}.operation-card span{color:#536174;line-height:1.45}.operation-card small{color:#69758a;background:#f8fafc;border-radius:6px;padding:5px 7px}@media(max-width:1000px){.kpi-grid,.dashboard-columns,.form-grid,.reason-form,.hint-grid,.line-grid,.line-head,.adjustment-row,.count-row,.transfer-row,.location-row,.operation-grid{grid-template-columns:1fr}.page-toolbar{justify-content:flex-start}.barcode-capture input{width:100%}.quick-grid{grid-template-columns:1fr}.section-head{flex-direction:column}}
 .adjustment-row,.adjustment-head{grid-template-columns:minmax(220px,1.6fr) minmax(105px,.75fr) minmax(130px,.9fr) minmax(90px,.65fr) minmax(150px,.95fr) minmax(110px,.75fr) minmax(120px,.9fr) minmax(180px,1.1fr) minmax(90px,.65fr)}.line-field{display:grid;gap:5px;min-width:0}.line-field span{display:none;color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.line-field input,.line-field select,.remove-line{width:100%;min-width:0}.product-field select{min-width:0}.condition-transfer-fields{display:grid;grid-template-columns:1fr 1fr;gap:6px}.condition-transfer-help{margin:8px 0 10px;padding:10px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:750}.transfer-physical-note{align-content:center;min-height:38px;padding:7px 10px;border:1px dashed #d8e0eb;border-radius:8px;background:#f8fafc}.transfer-physical-note strong{color:#142139;font-size:12px}.result-field input{font-weight:850;color:#142139}@media(max-width:1000px){.adjustment-head{display:none}.adjustment-row{align-items:stretch;padding:12px;background:#fff;border:1px solid #e3e9f2;border-radius:8px;grid-template-columns:1fr}.line-field span{display:block}.remove-line{justify-self:start;width:auto}.condition-transfer-fields{grid-template-columns:1fr}}
 .transfer-route{display:grid;grid-template-columns:minmax(0,1fr) 42px minmax(0,1fr);align-items:stretch;gap:12px;margin-bottom:12px}.route-side{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);align-items:end;gap:10px;padding:12px;background:#f8fafc;border:1px solid #e3e9f2;border-radius:8px}.route-side strong{align-self:center;color:#2457d6;font-size:11px;font-weight:900;letter-spacing:.8px}.route-side label,.transfer-meta label,.transfer-main-grid label,.tracking-box label{display:grid;gap:5px;min-width:0;color:#344159;font-size:12px;font-weight:800}.route-side span,.transfer-meta span,.transfer-main-grid span,.tracking-box span,.transfer-preview span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.route-arrow{display:grid;place-items:center;color:#2457d6;font-weight:900}.transfer-meta label{margin:0}.transfer-items-card{margin:14px 0;padding:14px;background:#fbfcfe;border:1px solid #e3e9f2;border-radius:8px}.transfer-item{display:grid;gap:12px;margin-bottom:12px;padding:14px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.transfer-main-grid{display:grid;grid-template-columns:minmax(260px,1.8fr) minmax(130px,.75fr) minmax(130px,.75fr) minmax(130px,.75fr);gap:10px}.location-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tracking-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tracking-box{display:grid;grid-template-columns:140px minmax(0,1fr) minmax(0,1fr);align-items:end;gap:10px;padding:11px;background:#f8fafc;border:1px dashed #d8e0eb;border-radius:8px}.tracking-box strong{align-self:center;color:#27344c;font-size:12px}.transfer-preview{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.transfer-preview div{display:grid;gap:4px;padding:10px;background:#f8fafc;border:1px solid #edf1f5;border-radius:8px}.transfer-preview strong{color:#142139;font-size:14px}.transfer-item-footer{display:flex;align-items:center;justify-content:space-between;gap:10px}.line-error{color:#b42318;font-weight:800}.transfer-summary{justify-content:flex-end}.transfer-row,.transfer-head{grid-template-columns:none}@media(max-width:1180px){.transfer-main-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.transfer-preview{grid-template-columns:repeat(3,minmax(0,1fr))}.route-side,.tracking-box{grid-template-columns:1fr}}@media(max-width:760px){.transfer-route,.tracking-grid,.location-grid,.transfer-main-grid,.transfer-preview{grid-template-columns:1fr}.route-arrow{display:none}.transfer-item-footer{align-items:flex-start;flex-direction:column}.transfer-summary{justify-content:flex-start}}
-.transfer-page{display:grid;gap:14px}.transfer-card{margin-bottom:0}.transfer-view-tabs{margin-bottom:0}.transfer-meta{grid-template-columns:repeat(3,minmax(0,1fr))}.transfer-remarks{grid-column:auto}.transfer-empty-state,.drawer-empty-note{display:grid;justify-items:center;gap:8px;padding:24px;background:#f8fafc;border:1px dashed #d8e0eb;border-radius:8px;color:#69758a;text-align:center}.transfer-empty-state strong{color:#142139;font-size:15px}.transfer-empty-state span,.drawer-empty-note{font-size:12px;font-weight:750}.transfer-action-bar{position:sticky;bottom:0;z-index:50;display:flex;justify-content:flex-end;gap:10px;margin:0 -18px;padding:12px 18px;background:rgba(255,255,255,.96);border-top:1px solid #dfe6ef;box-shadow:0 -10px 28px rgba(15,23,42,.08)}.transfer-history{margin-top:8px}.drawer-backdrop{position:fixed;z-index:1100;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.32)}.transfer-drawer{width:min(460px,100%);height:100%;overflow:auto;padding:18px;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-18px 0 50px rgba(15,23,42,.18)}.drawer-fields{display:grid;gap:10px}.drawer-fields label{display:grid;gap:5px;color:#344159;font-size:12px;font-weight:800}.drawer-fields span,.drawer-preview span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.drawer-preview{display:grid;gap:8px;margin:14px 0}.drawer-preview div{display:grid;gap:4px;padding:11px;background:#f8fafc;border:1px solid #edf1f5;border-radius:8px}.drawer-preview strong{color:#142139;font-size:16px}.drawer-preview small{color:#168757;font-weight:800}.drawer-empty-note{justify-items:start;margin:14px 0;text-align:left}@media(max-width:1180px){.transfer-meta{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.transfer-meta{grid-template-columns:1fr}.transfer-action-bar{justify-content:flex-start;flex-wrap:wrap}.transfer-drawer{width:100%}}
+.transfer-page{display:grid;gap:14px}.transfer-card{margin-bottom:0}.transfer-view-tabs{margin-bottom:0}.transfer-meta{grid-template-columns:repeat(3,minmax(0,1fr))}.transfer-remarks{grid-column:auto}.transfer-empty-state,.drawer-empty-note{display:grid;justify-items:center;gap:8px;padding:24px;background:#f8fafc;border:1px dashed #d8e0eb;border-radius:8px;color:#69758a;text-align:center}.transfer-empty-state strong{color:#142139;font-size:15px}.transfer-empty-state span,.drawer-empty-note{font-size:12px;font-weight:750}.transfer-action-bar{position:sticky;bottom:0;z-index:50;display:flex;justify-content:flex-end;gap:10px;margin:0 -18px;padding:12px 18px;background:rgba(255,255,255,.96);border-top:1px solid #dfe6ef;box-shadow:0 -10px 28px rgba(15,23,42,.08)}.transfer-history{margin-top:8px}.drawer-backdrop{position:fixed;z-index:1100;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.32)}.transfer-drawer{display:flex;flex-direction:column;width:min(520px,100%);height:100%;padding:18px 18px 0;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-18px 0 50px rgba(15,23,42,.18);overflow:hidden}.drawer-head{flex:0 0 auto}.icon-close{min-height:34px;width:38px;padding:0}.drawer-fields{display:grid;gap:10px;overflow:auto;padding-bottom:12px}.drawer-fields label{display:grid;gap:5px;color:#344159;font-size:12px;font-weight:800}.drawer-fields span,.drawer-preview span{color:#69758a;font-size:10px;font-weight:900;text-transform:uppercase}.product-search{position:relative}.product-results{display:grid;max-height:230px;overflow:auto;border:1px solid #e3e9f2;border-radius:8px;background:#fff}.product-results button{display:grid;gap:3px;min-height:auto;padding:10px;text-align:left;border:0;border-bottom:1px solid #edf1f5;border-radius:0}.product-results button.selected{background:#edf2ff}.product-results strong,.selected-product strong{color:#142139}.product-results small,.selected-product span,td small{display:block;color:#69758a;font-size:11px;font-weight:650}.selected-product{display:grid;gap:4px;padding:11px;background:#f8fafc;border:1px solid #e3e9f2;border-radius:8px}.drawer-preview{display:grid;gap:8px;margin:14px 0}.drawer-preview h3{margin:0;color:#142139;font-size:14px}.drawer-preview div{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:11px;background:#f8fafc;border:1px solid #edf1f5;border-radius:8px}.drawer-preview span,.drawer-preview strong{grid-column:1}.drawer-preview b{grid-column:2;grid-row:1 / span 2;color:#142139;font-size:16px;align-self:center}.drawer-preview small{color:#168757;font-weight:800}.drawer-empty-note{justify-items:start;margin:14px 0;text-align:left}.drawer-footer{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;margin:0 -18px;padding:12px 18px;background:#fff;border-top:1px solid #dfe6ef;box-shadow:0 -10px 24px rgba(15,23,42,.08)}@media(max-width:1180px){.transfer-meta{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.transfer-meta{grid-template-columns:1fr}.transfer-action-bar{justify-content:flex-start;flex-wrap:wrap}.transfer-drawer{width:100%}.drawer-preview div{grid-template-columns:1fr}.drawer-preview b{grid-column:auto;grid-row:auto}}
 </style>

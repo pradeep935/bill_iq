@@ -338,7 +338,7 @@ class InventoryControlService
             $items = $this->prepareTransferItems($data);
             unset($data['items']);
             $voucher = $id ? StockTransferVoucher::query()->where('business_id', $businessId)->with('items')->findOrFail($id) : new StockTransferVoucher(['business_id' => $businessId, 'voucher_number' => $this->nextNumber('TRF', StockTransferVoucher::class, 'voucher_number'), 'created_by' => Auth::id()]);
-            if (in_array($voucher->status, ['received', 'reversed', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Finalized transfers cannot be edited.']);
+            if (in_array($voucher->status, ['posted', 'received', 'reversed', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Finalized transfers cannot be edited.']);
             $voucher->fill($data)->save();
             $voucher->items()->delete();
             $voucher->items()->createMany($items);
@@ -356,6 +356,8 @@ class InventoryControlService
             if ($this->stockAlreadyPosted(StockTransferVoucher::class, $voucher->id)) return $voucher;
             foreach ($voucher->items as $item) {
                 $qty = (float) ($item->approved_quantity ?: $item->requested_quantity);
+                $sourceScope = $this->scope($voucher->source_branch_id, $voucher->source_warehouse_id, (int) $item->product_id, $item->product_variant_id, $item->source_batch_id);
+                $this->stock->validateAvailableStock(array_merge($sourceScope, ['stock_status' => 'saleable']), $qty);
                 $this->stock->decreaseStock($this->transferPayload($voucher, $item, $qty, $voucher->source_branch_id, $voucher->source_warehouse_id, 'stock_transfer_out', $item->source_location, $item->source_batch_id, $item->source_serial_id));
                 $this->stock->increaseStock($this->transferPayload($voucher, $item, $qty, $voucher->destination_branch_id, $voucher->destination_warehouse_id, 'stock_transfer_in', $item->destination_location, $item->destination_batch_id ?: $item->source_batch_id, $item->destination_serial_id ?: $item->source_serial_id));
                 $item->update(['dispatched_quantity' => $qty, 'received_quantity' => $qty]);
@@ -372,6 +374,8 @@ class InventoryControlService
             if (StockLedger::query()->where('business_id', $voucher->business_id)->where('reference_type', StockTransferVoucher::class)->where('reference_id', $voucher->id)->where('transaction_type', 'stock_transfer_out')->exists()) return $voucher;
             foreach ($voucher->items as $item) {
                 $qty = (float) ($item->approved_quantity ?: $item->requested_quantity);
+                $sourceScope = $this->scope($voucher->source_branch_id, $voucher->source_warehouse_id, (int) $item->product_id, $item->product_variant_id, $item->source_batch_id);
+                $this->stock->validateAvailableStock(array_merge($sourceScope, ['stock_status' => 'saleable']), $qty);
                 $this->stock->decreaseStock($this->transferPayload($voucher, $item, $qty, $voucher->source_branch_id, $voucher->source_warehouse_id, 'stock_transfer_out', $item->source_location, $item->source_batch_id, $item->source_serial_id));
                 $item->update(['dispatched_quantity' => $qty]);
             }
@@ -661,6 +665,10 @@ class InventoryControlService
                 throw ValidationException::withMessages(["items.$index.requested_quantity" => 'Quantity must be greater than zero.']);
             }
 
+            if ((int) $data['source_warehouse_id'] === (int) $data['destination_warehouse_id']) {
+                throw ValidationException::withMessages(['destination_warehouse_id' => 'Source and destination warehouse cannot be same.']);
+            }
+
             if (!empty($row['source_batch_id'])) {
                 $this->assertBatch((int) $row['source_batch_id'], $product->id);
             }
@@ -682,7 +690,7 @@ class InventoryControlService
                 $this->assertSerial((int) $row['destination_serial_id'], $product->id);
             }
 
-            $this->stock->validateAvailableStock($this->scope($data['source_branch_id'] ?? null, $data['source_warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['source_batch_id'] ?? null), $qty);
+            $this->stock->validateAvailableStock(array_merge($this->scope($data['source_branch_id'] ?? null, $data['source_warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['source_batch_id'] ?? null), ['stock_status' => 'saleable']), $qty);
 
             return array_merge($row, ['unit_id' => $row['unit_id'] ?? $product->unit_id ?? null, 'approved_quantity' => $row['approved_quantity'] ?? $row['requested_quantity']]);
         })->all();

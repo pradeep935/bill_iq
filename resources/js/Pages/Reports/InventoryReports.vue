@@ -96,7 +96,7 @@ onMounted(load);
                 <template #cell-product="{ row }">{{ row.product?.name || row.product_name || '-' }}</template>
             </InventoryTable>
             <InventoryTable v-else-if="tab === 'manufacturing'" :columns="[{key:'order_number',label:'Order'},{key:'bom_code',label:'BOM'},{key:'finished_product',label:'Finished Product'},{key:'planned_quantity',label:'Planned'},{key:'produced_quantity',label:'Produced'},{key:'status',label:'Status'}]" :rows="activeRows" />
-            <InventoryTable v-else :columns="[{key:'transaction_date',label:'Date'},{key:'transaction_type',label:'Type'},{key:'product',label:'Product'},{key:'quantity_in',label:'In'},{key:'quantity_out',label:'Out'},{key:'reference_number',label:'Reference'}]" :rows="activeRows">
+            <InventoryTable v-else :columns="[{key:'transaction_date',label:'Date'},{key:'transaction_type',label:'Type'},{key:'product',label:'Product'},{key:'movement',label:'Movement'},{key:'quantity_in',label:'In'},{key:'quantity_out',label:'Out'},{key:'reference_number',label:'Reference'}]" :rows="activeRows">
                 <template #cell-product="{ row }">{{ row.product?.name || row.product_name || '-' }}</template>
             </InventoryTable>
         </InventoryModuleScaffold>

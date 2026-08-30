@@ -640,7 +640,7 @@ onMounted(async () => {
                                     <tr v-for="row in selectedDetail.recent_movements" :key="row.id">
                                         <td>{{ formatDateTime(row.date_time) }}</td>
                                         <td>{{ row.transaction_label || row.transaction_type }}</td>
-                                        <td>{{ row.reference_number || '-' }}</td>
+                                        <td><strong>{{ row.reference_number || '-' }}</strong><small v-if="row.variance_reason">{{ row.variance_reason }} | System {{ formatQty(row.system_quantity) }} | Physical {{ formatQty(row.physical_quantity) }} | Variance {{ formatQty(row.variance_quantity) }}</small></td>
                                         <td>{{ row.movement || movementText(row) }}</td>
                                         <td class="numeric">{{ formatQty(row.quantity || row.stock_in || row.stock_out) }}</td>
                                         <td class="numeric">{{ formatQty(row.saleable_balance ?? row.running_balance) }}</td>

@@ -17,6 +17,7 @@ use App\Models\PurchaseVoucher;
 use App\Models\SalesReturnVoucher;
 use App\Models\SalesVoucher;
 use App\Models\StockAdjustmentVoucher;
+use App\Models\StockCountSession;
 use App\Models\StockLedger;
 use App\Models\StockTransferVoucher;
 use App\Models\Warehouse;
@@ -38,6 +39,8 @@ class StockService
         'sales_return',
         'stock_adjustment_in',
         'stock_adjustment_out',
+        'physical_count_gain',
+        'physical_count_shortage',
         'stock_transfer_in',
         'stock_transfer_out',
         'batch_transfer_in',
@@ -675,6 +678,8 @@ class StockService
             ->get();
 
         $references = $this->stockReferenceNumbers($entries);
+        $countSources = $this->stockCountSourcesForLedgerEntries($entries);
+        $countItems = $this->stockCountItemsForLedgerEntries($entries, $countSources);
         $runningSaleable = 0.0;
         $runningPhysical = 0.0;
         $rows = [];
@@ -686,28 +691,157 @@ class StockService
             }
             $runningPhysical += $net;
             $referenceKey = $entry->reference_type . ':' . $entry->reference_id;
+            $countSource = $countSources[$referenceKey] ?? null;
+            $isCountMovement = $entry->reference_type === StockCountSession::class || $countSource;
+            $countItemKey = ($countSource['reference_key'] ?? $referenceKey) . ':' . $this->ledgerItemKey($entry);
+            $countItem = $isCountMovement ? ($countItems[$countItemKey] ?? null) : null;
+            $net = round($net, 3);
 
             $rows[] = [
                 'id' => $entry->id,
                 'date_time' => optional($entry->transaction_date)->toDateTimeString(),
                 'transaction_type' => $entry->transaction_type,
-                'transaction_label' => $this->stockTransactionLabel($entry->transaction_type),
+                'transaction_label' => $isCountMovement
+                    ? ($net < 0 ? 'Physical Count Shortage' : 'Physical Count Gain')
+                    : $this->stockTransactionLabel($entry->transaction_type),
                 'reference_type' => class_basename((string) $entry->reference_type),
                 'reference_id' => $entry->reference_id,
-                'reference_number' => $references[$referenceKey] ?? (string) $entry->reference_id,
+                'reference_number' => $countSource['number'] ?? ($references[$referenceKey] ?? (string) $entry->reference_id),
                 'stock_status' => $entry->stock_status ?: 'saleable',
-                'movement' => null,
+                'movement' => $isCountMovement ? 'Count Adjustment -> Saleable' : null,
                 'stock_in' => (float) $entry->quantity_in,
                 'stock_out' => (float) $entry->quantity_out,
+                'quantity' => $isCountMovement ? $net : null,
                 'running_balance' => round($runningSaleable, 3),
                 'saleable_balance' => round($runningSaleable, 3),
                 'physical_balance' => round($runningPhysical, 3),
                 'branch' => optional($entry->branch)->name,
                 'warehouse' => optional($entry->warehouse)->name,
+                'system_quantity' => $countItem?->system_quantity,
+                'physical_quantity' => $countItem?->counted_quantity,
+                'variance_quantity' => $countItem?->variance_quantity ?? ($isCountMovement ? $net : null),
+                'variance_reason' => $isCountMovement ? ($countItem?->reviewer_notes ?: ($net < 0 ? 'Physical Count Shortage' : 'Physical Count Gain')) : null,
+                'linked_adjustment_number' => $countSource['linked_adjustment_number'] ?? null,
+                'posted_by' => optional($entry->creator)->name ?: 'System',
             ];
         }
 
         return collect($this->mergeReclassificationMovements($rows))->reverse()->take($limit)->values();
+    }
+
+    private function stockCountSourcesForLedgerEntries($entries): array
+    {
+        $sources = [];
+
+        $directCountIds = $entries
+            ->filter(fn ($entry) => $entry->reference_type === StockCountSession::class && $entry->reference_id)
+            ->pluck('reference_id')
+            ->unique()
+            ->values();
+
+        StockCountSession::query()
+            ->where('business_id', AppController::businessId())
+            ->whereIn('id', $directCountIds)
+            ->get(['id', 'session_number'])
+            ->each(function (StockCountSession $count) use (&$sources) {
+                $referenceKey = StockCountSession::class . ':' . $count->id;
+                $sources[$referenceKey] = ['number' => $count->session_number, 'reference_key' => $referenceKey];
+            });
+
+        $adjustmentIds = $entries
+            ->filter(fn ($entry) => $entry->reference_type === StockAdjustmentVoucher::class && $entry->reference_id)
+            ->pluck('reference_id')
+            ->unique()
+            ->values();
+
+        if ($adjustmentIds->isEmpty()) {
+            return $sources;
+        }
+
+        $adjustments = StockAdjustmentVoucher::query()
+            ->where('business_id', AppController::businessId())
+            ->whereIn('id', $adjustmentIds)
+            ->where('source', 'physical_count')
+            ->get(['id', 'voucher_number', 'remarks']);
+        $countNumbers = $adjustments
+            ->map(fn ($adjustment) => $this->countNumberFromText((string) $adjustment->remarks))
+            ->filter()
+            ->unique()
+            ->values();
+        $counts = StockCountSession::query()
+            ->where('business_id', AppController::businessId())
+            ->whereIn('session_number', $countNumbers)
+            ->get(['id', 'session_number'])
+            ->keyBy('session_number');
+
+        foreach ($adjustments as $adjustment) {
+            $number = $this->countNumberFromText((string) $adjustment->remarks);
+            $count = $number ? $counts->get($number) : null;
+            $referenceKey = $count ? StockCountSession::class . ':' . $count->id : StockAdjustmentVoucher::class . ':' . $adjustment->id;
+            $sources[StockAdjustmentVoucher::class . ':' . $adjustment->id] = [
+                'number' => $number,
+                'reference_key' => $referenceKey,
+                'linked_adjustment_number' => $adjustment->voucher_number,
+            ];
+        }
+
+        return $sources;
+    }
+
+    private function stockCountItemsForLedgerEntries($entries, array $countSources): array
+    {
+        $countIds = $entries
+            ->filter(fn ($entry) => $entry->reference_type === StockCountSession::class && $entry->reference_id)
+            ->pluck('reference_id')
+            ->merge(collect($countSources)->map(fn ($source) => str_starts_with($source['reference_key'] ?? '', StockCountSession::class . ':') ? (int) str_replace(StockCountSession::class . ':', '', $source['reference_key']) : null))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($countIds->isEmpty()) {
+            return [];
+        }
+
+        $items = [];
+        StockCountSession::query()
+            ->where('business_id', AppController::businessId())
+            ->whereIn('id', $countIds)
+            ->with('items')
+            ->get()
+            ->each(function (StockCountSession $count) use (&$items) {
+                foreach ($count->items as $item) {
+                    $items[StockCountSession::class . ':' . $count->id . ':' . $this->countItemKey($item)] = $item;
+                }
+            });
+
+        return $items;
+    }
+
+    private function countNumberFromText(string $text): ?string
+    {
+        if (preg_match('/CNT-\d{4}-\d+/i', $text, $matches)) {
+            return strtoupper($matches[0]);
+        }
+
+        return null;
+    }
+
+    private function ledgerItemKey(StockLedger $entry): string
+    {
+        return implode(':', [
+            (int) $entry->product_id,
+            (int) ($entry->product_variant_id ?? 0),
+            (int) ($entry->batch_id ?? 0),
+        ]);
+    }
+
+    private function countItemKey($item): string
+    {
+        return implode(':', [
+            (int) $item->product_id,
+            (int) ($item->product_variant_id ?? 0),
+            (int) ($item->batch_id ?? 0),
+        ]);
     }
 
     private function mergeReclassificationMovements(array $rows): array
@@ -776,6 +910,7 @@ class StockService
             PurchaseReturnVoucher::class => ['table' => 'purchase_return_vouchers', 'column' => 'voucher_number'],
             SalesReturnVoucher::class => ['table' => 'sales_return_vouchers', 'column' => 'credit_note_number', 'fallback' => 'voucher_number'],
             StockAdjustmentVoucher::class => ['table' => 'stock_adjustment_vouchers', 'column' => 'voucher_number'],
+            StockCountSession::class => ['table' => 'stock_count_sessions', 'column' => 'session_number'],
             StockTransferVoucher::class => ['table' => 'stock_transfer_vouchers', 'column' => 'voucher_number'],
             LocationTransferVoucher::class => ['table' => 'location_transfer_vouchers', 'column' => 'voucher_number'],
             DeliveryChallan::class => ['table' => 'delivery_challans', 'column' => 'challan_number'],
@@ -819,6 +954,8 @@ class StockService
             'sales_return' => 'Sales Return',
             'stock_adjustment_in' => 'Adjustment In',
             'stock_adjustment_out' => 'Adjustment Out',
+            'physical_count_gain' => 'Physical Count Gain',
+            'physical_count_shortage' => 'Physical Count Shortage',
             'stock_transfer_in' => 'Transfer In',
             'stock_transfer_out' => 'Transfer Out',
             'batch_transfer_in' => 'Batch Transfer In',

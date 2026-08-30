@@ -310,6 +310,10 @@ class InventoryControlService
             if ($session->status === 'posted') {
                 throw ValidationException::withMessages(['status' => 'This stock count has already been posted.']);
             }
+            if ($this->stockAlreadyPosted(StockCountSession::class, $session->id)) {
+                $session->update(['status' => 'posted', 'approved_by' => Auth::id(), 'approved_at' => now(), 'completed_at' => now()]);
+                return null;
+            }
             if (!$session->items->count()) {
                 throw ValidationException::withMessages(['items' => 'Stock count must have at least one item before posting.']);
             }
@@ -328,6 +332,7 @@ class InventoryControlService
                 'adjustment_reason_id' => null, 'adjustment_type' => 'mixed', 'source' => 'physical_count', 'status' => 'posted',
                 'remarks' => 'Stock Count ' . $session->session_number, 'items' => $items,
             ]);
+            $this->mapCountAdjustmentLedgerToSession($voucher, $session);
             $session->update(['status' => 'posted', 'approved_by' => Auth::id(), 'approved_at' => now(), 'completed_at' => now()]);
             return $voucher;
         });
@@ -909,7 +914,7 @@ class InventoryControlService
                 $signedQuantity = (float) $entry->quantity_in - (float) $entry->quantity_out;
                 $condition = str($entry->stock_status ?: 'saleable')->replace('_', ' ')->title();
                 $row->display_quantity = $signedQuantity;
-                $row->movement = $signedQuantity < 0 ? $condition . ' -> Out' : 'In -> ' . $condition;
+                $row->movement = $entry->movement ?: ($signedQuantity < 0 ? $condition . ' -> Out' : 'In -> ' . $condition);
                 $row->physical_change = $signedQuantity;
                 $rows->push($row);
                 continue;
@@ -937,6 +942,36 @@ class InventoryControlService
 
     private function annotatePhysicalCountLedger($ledger): void
     {
+        $directCountIds = $ledger
+            ->filter(fn ($entry) => $entry->reference_type === StockCountSession::class && $entry->reference_id)
+            ->pluck('reference_id')
+            ->unique()
+            ->values();
+
+        $directCounts = $directCountIds->isEmpty()
+            ? collect()
+            : StockCountSession::query()
+                ->where('business_id', AppController::businessId())
+                ->whereIn('id', $directCountIds)
+                ->with('items')
+                ->get()
+                ->keyBy('id');
+
+        if ($directCounts->isNotEmpty()) {
+            $ledger->each(function (StockLedger $entry) use ($directCounts) {
+                if ($entry->reference_type !== StockCountSession::class) {
+                    return;
+                }
+
+                $count = $directCounts->get((int) $entry->reference_id);
+                if (!$count) {
+                    return;
+                }
+
+                $this->applyCountLedgerMetadata($entry, $count, $this->matchingCountItem($count, $entry), (float) $entry->quantity_in - (float) $entry->quantity_out);
+            });
+        }
+
         $adjustmentIds = $ledger
             ->filter(fn ($entry) => $entry->reference_type === StockAdjustmentVoucher::class && $entry->reference_id)
             ->pluck('reference_id')
@@ -990,20 +1025,60 @@ class InventoryControlService
                     && (int) ($line->product_variant_id ?? 0) === (int) ($entry->product_variant_id ?? 0)
                     && (int) ($line->batch_id ?? 0) === (int) ($entry->batch_id ?? 0));
 
-            $entry->reference_number = $countNumber ?: $entry->reference_number;
-            $entry->source_document = 'Stock Count';
-            $entry->source_number = $countNumber;
-            $entry->linked_adjustment_number = $adjustment->voucher_number;
-            $entry->transaction_type = $variance < 0 ? 'Physical Count Shortage' : 'Physical Count Gain';
-            $entry->movement = $variance < 0 ? 'Saleable -> Out' : 'In -> Saleable';
-            $entry->physical_change = $variance;
-            $entry->count_type = $count?->count_type;
-            $entry->system_quantity = $countItem?->system_quantity;
-            $entry->physical_quantity = $countItem?->counted_quantity;
-            $entry->variance_quantity = $countItem?->variance_quantity ?? $variance;
-            $entry->variance_reason = $countItem?->reviewer_notes ?: $item?->reason ?: ($variance < 0 ? 'Physical Count Shortage' : 'Physical Count Gain');
-            $entry->remarks = trim(($entry->variance_reason ?: '') . ' ' . ($countNumber ?: ''));
+            $this->applyCountLedgerMetadata($entry, $count, $countItem, $variance, $adjustment->voucher_number, $item?->reason);
         });
+    }
+
+    private function mapCountAdjustmentLedgerToSession(StockAdjustmentVoucher $voucher, StockCountSession $session): void
+    {
+        StockLedger::query()
+            ->where('business_id', $voucher->business_id)
+            ->where('reference_type', StockAdjustmentVoucher::class)
+            ->where('reference_id', $voucher->id)
+            ->get()
+            ->each(function (StockLedger $entry) use ($session, $voucher) {
+                $variance = (float) $entry->quantity_in - (float) $entry->quantity_out;
+                $countItem = $this->matchingCountItem($session, $entry);
+                $reason = $countItem?->reviewer_notes ?: ($variance < 0 ? 'Physical Count Shortage' : 'Physical Count Gain');
+
+                $entry->update([
+                    'reference_type' => StockCountSession::class,
+                    'reference_id' => $session->id,
+                    'transaction_type' => $variance < 0 ? 'physical_count_shortage' : 'physical_count_gain',
+                    'remarks' => trim($session->session_number . ' | ' . $reason . ' | Linked adjustment ' . $voucher->voucher_number),
+                ]);
+            });
+    }
+
+    private function matchingCountItem(StockCountSession $count, StockLedger $entry)
+    {
+        return $count->items->first(fn ($line) => (int) $line->product_id === (int) $entry->product_id
+            && (int) ($line->product_variant_id ?? 0) === (int) ($entry->product_variant_id ?? 0)
+            && (int) ($line->batch_id ?? 0) === (int) ($entry->batch_id ?? 0)
+        );
+    }
+
+    private function applyCountLedgerMetadata(StockLedger $entry, ?StockCountSession $count, $countItem, float $variance, ?string $linkedAdjustmentNumber = null, ?string $fallbackReason = null): void
+    {
+        $countNumber = $count?->session_number ?: $entry->reference_number;
+        $entry->reference_number = $countNumber;
+        $entry->source_type = 'stock_count';
+        $entry->source_id = $count?->id;
+        $entry->source_reference = $countNumber;
+        $entry->source_document = 'Stock Count';
+        $entry->source_number = $countNumber;
+        $entry->linked_adjustment_number = $linkedAdjustmentNumber;
+        $entry->transaction_type = $variance < 0 ? 'Physical Count Shortage' : 'Physical Count Gain';
+        $entry->movement = 'Count Adjustment -> Saleable';
+        $entry->physical_change = $variance;
+        $entry->count_type = $count?->count_type;
+        $entry->system_quantity = $countItem?->system_quantity;
+        $entry->physical_quantity = $countItem?->counted_quantity;
+        $entry->variance_quantity = $countItem?->variance_quantity ?? $variance;
+        $entry->variance_reason = $countItem?->reviewer_notes ?: $fallbackReason ?: ($variance < 0 ? 'Physical Count Shortage' : 'Physical Count Gain');
+        $entry->posted_by_name = $entry->creator?->name ?: ($count?->approved_by ? 'User' : 'System');
+        $entry->posted_at = $count?->approved_at?->toDateTimeString() ?: optional($entry->transaction_date)->toDateTimeString();
+        $entry->remarks = trim(($entry->variance_reason ?: '') . ' ' . ($countNumber ?: ''));
     }
 
     private function applyLedgerRegisterSearch(Builder $query, string $search): void
@@ -1032,6 +1107,17 @@ class InventoryControlService
                 })
                 ->orWhereExists(function ($sub) use ($term) {
                     $sub->selectRaw('1')
+                        ->from('stock_count_sessions')
+                        ->whereColumn('stock_count_sessions.id', 'stock_ledgers.reference_id')
+                        ->where('stock_ledgers.reference_type', StockCountSession::class)
+                        ->where(function ($count) use ($term) {
+                            $count->where('session_number', 'like', $term)
+                                ->orWhere('remarks', 'like', $term)
+                                ->orWhere('count_type', 'like', $term);
+                        });
+                })
+                ->orWhereExists(function ($sub) use ($term) {
+                    $sub->selectRaw('1')
                         ->from('stock_transfer_vouchers')
                         ->whereColumn('stock_transfer_vouchers.id', 'stock_ledgers.reference_id')
                         ->where('stock_ledgers.reference_type', StockTransferVoucher::class)
@@ -1049,12 +1135,15 @@ class InventoryControlService
         $normalized = str($type)->lower()->replace(['-', '_'], ' ')->toString();
 
         if (str_contains($normalized, 'physical count')) {
-            $query->whereExists(function ($sub) {
-                $sub->selectRaw('1')
-                    ->from('stock_adjustment_vouchers')
-                    ->whereColumn('stock_adjustment_vouchers.id', 'stock_ledgers.reference_id')
-                    ->where('stock_ledgers.reference_type', StockAdjustmentVoucher::class)
-                    ->where('stock_adjustment_vouchers.source', 'physical_count');
+            $query->where(function (Builder $q) {
+                $q->where('reference_type', StockCountSession::class)
+                    ->orWhereExists(function ($sub) {
+                        $sub->selectRaw('1')
+                            ->from('stock_adjustment_vouchers')
+                            ->whereColumn('stock_adjustment_vouchers.id', 'stock_ledgers.reference_id')
+                            ->where('stock_ledgers.reference_type', StockAdjustmentVoucher::class)
+                            ->where('stock_adjustment_vouchers.source', 'physical_count');
+                    });
             });
 
             if (str_contains($normalized, 'shortage')) {

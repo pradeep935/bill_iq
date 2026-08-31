@@ -308,7 +308,6 @@ const visibleTabs = computed(() => {
   if (props.page === 'inventory-warehouses') return tabs.filter((tab) => tab.key === 'warehouse');
   return tabs.filter((tab) => {
     if (['branch', 'warehouse'].includes(tab.key)) return false;
-    if (tab.key === 'hsn') return Number(props.role_id) === 1;
     return true;
   });
 });

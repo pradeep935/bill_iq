@@ -1,0 +1,3 @@
+Build generated locally for production.
+Commit includes compiled public/build assets for servers without Node/Vite.
+Generated at: 2026-08-31 21:09:37 +0530

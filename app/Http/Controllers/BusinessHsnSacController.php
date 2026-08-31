@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\HsnMaster;
+use App\Services\MasterDataService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -21,6 +22,7 @@ class BusinessHsnSacController extends Controller
         return Inertia::render('Product/HsnMaster', [
             'page' => 'business-hsn-master',
             'title' => 'HSN/SAC Master',
+            'gst_rate_slabs' => app(MasterDataService::class)->gstRateSlabs(),
         ]);
     }
 
@@ -33,6 +35,14 @@ class BusinessHsnSacController extends Controller
             ->where('business_id', $businessId)
             ->when($request->filled('code_type'), fn (Builder $q) => $q->where('code_type', strtoupper((string) $request->query('code_type'))))
             ->when($request->filled('status'), fn (Builder $q) => $q->where('status', $request->query('status')))
+            ->when($request->filled('reference_status'), function (Builder $q) use ($request) {
+                match ($request->query('reference_status')) {
+                    'manual' => $q->whereNull('reference_hsn_master_id'),
+                    'matched' => $q->whereNotNull('reference_hsn_master_id')->where('verification_status', 'classification_verified'),
+                    'modified' => $q->whereNotNull('reference_hsn_master_id')->where('verification_status', 'rate_suggested'),
+                    default => null,
+                };
+            })
             ->when($search !== '', function (Builder $q) use ($search) {
                 $q->where(fn (Builder $inner) => $inner
                     ->where('hsn_code', 'like', '%' . $search . '%')
@@ -64,6 +74,7 @@ class BusinessHsnSacController extends Controller
                 ->where('hsn_code', 'like', $search . '%')
                 ->orWhere('description', 'like', '%' . $search . '%'))
             ->where(fn (Builder $q) => $q->whereNull('status')->orWhere('status', 'active'))
+            ->orderByRaw('CASE WHEN hsn_code = ? THEN 0 WHEN hsn_code LIKE ? THEN 1 ELSE 2 END', [$search, $search . '%'])
             ->orderBy('hsn_code')
             ->limit(10)
             ->get()
@@ -92,7 +103,6 @@ class BusinessHsnSacController extends Controller
 
         $data = $this->validated($request, $hsn->id);
         $data['business_id'] = AppController::businessId();
-        $data['reference_hsn_master_id'] = $hsn->reference_hsn_master_id;
         $data['verification_status'] = $this->referenceStatus($data);
 
         $hsn->fill($this->tablePayload($data))->save();
@@ -117,7 +127,7 @@ class BusinessHsnSacController extends Controller
 
         $data = $request->validate([
             'code_type' => ['required', Rule::in(['HSN', 'SAC'])],
-            'hsn_code' => ['required', 'string', 'max:12'],
+            'hsn_code' => ['required', 'string', 'max:12', 'regex:/^[0-9]+$/'],
             'description' => ['required', 'string', 'max:5000'],
             'gst_rate' => ['required', 'numeric', 'min:0', 'max:100'],
             'cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],

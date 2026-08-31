@@ -1896,7 +1896,7 @@ const saveProduct = () => {
                                         </span>
 
                                         <span class="field-hint">
-                                            Product name/category se HSN/SAC Master suggestions aayenge. Manual code bhi enter kar sakte hain; master select karne par GST rate auto-fill ho jayega.
+                                            My HSN/SAC Master se suggestions aayenge. Pehle Inventory > HSN/SAC Master me code add karein; master select karne par GST rate auto-fill ho jayega.
                                         </span>
                                     </div>
 

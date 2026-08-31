@@ -21,7 +21,7 @@ class MasterDataController extends Controller
 {
     public function __construct(private MasterDataService $masters) {}
 
-    public function index()
+    public function index(Request $request)
     {
         if ($redirect = AppController::guardPage('masters')) {
             return $redirect;
@@ -30,7 +30,7 @@ class MasterDataController extends Controller
         return Inertia::render('Setup/Masters', [
             'page' => 'masters',
             'title' => 'Masters',
-            'initial_tab' => 'category',
+            'initial_tab' => $request->query('tab', 'category'),
             'role_id' => AppController::roleId(),
         ]);
     }

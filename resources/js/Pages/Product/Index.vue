@@ -786,6 +786,13 @@ onMounted(() => {
         </template>
         <div class="product-page">
             <div class="page-actions">
+                    <a
+                        class="secondary-action"
+                        href="/app/setup/masters?tab=hsn"
+                    >
+                        HSN/SAC Master
+                    </a>
+
                     <button
                         type="button"
                         class="secondary-action"

@@ -83,6 +83,109 @@ class ProductMasterTest extends TestCase
         $this->assertDatabaseHas('product_barcodes', ['business_id' => $businessId, 'barcode' => '8901063400123']);
     }
 
+    public function test_product_gst_override_does_not_update_global_hsn_reference(): void
+    {
+        $businessId = DB::table('companies')->insertGetId([
+            'name' => 'ABC Retail Pvt Ltd',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $hsn = HsnMaster::query()->create([
+            'business_id' => null,
+            'code_type' => 'HSN',
+            'hsn_code' => '1514',
+            'description' => 'Mustard oil',
+            'taxability' => 'taxable',
+            'gst_rate' => 5,
+            'cess_rate' => 0,
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['business_id' => $businessId])
+            ->postJson('/app/inventory/products/save', [
+                'name' => 'Fortune Mustard Oil 1L',
+                'product_type' => 'goods',
+                'item_type' => 'stock',
+                'unit' => 'PCS',
+                'sku' => 'MO-001',
+                'hsn_master_id' => $hsn->id,
+                'hsn_code' => '1514',
+                'taxability' => 'taxable',
+                'gst_rate' => 18,
+                'cess_rate' => 0,
+                'tax_source' => 'override',
+                'tax_override_reason' => 'Rate confirmed by CA',
+                'reverse_charge' => 'no',
+                'tax_inclusive' => false,
+                'selling_price' => 180,
+                'cost_price' => 150,
+                'mrp' => 190,
+                'opening_stock' => 0,
+                'minimum_stock' => 0,
+                'reorder_stock' => 0,
+                'maximum_stock' => 0,
+                'tracking_type' => 'none',
+                'batch_required' => false,
+                'expiry_required' => false,
+                'serial_required' => false,
+                'status' => 'active',
+            ]);
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas('products', [
+            'business_id' => $businessId,
+            'sku' => 'MO-001',
+            'hsn_master_id' => $hsn->id,
+            'hsn_code' => '1514',
+            'gst_rate' => 18,
+            'tax_source' => 'override',
+        ]);
+        $this->assertDatabaseHas('hsn_masters', [
+            'id' => $hsn->id,
+            'business_id' => null,
+            'gst_rate' => 5,
+        ]);
+    }
+
+    public function test_business_admin_cannot_modify_global_hsn_reference(): void
+    {
+        $businessId = DB::table('companies')->insertGetId([
+            'name' => 'ABC Retail Pvt Ltd',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $hsn = HsnMaster::query()->create([
+            'business_id' => null,
+            'code_type' => 'HSN',
+            'hsn_code' => '1514',
+            'description' => 'Mustard oil',
+            'taxability' => 'taxable',
+            'gst_rate' => 5,
+            'cess_rate' => 0,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['business_id' => $businessId])
+            ->putJson("/app/masters/hsn/{$hsn->id}", [
+                'rate_update_only' => true,
+                'taxability' => 'taxable',
+                'gst_rate' => 18,
+                'cess_rate' => 0,
+                'effective_from' => now()->toDateString(),
+            ])
+            ->assertUnprocessable();
+
+        $this->assertDatabaseHas('hsn_masters', [
+            'id' => $hsn->id,
+            'gst_rate' => 5,
+        ]);
+    }
+
     public function test_selling_price_cannot_exceed_mrp(): void
     {
         $businessId = DB::table('companies')->insertGetId([

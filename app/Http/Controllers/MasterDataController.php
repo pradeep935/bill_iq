@@ -167,6 +167,12 @@ class MasterDataController extends Controller
         $record = $this->findScoped($model, $type, $id);
 
         if ($type === 'hsn' && $this->isOfficialHsn($record)) {
+            if (!auth()->user()?->isSuperAdmin()) {
+                throw ValidationException::withMessages([
+                    'hsn_code' => 'BillIQ global HSN/SAC reference records are read-only for business users.',
+                ]);
+            }
+
             if (!$request->boolean('rate_update_only')) {
                 throw ValidationException::withMessages([
                     'hsn_code' => 'Official Government HSN/SAC classification cannot be edited. Only GST rate verification is allowed here.',

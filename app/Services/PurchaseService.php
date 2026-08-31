@@ -393,13 +393,25 @@ class PurchaseService
     private function syncItems(PurchaseVoucher $voucher, array $items): void
     {
         foreach ($items as $item) {
+            $product = Product::query()->with(['hsn', 'hsnMaster', 'hsnTaxRate'])->findOrFail($item['product_id']);
+            $productHsn = $product->hsnMaster ?: $product->hsn;
+            $taxRule = $product->hsnTaxRate;
+
             $voucher->items()->create([
-                'product_id' => $item['product_id'],
+                'product_id' => $product->id,
                 'product_variant_id' => $item['product_variant_id'] ?? null,
                 'batch_id' => $item['batch_id'] ?? null,
                 'quantity' => $item['quantity'],
                 'free_quantity' => $item['free_quantity'] ?? 0,
                 'unit_id' => $item['unit_id'] ?? null,
+                'hsn_code_snapshot' => $product->hsn_code ?: $product->hsn ?: optional($productHsn)->hsn_code,
+                'hsn_code_type_snapshot' => optional($productHsn)->code_type ?: ($product->product_type === 'service' ? 'SAC' : 'HSN'),
+                'hsn_description_snapshot' => optional($productHsn)->description,
+                'hsn_tax_rate_id' => $product->hsn_tax_rate_id,
+                'taxability_snapshot' => $product->taxability ?: (((float) $product->gst_rate > 0) ? 'taxable' : 'nil_rated'),
+                'tax_source' => $product->tax_source ?: 'manual_confirmation',
+                'notification_number' => optional($taxRule)->notification_number,
+                'tax_rule_description' => optional($taxRule)->rule_description ?: optional($taxRule)->rule_name,
                 'purchase_rate' => $item['purchase_rate'],
                 'selling_price' => $item['selling_price'] ?? null,
                 'mrp' => $item['mrp'] ?? null,

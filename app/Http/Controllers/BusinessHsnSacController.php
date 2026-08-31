@@ -67,14 +67,32 @@ class BusinessHsnSacController extends Controller
             return response()->json(['data' => []]);
         }
 
+        $normalizedCode = preg_replace('/\D+/', '', $search);
+        $tokens = collect(preg_split('/\s+/', strtolower($search), -1, PREG_SPLIT_NO_EMPTY))
+            ->map(fn (string $token) => trim($token))
+            ->filter(fn (string $token) => strlen($token) >= 3 && !in_array($token, ['hsn', 'sac', 'gst'], true))
+            ->values();
+
         $records = HsnMaster::query()
             ->whereNull('business_id')
             ->where('code_type', $codeType)
-            ->where(fn (Builder $q) => $q
-                ->where('hsn_code', 'like', $search . '%')
-                ->orWhere('description', 'like', '%' . $search . '%'))
+            ->where(function (Builder $q) use ($search, $normalizedCode, $tokens) {
+                if ($normalizedCode !== '') {
+                    $q->where('hsn_code', $normalizedCode)
+                        ->orWhere('hsn_code', 'like', $normalizedCode . '%');
+                }
+
+                $q->orWhere('description', 'like', '%' . $search . '%');
+
+                foreach ($tokens as $token) {
+                    $q->orWhere('description', 'like', '%' . $token . '%');
+                    if (Schema::hasColumn('hsn_masters', 'search_keywords')) {
+                        $q->orWhere('search_keywords', 'like', '%' . $token . '%');
+                    }
+                }
+            })
             ->where(fn (Builder $q) => $q->whereNull('status')->orWhere('status', 'active'))
-            ->orderByRaw('CASE WHEN hsn_code = ? THEN 0 WHEN hsn_code LIKE ? THEN 1 ELSE 2 END', [$search, $search . '%'])
+            ->orderByRaw('CASE WHEN hsn_code = ? THEN 0 WHEN hsn_code LIKE ? THEN 1 ELSE 2 END', [$normalizedCode ?: $search, ($normalizedCode ?: $search) . '%'])
             ->orderBy('hsn_code')
             ->limit(10)
             ->get()

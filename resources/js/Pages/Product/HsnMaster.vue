@@ -57,7 +57,7 @@
             <input v-model="referenceSearch" type="search" placeholder="Search HSN/SAC code or description" @input="searchReference" />
           </div>
           <div v-if="referenceSearching" class="subtle-message">Searching...</div>
-          <div v-else-if="showNoReference" class="subtle-message">No matching BillIQ reference found. <button type="button" class="inline-action" @click="createManual">Create Manual HSN/SAC</button></div>
+          <div v-else-if="showNoReference" class="subtle-message">No matching BillIQ reference found. <button v-if="!form.id" type="button" class="inline-action" @click="createManual">Create Manual HSN/SAC</button></div>
           <div v-if="referenceResults.length" class="reference-results">
             <div v-for="ref in referenceResults" :key="ref.id" class="reference-result">
               <div><strong>{{ ref.code_type }} {{ ref.hsn_code }}</strong><span>{{ ref.description }}</span><small>GST: {{ ref.gst_rate === null || ref.gst_rate === undefined ? 'Rate pending' : rateLabel(ref.gst_rate) }} | {{ label(ref.taxability) }}</small></div>
@@ -118,7 +118,8 @@ const gstRateSlabs = computed(() => props.gst_rate_slabs || []);
 const detailsEnabled = computed(() => Boolean(form.id || selectedReference.value || manualMode.value));
 const firstError = computed(() => Object.values(errors.value || {})?.[0]?.[0] || '');
 const referenceRatePending = computed(() => selectedReference.value && (selectedReference.value.gst_rate === null || selectedReference.value.gst_rate === undefined));
-const showNoReference = computed(() => referenceSearch.value.trim().length >= 2 && !referenceSearching.value && !referenceResults.value.length && !detailsEnabled.value);
+const searchedReference = ref(false);
+const showNoReference = computed(() => referenceSearch.value.trim().length >= 2 && searchedReference.value && !referenceSearching.value && !referenceResults.value.length);
 const referenceStatusText = computed(() => !form.reference_hsn_master_id ? 'Manual / Not Matched' : (rateWarning.value ? 'Modified from BillIQ' : 'Matched with BillIQ'));
 const rateWarning = computed(() => {
   if (!selectedReference.value) return '';
@@ -166,11 +167,13 @@ function searchReference() {
     const q = referenceSearch.value.trim();
     referenceResults.value = [];
     selectedReference.value = null;
+    searchedReference.value = false;
     if (q.length < 2) return;
     referenceSearching.value = true;
     try {
       const { data } = await axios.get('/app/inventory/hsn-master/reference-search', { params: { q, code_type: form.code_type } });
       referenceResults.value = data.data || [];
+      searchedReference.value = true;
     } finally {
       referenceSearching.value = false;
     }

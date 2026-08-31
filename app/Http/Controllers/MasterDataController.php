@@ -31,6 +31,7 @@ class MasterDataController extends Controller
             'page' => 'masters',
             'title' => 'Masters',
             'initial_tab' => 'category',
+            'role_id' => AppController::roleId(),
         ]);
     }
 

@@ -281,6 +281,7 @@ const props = defineProps({
   page: { type: String, default: 'masters' },
   title: { type: String, default: 'Masters' },
   initial_tab: { type: String, default: 'category' },
+  role_id: { type: Number, default: null },
 });
 
 const tabs = [
@@ -305,7 +306,11 @@ const gstRateOptions = computed(() => references.gst_rate_slabs?.length ? refere
 const visibleTabs = computed(() => {
   if (props.page === 'branches') return tabs.filter((tab) => tab.key === 'branch');
   if (props.page === 'inventory-warehouses') return tabs.filter((tab) => tab.key === 'warehouse');
-  return tabs.filter((tab) => !['branch', 'warehouse'].includes(tab.key));
+  return tabs.filter((tab) => {
+    if (['branch', 'warehouse'].includes(tab.key)) return false;
+    if (tab.key === 'hsn') return Number(props.role_id) === 1;
+    return true;
+  });
 });
 
 const initialTab = computed(() => (

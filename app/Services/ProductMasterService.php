@@ -400,9 +400,7 @@ class ProductMasterService
         $isService = $data['product_type'] === 'service';
         $hsn = $hsnId
             ? HsnMaster::query()
-                ->where(function (Builder $query) use ($businessId) {
-                    $query->whereNull('business_id')->orWhere('business_id', $businessId);
-                })
+                ->where('business_id', $businessId)
                 ->where('code_type', $isService ? 'SAC' : 'HSN')
                 ->find($hsnId)
             : null;

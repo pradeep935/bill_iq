@@ -176,9 +176,7 @@ class MasterDataService
         $businessId = AppController::businessId();
 
         return HsnMaster::query()
-            ->where(function (Builder $query) use ($businessId) {
-                $query->where(fn (Builder $scope) => $scope->whereNull('business_id')->orWhere('business_id', $businessId));
-            })
+            ->where('business_id', $businessId)
             ->where('status', 'active')
             ->whereIn('verification_status', ['verified', 'classification_verified', 'Classification Verified', 'rate_verified', 'Rate Verified'])
             ->where(function (Builder $query) {

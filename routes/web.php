@@ -7,6 +7,7 @@ use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Admin\OnboardingController;
 use App\Http\Controllers\AppController;
+use App\Http\Controllers\BusinessHsnSacController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
@@ -350,6 +351,13 @@ Route::middleware('auth')->group(function () {
             '/products/references',
             [ProductController::class, 'references']
         )->name('products.references');
+
+        Route::get('/hsn-master', [BusinessHsnSacController::class, 'index'])->name('hsn-master');
+        Route::get('/hsn-master/list', [BusinessHsnSacController::class, 'list'])->name('hsn-master.list');
+        Route::get('/hsn-master/reference-search', [BusinessHsnSacController::class, 'referenceSearch'])->name('hsn-master.reference-search');
+        Route::post('/hsn-master', [BusinessHsnSacController::class, 'store'])->name('hsn-master.store');
+        Route::put('/hsn-master/{hsn}', [BusinessHsnSacController::class, 'update'])->name('hsn-master.update');
+        Route::delete('/hsn-master/{hsn}', [BusinessHsnSacController::class, 'destroy'])->name('hsn-master.destroy');
 
         Route::post(
             '/products/save',

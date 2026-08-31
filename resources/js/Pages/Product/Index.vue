@@ -788,7 +788,7 @@ onMounted(() => {
             <div class="page-actions">
                     <a
                         class="secondary-action"
-                        href="/app/setup/masters?tab=hsn"
+                        href="/app/inventory/hsn-master"
                     >
                         HSN/SAC Master
                     </a>

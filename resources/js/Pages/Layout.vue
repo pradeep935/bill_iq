@@ -234,6 +234,7 @@ const sections = [
     items: [
       { label: 'Inventory Dashboard', page: 'inventory', href: routeUrl('app.inventory.dashboard', '/app/inventory'), icon: 'boxes' },
       { label: 'Product Master', page: 'products', href: routeUrl('app.inventory.products', '/app/inventory/products'), icon: 'tag' },
+      { label: 'HSN/SAC Master', page: 'business-hsn-master', href: routeUrl('app.inventory.hsn-master', '/app/inventory/hsn-master'), icon: 'file-text' },
       { label: 'Opening Stock', page: 'opening-stock', href: routeUrl('app.inventory.opening-stock', '/app/inventory/add'), icon: 'package-plus' },
       { label: 'Current Stock', page: 'inventory-current-stock', href: routeUrl('app.inventory.current-stock', '/app/inventory/current-stock'), icon: 'warehouse' },
       { label: 'Inventory Vouchers', page: 'inventory-vouchers', href: routeUrl('app.inventory.vouchers', '/app/inventory/vouchers'), icon: 'file-stack' },

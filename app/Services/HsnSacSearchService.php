@@ -40,9 +40,7 @@ class HsnSacSearchService
 
         $query = HsnMaster::query()
             ->where('code_type', $codeType)
-            ->where(function (Builder $scope) use ($businessId) {
-                $scope->whereNull('business_id')->orWhere('business_id', $businessId);
-            })
+            ->where('business_id', $businessId)
             ->where(function (Builder $scope) {
                 $scope->whereNull('status')->orWhere('status', 'active');
             });

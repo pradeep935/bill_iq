@@ -43,37 +43,55 @@
       </section>
     </div>
 
-    <div v-if="showForm" class="drawer-shell">
-      <div class="drawer">
-        <div class="drawer-head">
-          <div><span>MY HSN/SAC MASTER</span><h2>{{ form.id ? 'Edit HSN/SAC' : 'Add HSN/SAC' }}</h2></div>
-          <button type="button" class="secondary-action" @click="closeForm">Close</button>
-        </div>
-
-        <section class="form-panel">
-          <label class="field-label">Search BillIQ Reference</label>
-          <div class="reference-search-row">
-            <select v-model="form.code_type" :disabled="detailsEnabled && !manualMode"><option value="HSN">HSN</option><option value="SAC">SAC</option></select>
-            <input v-model="referenceSearch" type="search" placeholder="Search HSN/SAC code or description" @input="searchReference" />
-          </div>
-          <div v-if="referenceSearching" class="subtle-message">Searching...</div>
-          <div v-else-if="showNoReference" class="subtle-message">No matching BillIQ reference found. <button v-if="!form.id" type="button" class="inline-action" @click="createManual">Create Manual HSN/SAC</button></div>
-          <div v-if="referenceResults.length" class="reference-results">
-            <div v-for="ref in referenceResults" :key="ref.id" class="reference-result">
-              <div><strong>{{ ref.code_type }} {{ ref.hsn_code }}</strong><span>{{ ref.description }}</span><small>GST: {{ ref.gst_rate === null || ref.gst_rate === undefined ? 'Rate pending' : rateLabel(ref.gst_rate) }} | {{ label(ref.taxability) }}</small></div>
-              <button type="button" class="secondary-action" @click="useReference(ref)">Use Reference</button>
+    <Transition name="product-drawer">
+      <div v-if="showForm" class="product-drawer-wrapper">
+        <div class="product-drawer-backdrop" @click="closeForm"></div>
+        <aside class="product-drawer-panel">
+          <header class="product-drawer-header">
+            <div class="drawer-heading">
+              <div class="drawer-heading-icon">HSN</div>
+              <div><span class="drawer-eyebrow">MY HSN/SAC MASTER</span><h2>{{ form.id ? 'Edit HSN/SAC' : 'Add HSN/SAC' }}</h2><p>Search BillIQ reference, then save your business-owned HSN/SAC.</p></div>
             </div>
-          </div>
-        </section>
+            <button type="button" class="drawer-close-button" @click="closeForm">x</button>
+          </header>
 
-        <section v-if="selectedReference || form.id || manualMode" class="selected-reference">
-          <strong>{{ referenceStatusText }}</strong>
-          <span v-if="selectedReference">BillIQ Reference: {{ selectedReference.code_type }} {{ selectedReference.hsn_code }} | GST {{ selectedReference.gst_rate === null || selectedReference.gst_rate === undefined ? 'Rate pending' : rateLabel(selectedReference.gst_rate) }}</span>
-          <span v-if="rateWarning">{{ rateWarning }}</span>
-        </section>
+          <nav class="product-tabs">
+            <button type="button" class="active">Reference</button>
+            <button type="button" :disabled="!detailsEnabled" :class="{ active: detailsEnabled }">Business Details</button>
+          </nav>
 
-        <form v-if="detailsEnabled" class="form-panel form-grid" @submit.prevent="save">
-          <h3 class="span-2">Business HSN/SAC Details</h3>
+          <main class="product-drawer-content">
+            <section class="product-section">
+              <div class="section-header">
+                <div class="section-number">01</div>
+                <div><h3>Search BillIQ Reference</h3><p>Search HSN/SAC code or description from the global reference master.</p></div>
+              </div>
+              <div class="reference-search-row">
+                <select v-model="form.code_type" :disabled="detailsEnabled && !manualMode"><option value="HSN">HSN</option><option value="SAC">SAC</option></select>
+                <input v-model="referenceSearch" type="search" placeholder="Search HSN/SAC code or description" @input="searchReference" />
+              </div>
+              <div v-if="referenceSearching" class="subtle-message">Searching...</div>
+              <div v-else-if="showNoReference" class="subtle-message">No matching BillIQ reference found. <button v-if="!form.id" type="button" class="inline-action" @click="createManual">Create Manual HSN/SAC</button></div>
+              <div v-if="referenceResults.length" class="reference-results">
+                <div v-for="ref in referenceResults" :key="ref.id" class="reference-result">
+                  <div><strong>{{ ref.code_type }} {{ ref.hsn_code }}</strong><span>{{ ref.description }}</span><small>GST: {{ ref.gst_rate === null || ref.gst_rate === undefined ? 'Rate pending' : rateLabel(ref.gst_rate) }} | {{ label(ref.taxability) }}</small></div>
+                  <button type="button" class="secondary-action" @click="useReference(ref)">Use Reference</button>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="selectedReference || form.id || manualMode" class="selected-reference">
+              <strong>{{ referenceStatusText }}</strong>
+              <span v-if="selectedReference">BillIQ Reference: {{ selectedReference.code_type }} {{ selectedReference.hsn_code }} | GST {{ selectedReference.gst_rate === null || selectedReference.gst_rate === undefined ? 'Rate pending' : rateLabel(selectedReference.gst_rate) }}</span>
+              <span v-if="rateWarning">{{ rateWarning }}</span>
+            </section>
+
+            <section v-if="detailsEnabled" class="product-section">
+              <div class="section-header">
+                <div class="section-number">02</div>
+                <div><h3>Business HSN/SAC Details</h3><p>These values belong to this business and are used in Product Master.</p></div>
+              </div>
+              <form class="form-grid" @submit.prevent="save">
           <label>Code Type<select v-model="form.code_type" required><option value="HSN">HSN</option><option value="SAC">SAC</option></select></label>
           <label>HSN/SAC Code<input v-model="form.hsn_code" required maxlength="12" inputmode="numeric" pattern="[0-9]+" @input="digitsOnly" /></label>
           <label class="span-2">Description<textarea v-model="form.description" required rows="4"></textarea></label>
@@ -82,10 +100,17 @@
           <label>Taxability<select v-model="form.taxability" required><option value="taxable">Taxable</option><option value="nil_rated">Nil Rated</option><option value="exempt">Exempt</option><option value="non_gst">Non-GST</option></select></label>
           <label>Status<select v-model="form.status" required><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
           <p v-if="firstError" class="error span-2">{{ firstError }}</p>
-          <div class="drawer-footer span-2"><button type="button" class="secondary-action" @click="closeForm">Cancel</button><button type="submit" class="primary-action" :disabled="saving">{{ saving ? 'Saving...' : 'Save HSN/SAC' }}</button></div>
-        </form>
+              </form>
+            </section>
+          </main>
+
+          <footer class="product-drawer-footer">
+            <div class="footer-help">Fields marked with required validation must be completed.</div>
+            <div class="footer-actions"><button type="button" class="secondary-action" @click="closeForm">Cancel</button><button type="button" class="primary-action" :disabled="saving || !detailsEnabled" @click="save">{{ saving ? 'Saving...' : 'Save HSN/SAC' }}</button></div>
+          </footer>
+        </aside>
       </div>
-    </div>
+    </Transition>
   </Layout>
 </template>
 
@@ -233,13 +258,13 @@ const referenceTone = (value) => String(value || '').startsWith('Matched') ? 'ma
 
 <style scoped>
 .business-hsn-page { display: grid; gap: 18px; }
-.page-actions, .drawer-footer { display: flex; justify-content: flex-end; gap: 12px; }
+.page-actions { display: flex; justify-content: flex-end; gap: 12px; }
 .primary-action, .secondary-action, .crud-action, .inline-action { border: 1px solid #d9e2f2; border-radius: 8px; padding: 10px 16px; font-weight: 800; text-decoration: none; cursor: pointer; }
 .primary-action { background: #2f63df; color: #fff; border-color: #2f63df; }
 .secondary-action, .crud-action { background: #fff; color: #24324a; }
 .inline-action { margin-left: 8px; color: #2f63df; background: #fff; }
 .danger { color: #b42318; }
-.bill-card, .form-panel, .selected-reference { background: #fff; border: 1px solid #dce5f3; border-radius: 8px; padding: 18px; }
+.bill-card, .product-section, .selected-reference { background: #fff; border: 1px solid #dce5f3; border-radius: 8px; padding: 18px; }
 .listing-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(140px, 190px)); gap: 12px; margin-bottom: 16px; }
 .reference-search-row { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; }
 input, select, textarea { width: 100%; border: 1px solid #d8e2f1; border-radius: 8px; padding: 12px; font: inherit; min-width: 0; }
@@ -254,11 +279,29 @@ th { font-size: 12px; color: #70809a; text-transform: uppercase; }
 .reference-pill.modified { background: #fff8e8; color: #8a5a00; }
 .reference-pill.manual { background: #f3f6fb; color: #526277; }
 .empty, .subtle-message { text-align: center; color: #718096; padding: 14px; }
-.drawer-shell { position: fixed; inset: 0; background: rgba(11, 20, 36, .48); display: flex; justify-content: flex-end; z-index: 40; }
-.drawer { width: min(800px, 100%); height: 100%; overflow-y: auto; background: #f6f9fd; padding: 24px; display: grid; align-content: start; gap: 16px; }
-.drawer-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.drawer-head span { color: #2f63df; font-size: 12px; font-weight: 900; letter-spacing: .12em; }
-.drawer-head h2 { margin: 4px 0 0; }
+.product-drawer-wrapper { position: fixed; inset: 0; z-index: 9999; }
+.product-drawer-backdrop { position: absolute; inset: 0; background: rgba(5, 18, 38, .62); backdrop-filter: blur(3px); }
+.product-drawer-panel { position: absolute; top: 0; right: 0; width: min(960px, 100%); height: 100vh; display: flex; flex-direction: column; background: #f4f7fb; box-shadow: -24px 0 60px rgba(7, 25, 51, .22); }
+.product-drawer-header { min-height: 96px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; padding: 19px 28px; background: #fff; border-bottom: 1px solid #e3e9f2; }
+.drawer-heading { display: flex; align-items: center; gap: 15px; }
+.drawer-heading-icon { width: 48px; height: 48px; display: grid; place-items: center; flex-shrink: 0; color: #2457d6; background: linear-gradient(145deg, #edf3ff, #dce7ff); border: 1px solid #d4e1ff; border-radius: 14px; font-size: 11px; font-weight: 900; }
+.drawer-eyebrow { display: block; margin-bottom: 2px; color: #2457d6; font-size: 10px; font-weight: 800; letter-spacing: 1.5px; }
+.drawer-heading h2 { margin: 0; color: #101c34; font-size: 22px; font-weight: 800; line-height: 1.25; }
+.drawer-heading p { margin: 4px 0 0; color: #738098; font-size: 12px; }
+.drawer-close-button { width: 40px; height: 40px; display: grid; place-items: center; padding: 0; color: #536078; background: #f4f6fa; border: 1px solid #dfe5ee; border-radius: 11px; font-size: 25px; font-weight: 300; line-height: 1; cursor: pointer; }
+.product-tabs { display: flex; gap: 7px; padding: 12px 28px; overflow-x: auto; background: #fff; border-bottom: 1px solid #e3e9f2; }
+.product-tabs button { min-height: 34px; flex-shrink: 0; padding: 7px 13px; color: #5e6a7f; background: #f6f8fb; border: 1px solid #dfe6ef; border-radius: 8px; font-size: 11px; font-weight: 750; cursor: pointer; }
+.product-tabs button.active { color: #fff; background: #2457d6; border-color: #2457d6; }
+.product-tabs button:disabled { opacity: .55; cursor: not-allowed; }
+.product-drawer-content { min-height: 0; flex: 1; padding: 22px 28px 30px; overflow-y: auto; display: grid; align-content: start; gap: 16px; }
+.product-section { display: grid; gap: 16px; }
+.section-header { display: flex; align-items: center; gap: 14px; }
+.section-number { width: 42px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: #2457d6; background: #edf3ff; font-weight: 900; }
+.section-header h3 { margin: 0; color: #17233b; font-size: 17px; }
+.section-header p { margin: 3px 0 0; color: #748199; font-size: 12px; }
+.product-drawer-footer { min-height: 74px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 16px; padding: 14px 28px; background: #fff; border-top: 1px solid #dfe6ef; box-shadow: 0 -5px 18px rgba(18, 40, 71, .05); }
+.footer-help { color: #7c8799; font-size: 11px; }
+.footer-actions { display: flex; align-items: center; gap: 10px; }
 .field-label, label { display: grid; gap: 7px; font-weight: 800; color: #27364f; }
 .reference-results { display: grid; gap: 10px; margin-top: 14px; }
 .reference-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid #d8e2f1; border-radius: 8px; padding: 12px; }
@@ -269,8 +312,12 @@ th { font-size: 12px; color: #70809a; text-transform: uppercase; }
 .error { color: #b42318; font-weight: 800; }
 @media (max-width: 760px) {
   .listing-toolbar, .reference-search-row, .form-grid, .reference-result { grid-template-columns: 1fr; }
-  .page-actions, .drawer-footer { flex-direction: column; }
+  .page-actions, .footer-actions { flex-direction: column; }
   .span-2 { grid-column: auto; }
-  .drawer { padding: 16px; }
+  .product-drawer-header { min-height: 84px; padding: 15px 16px; }
+  .drawer-heading-icon, .drawer-heading p, .footer-help { display: none; }
+  .product-tabs { padding: 10px 14px; }
+  .product-drawer-content { padding: 15px 14px 24px; }
+  .product-drawer-footer { padding: 12px 14px; }
 }
 </style>

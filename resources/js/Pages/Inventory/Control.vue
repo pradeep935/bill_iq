@@ -123,6 +123,14 @@ const countLineTone = (item) => countLineDifference(item) > 0 ? 'positive' : cou
 
 const labelize = (value) => String(value || '-').replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const formatIndianDateTime = formatInventoryDateTime;
+const formatReportDate = (value) => {
+    if (!value) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+        const [year, month, day] = String(value).split('-');
+        return `${day}/${month}/${year}`;
+    }
+    return formatIndianDateTime(value);
+};
 const movementOptions = [{ value: 'in', label: 'Stock In' }, { value: 'out', label: 'Stock Out' }, { value: 'transfer', label: 'Condition Transfer' }];
 const conditionOptions = [
     { value: 'saleable', label: 'Saleable' },
@@ -255,6 +263,33 @@ const exportDashboard = () => exportRows('csv');
 const productNameForMovement = (row) => row.product_name || row.product?.name || row.raw?.product?.name || row.items?.[0]?.product?.name || '-';
 const userNameForMovement = (row) => row.user_name || row.poster?.name || row.approver?.name || row.creator?.name || row.created_by?.name || row.approved_by?.name || (row.created_by || row.approved_by ? 'User' : 'System');
 const referenceForMovement = (row) => row.reference_number || row.voucher_number || row.session_number || row.remarks || `Ledger #${row.id}`;
+const numberValue = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+const movementQuantityParts = (row) => {
+    const qtyIn = numberValue(row.qty_in ?? row.quantity_in ?? row.stock_in);
+    const qtyOut = numberValue(row.qty_out ?? row.quantity_out ?? row.stock_out);
+    const reclassification = ['stock_reclassification_in', 'stock_reclassification_out', 'Stock Reclassification', 'Recovered / Repaired Stock'].includes(row.transaction_type);
+    const net = reclassification ? 0 : numberValue(row.net_quantity ?? (qtyIn - qtyOut));
+    const movementQty = numberValue(row.movement_qty ?? row.display_quantity ?? row.quantity ?? row.quantity_available ?? Math.max(Math.abs(qtyIn), Math.abs(qtyOut), Math.abs(net)));
+    const physicalImpact = reclassification ? 0 : numberValue(row.physical_impact ?? row.physical_change ?? net);
+    return { movementQty, qtyIn: reclassification ? 0 : qtyIn, qtyOut: reclassification ? 0 : qtyOut, net, physicalImpact };
+};
+const movementLocationParts = (row) => {
+    const parts = movementQuantityParts(row);
+    return {
+        fromLocation: row.from_location || row.source_location || (parts.qtyOut > 0 ? row.warehouse_location : ''),
+        toLocation: row.to_location || row.destination_location || (parts.qtyIn > 0 ? row.warehouse_location : ''),
+    };
+};
+const movementConditionParts = (row) => {
+    if (row.from_condition || row.to_condition) return { fromCondition: row.from_condition || '', toCondition: row.to_condition || '' };
+    const movement = String(row.movement || '');
+    if (!movement.includes('->')) return { fromCondition: '', toCondition: row.stock_status ? labelize(row.stock_status) : '' };
+    const [from, to] = movement.split('->').map((part) => part.trim());
+    return {
+        fromCondition: from && from !== 'In' ? from : '',
+        toCondition: to && to !== 'Out' ? to : '',
+    };
+};
 const rowDateOnly = (value) => String(value || '').slice(0, 10);
 const rowMatchesOption = (value, selected) => !selected || Number(value || 0) === Number(selected);
 const rowSearchText = (row) => [
@@ -503,20 +538,88 @@ const seedDefaultReasons = async () => {
     } catch (e) { capture(e); showToast(e?.response?.data?.message || 'Unable to create default reasons.', 'error'); } finally { saving.value = false; }
 };
 const printPage = () => window.print();
+const movementExportColumns = [
+    ['date_time', 'Date & Time'],
+    ['document_date', 'Document Date'],
+    ['reference_number', 'Voucher / Reference No.'],
+    ['source_module', 'Source Module'],
+    ['movement_type', 'Movement Type'],
+    ['product', 'Product'],
+    ['sku', 'SKU'],
+    ['barcode', 'Barcode'],
+    ['branch', 'Branch'],
+    ['warehouse', 'Warehouse'],
+    ['from_location', 'From Location'],
+    ['to_location', 'To Location'],
+    ['from_condition', 'From Condition'],
+    ['to_condition', 'To Condition'],
+    ['movement_qty', 'Movement Qty'],
+    ['qty_in', 'Qty In'],
+    ['qty_out', 'Qty Out'],
+    ['net_quantity', 'Net Quantity'],
+    ['physical_impact', 'Physical Impact'],
+    ['uom', 'UOM'],
+    ['rate', 'Rate'],
+    ['movement_value', 'Movement Value'],
+    ['reason', 'Reason'],
+    ['remarks', 'Remarks'],
+    ['user', 'User'],
+    ['posting_status', 'Posting Status'],
+];
+const normalizeMovementExportRow = (row) => {
+    const quantities = movementQuantityParts(row);
+    const locations = movementLocationParts(row);
+    const conditions = movementConditionParts(row);
+    const product = row.product || {};
+    return {
+        date_time: formatIndianDateTime(row.posted_at || row.created_at || row.date_time || row.date),
+        document_date: formatReportDate(row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date),
+        reference_number: referenceForMovement(row),
+        source_module: labelize(row.source_module || row.source_document || row.reference_type?.split('\\').pop() || activeReport.value),
+        movement_type: labelize(row.movement_type || row.transaction_type || row.source || row.transfer_type || row.movement || activeReport.value),
+        product: productNameForMovement(row),
+        sku: row.sku || product.sku || '',
+        barcode: row.barcode || product.primary_barcode || product.barcode || '',
+        branch: row.branch?.name || row.branch_name || row.source_branch?.name || '',
+        warehouse: row.warehouse?.name || row.warehouse_name || row.source_warehouse?.name || '',
+        from_location: locations.fromLocation || '',
+        to_location: locations.toLocation || '',
+        from_condition: conditions.fromCondition || '',
+        to_condition: conditions.toCondition || '',
+        movement_qty: qty(quantities.movementQty),
+        qty_in: qty(quantities.qtyIn),
+        qty_out: qty(quantities.qtyOut),
+        net_quantity: signedQty(quantities.net),
+        physical_impact: signedQty(quantities.physicalImpact),
+        uom: row.uom || row.unit || product.unit?.name || product.unit_name || product.unit_code || '',
+        rate: money(row.rate || row.unit_cost || row.average_cost || 0),
+        movement_value: money(row.movement_value ?? row.stock_value ?? row.total_value_in ?? row.total_value_out ?? 0),
+        reason: row.reason?.reason_name || row.reason_name || row.reason || row.source || '',
+        remarks: row.remarks || '',
+        user: userNameForMovement(row),
+        posting_status: labelize(row.posting_status || row.status || 'posted'),
+    };
+};
+const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 const exportRows = (format) => {
-    const rows = currentReportRows.value.map((row) => ({
-        date: row.posted_at || row.created_at || '',
-        document_date: row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date || '',
-        type: row.transaction_type || row.source || row.transfer_type || activeReport.value,
+    if (format === 'pdf') { window.print(); return; }
+    const isMovementReport = activeReport.value === 'movement_report';
+    const rows = isMovementReport ? currentReportRows.value.map(normalizeMovementExportRow) : currentReportRows.value.map((row) => ({
+        date: formatIndianDateTime(row.posted_at || row.created_at || ''),
+        document_date: formatReportDate(row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date || ''),
+        type: labelize(row.transaction_type || row.source || row.transfer_type || activeReport.value),
         product: row.product?.name || row.product_name || row.name || '',
         branch: row.branch?.name || row.branch_name || row.source_branch?.name || '',
         warehouse: row.warehouse?.name || row.warehouse_name || row.source_warehouse?.name || '',
-        quantity: row.quantity_available || row.quantity_in || row.total_quantity_in || '',
-        value: row.stock_value || row.total_value_in || '',
-        status: row.status || row.stock_status || '',
+        quantity: qty(row.quantity_available ?? row.display_quantity ?? row.quantity_in ?? row.total_quantity_in ?? row.quantity_out ?? row.total_quantity_out ?? 0),
+        value: money(row.stock_value ?? row.total_value_in ?? row.total_value_out ?? 0),
+        status: labelize(row.status || row.stock_status || ''),
     }));
-    if (format === 'pdf') { window.print(); return; }
-    const csv = [Object.keys(rows[0] || { report: activeReport.value }).join(','), ...rows.map((row) => Object.values(row).map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const columns = isMovementReport ? movementExportColumns : Object.keys(rows[0] || { report: activeReport.value }).map((key) => [key, labelize(key)]);
+    const csv = [
+        columns.map(([, label]) => csvEscape(label)).join(','),
+        ...rows.map((row) => columns.map(([key]) => csvEscape(row[key])).join(',')),
+    ].join('\n');
     const blob = new Blob([csv], { type: format === 'excel' ? 'application/vnd.ms-excel' : 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -1128,7 +1231,7 @@ onMounted(load);
             <section v-if="tab === 'reports'" class="panel">
                 <div class="section-head"><div><h2>Inventory Reports</h2><p>Ledger-backed stock movement, valuation, branch, warehouse, adjustment, transfer, damage and expiry reports.</p></div><div class="actions inline"><button @click="exportRows('csv')">CSV</button><button @click="exportRows('excel')">Excel</button><button @click="exportRows('pdf')">PDF</button></div></div>
                 <div class="tabs report-tabs"><button v-for="report in reportTabs" :key="report.key" :class="{active: activeReport === report.key}" @click="activeReport = report.key">{{ report.label }}</button></div>
-                <div class="table-wrapper"><table><thead><tr><th>Date & Time</th><th>Document Date</th><th>Type</th><th>Product / Voucher</th><th>Branch</th><th>Warehouse</th><th>Movement</th><th>In</th><th>Out</th><th>Qty</th><th>Physical</th><th>Value</th><th>Status</th></tr></thead><tbody><tr v-for="(row, index) in currentReportRows" :key="row.id || index"><td>{{ formatIndianDateTime(row.posted_at || row.created_at) }}</td><td>{{ row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date || '-' }}</td><td>{{ labelize(row.transaction_type || row.source || row.transfer_type || activeReport) }}</td><td>{{ row.product?.name || row.product_name || row.voucher_number || row.name || '-' }}</td><td>{{ row.branch?.name || row.branch_name || row.source_branch?.name || '-' }}</td><td>{{ row.warehouse?.name || row.warehouse_name || row.source_warehouse?.name || '-' }}</td><td>{{ row.movement || '-' }}</td><td>{{ qty(row.quantity_in) }}</td><td>{{ qty(row.quantity_out) }}</td><td>{{ qty(row.display_quantity || row.quantity_available || row.total_quantity_in || row.total_quantity_out) }}</td><td>{{ row.physical_change === 0 ? '0' : signedQty(row.physical_change || 0) }}</td><td>Rs. {{ money(row.stock_value || row.total_value_in || row.total_value_out) }}</td><td>{{ labelize(row.status || row.stock_status || '-') }}</td></tr><tr v-if="!currentReportRows.length"><td colspan="13" class="empty">No report data found.</td></tr></tbody></table></div>
+                <div class="table-wrapper"><table><thead><tr><th>Date & Time</th><th>Document Date</th><th>Type</th><th>Product / Voucher</th><th>Branch</th><th>Warehouse</th><th>Movement</th><th>In</th><th>Out</th><th>Qty</th><th>Physical</th><th>Value</th><th>Status</th></tr></thead><tbody><tr v-for="(row, index) in currentReportRows" :key="row.id || index"><td>{{ formatIndianDateTime(row.posted_at || row.created_at) }}</td><td>{{ formatReportDate(row.transaction_date || row.adjustment_date || row.transfer_date || row.expiry_date) || '-' }}</td><td>{{ labelize(row.transaction_type || row.source || row.transfer_type || activeReport) }}</td><td>{{ row.product?.name || row.product_name || row.voucher_number || row.name || '-' }}</td><td>{{ row.branch?.name || row.branch_name || row.source_branch?.name || '-' }}</td><td>{{ row.warehouse?.name || row.warehouse_name || row.source_warehouse?.name || '-' }}</td><td>{{ row.movement || '-' }}</td><td>{{ qty(movementQuantityParts(row).qtyIn) }}</td><td>{{ qty(movementQuantityParts(row).qtyOut) }}</td><td>{{ qty(movementQuantityParts(row).movementQty) }}</td><td>{{ movementQuantityParts(row).physicalImpact === 0 ? '0' : signedQty(movementQuantityParts(row).physicalImpact) }}</td><td>Rs. {{ money(row.movement_value ?? row.stock_value ?? row.total_value_in ?? row.total_value_out) }}</td><td>{{ labelize(row.status || row.stock_status || '-') }}</td></tr><tr v-if="!currentReportRows.length"><td colspan="13" class="empty">No report data found.</td></tr></tbody></table></div>
             </section>
 
             <div v-if="countDrawerOpen" class="drawer-backdrop" @click.self="closeCountDrawer">

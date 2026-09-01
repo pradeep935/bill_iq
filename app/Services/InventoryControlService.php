@@ -179,6 +179,12 @@ class InventoryControlService
                 unset($item['source_condition_quantity']);
                 return $item;
             })->all();
+            if (!Schema::hasColumn('stock_adjustment_items', 'warehouse_location_id')) {
+                $items = collect($items)->map(function (array $item) {
+                    unset($item['warehouse_location_id']);
+                    return $item;
+                })->all();
+            }
             $voucher->fill(array_merge($data, $totals))->save();
             $voucher->items()->delete();
             $voucher->items()->createMany($items);
@@ -206,6 +212,7 @@ class InventoryControlService
                     'quantity' => (float) $item->adjustment_quantity,
                     'unit_cost' => (float) $item->unit_cost,
                     'warehouse_location' => $item->warehouse_location,
+                    'warehouse_location_id' => $item->warehouse_location_id,
                     'remarks' => $item->reason ?: $voucher->remarks,
                     'skip_freeze_check' => $isCountPosting,
                 ]);
@@ -303,6 +310,12 @@ class InventoryControlService
             if (in_array($session->status, ['posted', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Posted count sessions cannot be edited.']);
             $session->fill($data)->save();
             $session->items()->delete();
+            if (!Schema::hasColumn('stock_count_items', 'warehouse_location_id')) {
+                $items = collect($items)->map(function (array $item) {
+                    unset($item['warehouse_location_id']);
+                    return $item;
+                })->all();
+            }
             if ($items) $session->items()->createMany($items);
             return $session->fresh(['items.product', 'warehouse']);
         });
@@ -347,7 +360,7 @@ class InventoryControlService
             $items = $session->items->filter(fn ($i) => $i->review_status === 'accepted' && round((float) $i->variance_quantity, 3) != 0.0)->map(fn ($i) => [
                 'product_id' => $i->product_id, 'product_variant_id' => $i->product_variant_id, 'batch_id' => $i->batch_id,
                 'unit_id' => null, 'adjustment_quantity' => abs((float) $i->variance_quantity), 'direction' => (float) $i->variance_quantity > 0 ? 'in' : 'out',
-                'unit_cost' => (float) $i->unit_cost, 'warehouse_location' => $i->warehouse_location, 'condition_status' => 'saleable',
+                'unit_cost' => (float) $i->unit_cost, 'warehouse_location' => $i->warehouse_location, 'warehouse_location_id' => $i->warehouse_location_id, 'condition_status' => 'saleable',
                 'reason' => $i->reviewer_notes ?: ((float) $i->variance_quantity > 0 ? 'Physical Count Gain' : 'Physical Count Shortage'), 'actual_quantity' => $i->counted_quantity,
             ])->values()->all();
             if (!$items) {
@@ -397,6 +410,12 @@ class InventoryControlService
             if (in_array($voucher->status, ['posted', 'received', 'reversed', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Finalized transfers cannot be edited.']);
             $voucher->fill($data)->save();
             $voucher->items()->delete();
+            if (!Schema::hasColumn('stock_transfer_items', 'source_location_id')) {
+                $items = collect($items)->map(function (array $item) {
+                    unset($item['source_location_id'], $item['destination_location_id']);
+                    return $item;
+                })->all();
+            }
             $voucher->items()->createMany($items);
             if ($data['status'] === 'approved' && $data['transfer_type'] === 'immediate') $this->postImmediateTransfer($voucher->id);
             if ($data['status'] === 'dispatched') $this->dispatchTransfer($voucher->id);
@@ -480,6 +499,7 @@ class InventoryControlService
                 $search = '%' . $filters['search'] . '%';
                 $q->where(fn (Builder $query) => $query->where('rack', 'like', $search)->orWhere('shelf', 'like', $search)->orWhere('bin', 'like', $search)->orWhere('zone', 'like', $search)->orWhere('aisle', 'like', $search));
             })
+            ->when(!empty($filters['active_only']), fn (Builder $q) => $q->where('status', 'active'))
             ->latest('id')
             ->paginate((int) ($filters['per_page'] ?? 50));
     }
@@ -490,6 +510,23 @@ class InventoryControlService
             $businessId = AppController::businessId();
             $warehouse = $this->assertWarehouse((int) $data['warehouse_id'], $data['branch_id'] ?? null);
             $location = $id ? WarehouseLocation::query()->where('business_id', $businessId)->findOrFail($id) : new WarehouseLocation(['business_id' => $businessId]);
+            $duplicate = WarehouseLocation::query()
+                ->where('business_id', $businessId)
+                ->where('warehouse_id', $warehouse->id)
+                ->where('branch_id', $data['branch_id'] ?? $warehouse->branch_id)
+                ->where('zone', $data['zone'] ?? null)
+                ->where('aisle', $data['aisle'] ?? null)
+                ->where('rack', $data['rack'] ?? null)
+                ->where('shelf', $data['shelf'] ?? null)
+                ->where('bin', $data['bin'] ?? null)
+                ->when($id, fn (Builder $q) => $q->where('id', '!=', $id))
+                ->exists();
+            if ($duplicate) {
+                throw ValidationException::withMessages(['bin' => 'This warehouse location already exists.']);
+            }
+            if ($id && ($data['status'] ?? $location->status) !== 'active' && $this->locationHasStock((int) $id)) {
+                throw ValidationException::withMessages(['status' => 'This location has stock. Move or clear stock before deactivating it.']);
+            }
             $location->fill(array_merge($data, ['branch_id' => $data['branch_id'] ?? $warehouse->branch_id]))->save();
 
             return $location->fresh('warehouse');
@@ -502,15 +539,32 @@ class InventoryControlService
             $businessId = AppController::businessId();
             $this->assertWarehouse($data['warehouse_id'], $data['branch_id'] ?? null);
             foreach ($data['items'] as $row) {
-                if ($row['from_location'] === $row['to_location']) throw ValidationException::withMessages(['to_location' => 'From and To locations cannot be same.']);
+                $fromLocation = $this->resolveLocation($row['from_location_id'] ?? null, $data['branch_id'] ?? null, $data['warehouse_id'] ?? null, true);
+                $toLocation = $this->resolveLocation($row['to_location_id'] ?? null, $data['branch_id'] ?? null, $data['warehouse_id'] ?? null, true);
+                if ($fromLocation->id === $toLocation->id) throw ValidationException::withMessages(['to_location' => 'From and To locations cannot be same.']);
                 $this->assertProduct($row['product_id']);
-                $this->stock->validateAvailableStock($this->scope($data['branch_id'] ?? null, $data['warehouse_id'], $row['product_id'], $row['product_variant_id'] ?? null, $row['batch_id'] ?? null), (float) $row['quantity']);
+                $this->stock->validateAvailableStock($this->scope($data['branch_id'] ?? null, $data['warehouse_id'], $row['product_id'], $row['product_variant_id'] ?? null, $row['batch_id'] ?? null, $fromLocation->id), (float) $row['quantity']);
             }
-            $items = $data['items'];
+            $items = collect($data['items'])->map(function (array $row) use ($data) {
+                $fromLocation = $this->resolveLocation($row['from_location_id'] ?? null, $data['branch_id'] ?? null, $data['warehouse_id'] ?? null, true);
+                $toLocation = $this->resolveLocation($row['to_location_id'] ?? null, $data['branch_id'] ?? null, $data['warehouse_id'] ?? null, true);
+                return array_merge($row, [
+                    'from_location' => $this->locationLabel($fromLocation),
+                    'to_location' => $this->locationLabel($toLocation),
+                    'from_location_id' => $fromLocation->id,
+                    'to_location_id' => $toLocation->id,
+                ]);
+            })->all();
             unset($data['items']);
             $voucher = $id ? LocationTransferVoucher::query()->where('business_id', $businessId)->findOrFail($id) : new LocationTransferVoucher(['business_id' => $businessId, 'voucher_number' => $this->nextNumber('LOC', LocationTransferVoucher::class, 'voucher_number'), 'created_by' => Auth::id()]);
             $voucher->fill($data)->save();
             $voucher->items()->delete();
+            if (!Schema::hasColumn('location_transfer_items', 'from_location_id')) {
+                $items = collect($items)->map(function (array $item) {
+                    unset($item['from_location_id'], $item['to_location_id']);
+                    return $item;
+                })->all();
+            }
             $voucher->items()->createMany($items);
             if (in_array($data['status'], ['approved', 'posted'], true)) $voucher->update(['status' => 'posted', 'approved_by' => Auth::id()]);
             return $voucher->fresh(['items.product', 'warehouse']);
@@ -599,7 +653,8 @@ class InventoryControlService
     {
         return collect($data['items'])->map(function ($row) use ($data) {
             $product = $this->assertProduct($row['product_id']);
-            $scope = $this->scope($data['branch_id'] ?? null, $data['warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['batch_id'] ?? null);
+            $location = $this->resolveLocation($row['warehouse_location_id'] ?? null, $data['branch_id'] ?? null, $data['warehouse_id'] ?? null, false);
+            $scope = $this->scope($data['branch_id'] ?? null, $data['warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['batch_id'] ?? null, $location?->id);
             $isConditionTransfer = ($data['adjustment_type'] ?? null) === 'condition_transfer' || ($row['direction'] ?? null) === 'transfer';
             $lineCondition = $this->adjustmentLineCondition($row, $isConditionTransfer);
             $sourceCondition = $isConditionTransfer ? ($row['source_condition_status'] ?? $lineCondition) : $lineCondition;
@@ -608,6 +663,8 @@ class InventoryControlService
             $sourceQty = $this->stock->getConditionStock($scope, $sourceCondition);
             return array_merge($row, [
                 'unit_id' => $row['unit_id'] ?? $product->unit_id ?? null,
+                'warehouse_location' => $location ? $this->locationLabel($location) : ($row['warehouse_location'] ?? null),
+                'warehouse_location_id' => $location?->id,
                 'system_quantity' => $systemQty,
                 'adjustment_value' => round((float) $row['adjustment_quantity'] * (float) $row['unit_cost'], 2),
                 'condition_status' => $isConditionTransfer ? $destinationCondition : $lineCondition,
@@ -665,7 +722,7 @@ class InventoryControlService
                 }
 
                 $sourceQty = (float) ($item['source_condition_quantity'] ?? $this->stock->getConditionStock(
-                    $this->scope($data['branch_id'] ?? null, $data['warehouse_id'] ?? null, (int) ($item['product_id'] ?? 0), $item['product_variant_id'] ?? null, $item['batch_id'] ?? null),
+                    $this->scope($data['branch_id'] ?? null, $data['warehouse_id'] ?? null, (int) ($item['product_id'] ?? 0), $item['product_variant_id'] ?? null, $item['batch_id'] ?? null, $item['warehouse_location_id'] ?? null),
                     $sourceCondition
                 ));
 
@@ -677,7 +734,7 @@ class InventoryControlService
             } elseif (($item['direction'] ?? null) === 'out') {
                 $condition = $this->adjustmentLineCondition($item, false);
                 $available = $this->stock->getConditionStock(
-                    $this->scope($data['branch_id'] ?? null, $data['warehouse_id'] ?? null, (int) ($item['product_id'] ?? 0), $item['product_variant_id'] ?? null, $item['batch_id'] ?? null),
+                    $this->scope($data['branch_id'] ?? null, $data['warehouse_id'] ?? null, (int) ($item['product_id'] ?? 0), $item['product_variant_id'] ?? null, $item['batch_id'] ?? null, $item['warehouse_location_id'] ?? null),
                     $condition
                 );
 
@@ -707,12 +764,13 @@ class InventoryControlService
         if (empty($data['items'])) return [];
         return collect($data['items'])->map(function ($row) use ($data) {
             $product = $this->assertProduct($row['product_id']);
-            $scope = $this->scope($data['branch_id'] ?? null, $data['warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['batch_id'] ?? null);
+            $location = $this->resolveLocation($row['warehouse_location_id'] ?? null, $data['branch_id'] ?? null, $data['warehouse_id'] ?? null, false);
+            $scope = $this->scope($data['branch_id'] ?? null, $data['warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['batch_id'] ?? null, $location?->id);
             $system = $this->stock->getCurrentStock($scope);
             $counted = array_key_exists('counted_quantity', $row) ? (float) $row['counted_quantity'] : null;
             $variance = $counted === null ? 0 : round($counted - $system, 3);
             $cost = (float) ($row['unit_cost'] ?? $this->stock->getAverageCost($scope));
-            return array_merge($row, ['system_quantity' => $system, 'variance_quantity' => $variance, 'unit_cost' => $cost, 'variance_value' => round(abs($variance) * $cost, 2), 'review_status' => $row['review_status'] ?? 'pending']);
+            return array_merge($row, ['warehouse_location' => $location ? $this->locationLabel($location) : ($row['warehouse_location'] ?? null), 'warehouse_location_id' => $location?->id, 'system_quantity' => $system, 'variance_quantity' => $variance, 'unit_cost' => $cost, 'variance_value' => round(abs($variance) * $cost, 2), 'review_status' => $row['review_status'] ?? 'pending']);
         })->all();
     }
 
@@ -752,9 +810,18 @@ class InventoryControlService
                 $this->assertSerial((int) $row['destination_serial_id'], $product->id);
             }
 
-            $this->stock->validateAvailableStock(array_merge($this->scope($data['source_branch_id'] ?? null, $data['source_warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['source_batch_id'] ?? null), ['stock_status' => 'saleable']), $qty);
+            $sourceLocation = $this->resolveLocation($row['source_location_id'] ?? null, $data['source_branch_id'] ?? null, $data['source_warehouse_id'] ?? null, false);
+            $destinationLocation = $this->resolveLocation($row['destination_location_id'] ?? null, $data['destination_branch_id'] ?? null, $data['destination_warehouse_id'] ?? null, false);
+            $this->stock->validateAvailableStock(array_merge($this->scope($data['source_branch_id'] ?? null, $data['source_warehouse_id'], $product->id, $row['product_variant_id'] ?? null, $row['source_batch_id'] ?? null, $sourceLocation?->id), ['stock_status' => 'saleable']), $qty);
 
-            return array_merge($row, ['unit_id' => $row['unit_id'] ?? $product->unit_id ?? null, 'approved_quantity' => $row['approved_quantity'] ?? $row['requested_quantity']]);
+            return array_merge($row, [
+                'unit_id' => $row['unit_id'] ?? $product->unit_id ?? null,
+                'approved_quantity' => $row['approved_quantity'] ?? $row['requested_quantity'],
+                'source_location' => $sourceLocation ? $this->locationLabel($sourceLocation) : ($row['source_location'] ?? null),
+                'destination_location' => $destinationLocation ? $this->locationLabel($destinationLocation) : ($row['destination_location'] ?? null),
+                'source_location_id' => $sourceLocation?->id,
+                'destination_location_id' => $destinationLocation?->id,
+            ]);
         })->all();
     }
 
@@ -805,12 +872,41 @@ class InventoryControlService
 
     private function transferPayload(StockTransferVoucher $voucher, $item, float $qty, ?int $branchId, int $warehouseId, string $type, ?string $location, ?int $batchId = null, ?int $serialId = null): array
     {
-        return ['business_id' => $voucher->business_id, 'branch_id' => $branchId, 'warehouse_id' => $warehouseId, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $batchId, 'serial_id' => $serialId, 'transaction_type' => $type, 'reference_type' => StockTransferVoucher::class, 'reference_id' => $voucher->id, 'quantity' => $qty, 'unit_cost' => (float) $item->unit_cost, 'transaction_date' => $voucher->transfer_date, 'warehouse_location' => $location, 'stock_status' => 'saleable', 'remarks' => $voucher->voucher_number];
+        $locationId = str_ends_with($type, '_out') ? ($item->source_location_id ?? null) : ($item->destination_location_id ?? null);
+        return ['business_id' => $voucher->business_id, 'branch_id' => $branchId, 'warehouse_id' => $warehouseId, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $batchId, 'serial_id' => $serialId, 'transaction_type' => $type, 'reference_type' => StockTransferVoucher::class, 'reference_id' => $voucher->id, 'quantity' => $qty, 'unit_cost' => (float) $item->unit_cost, 'transaction_date' => $voucher->transfer_date, 'warehouse_location' => $location, 'warehouse_location_id' => $locationId, 'stock_status' => 'saleable', 'remarks' => $voucher->voucher_number];
     }
 
-    private function scope(?int $branchId, ?int $warehouseId, int $productId, ?int $variantId = null, ?int $batchId = null): array
+    private function scope(?int $branchId, ?int $warehouseId, int $productId, ?int $variantId = null, ?int $batchId = null, ?int $locationId = null): array
     {
-        return ['business_id' => AppController::businessId(), 'branch_id' => $branchId, 'warehouse_id' => $warehouseId, 'product_id' => $productId, 'product_variant_id' => $variantId, 'batch_id' => $batchId];
+        $scope = ['business_id' => AppController::businessId(), 'branch_id' => $branchId, 'warehouse_id' => $warehouseId, 'product_id' => $productId, 'product_variant_id' => $variantId, 'batch_id' => $batchId];
+        if ($locationId) $scope['warehouse_location_id'] = $locationId;
+        return $scope;
+    }
+
+    private function resolveLocation($locationId, ?int $branchId, ?int $warehouseId, bool $required): ?WarehouseLocation
+    {
+        if (!$locationId) {
+            if ($required) throw ValidationException::withMessages(['warehouse_location_id' => 'Warehouse location is required.']);
+            return null;
+        }
+        return WarehouseLocation::query()
+            ->where('business_id', AppController::businessId())
+            ->where('id', $locationId)
+            ->when($branchId, fn (Builder $q) => $q->where('branch_id', $branchId))
+            ->when($warehouseId, fn (Builder $q) => $q->where('warehouse_id', $warehouseId))
+            ->where('status', 'active')
+            ->firstOrFail();
+    }
+
+    private function locationLabel(WarehouseLocation $location): string
+    {
+        return collect([$location->zone, $location->aisle, $location->rack, $location->shelf, $location->bin])->filter()->implode(' / ') ?: 'Location #' . $location->id;
+    }
+
+    private function locationHasStock(int $locationId): bool
+    {
+        return Schema::hasColumn('stock_ledgers', 'warehouse_location_id')
+            && abs((float) StockLedger::query()->where('business_id', AppController::businessId())->where('warehouse_location_id', $locationId)->selectRaw('COALESCE(SUM(quantity_in - quantity_out), 0) as qty')->value('qty')) > 0.0004;
     }
 
     private function formatQuantity(float $quantity): string

@@ -40,6 +40,7 @@ class InventoryConditionAdjustmentTest extends TestCase
             'product_categories',
             'brands',
             'products',
+            'warehouse_locations',
             'warehouses',
             'branches',
             'companies',
@@ -70,6 +71,20 @@ class InventoryConditionAdjustmentTest extends TestCase
             $table->unsignedBigInteger('branch_id')->nullable();
             $table->string('name');
             $table->string('code')->nullable();
+            $table->string('status')->default('active');
+            $table->timestamps();
+        });
+
+        Schema::create('warehouse_locations', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('business_id');
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->unsignedBigInteger('warehouse_id');
+            $table->string('zone')->nullable();
+            $table->string('aisle')->nullable();
+            $table->string('rack')->nullable();
+            $table->string('shelf')->nullable();
+            $table->string('bin')->nullable();
             $table->string('status')->default('active');
             $table->timestamps();
         });
@@ -197,6 +212,7 @@ class InventoryConditionAdjustmentTest extends TestCase
             $table->decimal('unit_cost', 15, 2)->default(0);
             $table->decimal('adjustment_value', 15, 2)->default(0);
             $table->string('warehouse_location')->nullable();
+            $table->unsignedBigInteger('warehouse_location_id')->nullable();
             $table->string('reason')->nullable();
             $table->string('condition_status', 30)->nullable();
             $table->string('source_condition_status', 30)->nullable();
@@ -221,6 +237,7 @@ class InventoryConditionAdjustmentTest extends TestCase
             $table->decimal('stock_value', 15, 2)->default(0);
             $table->unsignedBigInteger('serial_id')->nullable();
             $table->string('warehouse_location')->nullable();
+            $table->unsignedBigInteger('warehouse_location_id')->nullable();
             $table->string('stock_status', 30)->default('saleable');
             $table->timestamp('transaction_date')->nullable();
             $table->timestamp('posted_at')->nullable();
@@ -285,7 +302,9 @@ class InventoryConditionAdjustmentTest extends TestCase
             $table->decimal('rejected_quantity', 15, 3)->default(0);
             $table->decimal('unit_cost', 15, 2)->default(0);
             $table->string('source_location')->nullable();
+            $table->unsignedBigInteger('source_location_id')->nullable();
             $table->string('destination_location')->nullable();
+            $table->unsignedBigInteger('destination_location_id')->nullable();
             $table->timestamps();
         });
 
@@ -321,6 +340,7 @@ class InventoryConditionAdjustmentTest extends TestCase
             $table->decimal('unit_cost', 15, 2)->default(0);
             $table->decimal('variance_value', 15, 2)->default(0);
             $table->string('warehouse_location')->nullable();
+            $table->unsignedBigInteger('warehouse_location_id')->nullable();
             $table->string('review_status')->default('pending');
             $table->text('reviewer_notes')->nullable();
             $table->timestamps();
@@ -405,6 +425,46 @@ class InventoryConditionAdjustmentTest extends TestCase
             'reference_id' => $voucher->id,
             'transaction_type' => 'stock_adjustment_out',
         ]);
+    }
+
+    public function test_stock_out_uses_selected_warehouse_location_balance(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $locationB1 = DB::table('warehouse_locations')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'zone' => 'A', 'aisle' => 'A1', 'rack' => 'R1', 'shelf' => 'S1', 'bin' => 'B1', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $locationB2 = DB::table('warehouse_locations')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'zone' => 'A', 'aisle' => 'A1', 'rack' => 'R1', 'shelf' => 'S1', 'bin' => 'B2', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $this->seedLocationStock($businessId, $branch, $warehouse, $locationB1, $product->id, 'saleable', 20);
+        $this->seedLocationStock($businessId, $branch, $warehouse, $locationB2, $product->id, 'saleable', 63);
+
+        $this->expectException(ValidationException::class);
+        try {
+            app(InventoryControlService::class)->saveAdjustment([
+                'branch_id' => $branch,
+                'warehouse_id' => $warehouse,
+                'adjustment_date' => now()->toDateString(),
+                'adjustment_reason_id' => null,
+                'adjustment_type' => 'decrease',
+                'source' => 'manual',
+                'status' => 'posted',
+                'remarks' => 'Location stock out test',
+                'items' => [[
+                    'product_id' => $product->id,
+                    'product_variant_id' => null,
+                    'batch_id' => null,
+                    'unit_id' => null,
+                    'adjustment_quantity' => 25,
+                    'direction' => 'out',
+                    'unit_cost' => 10,
+                    'warehouse_location_id' => $locationB1,
+                    'condition_status' => 'saleable',
+                    'reason' => null,
+                ]],
+            ]);
+        } catch (ValidationException $exception) {
+            $this->assertSame('Insufficient stock. Available quantity is 20.', $exception->errors()['items.0.adjustment_quantity'][0] ?? null);
+            $this->assertSame(83.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $product->id]));
+            $this->assertSame(20.0, app(StockService::class)->getCurrentStock(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'warehouse_location_id' => $locationB1, 'product_id' => $product->id]));
+            throw $exception;
+        }
     }
 
     public function test_damaged_stock_out_reduces_damaged_and_physical_stock(): void
@@ -816,6 +876,26 @@ class InventoryConditionAdjustmentTest extends TestCase
             'business_id' => $businessId,
             'branch_id' => $branch,
             'warehouse_id' => $warehouse,
+            'product_id' => $productId,
+            'transaction_type' => 'opening_stock',
+            'reference_type' => Product::class,
+            'reference_id' => $productId,
+            'quantity' => $quantity,
+            'unit_cost' => 10,
+            'stock_status' => $condition,
+            'transaction_date' => now(),
+            'skip_freeze_check' => true,
+        ]);
+    }
+
+    private function seedLocationStock(int $businessId, int $branch, int $warehouse, int $locationId, int $productId, string $condition, float $quantity): void
+    {
+        app(StockService::class)->increaseStock([
+            'business_id' => $businessId,
+            'branch_id' => $branch,
+            'warehouse_id' => $warehouse,
+            'warehouse_location_id' => $locationId,
+            'warehouse_location' => 'A / A1 / R1 / S1 / B' . ($locationId ? '' : ''),
             'product_id' => $productId,
             'transaction_type' => 'opening_stock',
             'reference_type' => Product::class,

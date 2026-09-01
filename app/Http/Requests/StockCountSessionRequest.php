@@ -19,7 +19,9 @@ class StockCountSessionRequest extends FormRequest
             'category_id' => ['nullable', 'integer'],
             'brand_id' => ['nullable', 'integer'],
             'warehouse_location_from' => ['nullable', 'string', 'max:255'],
+            'warehouse_location_from_id' => ['nullable', 'integer'],
             'warehouse_location_to' => ['nullable', 'string', 'max:255'],
+            'warehouse_location_to_id' => ['nullable', 'integer'],
             'assigned_to' => ['nullable', 'integer'],
             'freeze_stock' => ['nullable', 'boolean'],
             'status' => ['required', 'in:draft,assigned,counting,submitted,reviewed,approved'],
@@ -35,6 +37,7 @@ class StockCountSessionRequest extends FormRequest
             'items.*.variance_value' => ['nullable', 'numeric', 'min:0'],
             'items.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
             'items.*.warehouse_location' => ['nullable', 'string', 'max:255'],
+            'items.*.warehouse_location_id' => ['nullable', 'integer'],
             'items.*.review_status' => ['nullable', 'in:pending,accepted,rejected,recount_required'],
             'items.*.reviewer_notes' => ['nullable', 'string'],
         ];

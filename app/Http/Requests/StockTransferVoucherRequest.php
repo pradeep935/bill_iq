@@ -34,7 +34,9 @@ class StockTransferVoucherRequest extends FormRequest
             'items.*.approved_quantity' => ['nullable', 'numeric', 'min:0'],
             'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
             'items.*.source_location' => ['nullable', 'string', 'max:255'],
+            'items.*.source_location_id' => ['nullable', 'integer'],
             'items.*.destination_location' => ['nullable', 'string', 'max:255'],
+            'items.*.destination_location_id' => ['nullable', 'integer'],
             'items.*.remarks' => ['nullable', 'string'],
         ];
     }

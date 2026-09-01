@@ -21,6 +21,7 @@ use App\Models\StockCountSession;
 use App\Models\StockLedger;
 use App\Models\StockTransferVoucher;
 use App\Models\Warehouse;
+use App\Models\WarehouseLocation;
 use App\Models\WarehouseProductStock;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -259,6 +260,8 @@ class StockService
                     'quantity_in' => (float) $entry->quantity_out,
                     'quantity_out' => (float) $entry->quantity_in,
                     'unit_cost' => (float) $entry->unit_cost,
+                    'warehouse_location_id' => $entry->warehouse_location_id ?? null,
+                    'warehouse_location' => $entry->warehouse_location ?? null,
                     'stock_status' => $entry->stock_status ?: 'saleable',
                     'transaction_date' => now(),
                     'remarks' => $remarks ?: 'Reversal for ledger #' . $entry->id,
@@ -1073,6 +1076,10 @@ class StockService
             $payload['posted_at'] = $data['posted_at'] ?? now();
         }
 
+        if (Schema::hasColumn('stock_ledgers', 'warehouse_location_id')) {
+            $payload['warehouse_location_id'] = $data['warehouse_location_id'] ?? null;
+        }
+
         $ledger = StockLedger::query()->create($payload);
 
         $this->refreshStockBalances($ledger);
@@ -1093,6 +1100,7 @@ class StockService
         $batchId = $ledger->batch_id ? (int) $ledger->batch_id : null;
         $branchId = $ledger->branch_id ? (int) $ledger->branch_id : null;
         $warehouseId = $ledger->warehouse_id ? (int) $ledger->warehouse_id : null;
+        $locationId = Schema::hasColumn('stock_ledgers', 'warehouse_location_id') && $ledger->warehouse_location_id ? (int) $ledger->warehouse_location_id : null;
 
         if (Schema::hasColumn('products', 'current_stock')) {
             Product::query()
@@ -1163,6 +1171,28 @@ class StockService
         } else {
             WarehouseProductStock::query()->create($payload + ['created_at' => now()]);
         }
+
+        if ($locationId && Schema::hasColumn('warehouse_product_stocks', 'warehouse_location_id')) {
+            $locationScope = $scope + ['warehouse_location_id' => $locationId];
+            $locationQuantity = $this->getCurrentStock($locationScope);
+            $locationPayload = $payload + [
+                'warehouse_location_id' => $locationId,
+                'quantity_on_hand' => $locationQuantity,
+                'available_quantity' => $locationQuantity,
+                'stock_value' => round($locationQuantity * $averageCost, 2),
+            ];
+            $locationQuery = WarehouseProductStock::query()
+                ->where('business_id', $businessId)
+                ->where('product_id', $productId)
+                ->where('warehouse_location_id', $locationId)
+                ->when($branchId, fn (Builder $q) => $q->where('branch_id', $branchId), fn (Builder $q) => $q->whereNull('branch_id'))
+                ->when($warehouseId, fn (Builder $q) => $q->where('warehouse_id', $warehouseId), fn (Builder $q) => $q->whereNull('warehouse_id'))
+                ->when($variantId, fn (Builder $q) => $q->where('product_variant_id', $variantId), fn (Builder $q) => $q->whereNull('product_variant_id'))
+                ->when($batchId, fn (Builder $q) => $q->where('batch_id', $batchId), fn (Builder $q) => $q->whereNull('batch_id'));
+
+            $locationStock = $locationQuery->first();
+            $locationStock ? $locationStock->update($locationPayload) : WarehouseProductStock::query()->create($locationPayload + ['created_at' => now()]);
+        }
     }
 
     private function validateOwnership(int $businessId, array $data): void
@@ -1175,6 +1205,16 @@ class StockService
 
         if (!empty($data['warehouse_id'])) {
             Warehouse::query()->where('business_id', $businessId)->where('id', $data['warehouse_id'])->firstOrFail();
+        }
+
+        if (!empty($data['warehouse_location_id'])) {
+            WarehouseLocation::query()
+                ->where('business_id', $businessId)
+                ->where('id', $data['warehouse_location_id'])
+                ->when(!empty($data['branch_id']), fn (Builder $q) => $q->where('branch_id', $data['branch_id']))
+                ->when(!empty($data['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $data['warehouse_id']))
+                ->where('status', 'active')
+                ->firstOrFail();
         }
 
         if (!empty($data['product_variant_id'])) {
@@ -1235,6 +1275,7 @@ class StockService
             ->when(!empty($scope['product_id']), fn (Builder $q) => $q->where('product_id', $scope['product_id']))
             ->when(array_key_exists('product_variant_id', $scope), fn (Builder $q) => $q->where('product_variant_id', $scope['product_variant_id']))
             ->when(array_key_exists('batch_id', $scope), fn (Builder $q) => $q->where('batch_id', $scope['batch_id']))
+            ->when(array_key_exists('warehouse_location_id', $scope) && Schema::hasColumn('stock_ledgers', 'warehouse_location_id'), fn (Builder $q) => $q->where('warehouse_location_id', $scope['warehouse_location_id']))
             ->when(array_key_exists('stock_status', $scope), fn (Builder $q) => $q->where('stock_status', $scope['stock_status']))
             ->when(!empty($scope['exclude_stock_statuses']), fn (Builder $q) => $q->whereNotIn('stock_status', (array) $scope['exclude_stock_statuses']));
     }

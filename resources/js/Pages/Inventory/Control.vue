@@ -48,13 +48,13 @@ const countView = ref('new');
 const countProductSearch = ref('');
 
 const today = new Date().toISOString().slice(0, 10);
-const adjustment = reactive({ branch_id: '', warehouse_id: '', adjustment_date: today, adjustment_reason_id: '', adjustment_type: 'mixed', source: 'manual', status: 'draft', remarks: '', items: [{ product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', source_condition_status: 'damaged', destination_condition_status: 'saleable', reason: '' }] });
+const adjustment = reactive({ branch_id: '', warehouse_id: '', adjustment_date: today, adjustment_reason_id: '', adjustment_type: 'mixed', source: 'manual', status: 'draft', remarks: '', items: [{ product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', warehouse_location_id: '', condition_status: 'saleable', source_condition_status: 'damaged', destination_condition_status: 'saleable', reason: '' }] });
 const newCountToken = () => `count-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 const count = reactive({ id: null, client_token: newCountToken(), session_number: '', branch_id: '', warehouse_id: '', count_date: today, count_type: 'full', freeze_stock: false, status: 'draft', remarks: '', items: [] });
-const countItem = reactive({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', system_quantity: 0, counted_quantity: '', unit_cost: 0, warehouse_location: '', batch_id: '', serial_id: '', reason: '', review_status: 'accepted' });
+const countItem = reactive({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', system_quantity: 0, counted_quantity: '', unit_cost: 0, warehouse_location: '', warehouse_location_id: '', batch_id: '', serial_id: '', reason: '', review_status: 'accepted' });
 const countFilters = reactive({ search: '', branch_id: '', warehouse_id: '', status: '', count_type: '', date_from: '', date_to: '' });
 const transfer = reactive({ id: null, transfer_date: today, source_branch_id: '', source_warehouse_id: '', destination_branch_id: '', destination_warehouse_id: '', transfer_type: 'immediate', expected_delivery_date: '', status: 'draft', remarks: '', items: [] });
-const transferItem = reactive({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', destination_location: '', current_stock: 0, destination_stock: 0, source_before: 0, source_after: 0, destination_before: 0, destination_after: 0 });
+const transferItem = reactive({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', source_location_id: '', destination_location: '', destination_location_id: '', current_stock: 0, destination_stock: 0, source_before: 0, source_after: 0, destination_before: 0, destination_after: 0 });
 const transferFilters = reactive({ search: '', source_branch_id: '', destination_branch_id: '', status: '', date_from: '', date_to: '', transfer_type: '' });
 const location = reactive({ branch_id: '', warehouse_id: '', movement_date: today, status: 'draft', remarks: '', items: [{ product_id: '', quantity: 1, from_location: '', to_location: '' }] });
 const locationMaster = reactive({ id: null, branch_id: '', warehouse_id: '', zone: '', aisle: '', rack: '', shelf: '', bin: '', status: 'active' });
@@ -133,6 +133,14 @@ const conditionOptions = [
     { value: 'lost', label: 'Lost' },
 ];
 const statusOptions = [{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }];
+const locationLabel = (loc) => [loc.zone, loc.aisle, loc.rack, loc.shelf, loc.bin].filter(Boolean).join(' / ') || loc.name || `Location #${loc.id}`;
+const activeLocationsForWarehouse = (warehouseId) => warehouseLocations.value.filter((loc) => Number(loc.warehouse_id) === Number(warehouseId) && (loc.status || 'active') === 'active');
+const activeAdjustmentLocations = computed(() => activeLocationsForWarehouse(adjustment.warehouse_id));
+const locationById = (id) => warehouseLocations.value.find((loc) => Number(loc.id) === Number(id));
+const syncLocationLabel = (item, field = 'warehouse_location_id', textField = 'warehouse_location') => {
+    const loc = locationById(item[field]);
+    item[textField] = loc ? locationLabel(loc) : '';
+};
 const optionLabel = (options, value, labelKey = 'label', valueKey = 'value') => {
     const option = options.find((row) => Number(row[valueKey] ?? row.id) === Number(value) || row[valueKey] === value);
     return option?.[labelKey] || option?.label || option?.name || labelize(value);
@@ -160,7 +168,8 @@ const adjustmentStockError = computed(() => {
     const item = adjustment.items.find((line) => insufficientStockLine(line));
     return item ? insufficientStockMessage(item) : '';
 });
-const canPostAdjustment = computed(() => !saving.value && !adjustmentStockError.value);
+const adjustmentMissingLocation = computed(() => activeAdjustmentLocations.value.length && adjustment.items.some((item) => !isConditionTransferLine(item) && !item.warehouse_location_id));
+const canPostAdjustment = computed(() => !saving.value && !adjustmentStockError.value && !adjustmentMissingLocation.value);
 const adjustmentTypeLabel = (value) => optionLabel(movementOptions, value);
 const conditionName = (value) => optionLabel(conditionOptions, value);
 const lineSourceQty = (item) => Number(item.source_condition_quantity ?? 0);
@@ -403,6 +412,8 @@ const validateAdjustmentClient = (status) => {
     if (transferOver) return `Only ${qty(lineSourceQty(transferOver))} units are available in ${conditionName(transferOver.source_condition_status)} stock.`;
     const mismatchedReason = selectedReason.value && adjustment.items.find((item) => !isConditionTransferLine(item) && item.direction !== selectedReason.value.default_direction);
     if (mismatchedReason) return `${selectedReason.value.reason_name} requires ${optionLabel(movementOptions, selectedReason.value.default_direction)}.`;
+    const missingLocation = status !== 'draft' && activeAdjustmentLocations.value.length ? adjustment.items.find((item) => !isConditionTransferLine(item) && !item.warehouse_location_id) : null;
+    if (missingLocation) return 'Location is required.';
     const outWithoutStock = status !== 'draft' ? adjustment.items.find((item) => insufficientStockLine(item)) : null;
     if (outWithoutStock) return insufficientStockMessage(outWithoutStock);
     return '';
@@ -516,7 +527,7 @@ const exportRows = (format) => {
 const refreshLineStock = async (item, source = adjustment) => {
     if (!item.product_id || !source.warehouse_id) return;
     if (source === adjustment) syncOutboundCondition(item);
-    const params = { branch_id: source.branch_id || '', warehouse_id: source.warehouse_id, product_id: item.product_id, product_variant_id: item.product_variant_id || '', batch_id: item.batch_id || item.source_batch_id || '' };
+    const params = { branch_id: source.branch_id || '', warehouse_id: source.warehouse_id, product_id: item.product_id, product_variant_id: item.product_variant_id || '', batch_id: item.batch_id || item.source_batch_id || '', warehouse_location_id: item.warehouse_location_id || item.source_location_id || '' };
     if (source === adjustment && !isConditionTransferLine(item)) params.stock_status = lineStockCondition(item);
     const value = await InventoryApi.inventoryValuation(params);
     item.current_stock = Number(value.quantity || value.available || 0);
@@ -539,7 +550,7 @@ const countReasonOptions = computed(() => {
     const master = (refs.value.reasons || []).map((reason) => reason.reason_name).filter(Boolean);
     return [...new Set([...master, ...defaults])];
 });
-const blankCountItem = () => ({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', system_quantity: 0, counted_quantity: '', unit_cost: 0, warehouse_location: '', batch_id: '', serial_id: '', reason: '', review_status: 'accepted' });
+const blankCountItem = () => ({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', system_quantity: 0, counted_quantity: '', unit_cost: 0, warehouse_location: '', warehouse_location_id: '', batch_id: '', serial_id: '', reason: '', review_status: 'accepted' });
 const refreshCountLineStock = async (item) => {
     if (!item.product_id || !count.warehouse_id) {
         item.system_quantity = 0;
@@ -556,7 +567,7 @@ const selectCountProduct = async (product) => {
 const countDuplicateIndex = (row) => count.items.findIndex((item, index) => index !== editingCountIndex.value
     && Number(item.product_id) === Number(row.product_id)
     && Number(item.product_variant_id || 0) === Number(row.product_variant_id || 0)
-    && String(item.warehouse_location || '') === String(row.warehouse_location || '')
+    && Number(item.warehouse_location_id || 0) === Number(row.warehouse_location_id || 0)
     && Number(item.batch_id || 0) === Number(row.batch_id || 0));
 const countLineError = (item) => {
     if (!count.warehouse_id) return 'Choose a warehouse first.';
@@ -642,6 +653,7 @@ const editCount = async (row) => {
             counted_quantity: item.counted_quantity ?? '',
             unit_cost: Number(item.unit_cost || 0),
             warehouse_location: item.warehouse_location || '',
+            warehouse_location_id: item.warehouse_location_id || '',
             batch_id: item.batch_id || '',
             serial_id: item.serial_id || '',
             reason: item.reviewer_notes || item.reason || '',
@@ -684,8 +696,6 @@ const sourceAfterTransfer = (item) => Number(item.current_stock || 0) - transfer
 const destinationAfterTransfer = (item) => Number(item.destination_stock || 0) + transferQty(item);
 const transferPhysicalBefore = (item) => Number(item.current_stock || 0) + Number(item.destination_stock || 0);
 const transferPhysicalAfter = (item) => sourceAfterTransfer(item) + destinationAfterTransfer(item);
-const locationLabel = (loc) => [loc.zone, loc.aisle, loc.rack, loc.shelf, loc.bin].filter(Boolean).join(' / ') || loc.name || `Location #${loc.id}`;
-const activeLocationsForWarehouse = (warehouseId) => warehouseLocations.value.filter((loc) => Number(loc.warehouse_id) === Number(warehouseId) && (loc.status || 'active') === 'active');
 const sourceLocationOptions = computed(() => activeLocationsForWarehouse(transfer.source_warehouse_id));
 const destinationLocationOptions = computed(() => activeLocationsForWarehouse(transfer.destination_warehouse_id));
 const hasSourceLocations = computed(() => sourceLocationOptions.value.length > 0);
@@ -729,7 +739,7 @@ const refreshTransferLineStocks = async (item) => {
     }
     await refreshLineStock(item, { branch_id: transfer.source_branch_id, warehouse_id: transfer.source_warehouse_id });
     if (!item.product_id || !transfer.destination_warehouse_id) return;
-    const value = await InventoryApi.inventoryValuation({ branch_id: transfer.destination_branch_id || '', warehouse_id: transfer.destination_warehouse_id, product_id: item.product_id, product_variant_id: item.product_variant_id || '', batch_id: item.destination_batch_id || item.source_batch_id || '' });
+    const value = await InventoryApi.inventoryValuation({ branch_id: transfer.destination_branch_id || '', warehouse_id: transfer.destination_warehouse_id, product_id: item.product_id, product_variant_id: item.product_variant_id || '', batch_id: item.destination_batch_id || item.source_batch_id || '', warehouse_location_id: item.destination_location_id || '' });
     item.destination_stock = Number(value.quantity || value.available || 0);
 };
 const refreshTransferStocks = async () => {
@@ -743,7 +753,7 @@ const onTransferBranchChange = async (side) => {
 const onTransferWarehouseChange = async () => {
     await refreshTransferStocks();
 };
-const blankTransferItem = () => ({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', destination_location: '', current_stock: 0, destination_stock: 0, source_before: 0, source_after: 0, destination_before: 0, destination_after: 0 });
+const blankTransferItem = () => ({ product_id: '', product_variant_id: '', product_name: '', sku: '', barcode: '', unit: '', requested_quantity: 1, approved_quantity: '', unit_cost: 0, source_batch_id: '', destination_batch_id: '', source_serial_id: '', destination_serial_id: '', source_location: '', source_location_id: '', destination_location: '', destination_location_id: '', current_stock: 0, destination_stock: 0, source_before: 0, source_after: 0, destination_before: 0, destination_after: 0 });
 const openTransferDrawer = (item = null, index = null) => {
     Object.assign(transferItem, blankTransferItem(), item || {});
     transferProductSearch.value = '';
@@ -779,8 +789,8 @@ const transferDuplicateIndex = (row) => transfer.items.findIndex((item, index) =
     && Number(item.product_variant_id || 0) === Number(row.product_variant_id || 0)
     && Number(item.source_warehouse_id || transfer.source_warehouse_id || 0) === Number(row.source_warehouse_id || transfer.source_warehouse_id || 0)
     && Number(item.destination_warehouse_id || transfer.destination_warehouse_id || 0) === Number(row.destination_warehouse_id || transfer.destination_warehouse_id || 0)
-    && String(item.source_location || '') === String(row.source_location || '')
-    && String(item.destination_location || '') === String(row.destination_location || '')
+    && Number(item.source_location_id || 0) === Number(row.source_location_id || 0)
+    && Number(item.destination_location_id || 0) === Number(row.destination_location_id || 0)
     && Number(item.source_batch_id || 0) === Number(row.source_batch_id || 0));
 const transferRowSnapshot = () => {
     const product = selectedTransferProduct.value || {};
@@ -852,7 +862,9 @@ const editTransfer = async (row) => {
             source_serial_id: item.source_serial_id || '',
             destination_serial_id: item.destination_serial_id || '',
             source_location: item.source_location || '',
+            source_location_id: item.source_location_id || '',
             destination_location: item.destination_location || '',
+            destination_location_id: item.destination_location_id || '',
             current_stock: 0,
             destination_stock: 0,
             source_before: item.source_before || 0,
@@ -974,7 +986,7 @@ onMounted(load);
 
             <section v-if="!loading && tab === 'voucher'" class="panel">
                 <div class="section-head"><div><span>STOCK ADJUSTMENT WORKFLOW</span><h2>New {{ currentVoucherType.label }}</h2><p>Draft does not update stock. Posting creates immutable stock ledger entries.</p></div><span class="status-pill">{{ labelize(adjustment.status) }}</span></div>
-                <div class="form-grid"><input value="Auto generated on save" disabled /><select v-model="adjustment.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="adjustment.warehouse_id"><option value="">Source Warehouse</option><option v-for="w in filteredWarehouses(adjustment.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="adjustment.adjustment_date" type="date" /><select v-model="adjustment.adjustment_reason_id" @change="applyReason"><option value="">Select Reason</option><option v-for="r in refs.reasons" :key="r.id" :value="r.id">{{ reasonDisplayName(r) }}</option></select><select v-model="adjustment.adjustment_type" @change="onAdjustmentTypeChange"><option value="increase">Stock In</option><option value="decrease">Stock Out</option><option value="condition_transfer">Condition Transfer</option><option value="mixed">Mixed</option></select><input :value="currentVoucherType.label" disabled /><textarea v-model="adjustment.remarks" placeholder="Remarks / reason note"></textarea></div>
+                <div class="form-grid"><input value="Auto generated on save" disabled /><select v-model="adjustment.branch_id" @change="adjustment.warehouse_id = ''; adjustment.items.forEach((line) => { line.warehouse_location_id = ''; line.warehouse_location = ''; refreshLineStock(line); })"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="adjustment.warehouse_id" @change="adjustment.items.forEach((line) => { line.warehouse_location_id = ''; line.warehouse_location = ''; refreshLineStock(line); })"><option value="">Source Warehouse</option><option v-for="w in filteredWarehouses(adjustment.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select><input v-model="adjustment.adjustment_date" type="date" /><select v-model="adjustment.adjustment_reason_id" @change="applyReason"><option value="">Select Reason</option><option v-for="r in refs.reasons" :key="r.id" :value="r.id">{{ reasonDisplayName(r) }}</option></select><select v-model="adjustment.adjustment_type" @change="onAdjustmentTypeChange"><option value="increase">Stock In</option><option value="decrease">Stock Out</option><option value="condition_transfer">Condition Transfer</option><option value="mixed">Mixed</option></select><input :value="currentVoucherType.label" disabled /><textarea v-model="adjustment.remarks" placeholder="Remarks / reason note"></textarea></div>
                 <div class="hint-grid">
                     <span>Voucher number is generated when the voucher is saved.</span>
                     <span>Branch and source warehouse decide where stock is affected.</span>
@@ -992,7 +1004,7 @@ onMounted(load);
                     <label v-else class="line-field result-field"><span>Result</span><input :value="conditionTransferResult(item)" disabled placeholder="Result" /></label>
                     <label v-if="!isConditionTransferLine(item)" class="line-field"><span>Unit Cost</span><input v-model.number="item.unit_cost" type="number" step="0.01" placeholder="Unit Cost" /></label>
                     <div v-else class="line-field transfer-physical-note"><span>Physical</span><strong>{{ item.product_id ? `${qty(item.physical_quantity)} -> ${qty(item.physical_quantity)}` : '-' }}</strong></div>
-                    <label class="line-field"><span>Location</span><input v-model="item.warehouse_location" placeholder="Location" /></label>
+                    <label class="line-field"><span>Location</span><select v-model="item.warehouse_location_id" :disabled="!adjustment.warehouse_id || isConditionTransferLine(item)" @change="syncLocationLabel(item); refreshLineStock(item)"><option value="">{{ activeAdjustmentLocations.length ? 'Select Location' : 'No active locations' }}</option><option v-for="loc in activeAdjustmentLocations" :key="loc.id" :value="loc.id">{{ locationLabel(loc) }}</option></select></label>
                     <label v-if="!isConditionTransferLine(item)" class="line-field"><span>Condition</span><select v-model="item.condition_status" @change="onLineConditionChange(item)"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
                     <div v-else class="condition-transfer-fields">
                         <label class="line-field"><span>From</span><select v-model="item.source_condition_status" @change="refreshConditionQuantities(item)"><option v-for="option in conditionOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
@@ -1012,7 +1024,7 @@ onMounted(load);
                         <li>Location and condition help separate saleable, damaged, expired or lost stock.</li>
                     </ul>
                 </section>
-                <div class="posting-summary"><strong>{{ adjustmentSummary.products }} products affected</strong><span>Stock Increase: +{{ qty(adjustmentSummary.increases) }}</span><span>Stock Decrease: -{{ qty(adjustmentSummary.decreases) }}</span><span>Condition Transfer: {{ qty(adjustmentSummary.transfers) }}</span><span>Net Difference: {{ signedQty(adjustmentSummary.net) }}</span></div><div class="actions"><button @click="addRow(adjustment.items, { product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', condition_status: 'saleable', source_condition_status: 'damaged', destination_condition_status: 'saleable', reason: '' })">Add Item</button><button :disabled="saving" @click="saveAdjustment('draft')">Save Draft</button><button class="primary post-adjustment-button" :disabled="!canPostAdjustment" @click="saveAdjustment('posted')">Post Adjustment</button></div>
+                <div class="posting-summary"><strong>{{ adjustmentSummary.products }} products affected</strong><span>Stock Increase: +{{ qty(adjustmentSummary.increases) }}</span><span>Stock Decrease: -{{ qty(adjustmentSummary.decreases) }}</span><span>Condition Transfer: {{ qty(adjustmentSummary.transfers) }}</span><span>Net Difference: {{ signedQty(adjustmentSummary.net) }}</span></div><div class="actions"><button @click="addRow(adjustment.items, { product_id: '', unit_id: '', adjustment_quantity: 1, direction: 'in', unit_cost: 0, warehouse_location: '', warehouse_location_id: '', condition_status: 'saleable', source_condition_status: 'damaged', destination_condition_status: 'saleable', reason: '' })">Add Item</button><button :disabled="saving" @click="saveAdjustment('draft')">Save Draft</button><button class="primary post-adjustment-button" :disabled="!canPostAdjustment" @click="saveAdjustment('posted')">Post Adjustment</button></div>
             </section>
 
             <section v-if="!loading && tab === 'register'" class="panel">
@@ -1127,7 +1139,7 @@ onMounted(load);
                         <div v-if="countItem.product_id" class="selected-product"><strong>{{ countItem.product_name || selectedCountProduct.name }}</strong><span>SKU: {{ countItem.sku || selectedCountProduct.sku || '-' }}</span><span>Barcode: {{ countItem.barcode || productBarcode(selectedCountProduct) || '-' }}</span><span>Unit: {{ countItem.unit || productUnit(selectedCountProduct) }}</span></div>
                         <label><span>System Quantity</span><input :value="countItem.product_id ? `${qty(countItem.system_quantity)} ${countItem.unit || productUnit(selectedCountProduct)}` : ''" disabled /></label>
                         <label><span>Physical Quantity</span><input v-model.number="countItem.counted_quantity" type="number" min="0" step="0.001" :disabled="!countItem.product_id" placeholder="Enter counted quantity" /></label>
-                        <label><span>Location</span><select v-if="activeCountLocations.length" v-model="countItem.warehouse_location" :disabled="!countItem.product_id"><option value="">Optional</option><option v-for="loc in activeCountLocations" :key="loc.id" :value="locationLabel(loc)">{{ locationLabel(loc) }}</option></select><input v-else value="Optional" disabled /></label>
+                        <label><span>Location</span><select v-if="activeCountLocations.length" v-model="countItem.warehouse_location_id" :disabled="!countItem.product_id" @change="syncLocationLabel(countItem); refreshCountLineStock(countItem)"><option value="">Select Location</option><option v-for="loc in activeCountLocations" :key="loc.id" :value="loc.id">{{ locationLabel(loc) }}</option></select><input v-else value="No active locations" disabled /></label>
                         <label v-if="isBatchTracked(countItem)"><span>Batch</span><input v-model="countItem.batch_id" :disabled="!countItem.product_id" placeholder="Select batch" @change="refreshCountLineStock(countItem)" /></label>
                         <label v-if="isSerialTracked(countItem)"><span>Serial Numbers</span><input v-model="countItem.serial_id" :disabled="!countItem.product_id" placeholder="Scan or select serial" /></label>
                         <label v-if="countItem.product_id && countLineDifference(countItem) !== 0"><span>Variance Reason</span><select v-model="countItem.reason"><option value="">Select reason</option><option v-for="reasonName in countReasonOptions" :key="reasonName" :value="reasonName">{{ reasonName }}</option></select></label>
@@ -1148,8 +1160,8 @@ onMounted(load);
                         <div v-if="transferItem.product_id" class="selected-product"><strong>{{ transferItem.product_name || selectedTransferProduct.name }}</strong><span>SKU: {{ transferItem.sku || selectedTransferProduct.sku || '-' }}</span><span>Barcode: {{ transferItem.barcode || productBarcode(selectedTransferProduct) || '-' }}</span><span>Unit: {{ transferItem.unit || productUnit(selectedTransferProduct) }}</span></div>
                         <label><span>Available Stock</span><input :value="transferItem.product_id ? `${qty(transferItem.current_stock)} ${transferItem.unit || productUnit(selectedTransferProduct)}` : ''" disabled /></label>
                         <label><span>Transfer Quantity</span><input v-model.number="transferItem.requested_quantity" type="number" min="0.001" step="0.001" :disabled="!transferItem.product_id || Number(transferItem.current_stock || 0) <= 0" /></label>
-                        <label><span>From Location</span><select v-if="hasSourceLocations" v-model="transferItem.source_location" :disabled="!transferItem.product_id"><option value="">Optional</option><option v-for="loc in sourceLocationOptions" :key="loc.id" :value="locationLabel(loc)">{{ locationLabel(loc) }}</option></select><input v-else value="Optional" disabled /></label>
-                        <label><span>To Location</span><select v-if="hasDestinationLocations" v-model="transferItem.destination_location" :disabled="!transferItem.product_id"><option value="">Optional</option><option v-for="loc in destinationLocationOptions" :key="loc.id" :value="locationLabel(loc)">{{ locationLabel(loc) }}</option></select><input v-else value="Optional" disabled /></label>
+                        <label><span>From Location</span><select v-if="hasSourceLocations" v-model="transferItem.source_location_id" :disabled="!transferItem.product_id" @change="syncLocationLabel(transferItem, 'source_location_id', 'source_location'); refreshTransferLineStocks(transferItem)"><option value="">Select Location</option><option v-for="loc in sourceLocationOptions" :key="loc.id" :value="loc.id">{{ locationLabel(loc) }}</option></select><input v-else value="No active locations" disabled /></label>
+                        <label><span>To Location</span><select v-if="hasDestinationLocations" v-model="transferItem.destination_location_id" :disabled="!transferItem.product_id" @change="syncLocationLabel(transferItem, 'destination_location_id', 'destination_location'); refreshTransferLineStocks(transferItem)"><option value="">Select Location</option><option v-for="loc in destinationLocationOptions" :key="loc.id" :value="loc.id">{{ locationLabel(loc) }}</option></select><input v-else value="No active locations" disabled /></label>
                         <label v-if="isBatchTracked(transferItem)"><span>Source Batch</span><input v-model="transferItem.source_batch_id" :disabled="!transferItem.product_id" placeholder="Source batch" @change="refreshTransferLineStocks(transferItem)" /></label>
                         <label v-if="isBatchTracked(transferItem)"><span>Destination Batch</span><input v-model="transferItem.destination_batch_id" :disabled="!transferItem.product_id" placeholder="Destination batch" /></label>
                         <label v-if="isSerialTracked(transferItem)"><span>Serial</span><input v-model="transferItem.source_serial_id" :disabled="!transferItem.product_id" placeholder="Select serial" /></label>

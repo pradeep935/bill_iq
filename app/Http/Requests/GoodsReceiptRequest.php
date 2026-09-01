@@ -20,7 +20,7 @@ class GoodsReceiptRequest extends FormRequest
             'items.*.rejected_quantity' => ['nullable', 'numeric', 'min:0'], 'items.*.damaged_quantity' => ['nullable', 'numeric', 'min:0'],
             'items.*.unit_cost' => ['nullable', 'numeric', 'min:0'], 'items.*.batch_number' => ['nullable', 'string'],
             'items.*.manufacturing_date' => ['nullable', 'date'], 'items.*.expiry_date' => ['nullable', 'date'],
-            'items.*.qc_status' => ['nullable', 'in:pending,passed,failed'], 'items.*.warehouse_location' => ['nullable', 'string'], 'items.*.remarks' => ['nullable', 'string'],
+            'items.*.qc_status' => ['nullable', 'in:pending,passed,failed'], 'items.*.warehouse_location' => ['nullable', 'string'], 'items.*.warehouse_location_id' => ['nullable', 'integer'], 'items.*.remarks' => ['nullable', 'string'],
         ];
     }
 }

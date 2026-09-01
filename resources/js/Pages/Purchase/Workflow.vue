@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 import OrderApi from '../Orders/OrderApi';
+import InventoryApi from '../Inventory/InventoryApi';
 
 const props = defineProps({ page: { type: String, default: 'inventory-orders' }, title: { type: String, default: 'Purchase Management' }, initial_tab: { type: String, default: 'overview' } });
 
@@ -16,6 +17,7 @@ const reports = ref({});
 const requisitions = ref([]);
 const purchaseOrders = ref([]);
 const receipts = ref([]);
+const warehouseLocations = ref([]);
 const productSearch = ref('');
 const productResults = ref([]);
 const selectedPoId = ref('');
@@ -41,6 +43,12 @@ const productSku = (item) => item.product?.sku || item.sku || '-';
 const productUnit = (product) => product?.unit?.name || product?.unit || product?.unit_name || 'PCS';
 const filteredWarehouses = computed(() => !po.branch_id ? refs.value.warehouses || [] : (refs.value.warehouses || []).filter((w) => Number(w.branch_id || 0) === Number(po.branch_id)));
 const grnWarehouses = computed(() => !grn.branch_id ? refs.value.warehouses || [] : (refs.value.warehouses || []).filter((w) => Number(w.branch_id || 0) === Number(grn.branch_id)));
+const locationLabel = (loc) => [loc.zone, loc.aisle, loc.rack, loc.shelf, loc.bin].filter(Boolean).join(' / ') || loc.name || `Location #${loc.id}`;
+const activeGrnLocations = computed(() => warehouseLocations.value.filter((loc) => Number(loc.warehouse_id) === Number(grn.warehouse_id) && (loc.status || 'active') === 'active'));
+const syncGrnLocation = (item) => {
+    const loc = warehouseLocations.value.find((row) => Number(row.id) === Number(item.warehouse_location_id));
+    item.warehouse_location = loc ? locationLabel(loc) : '';
+};
 const approvedRequisitions = computed(() => requisitions.value.filter((r) => ['approved'].includes(r.status)));
 const receivablePurchaseOrders = computed(() => purchaseOrders.value.filter((order) => ['ordered', 'confirmed', 'partially_received', 'partial_received'].includes(order.status) && (order.items || []).some((item) => pendingQty(item) > 0)));
 const poTotals = computed(() => {
@@ -67,13 +75,14 @@ const resetGrn = () => { selectedPoId.value = ''; Object.assign(grn, { branch_id
 const load = async () => {
     loading.value = true;
     try {
-        const [referenceData, dashboardData, reportData, reqData, poData, grnData] = await Promise.all([
+        const [referenceData, dashboardData, reportData, reqData, poData, grnData, locationData] = await Promise.all([
             OrderApi.references('purchase'),
             OrderApi.dashboard('purchase'),
             OrderApi.reports('purchase'),
             OrderApi.requisitions({ per_page: 100 }),
             OrderApi.purchaseOrders({ per_page: 100 }),
             OrderApi.goodsReceipts({ per_page: 100 }),
+            InventoryApi.warehouseLocations({ active_only: 1, per_page: 500 }),
         ]);
         refs.value = referenceData;
         dashboard.value = dashboardData;
@@ -81,6 +90,7 @@ const load = async () => {
         requisitions.value = reqData.purchase_requisitions || [];
         purchaseOrders.value = poData.purchase_orders || [];
         receipts.value = grnData.goods_receipts || [];
+        warehouseLocations.value = locationData.locations || [];
     } finally {
         loading.value = false;
     }
@@ -169,6 +179,7 @@ const loadPoIntoGrn = () => {
             manufacturing_date: '',
             expiry_date: '',
             warehouse_location: '',
+            warehouse_location_id: '',
             qc_status: 'pending',
             remarks: '',
         })),
@@ -268,7 +279,7 @@ onMounted(async () => {
                 <div class="form-grid">
                     <label>Select Purchase Order<select v-model="selectedPoId"><option value="">Select Purchase Order</option><option v-for="order in receivablePurchaseOrders" :key="order.id" :value="order.id">{{ order.po_number }} - {{ supplierName(order.supplier) }}</option></select></label><label>GRN Number<input value="Auto generated" disabled /></label><label>Supplier<select v-model="grn.supplier_id" disabled><option value="">Loaded from PO</option><option v-for="s in refs.suppliers" :key="s.id" :value="s.id">{{ supplierName(s) }}</option></select></label><label>Branch<select v-model="grn.branch_id" disabled><option value="">Loaded from PO</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label><label>Warehouse<select v-model="grn.warehouse_id" disabled><option value="">Loaded from PO</option><option v-for="w in grnWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label><label>Receipt Date<input v-model="grn.receipt_date" type="date" /></label><label>Supplier Challan Number<input v-model="grn.supplier_challan_number" /></label><label>Supplier Invoice Number<input v-model="grn.supplier_invoice_number" /></label><label>Vehicle Number<input v-model="grn.vehicle_number" /></label><label>Received By<input value="Current user" disabled /></label><label class="wide">Remarks<textarea v-model="grn.remarks"></textarea></label>
                 </div>
-                <div class="table-scroll"><table class="line-table grn-lines"><thead><tr><th>Product</th><th>SKU</th><th>Ordered</th><th>Previous Received</th><th>Pending</th><th>Received Now</th><th>Rejected/Damaged</th><th>Accepted</th><th>Batch No.</th><th>MFG Date</th><th>Expiry Date</th><th>Storage Location</th><th>Remarks</th></tr></thead><tbody><tr v-for="(item, index) in grn.items" :key="index"><td data-label="Product">{{ productName(item) }}</td><td data-label="SKU">{{ productSku(item) }}</td><td data-label="Ordered">{{ qty(item.ordered_quantity) }}</td><td data-label="Previous Received">{{ qty(item.previous_received_quantity) }}</td><td data-label="Pending">{{ qty(item.pending_quantity) }}</td><td data-label="Received Now"><input v-model.number="item.received_quantity" type="number" :max="item.pending_quantity" step="0.001" /></td><td data-label="Rejected/Damaged"><input v-model.number="item.rejected_quantity" type="number" step="0.001" /><input v-model.number="item.damaged_quantity" type="number" step="0.001" /></td><td data-label="Accepted">{{ qty(acceptedQty(item)) }}</td><td data-label="Batch No."><input v-model="item.batch_number" /></td><td data-label="MFG Date"><input v-model="item.manufacturing_date" type="date" /></td><td data-label="Expiry Date"><input v-model="item.expiry_date" type="date" /></td><td data-label="Storage Location"><input v-model="item.warehouse_location" /></td><td data-label="Remarks"><input v-model="item.remarks" /></td></tr><tr v-if="!grn.items.length"><td colspan="13" class="empty">Select a confirmed purchase order to load pending products for GRN.</td></tr></tbody></table></div>
+                <div class="table-scroll"><table class="line-table grn-lines"><thead><tr><th>Product</th><th>SKU</th><th>Ordered</th><th>Previous Received</th><th>Pending</th><th>Received Now</th><th>Rejected/Damaged</th><th>Accepted</th><th>Batch No.</th><th>MFG Date</th><th>Expiry Date</th><th>Storage Location</th><th>Remarks</th></tr></thead><tbody><tr v-for="(item, index) in grn.items" :key="index"><td data-label="Product">{{ productName(item) }}</td><td data-label="SKU">{{ productSku(item) }}</td><td data-label="Ordered">{{ qty(item.ordered_quantity) }}</td><td data-label="Previous Received">{{ qty(item.previous_received_quantity) }}</td><td data-label="Pending">{{ qty(item.pending_quantity) }}</td><td data-label="Received Now"><input v-model.number="item.received_quantity" type="number" :max="item.pending_quantity" step="0.001" /></td><td data-label="Rejected/Damaged"><input v-model.number="item.rejected_quantity" type="number" step="0.001" /><input v-model.number="item.damaged_quantity" type="number" step="0.001" /></td><td data-label="Accepted">{{ qty(acceptedQty(item)) }}</td><td data-label="Batch No."><input v-model="item.batch_number" /></td><td data-label="MFG Date"><input v-model="item.manufacturing_date" type="date" /></td><td data-label="Expiry Date"><input v-model="item.expiry_date" type="date" /></td><td data-label="Storage Location"><select v-if="activeGrnLocations.length" v-model="item.warehouse_location_id" @change="syncGrnLocation(item)"><option value="">Select Location</option><option v-for="loc in activeGrnLocations" :key="loc.id" :value="loc.id">{{ locationLabel(loc) }}</option></select><input v-else value="No active locations" disabled /></td><td data-label="Remarks"><input v-model="item.remarks" /></td></tr><tr v-if="!grn.items.length"><td colspan="13" class="empty">Select a confirmed purchase order to load pending products for GRN.</td></tr></tbody></table></div>
                 <div class="sticky-actions"><button @click="resetGrn">Clear</button><button :disabled="saving || !grn.items.length" @click="saveGrn('draft')">Save Draft</button><button class="primary" :disabled="saving || !grn.items.length" @click="saveGrn('received')">Confirm / Receive Goods</button><button :disabled="!grn.items.length">Create Purchase Bill</button></div>
                 <div class="list-table"><table><thead><tr><th>GRN Number</th><th>PO</th><th>Supplier</th><th>Warehouse</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody><tr v-for="receipt in receipts" :key="receipt.id"><td>{{ receipt.grn_number }}</td><td>{{ receipt.order?.po_number || '-' }}</td><td>{{ supplierName(receipt.supplier) }}</td><td>{{ receipt.warehouse?.name || '-' }}</td><td>{{ receipt.receipt_date }}</td><td><span class="badge" :class="receipt.status">{{ statusLabel(receipt.status) }}</span></td><td><button v-if="receipt.status === 'draft'" @click="receiveExisting(receipt)">Confirm Receipt</button><button @click="printDoc('Goods Receipt Note', receipt.grn_number)">Print</button><button v-if="receipt.status === 'received'">Create Purchase Bill</button></td></tr><tr v-if="!receipts.length"><td colspan="7" class="empty">No goods receipts yet. Select a confirmed PO and receive goods when supplier stock arrives.</td></tr></tbody></table></div>
             </section>

@@ -19,9 +19,11 @@ use App\Models\StockReservation;
 use App\Models\Supplier;
 use App\Models\SupplierConfirmation;
 use App\Models\Warehouse;
+use App\Models\WarehouseLocation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class OrderManagementService
@@ -405,7 +407,9 @@ class OrderManagementService
                     throw ValidationException::withMessages(['purchase_order_id' => 'GRN supplier, branch and warehouse must match the selected purchase order.']);
                 }
             }
-            $items = collect($data['items'])->map(fn ($item) => [
+            $items = collect($data['items'])->map(function ($item) use ($data) {
+                $location = $this->warehouseLocation($item['warehouse_location_id'] ?? null, $data['branch_id'] ?? null, $data['warehouse_id'] ?? null, false);
+                return [
                 'purchase_order_item_id' => $item['purchase_order_item_id'] ?? null,
                 'product_id' => $item['product_id'],
                 'product_variant_id' => $item['product_variant_id'] ?? null,
@@ -420,9 +424,11 @@ class OrderManagementService
                 'manufacturing_date' => $item['manufacturing_date'] ?? null,
                 'expiry_date' => $item['expiry_date'] ?? null,
                 'qc_status' => $item['qc_status'] ?? 'pending',
-                'warehouse_location' => $item['warehouse_location'] ?? null,
+                'warehouse_location' => $location ? $this->warehouseLocationLabel($location) : ($item['warehouse_location'] ?? null),
+                'warehouse_location_id' => $location?->id,
                 'remarks' => $item['remarks'] ?? null,
-            ])->all();
+                ];
+            })->all();
             if ($order) {
                 $validItemIds = $order->items->pluck('id')->map(fn ($value) => (int) $value)->all();
                 foreach ($items as $index => $item) {
@@ -435,7 +441,14 @@ class OrderManagementService
             $grn = $id ? GoodsReceipt::query()->where('business_id', $businessId)->findOrFail($id) : new GoodsReceipt(['business_id' => $businessId, 'grn_number' => $this->nextNumber('GRN', GoodsReceipt::class, 'grn_number'), 'created_by' => Auth::id()]);
             if (in_array($grn->status, ['received', 'cancelled'], true)) throw ValidationException::withMessages(['status' => 'Received GRN cannot be edited.']);
             $grn->fill($data)->save();
-            $grn->items()->delete(); $grn->items()->createMany($items);
+            $grn->items()->delete();
+            if (!Schema::hasColumn('goods_receipt_items', 'warehouse_location_id')) {
+                $items = collect($items)->map(function (array $item) {
+                    unset($item['warehouse_location_id']);
+                    return $item;
+                })->all();
+            }
+            $grn->items()->createMany($items);
             if ($data['status'] === 'received') $this->receiveGoods($grn->id);
             return $grn->fresh(['items.product', 'supplier']);
         });
@@ -452,7 +465,7 @@ class OrderManagementService
                     $poItem = $grn->order->items->firstWhere('id', $item->purchase_order_item_id);
                     if ($poItem && (float) $item->received_quantity > ((float) $poItem->ordered_quantity - (float) $poItem->received_quantity)) throw ValidationException::withMessages(['received_quantity' => 'Received now cannot exceed pending purchase order quantity.']);
                 }
-                if ($net > 0) $this->stock->increaseStock(['business_id' => $grn->business_id, 'branch_id' => $grn->branch_id, 'warehouse_id' => $grn->warehouse_id, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id, 'serial_id' => $item->serial_id, 'transaction_type' => 'goods_receipt', 'reference_type' => GoodsReceipt::class, 'reference_id' => $grn->id, 'quantity' => $net, 'unit_cost' => (float) $item->unit_cost, 'warehouse_location' => $item->warehouse_location, 'transaction_date' => $grn->receipt_date, 'remarks' => 'GRN ' . $grn->grn_number]);
+                if ($net > 0) $this->stock->increaseStock(['business_id' => $grn->business_id, 'branch_id' => $grn->branch_id, 'warehouse_id' => $grn->warehouse_id, 'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id, 'serial_id' => $item->serial_id, 'transaction_type' => 'goods_receipt', 'reference_type' => GoodsReceipt::class, 'reference_id' => $grn->id, 'quantity' => $net, 'unit_cost' => (float) $item->unit_cost, 'warehouse_location' => $item->warehouse_location, 'warehouse_location_id' => $item->warehouse_location_id ?? null, 'transaction_date' => $grn->receipt_date, 'remarks' => 'GRN ' . $grn->grn_number]);
                 if ($item->purchase_order_item_id) $item->orderItem()->increment('received_quantity', $net);
             }
             if ($grn->order) $this->refreshPurchaseOrderReceipt($grn->order);
@@ -610,6 +623,22 @@ class OrderManagementService
     private function supplier(int $id): Supplier { return Supplier::query()->where('business_id', AppController::businessId())->where('status', 'active')->findOrFail($id); }
     private function branch(int $id): Branch { return Branch::query()->where('business_id', AppController::businessId())->findOrFail($id); }
     private function warehouse(int $id, ?int $branchId = null): Warehouse { return Warehouse::query()->where('business_id', AppController::businessId())->when($branchId, fn (Builder $q) => $q->where('branch_id', $branchId))->findOrFail($id); }
+    private function warehouseLocation($id, ?int $branchId, ?int $warehouseId, bool $required): ?WarehouseLocation
+    {
+        if (!$id) {
+            if ($required) throw ValidationException::withMessages(['warehouse_location_id' => 'Warehouse location is required.']);
+            return null;
+        }
+
+        return WarehouseLocation::query()
+            ->where('business_id', AppController::businessId())
+            ->where('id', $id)
+            ->when($branchId, fn (Builder $q) => $q->where('branch_id', $branchId))
+            ->when($warehouseId, fn (Builder $q) => $q->where('warehouse_id', $warehouseId))
+            ->where('status', 'active')
+            ->firstOrFail();
+    }
+    private function warehouseLocationLabel(WarehouseLocation $location): string { return collect([$location->zone, $location->aisle, $location->rack, $location->shelf, $location->bin])->filter()->implode(' / ') ?: 'Location #' . $location->id; }
     private function product(int $id): Product { return $this->productQuery()->findOrFail($id); }
     private function nextNumber(string $prefix, string $model, string $column): string { $prefix .= '-' . date('Y') . '-'; $last = $model::query()->where('business_id', AppController::businessId())->where($column, 'like', $prefix . '%')->orderByDesc('id')->value($column); return $prefix . str_pad((string) ($last ? ((int) substr($last, strlen($prefix)) + 1) : 1), 5, '0', STR_PAD_LEFT); }
     private function history(string $type, int $id, ?string $old, string $new, ?string $remarks = null): void { OrderStatusHistory::query()->create(['business_id' => AppController::businessId(), 'document_type' => $type, 'document_id' => $id, 'old_status' => $old, 'new_status' => $new, 'remarks' => $remarks, 'created_by' => Auth::id()]); }

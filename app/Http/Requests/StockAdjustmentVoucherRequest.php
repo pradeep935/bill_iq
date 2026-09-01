@@ -29,6 +29,7 @@ class StockAdjustmentVoucherRequest extends FormRequest
             'items.*.direction' => ['required', 'in:in,out,transfer'],
             'items.*.unit_cost' => ['required', 'numeric', 'min:0'],
             'items.*.warehouse_location' => ['nullable', 'string', 'max:255'],
+            'items.*.warehouse_location_id' => ['nullable', 'integer'],
             'items.*.reason' => ['nullable', 'string', 'max:255'],
             'items.*.condition_status' => ['nullable', 'in:saleable,damaged,expired,defective,quarantined,lost'],
             'items.*.source_condition_status' => ['nullable', 'in:saleable,damaged,expired,defective,quarantined,lost'],

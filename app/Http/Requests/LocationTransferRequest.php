@@ -20,8 +20,10 @@ class LocationTransferRequest extends FormRequest
             'items.*.product_variant_id' => ['nullable', 'integer'],
             'items.*.batch_id' => ['nullable', 'integer'],
             'items.*.quantity' => ['required', 'numeric', 'min:0.001'],
-            'items.*.from_location' => ['required', 'string', 'max:255'],
-            'items.*.to_location' => ['required', 'string', 'max:255'],
+            'items.*.from_location' => ['nullable', 'string', 'max:255'],
+            'items.*.from_location_id' => ['required', 'integer'],
+            'items.*.to_location' => ['nullable', 'string', 'max:255'],
+            'items.*.to_location_id' => ['required', 'integer'],
         ];
     }
 }

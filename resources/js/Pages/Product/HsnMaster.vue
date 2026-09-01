@@ -100,17 +100,19 @@
 
           <template #actions="{ row }">
             <button type="button" class="crud-action" title="Edit HSN/SAC" @click="openForm(row)">Edit</button>
-            <RowActionMenu
-              :open="openActionMenuId === row.id"
-              :show-view="false"
-              more-label="Actions"
-              more-title="More HSN/SAC actions"
-              @toggle="openActionMenuId = openActionMenuId === row.id ? null : row.id"
-              @close="openActionMenuId = null"
-            >
-              <button type="button" @click="openForm(row)">Edit HSN/SAC</button>
-              <button type="button" class="danger" @click="remove(row)">Delete HSN/SAC</button>
-            </RowActionMenu>
+            <div class="action-menu-wrap">
+              <RowActionMenu
+                :open="openActionMenuId === row.id"
+                :show-view="false"
+                more-label="Actions"
+                more-title="More HSN/SAC actions"
+                @toggle="openActionMenuId = openActionMenuId === row.id ? null : row.id"
+                @close="openActionMenuId = null"
+              >
+                <button type="button" @click="openForm(row)">Edit HSN/SAC</button>
+                <button type="button" class="danger" @click="remove(row)">Delete HSN/SAC</button>
+              </RowActionMenu>
+            </div>
           </template>
         </CrudTable>
       </section>
@@ -529,6 +531,9 @@ const referenceTone = (value) => String(value || '').startsWith('Matched') ? 'ma
 .record-information strong { color: #17233b; font-size: 12px; font-weight: 800; overflow-wrap: anywhere; }
 .record-information span { color: #738098; font-size: 11px; font-weight: 700; }
 .gst-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; min-height: 26px; padding: 4px 9px; color: #2457d6; background: #eaf0ff; border-radius: 7px; font-size: 11px; font-weight: 800; }
+:deep(.crud-table-wrap) { overflow-y: visible; padding-bottom: 170px; margin-bottom: -170px; }
+:deep(.crud-action-column) { z-index: 40; }
+.action-menu-wrap { position: relative; }
 .status-pill, .reference-pill { display: inline-flex; border-radius: 999px; padding: 5px 9px; font-weight: 800; font-size: 12px; background: #eef4ff; }
 .reference-pill.matched { background: #eaf8ef; color: #157347; }
 .reference-pill.modified { background: #fff8e8; color: #8a5a00; }
@@ -575,6 +580,7 @@ const referenceTone = (value) => String(value || '').startsWith('Matched') ? 'ma
 .reference-result span, .reference-result small, .selected-reference span, label small { color: #66758f; overflow-wrap: anywhere; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
 .field-help { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; color: #66738a; background: #f6f8fc; border: 1px dashed #d7deea; border-radius: 9px; font-size: 11px; line-height: 1.5; }
+.tab-purpose-help { margin: -3px 0 18px; }
 .help-icon { width: 18px; height: 18px; display: grid; place-items: center; flex-shrink: 0; color: #2457d6; background: #eaf0ff; border-radius: 50%; font-size: 11px; font-weight: 900; }
 .empty-guidance { min-height: 180px; align-content: start; }
 .span-2 { grid-column: 1 / -1; }

@@ -102,6 +102,17 @@
           <p v-if="firstError" class="error span-2">{{ firstError }}</p>
               </form>
             </section>
+
+            <section v-else class="product-section empty-guidance">
+              <div class="section-header">
+                <div class="section-number">02</div>
+                <div><h3>Business HSN/SAC Details</h3><p>Select a BillIQ reference or create a manual HSN/SAC to continue.</p></div>
+              </div>
+              <div class="field-help">
+                <span class="help-icon">i</span>
+                <span>Your business master stays separate from the BillIQ reference master. Products will search only the HSN/SAC records saved here.</span>
+              </div>
+            </section>
           </main>
 
           <footer class="product-drawer-footer">
@@ -267,7 +278,10 @@ const referenceTone = (value) => String(value || '').startsWith('Matched') ? 'ma
 .bill-card, .product-section, .selected-reference { background: #fff; border: 1px solid #dce5f3; border-radius: 8px; padding: 18px; }
 .listing-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(140px, 190px)); gap: 12px; margin-bottom: 16px; }
 .reference-search-row { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; }
-input, select, textarea { width: 100%; border: 1px solid #d8e2f1; border-radius: 8px; padding: 12px; font: inherit; min-width: 0; }
+input, select, textarea { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; color: #17233b; background: #fff; border: 1px solid #d8e0eb; border-radius: 9px; outline: none; font-size: 13px; font-weight: 500; }
+textarea { min-height: 82px; resize: vertical; line-height: 1.45; }
+input::placeholder { color: #a0a9b8; }
+input:focus, select:focus, textarea:focus { border-color: #2457d6; box-shadow: 0 0 0 3px rgba(36, 87, 214, .1); }
 .table-wrapper { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 13px 12px; border-bottom: 1px solid #edf1f7; vertical-align: top; }
@@ -302,12 +316,15 @@ th { font-size: 12px; color: #70809a; text-transform: uppercase; }
 .product-drawer-footer { min-height: 74px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 16px; padding: 14px 28px; background: #fff; border-top: 1px solid #dfe6ef; box-shadow: 0 -5px 18px rgba(18, 40, 71, .05); }
 .footer-help { color: #7c8799; font-size: 11px; }
 .footer-actions { display: flex; align-items: center; gap: 10px; }
-.field-label, label { display: grid; gap: 7px; font-weight: 800; color: #27364f; }
+.field-label, label { display: grid; gap: 7px; color: #344159; font-size: 12px; font-weight: 700; }
 .reference-results { display: grid; gap: 10px; margin-top: 14px; }
 .reference-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid #d8e2f1; border-radius: 8px; padding: 12px; }
 .reference-result div, .selected-reference { display: grid; gap: 5px; }
 .reference-result span, .reference-result small, .selected-reference span, label small { color: #66758f; overflow-wrap: anywhere; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
+.field-help { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; color: #66738a; background: #f6f8fc; border: 1px dashed #d7deea; border-radius: 9px; font-size: 11px; line-height: 1.5; }
+.help-icon { width: 18px; height: 18px; display: grid; place-items: center; flex-shrink: 0; color: #2457d6; background: #eaf0ff; border-radius: 50%; font-size: 11px; font-weight: 900; }
+.empty-guidance { min-height: 180px; align-content: start; }
 .span-2 { grid-column: 1 / -1; }
 .error { color: #b42318; font-weight: 800; }
 @media (max-width: 760px) {

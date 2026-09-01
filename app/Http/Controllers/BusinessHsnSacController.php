@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\HsnMaster;
+use App\Models\Product;
 use App\Services\MasterDataService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -134,7 +135,15 @@ class BusinessHsnSacController extends Controller
     public function destroy(HsnMaster $hsn)
     {
         $this->assertOwnRecord($hsn);
-        $hsn->fill(['status' => 'inactive'])->save();
+
+        $usedByProduct = Product::query()
+            ->where('business_id', AppController::businessId())
+            ->where(function (Builder $query) use ($hsn) {
+                $query->where('hsn_master_id', $hsn->id)->orWhere('hsn_id', $hsn->id);
+            })
+            ->exists();
+
+        $usedByProduct ? $hsn->fill(['status' => 'inactive'])->save() : $hsn->delete();
 
         return response()->json(['message' => 'HSN/SAC deactivated successfully.']);
     }

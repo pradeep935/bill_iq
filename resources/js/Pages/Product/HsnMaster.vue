@@ -148,7 +148,7 @@ const referenceSearching = ref(false);
 const selectedReference = ref(null);
 let timer = null;
 
-const filters = reactive({ search: '', code_type: '', reference_status: '', status: '', per_page: 25 });
+const filters = reactive({ search: '', code_type: '', reference_status: '', status: 'active', per_page: 25 });
 const form = reactive(defaults());
 const gstRateSlabs = computed(() => props.gst_rate_slabs || []);
 const detailsEnabled = computed(() => Boolean(form.id || selectedReference.value || manualMode.value));
@@ -259,6 +259,7 @@ async function save() {
 async function remove(row) {
   if (!confirm(`Delete ${row.code_type} ${row.hsn_code}?`)) return;
   await axios.delete(`/app/inventory/hsn-master/${row.id}`);
+  records.value = records.value.filter((record) => record.id !== row.id);
   await loadRecords();
 }
 

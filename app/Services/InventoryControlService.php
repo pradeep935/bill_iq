@@ -606,9 +606,6 @@ class InventoryControlService
             $destinationCondition = $row['destination_condition_status'] ?? $lineCondition;
             $systemQty = $this->stock->getConditionStock($scope, $isConditionTransfer ? $sourceCondition : $lineCondition);
             $sourceQty = $this->stock->getConditionStock($scope, $sourceCondition);
-            if (($row['direction'] ?? null) === 'out') {
-                $this->stock->validateAvailableStock(array_merge($scope, ['stock_status' => $lineCondition]), (float) $row['adjustment_quantity']);
-            }
             return array_merge($row, [
                 'unit_id' => $row['unit_id'] ?? $product->unit_id ?? null,
                 'system_quantity' => $systemQty,
@@ -684,9 +681,9 @@ class InventoryControlService
                     $condition
                 );
 
-                if ($available + 0.0004 < $quantity) {
+                if (!$isDraft && $available + 0.0004 < $quantity) {
                     throw ValidationException::withMessages([
-                        "items.$index.adjustment_quantity" => 'Only ' . round($available, 3) . ' units are available in ' . str($condition)->replace('_', ' ')->title() . ' stock.',
+                        "items.$index.adjustment_quantity" => 'Insufficient stock. Available quantity is ' . $this->formatQuantity($available) . '.',
                     ]);
                 }
             }
@@ -814,6 +811,11 @@ class InventoryControlService
     private function scope(?int $branchId, ?int $warehouseId, int $productId, ?int $variantId = null, ?int $batchId = null): array
     {
         return ['business_id' => AppController::businessId(), 'branch_id' => $branchId, 'warehouse_id' => $warehouseId, 'product_id' => $productId, 'product_variant_id' => $variantId, 'batch_id' => $batchId];
+    }
+
+    private function formatQuantity(float $quantity): string
+    {
+        return rtrim(rtrim(number_format($quantity, 3, '.', ''), '0'), '.');
     }
 
     private function reservedStock(array $scope): float

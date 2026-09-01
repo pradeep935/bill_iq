@@ -356,6 +356,57 @@ class InventoryConditionAdjustmentTest extends TestCase
         $this->assertMovementRow($product->id, 'Saleable -> Out', -3, -3);
     }
 
+    public function test_stock_out_post_rejects_quantity_above_available_stock(): void
+    {
+        [$businessId, $product, $branch, $warehouse] = $this->fixture();
+        $this->seedConditionStock($businessId, $branch, $warehouse, $product->id, 'saleable', 88);
+
+        $voucher = app(InventoryControlService::class)->saveAdjustment([
+            'branch_id' => $branch,
+            'warehouse_id' => $warehouse,
+            'adjustment_date' => now()->toDateString(),
+            'adjustment_reason_id' => null,
+            'adjustment_type' => 'decrease',
+            'source' => 'manual',
+            'status' => 'draft',
+            'remarks' => 'Draft may retain invalid quantity',
+            'items' => [[
+                'product_id' => $product->id,
+                'product_variant_id' => null,
+                'batch_id' => null,
+                'unit_id' => null,
+                'adjustment_quantity' => 100,
+                'direction' => 'out',
+                'unit_cost' => 10,
+                'warehouse_location' => null,
+                'condition_status' => 'saleable',
+                'reason' => null,
+            ]],
+        ]);
+
+        try {
+            app(InventoryControlService::class)->postAdjustment($voucher->id);
+            $this->fail('Stock adjustment posted despite insufficient stock.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(
+                'Insufficient stock. Available quantity is 88.',
+                $exception->errors()['items.0.adjustment_quantity'][0] ?? null
+            );
+        }
+
+        $this->assertSame(88.0, app(StockService::class)->getCurrentStock([
+            'business_id' => $businessId,
+            'branch_id' => $branch,
+            'warehouse_id' => $warehouse,
+            'product_id' => $product->id,
+        ]));
+        $this->assertDatabaseMissing('stock_ledgers', [
+            'reference_type' => StockAdjustmentVoucher::class,
+            'reference_id' => $voucher->id,
+            'transaction_type' => 'stock_adjustment_out',
+        ]);
+    }
+
     public function test_damaged_stock_out_reduces_damaged_and_physical_stock(): void
     {
         [$businessId, $product, $branch, $warehouse] = $this->fixture();

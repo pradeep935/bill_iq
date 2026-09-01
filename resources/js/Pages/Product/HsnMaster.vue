@@ -56,12 +56,12 @@
           </header>
 
           <nav class="product-tabs">
-            <button type="button" class="active">Reference</button>
-            <button type="button" :disabled="!detailsEnabled" :class="{ active: detailsEnabled }">Business Details</button>
+            <button type="button" :class="{ active: activeDrawerTab === 'reference' }" @click="activeDrawerTab = 'reference'">Reference</button>
+            <button type="button" :disabled="!detailsEnabled" :class="{ active: activeDrawerTab === 'details' }" @click="activeDrawerTab = 'details'">Business Details</button>
           </nav>
 
           <main class="product-drawer-content">
-            <section class="product-section">
+            <section v-show="activeDrawerTab === 'reference'" class="product-section">
               <div class="section-header">
                 <div class="section-number">01</div>
                 <div><h3>Search BillIQ Reference</h3><p>Search HSN/SAC code or description from the global reference master.</p></div>
@@ -80,30 +80,29 @@
               </div>
             </section>
 
-            <section v-if="selectedReference || form.id || manualMode" class="selected-reference">
-              <strong>{{ referenceStatusText }}</strong>
-              <span v-if="selectedReference">BillIQ Reference: {{ selectedReference.code_type }} {{ selectedReference.hsn_code }} | GST {{ selectedReference.gst_rate === null || selectedReference.gst_rate === undefined ? 'Rate pending' : rateLabel(selectedReference.gst_rate) }}</span>
-              <span v-if="rateWarning">{{ rateWarning }}</span>
-            </section>
-
-            <section v-if="detailsEnabled" class="product-section">
+            <section v-show="activeDrawerTab === 'details' && detailsEnabled" class="product-section">
               <div class="section-header">
                 <div class="section-number">02</div>
                 <div><h3>Business HSN/SAC Details</h3><p>These values belong to this business and are used in Product Master.</p></div>
               </div>
+              <div v-if="selectedReference || form.id || manualMode" class="selected-reference">
+                <strong>{{ referenceStatusText }}</strong>
+                <span v-if="selectedReference">BillIQ Reference: {{ selectedReference.code_type }} {{ selectedReference.hsn_code }} | GST {{ selectedReference.gst_rate === null || selectedReference.gst_rate === undefined ? 'Rate pending' : rateLabel(selectedReference.gst_rate) }}</span>
+                <span v-if="rateWarning">{{ rateWarning }}</span>
+              </div>
               <form class="form-grid" @submit.prevent="save">
-          <label>Code Type<select v-model="form.code_type" required><option value="HSN">HSN</option><option value="SAC">SAC</option></select></label>
-          <label>HSN/SAC Code<input v-model="form.hsn_code" required maxlength="12" inputmode="numeric" pattern="[0-9]+" @input="digitsOnly" /></label>
-          <label class="span-2">Description<textarea v-model="form.description" required rows="4"></textarea></label>
-          <label>GST Rate<select v-model="form.gst_rate" required><option value="">Select GST</option><option v-for="rate in gstRateSlabs" :key="rate.value" :value="Number(rate.value)">{{ rate.label }}</option></select><small v-if="referenceRatePending">BillIQ does not currently have a verified GST rate for this classification.</small></label>
-          <label>Cess<input v-model.number="form.cess_rate" type="number" min="0" max="100" step="0.01" /></label>
-          <label>Taxability<select v-model="form.taxability" required><option value="taxable">Taxable</option><option value="nil_rated">Nil Rated</option><option value="exempt">Exempt</option><option value="non_gst">Non-GST</option></select></label>
-          <label>Status<select v-model="form.status" required><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
-          <p v-if="firstError" class="error span-2">{{ firstError }}</p>
+                <label class="product-field">Code Type<select v-model="form.code_type" required><option value="HSN">HSN</option><option value="SAC">SAC</option></select></label>
+                <label class="product-field">HSN/SAC Code<input v-model="form.hsn_code" required maxlength="12" inputmode="numeric" pattern="[0-9]+" @input="digitsOnly" /></label>
+                <label class="product-field span-2">Description<textarea v-model="form.description" required rows="4"></textarea></label>
+                <label class="product-field">GST Rate<select v-model="form.gst_rate" required><option value="">Select GST</option><option v-for="rate in gstRateSlabs" :key="rate.value" :value="Number(rate.value)">{{ rate.label }}</option></select><small v-if="referenceRatePending">BillIQ does not currently have a verified GST rate for this classification.</small></label>
+                <label class="product-field">Cess<input v-model.number="form.cess_rate" type="number" min="0" max="100" step="0.01" /></label>
+                <label class="product-field">Taxability<select v-model="form.taxability" required><option value="taxable">Taxable</option><option value="nil_rated">Nil Rated</option><option value="exempt">Exempt</option><option value="non_gst">Non-GST</option></select></label>
+                <label class="product-field">Status<select v-model="form.status" required><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+                <p v-if="firstError" class="error span-2">{{ firstError }}</p>
               </form>
             </section>
 
-            <section v-else class="product-section empty-guidance">
+            <section v-show="activeDrawerTab === 'details' && !detailsEnabled" class="product-section empty-guidance">
               <div class="section-header">
                 <div class="section-number">02</div>
                 <div><h3>Business HSN/SAC Details</h3><p>Select a BillIQ reference or create a manual HSN/SAC to continue.</p></div>
@@ -141,6 +140,7 @@ const loading = ref(false);
 const saving = ref(false);
 const showForm = ref(false);
 const manualMode = ref(false);
+const activeDrawerTab = ref('reference');
 const errors = ref({});
 const referenceSearch = ref('');
 const referenceResults = ref([]);
@@ -190,6 +190,7 @@ function openForm(row = null) {
   referenceResults.value = [];
   manualMode.value = Boolean(row && !row.reference_hsn_master_id);
   errors.value = {};
+  activeDrawerTab.value = row ? 'details' : 'reference';
   showForm.value = true;
 }
 
@@ -221,6 +222,7 @@ function createManual() {
   selectedReference.value = null;
   form.reference_hsn_master_id = null;
   if (/^[0-9]+$/.test(referenceSearch.value.trim())) form.hsn_code = referenceSearch.value.trim();
+  activeDrawerTab.value = 'details';
 }
 
 function useReference(ref) {
@@ -234,6 +236,7 @@ function useReference(ref) {
   form.cess_rate = Number(ref.cess_rate || 0);
   form.taxability = ref.taxability || 'taxable';
   referenceResults.value = [];
+  activeDrawerTab.value = 'details';
 }
 
 function digitsOnly() {
@@ -308,16 +311,34 @@ th { font-size: 12px; color: #70809a; text-transform: uppercase; }
 .product-tabs button { min-height: 34px; flex-shrink: 0; padding: 7px 13px; color: #5e6a7f; background: #f6f8fb; border: 1px solid #dfe6ef; border-radius: 8px; font-size: 11px; font-weight: 750; cursor: pointer; }
 .product-tabs button.active { color: #fff; background: #2457d6; border-color: #2457d6; }
 .product-tabs button:disabled { opacity: .55; cursor: not-allowed; }
-.product-drawer-content { min-height: 0; flex: 1; padding: 22px 28px 30px; overflow-y: auto; display: grid; align-content: start; gap: 16px; }
-.product-section { display: grid; gap: 16px; }
-.section-header { display: flex; align-items: center; gap: 14px; }
-.section-number { width: 42px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: #2457d6; background: #edf3ff; font-weight: 900; }
-.section-header h3 { margin: 0; color: #17233b; font-size: 17px; }
-.section-header p { margin: 3px 0 0; color: #748199; font-size: 12px; }
+.product-drawer-content { min-height: 0; flex: 1; padding: 22px 28px 30px; overflow-y: auto; }
+.product-section { margin-bottom: 18px; padding: 22px; background: #fff; border: 1px solid #e1e7f0; border-radius: 15px; box-shadow: 0 6px 20px rgba(27, 52, 87, .045); }
+.section-header { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 21px; padding-bottom: 16px; border-bottom: 1px solid #edf1f6; }
+.section-number { min-width: 38px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: #2457d6; background: #eaf0ff; font-size: 11px; font-weight: 800; }
+.section-header h3 { margin: 0; color: #15223b; font-size: 15px; font-weight: 800; }
+.section-header p { margin: 4px 0 0; color: #7b879c; font-size: 12px; }
 .product-drawer-footer { min-height: 74px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 16px; padding: 14px 28px; background: #fff; border-top: 1px solid #dfe6ef; box-shadow: 0 -5px 18px rgba(18, 40, 71, .05); }
 .footer-help { color: #7c8799; font-size: 11px; }
 .footer-actions { display: flex; align-items: center; gap: 10px; }
-.field-label, label { display: grid; gap: 7px; color: #344159; font-size: 12px; font-weight: 700; }
+.field-label, .product-field { min-width: 0; width: 100%; display: grid; gap: 7px; margin: 0; color: #344159; font-size: 12px; font-weight: 700; }
+.product-field input,
+.product-field select,
+.product-field textarea,
+.reference-search-row input,
+.reference-search-row select,
+.listing-toolbar input,
+.listing-toolbar select { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; color: #17233b; background: #fff; border: 1px solid #d8e0eb; border-radius: 9px; outline: none; font-size: 13px; font-weight: 500; transition: border-color .15s ease, box-shadow .15s ease; }
+.product-field textarea { min-height: 94px; resize: vertical; line-height: 1.35; }
+.product-field input::placeholder,
+.reference-search-row input::placeholder,
+.listing-toolbar input::placeholder { color: #a0a9b8; }
+.product-field input:focus,
+.product-field select:focus,
+.product-field textarea:focus,
+.reference-search-row input:focus,
+.reference-search-row select:focus,
+.listing-toolbar input:focus,
+.listing-toolbar select:focus { border-color: #2457d6; box-shadow: 0 0 0 3px rgba(36, 87, 214, .12); }
 .reference-results { display: grid; gap: 10px; margin-top: 14px; }
 .reference-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid #d8e2f1; border-radius: 8px; padding: 12px; }
 .reference-result div, .selected-reference { display: grid; gap: 5px; }

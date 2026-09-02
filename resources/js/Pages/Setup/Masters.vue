@@ -135,7 +135,7 @@
       @save="saveRecord"
     >
       <template #tabs>
-        <button v-for="tab in visibleTabs" :key="tab.key" type="button" class="master-drawer-tab" :class="{ active: activeTab === tab.key }" @click="switchTab(tab.key)">
+        <button v-for="tab in drawerTabs" :key="tab.key" type="button" class="master-drawer-tab" :class="{ active: isDrawerTabActive(tab.key) }" @click="selectDrawerTab(tab.key)">
           {{ tab.label }}
         </button>
       </template>
@@ -208,53 +208,54 @@
                 <strong>{{ form.hsn_code }}</strong>
                 <p>{{ form.description }}</p>
               </section>
-              <template v-else>
-                <DrawerField v-model="form.hsn_code" label="HSN/SAC Code" hint="Enter the tax classification code used for GST invoices." required />
-                <DrawerField v-model="form.code_type" label="Code Type" as="select" hint="Use HSN for goods and SAC for services." required>
+
+              <template v-if="!rateMode && hsnDrawerSection === 'reference'">
+                <DrawerField v-model="form.hsn_code" label="HSN/SAC Code" hint="Enter the tax classification code used for GST invoices." :error="fieldError('hsn_code')" required />
+                <DrawerField v-model="form.code_type" label="Code Type" as="select" hint="Use HSN for goods and SAC for services." :error="fieldError('code_type')" required>
                   <option value="HSN">HSN - Goods</option>
                   <option value="SAC">SAC - Services</option>
                 </DrawerField>
+                <DrawerField v-model="form.chapter_code" label="Chapter Code" hint="Optional classification chapter used for filtering and reports." :error="fieldError('chapter_code')" />
+                <DrawerField v-model="form.description" label="Classification Description" as="textarea" hint="Describe the tax classification, not a product or brand name." :error="fieldError('description')" :span="2" required />
               </template>
 
-              <DrawerField v-model="form.taxability" label="Taxability" as="select" hint="Defines how this classification is treated for GST." required>
+              <template v-if="rateMode || hsnDrawerSection === 'business'">
+              <DrawerField v-model="form.taxability" label="Taxability" as="select" hint="Defines how this classification is treated for GST." :error="fieldError('taxability')" required>
                 <option value="taxable">Taxable</option>
                 <option value="exempt">Exempt</option>
                 <option value="nil_rated">Nil Rated</option>
                 <option value="non_gst">Non-GST</option>
               </DrawerField>
-              <DrawerField v-model="gstRateSelection" label="GST Rate %" as="select" hint="Select the statutory GST rate for this classification." required>
+              <DrawerField v-model="gstRateSelection" label="GST Rate %" as="select" hint="Select the statutory GST rate for this classification." :error="fieldError('gst_rate')" required>
                 <option v-for="rate in gstRateOptions" :key="rate.value" :value="rate.value">{{ rate.label }}</option>
                 <option value="custom">Custom rate</option>
               </DrawerField>
-              <DrawerField v-if="gstRateSelection === 'custom'" v-model="form.gst_rate" label="Custom GST Rate %" type="number" :min="0" :max="100" step="0.01" hint="Enter a custom GST percentage only when needed." number required />
-              <DrawerField v-model="form.cess_rate" label="CESS Rate %" type="number" :min="0" :max="100" step="0.01" hint="Optional compensation cess percentage. Leave as 0 when not applicable." number />
-              <DrawerField v-model="form.verification_status" label="Verification" as="select" hint="Only verified active records are available in Product Master." required>
+              <DrawerField v-if="gstRateSelection === 'custom'" v-model="form.gst_rate" label="Custom GST Rate %" type="number" :min="0" :max="100" step="0.01" hint="Enter a custom GST percentage only when needed." :error="fieldError('gst_rate')" number required />
+              <DrawerField v-model="form.cess_rate" label="CESS Rate %" type="number" :min="0" :max="100" step="0.01" hint="Optional compensation cess percentage. Leave as 0 when not applicable." :error="fieldError('cess_rate')" number />
+              <DrawerField v-model="form.verification_status" label="Verification" as="select" hint="Only verified active records are available in Product Master." :error="fieldError('verification_status')" required>
                 <option value="classification_verified">Classification Verified</option>
                 <option value="verified">Rate Verified</option>
                 <option value="unverified">Unverified</option>
               </DrawerField>
 
-              <DrawerField v-model="form.effective_from" label="Effective From" type="date" hint="Required start date for this tax rate." required />
-              <DrawerField v-model="form.effective_to" label="Effective To" type="date" hint="Optional end date. Leave blank while this rate is current." />
+              <DrawerField v-model="form.effective_from" label="Effective From" type="date" hint="Required start date for this tax rate." :error="fieldError('effective_from')" required />
+              <DrawerField v-model="form.effective_to" label="Effective To" type="date" hint="Optional end date. Leave blank while this rate is current." :error="fieldError('effective_to')" />
               <template v-if="rateMode">
-                <DrawerField v-model="form.notification_number" label="Notification No." hint="CBIC/GST Council rate notification reference used to verify this rate." />
-                <DrawerField v-model="form.source_reference" label="Source Reference" hint="Add source link or document name for audit trail." />
-                <DrawerField v-model="form.notes" label="Rate Notes" as="textarea" hint="Mention conditions, exemptions or usage notes if any." :span="2" />
+                <DrawerField v-model="form.notification_number" label="Notification No." hint="CBIC/GST Council rate notification reference used to verify this rate." :error="fieldError('notification_number')" />
+                <DrawerField v-model="form.source_reference" label="Source Reference" hint="Add source link or document name for audit trail." :error="fieldError('source_reference')" />
+                <DrawerField v-model="form.notes" label="Rate Notes" as="textarea" hint="Mention conditions, exemptions or usage notes if any." :error="fieldError('notes')" :span="2" />
               </template>
-              <template v-else>
-                <DrawerField v-model="form.chapter_code" label="Chapter Code" hint="Optional classification chapter used for filtering and reports." />
-                <DrawerField v-model="form.description" label="Classification Description" as="textarea" hint="Describe the tax classification, not a product or brand name." :span="2" required />
               </template>
             </template>
 
-            <DrawerField v-if="!rateMode" v-model="form.status" label="Status" as="select" hint="Keep active records available for selection in transactions." required>
+            <DrawerField v-if="!rateMode && (activeTab !== 'hsn' || hsnDrawerSection === 'business')" v-model="form.status" label="Status" as="select" hint="Keep active records available for selection in transactions." :error="fieldError('status')" required>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
             </DrawerField>
 
             <div v-if="firstError" class="field-error">{{ firstError }}</div>
 
-            <section v-if="!rateMode" class="master-help-card">
+            <section v-if="!rateMode && (activeTab !== 'hsn' || hsnDrawerSection === 'business')" class="master-help-card">
               <div class="help-icon">i</div>
               <div>
                 <strong>{{ current.helpTitle }}</strong>
@@ -292,6 +293,11 @@ const tabs = [
   { key: 'brand', label: 'Brands', singular: 'Brand', hint: 'Maintain product brands used in Product Master, filters and reports.', helpTitle: 'Where is this used?', helpPoints: ['Tags products with the brand or manufacturer name.', 'Supports brand-wise sales, purchase and stock performance reporting.', 'Improves product search, filtering and billing selection.'], columns: [{ key: 'name', label: 'Name' }] },
   { key: 'unit', label: 'Units', singular: 'Unit', hint: 'Maintain units such as PCS, KG, LTR and BOX for billing and inventory quantities.', helpTitle: 'Where is this used?', helpPoints: ['Defines how quantities are entered in billing and inventory.', 'Keeps purchase and sales quantities in a consistent measurement format.', 'Improves accuracy in stock movement and valuation reports.'], columns: [{ key: 'code', label: 'Code' }, { key: 'name', label: 'Name' }] },
   { key: 'hsn', label: 'HSN/SAC', singular: 'HSN/SAC', hint: 'Maintain HSN/SAC tax classifications and GST rates used by many products and services.', helpTitle: 'Where is this used?', helpPoints: ['One HSN/SAC classification can be linked with many products.', 'Product Master stores the actual product name separately from this tax description.', 'Provides stable tax snapshots for invoices, tax summaries and GST reports.'], columns: [{ key: 'hsn_code', label: 'Code', class: 'hsn-code-column', hint: 'HSN/SAC code and whether it applies to goods or services.' }, { key: 'gst_rate', label: 'GST', class: 'hsn-rate-column', hint: 'GST percentage and taxability type.' }, { key: 'verification_status', label: 'Verification', class: 'hsn-verify-column', hint: 'Only verified active classifications should be used in Product Master.' }, { key: 'description', label: 'Classification', class: 'hsn-description-column', hint: 'Official classification description and validity details.' }] },
+];
+
+const hsnDrawerTabs = [
+  { key: 'reference', label: 'Reference' },
+  { key: 'business', label: 'Business Details' },
 ];
 
 const fallbackGstRateOptions = [
@@ -333,8 +339,11 @@ const editingId = ref(null);
 const drawerOpen = ref(false);
 const rateMode = ref(false);
 const hydratingForm = ref(false);
+const hsnDrawerSection = ref('reference');
 
 const current = computed(() => visibleTabs.value.find((tab) => tab.key === activeTab.value) || visibleTabs.value[0] || tabs[0]);
+const isHsnDrawer = computed(() => activeTab.value === 'hsn');
+const drawerTabs = computed(() => (isHsnDrawer.value && !rateMode.value ? hsnDrawerTabs : visibleTabs.value));
 const filteredCities = computed(() => references.cities.filter((city) => Number(city.state_id) === Number(form.state_id)));
 const pageDescription = computed(() => {
   if (props.page === 'branches') return 'Create and maintain business branches used in vouchers, payroll and inventory reports.';
@@ -342,13 +351,17 @@ const pageDescription = computed(() => {
   return 'Maintain catalog, product grouping, units and tax master records used across billing and inventory.';
 });
 const firstError = computed(() => Object.values(errors.value || {})?.[0]?.[0] || '');
+const fieldError = (field) => errors.value?.[field]?.[0] || '';
 const drawerTitle = computed(() => {
   if (rateMode.value) return `Verify GST Rate - ${form.hsn_code || 'HSN/SAC'}`;
+  if (isHsnDrawer.value) return editingId.value ? 'Edit HSN/SAC' : 'Add HSN/SAC';
   return editingId.value ? `Edit ${current.value.singular}` : `Add ${current.value.singular}`;
 });
 const drawerDescription = computed(() => rateMode.value
   ? 'Set the current verified GST/CESS rate against this official HSN/SAC classification.'
-  : current.value.hint
+  : isHsnDrawer.value
+    ? 'Add or update the tax classification used by your business.'
+    : current.value.hint
 );
 const hsnSummary = computed(() => {
   if (hsnServerSummary.value) {
@@ -398,6 +411,7 @@ const resetForm = () => {
   editingId.value = null;
   rateMode.value = false;
   errors.value = {};
+  hsnDrawerSection.value = 'reference';
   Object.assign(form, defaults());
   gstRateSelection.value = '0';
 };
@@ -418,6 +432,7 @@ const openDrawer = (record = null) => {
       hydratingForm.value = false;
     });
   }
+  hsnDrawerSection.value = activeTab.value === 'hsn' ? 'reference' : activeTab.value;
   drawerOpen.value = true;
 };
 
@@ -493,6 +508,28 @@ const switchTab = async (tab) => {
   await loadRecords();
 };
 
+const isDrawerTabActive = (tab) => {
+  return isHsnDrawer.value && !rateMode.value
+    ? hsnDrawerSection.value === tab
+    : activeTab.value === tab;
+};
+
+const selectDrawerTab = async (tab) => {
+  if (isHsnDrawer.value && !rateMode.value) {
+    hsnDrawerSection.value = tab;
+    return;
+  }
+
+  await switchTab(tab);
+};
+
+const hsnErrorSection = (formErrors = {}) => {
+  const referenceFields = ['hsn_code', 'code_type', 'chapter_code', 'description'];
+  const firstField = Object.keys(formErrors)[0] || '';
+
+  return referenceFields.includes(firstField) ? 'reference' : 'business';
+};
+
 const payload = () => {
   const data = { status: form.status };
   const allowed = {
@@ -549,6 +586,9 @@ const saveRecord = async () => {
     await loadRecords();
   } catch (error) {
     errors.value = error.response?.data?.errors || {};
+    if (activeTab.value === 'hsn' && !rateMode.value && Object.keys(errors.value).length) {
+      hsnDrawerSection.value = hsnErrorSection(errors.value);
+    }
     notify(error.response?.data?.message || 'Please check the highlighted fields.', 'error');
   } finally {
     saving.value = false;

@@ -19,7 +19,7 @@
                 <p>{{ description }}</p>
               </div>
             </div>
-            <button type="button" class="crud-drawer-close" @click="$emit('close')">x</button>
+            <button type="button" class="crud-drawer-close" aria-label="Close drawer" @click="$emit('close')">x</button>
           </header>
 
           <nav v-if="$slots.tabs" class="crud-drawer-tabs">
@@ -36,7 +36,7 @@
 
           <footer v-if="showFooter" class="crud-drawer-footer">
             <button type="button" class="crud-secondary" @click="$emit('close')">Cancel</button>
-            <button type="button" class="crud-primary" :disabled="processing" @click="$emit('save')">
+            <button type="button" class="crud-primary" :disabled="processing || saveDisabled" @click="$emit('save')">
               {{ processing ? 'Saving...' : saveLabel }}
             </button>
           </footer>
@@ -56,6 +56,7 @@ const props = defineProps({
   eyebrow: { type: String, default: 'MASTER SETUP' },
   saveLabel: { type: String, default: 'Save' },
   processing: { type: Boolean, default: false },
+  saveDisabled: { type: Boolean, default: false },
   showFooter: { type: Boolean, default: true },
   errors: { type: Object, default: () => ({}) },
 });
@@ -289,6 +290,10 @@ const errorList = computed(() =>
 }
 
 @media (max-width: 767px) {
+  .crud-drawer-panel {
+    width: 100%;
+  }
+
   .crud-drawer-header {
     min-height: 84px;
     padding: 15px 16px;
@@ -313,6 +318,12 @@ const errorList = computed(() =>
 
   .crud-drawer-footer button {
     flex: 1;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .crud-drawer-panel {
+    width: min(820px, 92vw);
   }
 }
 </style>

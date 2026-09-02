@@ -600,6 +600,12 @@ const hsnOptions = computed(() => {
 });
 const selectedHsn = computed(() => selectedHsnRecord.value || hsnOptions.value.find((hsn) => String(hsn.id) === String(form.hsn_master_id)) || null);
 const hsnTaxLocked = computed(() => ['verified_rule', 'master_suggested'].includes(form.tax_source));
+const manualHsnWarning = computed(() => {
+    const codeType = form.product_type === 'service' ? 'SAC' : 'HSN';
+    const code = form.hsn_code || hsnSacLabel.value;
+
+    return `${codeType} Code ${code} was entered manually and could not be matched with the HSN/SAC Master. Please verify the code and select the applicable GST rate before saving.`;
+});
 const brandOptions = computed(() => {
     const options = normalizeReferenceOptions(props.references?.brands || [], ['name', 'label', 'code']);
 
@@ -1896,7 +1902,7 @@ const saveProduct = () => {
                                         </span>
 
                                         <span class="field-hint">
-                                            My HSN/SAC Master se suggestions aayenge. Pehle Inventory > HSN/SAC Master me code add karein; master select karne par GST rate auto-fill ho jayega.
+                                            Suggestions are retrieved from your HSN/SAC Master. To add a new code, go to Inventory > HSN/SAC Master. Selecting a master record will automatically populate the applicable GST rate.
                                         </span>
                                     </div>
 
@@ -1919,7 +1925,7 @@ const saveProduct = () => {
                                         <span class="help-icon">i</span>
 
                                         <span>
-                                            Manual {{ hsnSacLabel }} {{ form.hsn_code }} use ho raha hai. Master select karenge to GST rate auto-fill ho jayega.
+                                            {{ manualHsnWarning }}
                                         </span>
                                     </div>
 

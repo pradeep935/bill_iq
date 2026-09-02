@@ -86,6 +86,54 @@ class InventoryController extends Controller
     public function products(Request $request) { return response()->json($this->inventory->searchProducts((string) $request->get('q', ''))); }
     public function dashboardData(Request $request) { return response()->json($this->inventory->dashboard($request->all())); }
     public function inventoryReports(Request $request) { return response()->json($this->inventory->reports($request->all())); }
+    public function movementHistory(Request $request)
+    {
+        $paginator = $this->inventory->movementHistory($request->all());
+        return response()->json(['movements' => $paginator->getCollection()->values(), 'pagination' => $this->pagination($paginator)]);
+    }
+
+    public function exportMovementHistory(Request $request)
+    {
+        $format = $request->get('format') === 'excel' ? 'xls' : 'csv';
+        $rows = $this->inventory->movementHistoryExport($request->all());
+        $columns = [
+            'date_time' => 'Date & Time',
+            'document_date' => 'Document Date',
+            'reference_number' => 'Voucher / Reference No.',
+            'source_module' => 'Source Module',
+            'movement_type' => 'Movement Type',
+            'product' => 'Product',
+            'sku' => 'SKU',
+            'barcode' => 'Barcode',
+            'branch' => 'Branch',
+            'warehouse' => 'Warehouse',
+            'from_location' => 'From Location',
+            'to_location' => 'To Location',
+            'from_condition' => 'From Condition',
+            'to_condition' => 'To Condition',
+            'movement_qty' => 'Movement Qty',
+            'qty_in' => 'Qty In',
+            'qty_out' => 'Qty Out',
+            'net_quantity' => 'Net Quantity',
+            'physical_impact' => 'Physical Impact',
+            'rate' => 'Rate',
+            'movement_value' => 'Movement Value',
+            'reason' => 'Reason',
+            'remarks' => 'Remarks',
+            'user' => 'User',
+            'posting_status' => 'Posting Status',
+            'impact_summary' => 'Impact Summary',
+        ];
+
+        return response()->streamDownload(function () use ($rows, $columns) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, array_values($columns));
+            foreach ($rows as $row) {
+                fputcsv($handle, collect(array_keys($columns))->map(fn ($key) => $row[$key] ?? '')->all());
+            }
+            fclose($handle);
+        }, 'movement-history.' . $format, ['Content-Type' => $format === 'xls' ? 'application/vnd.ms-excel' : 'text/csv']);
+    }
     public function valuation(Request $request) { return response()->json($this->inventory->valuation($request->all())); }
 
     public function reasons(Request $request)

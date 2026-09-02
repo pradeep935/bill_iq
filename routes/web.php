@@ -488,6 +488,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/control/products/search', [InventoryController::class, 'products'])->name('control.products.search');
         Route::get('/control/dashboard', [InventoryController::class, 'dashboardData'])->name('control.dashboard');
         Route::get('/control/reports', [InventoryController::class, 'inventoryReports'])->name('control.reports');
+        Route::get('/control/movement-history', [InventoryController::class, 'movementHistory'])->name('control.movement-history');
+        Route::get('/control/movement-history/export', [InventoryController::class, 'exportMovementHistory'])->name('control.movement-history.export');
         Route::get('/control/valuation', [InventoryController::class, 'valuation'])->name('control.valuation');
         Route::get('/adjustment-reasons/list', [InventoryController::class, 'reasons'])->name('adjustment-reasons.list');
         Route::post('/adjustment-reasons/seed-defaults', [InventoryController::class, 'seedDefaultReasons'])->name('adjustment-reasons.seed-defaults');

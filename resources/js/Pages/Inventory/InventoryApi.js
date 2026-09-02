@@ -87,6 +87,20 @@ const InventoryApi = {
         return response.data;
     },
 
+    async movementHistory(params = {}) {
+        const response = await axios.get('/app/inventory/control/movement-history', { params });
+        return response.data;
+    },
+
+    async exportMovementHistory(params = {}, format = 'csv') {
+        const response = await axios.get('/app/inventory/control/movement-history/export', {
+            params: { ...params, format },
+            responseType: 'blob',
+        });
+
+        return response.data;
+    },
+
     async inventoryValuation(params = {}) {
         const response = await axios.get('/app/inventory/control/valuation', { params });
         return response.data;

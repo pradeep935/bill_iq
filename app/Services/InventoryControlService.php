@@ -21,6 +21,7 @@ use App\Models\StockTransferVoucher;
 use App\Models\Warehouse;
 use App\Models\WarehouseLocation;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -31,12 +32,14 @@ class InventoryControlService
     private StockService $stock;
     private AccountingPostingService $accounting;
     private InventoryFreezeService $freeze;
+    private InventoryMovementService $movement;
 
-    public function __construct(StockService $stock, AccountingPostingService $accounting, InventoryFreezeService $freeze)
+    public function __construct(StockService $stock, AccountingPostingService $accounting, InventoryFreezeService $freeze, InventoryMovementService $movement)
     {
         $this->stock = $stock;
         $this->accounting = $accounting;
         $this->freeze = $freeze;
+        $this->movement = $movement;
     }
 
     public function references(): array
@@ -637,6 +640,30 @@ class InventoryControlService
         ];
     }
 
+    public function movementHistory(array $filters): LengthAwarePaginator
+    {
+        $perPage = in_array((int) ($filters['per_page'] ?? 25), [25, 50, 100], true) ? (int) $filters['per_page'] : 25;
+        $query = $this->movementLedgerQuery($filters);
+        $this->applyMovementSort($query, $filters);
+
+        $paginator = $query->paginate($perPage);
+        $references = $this->stock->stockReferenceNumbers($paginator->getCollection());
+        $paginator->setCollection($this->movement->normalizeCollection($paginator->getCollection(), $references));
+
+        return $paginator;
+    }
+
+    public function movementHistoryExport(array $filters)
+    {
+        $ledger = $this->movementLedgerQuery($filters)
+            ->orderByDesc(DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'))
+            ->limit(10000)
+            ->get();
+        $references = $this->stock->stockReferenceNumbers($ledger);
+
+        return $this->movement->normalizeCollection($ledger, $references);
+    }
+
     public function valuation(array $scope): array
     {
         return [
@@ -868,6 +895,86 @@ class InventoryControlService
             ->where('stock_ledgers.business_id', AppController::businessId())
             ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('stock_ledgers.branch_id', $filters['branch_id']))
             ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('stock_ledgers.warehouse_id', $filters['warehouse_id']));
+    }
+
+    private function movementLedgerQuery(array $filters): Builder
+    {
+        return StockLedger::query()
+            ->with(['product.unit', 'warehouse', 'branch', 'creator'])
+            ->where('stock_ledgers.business_id', AppController::businessId())
+            ->when(!empty($filters['search']), fn (Builder $q) => $this->applyLedgerRegisterSearch($q, (string) $filters['search']))
+            ->when(!empty($filters['reference_number']), fn (Builder $q) => $this->applyLedgerRegisterSearch($q, (string) $filters['reference_number']))
+            ->when(!empty($filters['product_name']), function (Builder $q) use ($filters) {
+                $q->whereHas('product', fn (Builder $product) => $product->where('name', 'like', '%' . $filters['product_name'] . '%'));
+            })
+            ->when(!empty($filters['sku']), function (Builder $q) use ($filters) {
+                $q->whereHas('product', fn (Builder $product) => $product->where('sku', 'like', '%' . $filters['sku'] . '%'));
+            })
+            ->when(!empty($filters['barcode']), function (Builder $q) use ($filters) {
+                $barcode = (string) $filters['barcode'];
+                $q->whereHas('product', function (Builder $product) use ($barcode) {
+                    $product->where('primary_barcode', 'like', '%' . $barcode . '%')
+                        ->orWhere('barcode', 'like', '%' . $barcode . '%')
+                        ->orWhereHas('barcodes', fn (Builder $barcodes) => $barcodes->where('barcode', 'like', '%' . $barcode . '%'));
+                });
+            })
+            ->when(!empty($filters['movement_type']), fn (Builder $q) => $this->applyLedgerRegisterType($q, (string) $filters['movement_type']))
+            ->when(!empty($filters['source_module']), fn (Builder $q) => $this->applySourceModuleFilter($q, (string) $filters['source_module']))
+            ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('stock_ledgers.branch_id', $filters['branch_id']))
+            ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('stock_ledgers.warehouse_id', $filters['warehouse_id']))
+            ->when(!empty($filters['location']), fn (Builder $q) => $q->where('stock_ledgers.warehouse_location', 'like', '%' . $filters['location'] . '%'))
+            ->when(!empty($filters['stock_condition']), fn (Builder $q) => $q->where('stock_ledgers.stock_status', $filters['stock_condition']))
+            ->when(!empty($filters['from_condition']), fn (Builder $q) => $q->where('stock_ledgers.stock_status', $filters['from_condition'])->where('stock_ledgers.quantity_out', '>', 0))
+            ->when(!empty($filters['to_condition']), fn (Builder $q) => $q->where('stock_ledgers.stock_status', $filters['to_condition'])->where('stock_ledgers.quantity_in', '>', 0))
+            ->when(!empty($filters['user_id']), fn (Builder $q) => $q->where('stock_ledgers.created_by', $filters['user_id']))
+            ->when(!empty($filters['reason']), fn (Builder $q) => $q->where('stock_ledgers.remarks', 'like', '%' . $filters['reason'] . '%'))
+            ->when(!empty($filters['posting_status']) && $filters['posting_status'] !== 'posted', fn (Builder $q) => $q->whereRaw('1 = 0'))
+            ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('stock_ledgers.transaction_date', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']), fn (Builder $q) => $q->whereDate('stock_ledgers.transaction_date', '<=', $filters['date_to']));
+    }
+
+    private function applyMovementSort(Builder $query, array $filters): void
+    {
+        $direction = strtolower((string) ($filters['direction'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sort = (string) ($filters['sort'] ?? 'date_time');
+
+        $columns = [
+            'date_time' => DB::raw('COALESCE(stock_ledgers.posted_at, stock_ledgers.created_at)'),
+            'document_date' => 'stock_ledgers.transaction_date',
+            'movement_type' => 'stock_ledgers.transaction_type',
+            'qty_in' => 'stock_ledgers.quantity_in',
+            'qty_out' => 'stock_ledgers.quantity_out',
+            'net_quantity' => DB::raw('stock_ledgers.quantity_in - stock_ledgers.quantity_out'),
+            'rate' => 'stock_ledgers.unit_cost',
+            'movement_value' => 'stock_ledgers.stock_value',
+        ];
+
+        $query->orderBy($columns[$sort] ?? $columns['date_time'], $direction)->orderByDesc('stock_ledgers.id');
+    }
+
+    private function applySourceModuleFilter(Builder $query, string $sourceModule): void
+    {
+        $term = strtolower($sourceModule);
+        $map = [
+            'opening' => ['OpeningStockVoucher'],
+            'purchase' => ['PurchaseVoucher', 'GoodsReceipt'],
+            'grn' => ['GoodsReceipt'],
+            'sales' => ['SalesVoucher', 'DeliveryChallan', 'SalesReturnVoucher'],
+            'return' => ['SalesReturnVoucher', 'PurchaseReturnVoucher'],
+            'adjustment' => ['StockAdjustmentVoucher'],
+            'transfer' => ['StockTransferVoucher'],
+            'count' => ['StockCountSession'],
+            'location' => ['LocationTransferVoucher'],
+            'manufacturing' => ['ProductionOrder'],
+        ];
+        $classes = collect($map)->filter(fn ($values, $key) => str_contains($term, $key))->flatten()->unique()->values();
+
+        $query->where(function (Builder $q) use ($classes, $term) {
+            foreach ($classes as $class) {
+                $q->orWhere('stock_ledgers.reference_type', 'like', '%' . $class);
+            }
+            $q->orWhere('stock_ledgers.transaction_type', 'like', '%' . str_replace(' ', '_', $term) . '%');
+        });
     }
 
     private function transferPayload(StockTransferVoucher $voucher, $item, float $qty, ?int $branchId, int $warehouseId, string $type, ?string $location, ?int $batchId = null, ?int $serialId = null): array

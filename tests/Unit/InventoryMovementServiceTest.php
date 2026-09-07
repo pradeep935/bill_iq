@@ -78,6 +78,9 @@ class InventoryMovementServiceTest extends TestCase
             'unit_cost' => 10,
         ]);
 
+        foreach ([$out, $in] as $entry) {
+            foreach (['product','warehouse','branch','creator'] as $relation) $entry->setRelation($relation, null);
+        }
         $rows = (new InventoryMovementService())->normalizeCollection(new Collection([$out, $in]));
 
         $this->assertCount(1, $rows);
@@ -94,6 +97,9 @@ class InventoryMovementServiceTest extends TestCase
         $out = new StockLedger(['id' => 31, 'transaction_type' => 'stock_transfer_out', 'reference_type' => 'App\\Models\\StockTransferVoucher', 'reference_id' => 9, 'quantity_in' => 0, 'quantity_out' => 6, 'stock_status' => 'saleable']);
         $in = new StockLedger(['id' => 32, 'transaction_type' => 'stock_transfer_in', 'reference_type' => 'App\\Models\\StockTransferVoucher', 'reference_id' => 9, 'quantity_in' => 6, 'quantity_out' => 0, 'stock_status' => 'saleable']);
 
+        foreach ([$out, $in] as $entry) {
+            foreach (['product','warehouse','branch','creator'] as $relation) $entry->setRelation($relation, null);
+        }
         $rows = (new InventoryMovementService())->normalizeCollection(new Collection([$out, $in]));
 
         $this->assertCount(2, $rows);

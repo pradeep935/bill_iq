@@ -25,6 +25,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class ProductMasterService
 {
@@ -479,6 +480,14 @@ class ProductMasterService
         $this->setProductColumn($product, 'reorder_stock', $isService ? 0 : ($data['reorder_stock'] ?? 0));
         $this->setProductColumn($product, 'reorder_level', $isService ? 0 : ($data['reorder_stock'] ?? $data['minimum_stock'] ?? 0));
         $this->setProductColumn($product, 'maximum_stock', $isService ? 0 : ($data['maximum_stock'] ?? 0));
+        if ($product->exists) {
+            $wasBatchTracked = $product->batch_required || in_array($product->tracking_type, ['batch','batch_expiry','batch_serial'], true);
+            $willBatchTrack = !$isService && (!empty($data['batch_required']) || in_array($trackingType, ['batch','batch_expiry','batch_serial'], true));
+            if ($wasBatchTracked !== $willBatchTrack && DB::table('stock_ledgers')->where('product_id',$product->id)
+                ->selectRaw('SUM(quantity_in - quantity_out) as balance')->groupBy('branch_id','warehouse_id','batch_id','stock_status')->havingRaw('ABS(SUM(quantity_in - quantity_out)) > 0.0001')->exists()) {
+                throw ValidationException::withMessages(['tracking_type'=>'Clear existing stock through inventory operations before changing batch tracking.']);
+            }
+        }
         $this->setProductColumn($product, 'tracking_type', $trackingType);
         $this->setProductColumn($product, 'track_inventory', !$isService && $itemType === 'stock');
         $this->setProductColumn($product, 'weight', $data['weight'] ?? null);
@@ -800,27 +809,16 @@ class ProductMasterService
 
     private function syncBatches(Product $product, array $batches): void
     {
-        $this->childBusinessQuery(ProductBatch::query(), $product, 'product_batches')
-            ->where('product_id', $product->id)
-            ->delete();
-
+        // Lot identities referenced by stock documents must survive product edits.
         foreach ($batches as $batch) {
-            if (empty($batch['batch_no'])) {
-                continue;
-            }
-
-            ProductBatch::create($this->childPayload('product_batches', $product, [
-                'product_id' => $product->id,
-                'batch_no' => $batch['batch_no'],
+            if (empty($batch['batch_no'])) continue;
+            app(BatchIdentityService::class)->resolve((int) ($product->business_id ?: $product->company_id), $product->id, [
+                'batch_id' => $batch['id'] ?? null,
                 'batch_number' => $batch['batch_no'],
                 'manufacturing_date' => $batch['manufacturing_date'] ?? null,
                 'expiry_date' => $batch['expiry_date'] ?? null,
-                'purchase_price' => $batch['purchase_price'] ?? 0,
-                'cost_price' => $batch['purchase_price'] ?? 0,
-                'selling_price' => $batch['selling_price'] ?? 0,
-                'quantity' => $batch['quantity'] ?? 0,
-                'status' => 'active',
-            ]));
+                'unit_cost' => $batch['purchase_price'] ?? 0,
+            ]);
         }
     }
 

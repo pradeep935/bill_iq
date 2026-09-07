@@ -175,6 +175,7 @@ class SalesService
     {
         return DB::transaction(function () use ($voucher, $status) {
             $this->assertBusiness($voucher);
+            $voucher = SalesVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
 
             if ($this->hasStockPosting($voucher)) {
                 return $this->fresh($voucher);
@@ -350,7 +351,7 @@ class SalesService
         $priceType = $scope['price_type'] ?? 'retail';
 
         return Product::query()
-            ->with(['barcodes', 'variantItems', 'images', 'unit', 'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderBy('expiry_date')])
+            ->with(['barcodes', 'variantItems', 'images', 'unit', 'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderByRaw('expiry_date IS NULL')->orderBy('expiry_date')->orderBy('id')])
             ->where(function (Builder $q) use ($businessId) {
                 $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
             })
@@ -402,7 +403,7 @@ class SalesService
                 'variantItems',
                 'images',
                 'unit',
-                'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderBy('expiry_date'),
+                'batches' => fn ($q) => $q->where('status', 'active')->where(fn ($query) => $query->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString()))->orderByRaw('expiry_date IS NULL')->orderBy('expiry_date')->orderBy('id'),
             ])
             ->where(function (Builder $q) use ($businessId) {
                 $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
@@ -829,17 +830,17 @@ class SalesService
                 ProductVariantItem::query()->where('business_id', $businessId)->where('product_id', $product->id)->where('id', $item['product_variant_id'])->firstOrFail();
             }
 
-            $batchRequired = $product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry'], true);
+            $batchRequired = $product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry', 'batch_serial'], true);
             if ($batchRequired && empty($item['batch_id'])) {
                 throw ValidationException::withMessages(["items.$index.batch_id" => 'Batch is required for this product.']);
             }
 
             if (!empty($item['batch_id'])) {
                 $batch = ProductBatch::query()->where('business_id', $businessId)->where('product_id', $product->id)->where('id', $item['batch_id'])->firstOrFail();
-                if (in_array($batch->status, ['blocked', 'quarantined'], true)) {
+                if (!$batch->isSaleEligible()) {
                     throw ValidationException::withMessages(["items.$index.batch_id" => 'Blocked or quarantined batch cannot be sold.']);
                 }
-                if ($batch->expiry_date && $batch->expiry_date->isPast()) {
+                if ($batch->expiry_date && $batch->expiry_date->lt(now()->startOfDay())) {
                     throw ValidationException::withMessages(["items.$index.batch_id" => 'Expired batch cannot be sold.']);
                 }
             }
@@ -909,13 +910,13 @@ class SalesService
             $stockScope['warehouse_id'] = $warehouseId;
         }
 
-        $batches = $product->batches->map(function ($batch) use ($stockScope) {
+        $batches = $product->batches->filter(fn ($batch) => $batch->isSaleEligible())->sortBy(fn ($batch) => ($batch->expiry_date?->format('Y-m-d') ?? '9999-12-31').sprintf('%020d', $batch->id))->map(function ($batch) use ($stockScope) {
             $scope = array_merge($stockScope, ['batch_id' => $batch->id]);
             return [
                 'id' => $batch->id,
                 'batch_no' => $batch->batch_no ?: $batch->batch_number,
                 'expiry_date' => optional($batch->expiry_date)->format('Y-m-d'),
-                'available_stock' => $this->stock->getCurrentStock($scope),
+                'available_stock' => $this->stock->getAvailableToSell($scope),
             ];
         })->filter(fn ($batch) => (float) $batch['available_stock'] > 0 || (int) $batch['id'] === (int) $batchId)->values();
         $selectedBatchId = $batchId ?: ($batches->first()['id'] ?? null);

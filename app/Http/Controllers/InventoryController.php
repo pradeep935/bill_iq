@@ -61,6 +61,7 @@ class InventoryController extends Controller
 
     public function batches()
     {
+        $this->authorizeBatchPermission('batch.view');
         return Inertia::render('Inventory/BatchExpiry', ['page' => 'inventory-batches', 'title' => 'Batch & Expiry', 'role_id' => AppController::roleId()]);
     }
 
@@ -291,6 +292,7 @@ class InventoryController extends Controller
 
     public function batchFefo(Request $request, BatchManagementService $batches)
     {
+        $this->authorizeBatchPermission('batch.view');
         return response()->json(['batch' => $batches->fefo($request->all())]);
     }
 
@@ -324,20 +326,48 @@ class InventoryController extends Controller
         return response()->json(['message' => 'Batch transfer posted.', 'batch' => $batches->transfer($batch, $data)]);
     }
 
-    public function batchSplit(Request $request, BatchManagementService $batches, int $batch)
+    public function batchOperation(\App\Http\Requests\BatchOperationRequest $request, BatchManagementService $batches)
     {
-        $this->authorizeBatchPermission('batch.split');
-        $data = $request->validate(['batch_number' => ['required', 'string', 'max:100'], 'quantity' => ['required', 'numeric', 'min:0.001']]);
-
-        return response()->json(['message' => 'Batch split posted.', 'batch' => $batches->split($batch, $data)], 201);
+        $data = $request->validated();
+        $permission = ['opening'=>'create','stock_in'=>'create'][$data['operation']] ?? $data['operation'];
+        $this->authorizeBatchPermission('batch.'.$permission);
+        return response()->json(['message'=>'Batch operation posted.'] + $batches->operation($data), 201);
     }
 
-    public function batchMerge(Request $request, BatchManagementService $batches, int $batch)
+    public function batchMovements(Request $request, BatchManagementService $batches)
     {
-        $this->authorizeBatchPermission('batch.merge');
-        $data = $request->validate(['target_batch_id' => ['required', 'integer']]);
+        $this->authorizeBatchPermission('batch.view_ledger');
+        return response()->json($batches->movements($request->all()));
+    }
 
-        return response()->json(['message' => 'Batch merge posted.', 'batch' => $batches->merge($batch, (int) $data['target_batch_id'])]);
+    public function batchExport(Request $request, BatchManagementService $batches)
+    {
+        $this->authorizeBatchPermission('batch.export');
+        $format = $request->validate(['format'=>['required','in:csv,excel,pdf']])['format'];
+        $data = $batches->exportRows($request->all());
+        $name = 'batch-report-'.now()->format('Y-m-d');
+        if ($format === 'pdf') {
+            return \Barryvdh\DomPDF\Facade\Pdf::loadView('inventory.batch-export', $data)->setPaper('a3','landscape')->download($name.'.pdf');
+        }
+        if ($format === 'excel') {
+            $sheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            foreach (array_merge([$data['headers']],$data['rows']) as $i=>$row) {
+                foreach ($row as $j=>$value) {
+                    $sheet->getActiveSheet()->setCellValueExplicit([$j+1,$i+1], $value ?? '', is_numeric($value) && !is_string($value) ? \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC : \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                }
+            }
+            return response()->streamDownload(function () use ($sheet) {
+                (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($sheet))->save('php://output');
+                $sheet->disconnectWorksheets();
+            }, $name.'.xlsx', ['Content-Type'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        }
+        return response()->streamDownload(function () use ($data) {
+            $stream = fopen('php://output','w');
+            foreach (array_merge([$data['headers']],$data['rows']) as $row) {
+                fputcsv($stream, array_map(fn ($value) => is_string($value) && preg_match('/^[=+@\-\t\r]/',$value) ? "'".$value : $value, $row));
+            }
+            fclose($stream);
+        }, $name.'.csv', ['Content-Type'=>'text/csv; charset=UTF-8']);
     }
 
     public function batchReports(Request $request, BatchManagementService $batches)

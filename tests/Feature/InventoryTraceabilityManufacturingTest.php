@@ -208,7 +208,7 @@ class InventoryTraceabilityManufacturingTest extends TestCase
     private function createOrder(User $user, int $businessId, int $bomId, int $branchId, int $warehouseId, float $quantity): int
     {
         return $this->actingAs($user)->withSession(['business_id' => $businessId])
-            ->postJson('/app/inventory/manufacturing/orders', ['bom_id' => $bomId, 'branch_id' => $branchId, 'source_warehouse_id' => $warehouseId, 'finished_goods_warehouse_id' => $warehouseId, 'planned_quantity' => $quantity])
+            ->postJson('/app/inventory/manufacturing/orders', ['bom_id' => $bomId, 'branch_id' => $branchId, 'source_warehouse_id' => $warehouseId, 'finished_goods_warehouse_id' => $warehouseId, 'planned_quantity' => $quantity, 'status' => 'planned'])
             ->assertCreated()
             ->json('order.id');
     }

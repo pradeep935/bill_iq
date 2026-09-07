@@ -112,6 +112,7 @@ class PurchaseReturnService
     {
         return DB::transaction(function () use ($voucher, $status) {
             $this->assertBusiness($voucher);
+            $voucher = PurchaseReturnVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
 
             if ($this->hasStockPosting($voucher)) {
                 throw ValidationException::withMessages(['status' => 'Stock ledger already posted for this return.']);
@@ -520,7 +521,7 @@ class PurchaseReturnService
                 throw ValidationException::withMessages(["items.$index.product_id" => 'Services and non-stock products cannot create stock return entries.']);
             }
 
-            if (($product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry'], true)) && empty($item['batch_id'])) {
+            if (($product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry', 'batch_serial'], true)) && empty($item['batch_id'])) {
                 throw ValidationException::withMessages(["items.$index.batch_id" => 'Batch is required for this product.']);
             }
 

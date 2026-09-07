@@ -386,12 +386,13 @@ onMounted(async () => {
 
                     <div class="table-wrapper">
                         <table>
-                            <thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>Expiry</th><th>Qty <span class="required-mark">*</span></th><th>Free</th><th>Rate <span class="required-mark">*</span></th><th>Disc</th><th>GST</th><th>Sell</th><th>MRP</th><th>Location</th><th></th></tr></thead>
+                            <thead><tr><th>Product</th><th>Variant</th><th>Batch</th><th>MFG Date</th><th>Expiry</th><th>Qty <span class="required-mark">*</span></th><th>Free</th><th>Rate <span class="required-mark">*</span></th><th>Disc</th><th>GST</th><th>Sell</th><th>MRP</th><th>Location</th><th></th></tr></thead>
                             <tbody>
                                 <tr v-for="(item, index) in form.items" :key="`${item.product_id}-${index}`">
                                     <td><strong>{{ item.product_name }}</strong><span>{{ item.sku }}</span></td>
                                     <td><select v-model="item.product_variant_id"><option value="">Default</option><option v-for="v in item.variants" :key="v.id" :value="v.id">{{ v.sku }}</option></select></td>
                                     <td><input v-model="item.batch_number" /></td>
+                                    <td><input v-model="item.manufacturing_date" type="date" /></td>
                                     <td><input v-model="item.expiry_date" type="date" /></td>
                                     <td><input v-model="item.quantity" type="number" step="0.001" /></td>
                                     <td><input v-model="item.free_quantity" type="number" step="0.001" /></td>

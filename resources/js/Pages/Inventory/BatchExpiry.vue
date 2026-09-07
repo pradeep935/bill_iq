@@ -1,982 +1,180 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import axios from 'axios';
 import Layout from '../Layout.vue';
 import InventoryApi from './InventoryApi';
 import AppToast from '../../Components/Common/AppToast.vue';
+import SearchSelect from '../../Components/Common/SearchSelect.vue';
 import TableLoadingState from '../../Components/Common/TableLoadingState.vue';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
-import { formatInventoryDateTime, formatInventoryQty } from './Shared/formatters';
+import InventoryModal from './Shared/InventoryModal.vue';
+import { formatInventoryQty, formatInventoryDateTime } from './Shared/formatters';
 
-defineProps({
-    page: { type: String, default: 'inventory-batches' },
-    title: { type: String, default: 'Batch & Expiry' },
-});
-
-const loading = ref(false);
-const initialLoaded = ref(false);
-const detailLoading = ref(false);
-const rows = ref([]);
-const references = ref({ products: [], branches: [], warehouses: [], statuses: [] });
-const dashboard = ref({});
-const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
-const toast = ref(null);
-const selected = ref(null);
-const reports = ref({});
-const activeReport = ref('batch_stock');
-const showActions = ref(null);
-const openActionMenuId = ref(null);
-const actionModal = ref(null);
-const actionForm = ref({});
-const actionSaving = ref(false);
-
-const filters = ref({
-    search: '',
-    product_id: '',
-    branch_id: '',
-    warehouse_id: '',
-    batch_status: '',
-    expiry_filter: '',
-    mfg_from: '',
-    mfg_to: '',
-    expiry_from: '',
-    expiry_to: '',
-    per_page: 15,
-});
-
-const permissions = {
-    create: true,
-    view: true,
-    edit: true,
-    block: true,
-    unblock: true,
-    quarantine: true,
-    transfer: true,
-    split: true,
-    merge: true,
-    print: true,
-    export: true,
-};
-
-const reportTabs = [
-    { key: 'batch_stock', label: 'Batch Stock Report' },
-    { key: 'expiry_report', label: 'Expiry Report' },
-    { key: 'expire_today_report', label: 'Expire Today' },
-    { key: 'near_expiry_report', label: 'Near Expiry Report' },
-    { key: 'expired_report', label: 'Expired Report' },
-    { key: 'blocked_report', label: 'Blocked Report' },
-    { key: 'quarantine_report', label: 'Quarantine Report' },
-    { key: 'fefo_priority', label: 'FEFO Priority' },
-    { key: 'batch_movement', label: 'Batch Movement' },
-    { key: 'batch_valuation', label: 'Batch Valuation' },
-];
-
-const summaryCards = computed(() => [
-    { label: 'Active Batches', value: dashboard.value.active_batches || 0, tone: 'good' },
-    { label: 'Near Expiry', value: dashboard.value.near_expiry || 0, tone: 'warn' },
-    { label: 'Expired', value: dashboard.value.expired || 0, tone: 'bad' },
-    { label: 'Total Batch Quantity', value: qty(dashboard.value.total_batch_quantity), tone: 'info' },
-    { label: 'Total Batch Value', value: `Rs. ${money(dashboard.value.total_batch_value)}`, tone: 'money' },
-    { label: 'Blocked', value: dashboard.value.blocked_batches || 0, tone: 'bad' },
-    { label: 'Quarantine', value: dashboard.value.quarantined_batches || 0, tone: 'warn' },
-]);
-
-const expiryCards = computed(() => [
-    { label: 'Expire Today', value: dashboard.value.expire_today || 0, tone: 'bad' },
-    { label: 'Expire in 7 Days', value: dashboard.value.expire_7_days || 0, tone: 'warn' },
-    { label: 'Expire in 30 Days', value: dashboard.value.expire_30_days || 0, tone: 'info' },
-    { label: 'Expired', value: dashboard.value.expired || 0, tone: 'bad' },
-]);
-
-const filteredWarehouses = computed(() => {
-    if (!filters.value.branch_id) return references.value.warehouses || [];
-    return (references.value.warehouses || []).filter((w) => Number(w.branch_id || 0) === Number(filters.value.branch_id));
-});
-
-const reportRows = computed(() => reports.value?.[activeReport.value] || []);
-
-let timer = null;
-
-const money = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const qty = formatInventoryQty;
-const dateTime = formatInventoryDateTime;
-const showToast = (message, type = 'success', title = 'Batch & Expiry') => { toast.value = { title, message, type }; };
-const rowActionId = (row) => `${row.id}-${row.branch_id || 0}-${row.warehouse_id || 0}`;
-const toggleActionMenu = (row) => {
-    const id = rowActionId(row);
-    openActionMenuId.value = openActionMenuId.value === id ? null : id;
-};
-const closeActionMenu = () => {
-    openActionMenuId.value = null;
-};
-
-const loadReferences = async () => {
-    references.value = await InventoryApi.batchReferences();
-};
-
-const load = async (page = 1) => {
+defineProps({ page: { type: String, default: 'inventory-batches' }, title: { type: String, default: 'Batch & Expiry' } });
+const tabs = ['Overview', 'Batches', 'Batch Movements', 'Expiry', 'Quarantine', 'Reports'];
+const tab = ref('Overview');
+const report = ref('batch_stock');
+const reports = { batch_stock:'Batch Stock Report', expiry_report:'Expiry Report', expire_today_report:'Expire Today', near_expiry_report:'Near Expiry Report', expired_report:'Expired Report', blocked_report:'Blocked Report', quarantine_report:'Quarantine Report', fefo_priority:'FEFO Priority', batch_movement:'Batch Movement', batch_valuation:'Batch Valuation' };
+const operationNames = { opening:'Opening Batch Stock', stock_in:'Batch Stock In', adjust:'Batch Adjustment', transfer:'Batch Transfer', reclassify:'Reclassify Stock', quarantine:'Quarantine Batch', release_quarantine:'Release Quarantine', block:'Block Batch', unblock:'Unblock Batch', writeoff:'Write-off Batch' };
+const refs = ref({ products:[], branches:[], warehouses:[], permissions:{}, conditions:[], statuses:[] });
+const permissions = computed(() => refs.value.permissions || {});
+const permissionFor = key => ({ opening:'create', stock_in:'create', view:'view', movements:'view_ledger' }[key] || key);
+const allowed = key => !!permissions.value[permissionFor(key)];
+const operations = computed(() => Object.entries(operationNames).filter(([key]) => allowed(key)));
+const loading = ref(false), saving = ref(false), exporting = ref(false), detailLoading = ref(false);
+const rows = ref([]), dashboard = ref({}), toast = ref(null), details = ref(null), menu = ref(null);
+const page = ref({ current_page:1,last_page:1,total:0,from:0,to:0 });
+const emptyFilters = () => ({ search:'',product_id:'',batch_id:'',branch_id:'',warehouse_id:'',batch_status:'',expiry_filter:'',date_from:'',date_to:'',movement_type:'',per_page:15 });
+const filters = ref(emptyFilters());
+const showFilters = ref(false), modal = ref(false), form = ref({}), errors = ref({}), selectedRow = ref(null), batchOptions = ref([]), batchSearch = ref('');
+const qty = formatInventoryQty, date = formatInventoryDateTime;
+const money = n => Number(n || 0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const label = s => ({empty:'Depleted',expire_today:'Expire Today',quarantined:'Quarantined'}[s] || String(s || '—').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()));
+const notify = (message,type='success') => { toast.value = { message,type }; };
+const fail = e => notify(e?.response?.data?.message || e.message || 'Unable to complete this action.','error');
+const base = '/app/inventory/batches';
+const localLink = path => `${String(axios.defaults.baseURL || '').replace(/\/$/,'')}${path}`;
+const warehouses = branch => refs.value.warehouses.filter(w => !branch || Number(w.branch_id) === Number(branch));
+const key = row => `${row.id}-${row.branch_id}-${row.warehouse_id}-${row.product_variant_id}-${row.condition_status}`;
+const isMovement = computed(() => tab.value === 'Batch Movements' || (tab.value === 'Reports' && report.value === 'batch_movement'));
+const requestFilters = computed(() => ({ ...filters.value, ...(tab.value === 'Quarantine' ? { batch_status:'quarantined' } : {}), ...(tab.value === 'Expiry' && !filters.value.expiry_filter ? {expiry_filter:'near'} : {}), report:isMovement.value ? 'batch_movement' : (tab.value === 'Reports' ? report.value : '') }));
+let request = 0, timer, batchTimer;
+async function load(number=1) {
+    const token = ++request;
     loading.value = true;
     try {
-        const [response, reportResponse] = await Promise.all([
-            InventoryApi.batchList({ ...filters.value, page }),
-            InventoryApi.batchReports(filters.value),
-        ]);
-        rows.value = response.items || [];
-        dashboard.value = response.dashboard || {};
-        pagination.value = response.pagination || pagination.value;
-        reports.value = reportResponse || {};
-        initialLoaded.value = true;
-    } finally {
-        loading.value = false;
-    }
-};
-
-const clearFilters = () => {
-    filters.value = { search: '', product_id: '', branch_id: '', warehouse_id: '', batch_status: '', expiry_filter: '', mfg_from: '', mfg_to: '', expiry_from: '', expiry_to: '', per_page: 15 };
-};
-
-const openDetail = async (row) => {
-    detailLoading.value = true;
+        const response = await axios.get(`${base}/${isMovement.value ? 'movements' : 'list'}`, {params:{...requestFilters.value,page:number}});
+        if (token !== request) return;
+        if (isMovement.value) { rows.value=response.data.data; page.value=response.data; }
+        else { rows.value=response.data.items; page.value=response.data.pagination; dashboard.value=response.data.dashboard; }
+    } catch(e) { if(token===request) fail(e); }
+    finally { if(token===request) loading.value=false; }
+}
+const cards = computed(() => [
+    ['Active Batches',dashboard.value.active_batches,'active','good'], ['Near Expiry',dashboard.value.near_expiry,'near_expiry','warn'],
+    ['Expired',dashboard.value.expired,'expired','bad'], ['Total Batch Quantity',qty(dashboard.value.total_batch_quantity),'','info'],
+    ['Total Batch Value',`₹ ${money(dashboard.value.total_batch_value)}`,'','info'], ['Blocked',dashboard.value.blocked_batches,'blocked','bad'],
+    ['Quarantine',dashboard.value.quarantined_batches,'quarantined','warn'],
+]);
+const alerts = computed(() => [['Expire Today',dashboard.value.expire_today,'today'],['Expire in 7 Days',dashboard.value.expire_7_days,'7'],['Expire in 30 Days',dashboard.value.expire_30_days,'30'],['Expired',dashboard.value.expired,'expired']]);
+function filterStatus(status) { filters.value=emptyFilters(); filters.value.batch_status=status; tab.value=status==='quarantined'?'Quarantine':'Batches'; }
+function filterExpiry(expiry) { filters.value=emptyFilters(); filters.value.expiry_filter=expiry; tab.value='Expiry'; }
+function movements(row) { filters.value={...emptyFilters(),batch_id:row.id,product_id:row.product_id,branch_id:row.branch_id,warehouse_id:row.warehouse_id}; tab.value='Batch Movements'; menu.value=null; }
+async function view(row) {
+    menu.value=null; detailLoading.value=true;
+    try { details.value=(await axios.get(`${base}/${row.id}`,{params:{branch_id:row.branch_id,warehouse_id:row.warehouse_id}})).data; }
+    catch(e) { fail(e); } finally { detailLoading.value=false; }
+}
+function openOperation(operation='opening',row=null) {
+    menu.value=null; selectedRow.value=row; errors.value={}; batchOptions.value=row?[row]:[];
+    form.value={operation,operation_token:crypto.randomUUID(),batch_id:row?.id || '',product_id:row?.product_id || '',product_variant_id:row?.product_variant_id || null,batch_number:'',manufacturing_date:'',expiry_date:'',document_date:new Date().toLocaleDateString('en-CA'),branch_id:row?.branch_id || '',warehouse_id:row?.warehouse_id || '',quantity:'',unit_cost:row?.average_cost || 0,condition_status:row?.condition_status || 'saleable',to_condition:operation==='quarantine'?'quarantined':'saleable',direction:'out',destination_branch_id:'',destination_warehouse_id:'',reason:'',confirmed:false};
+    modal.value=true;
+    if (!row && !['opening','stock_in'].includes(operation)) searchBatches();
+}
+const receipt = computed(() => ['opening','stock_in'].includes(form.value.operation));
+const statusOnly = computed(() => ['block','unblock'].includes(form.value.operation));
+const reclassifying = computed(() => ['reclassify','release_quarantine'].includes(form.value.operation));
+const operationBatchOptions = computed(() => batchOptions.value.filter(r => (r.actions || []).includes(form.value.operation)).map(r => ({...r,option_key:key(r),name:`${r.batch_number} · ${r.product_name} · ${r.branch_name} / ${r.warehouse_name} · ${label(r.condition_status)} · ${qty(r.quantity_on_hand)}`})));
+const batchChoice = ref('');
+async function searchBatches() {
+    try { batchOptions.value=(await axios.get(`${base}/list`,{params:{search:batchSearch.value,per_page:100}})).data.items; } catch(e) { fail(e); }
+}
+function chooseBatch(value) {
+    const row=operationBatchOptions.value.find(r=>r.option_key===value); if(!row) return;
+    selectedRow.value=row;
+    Object.assign(form.value,{batch_id:row.id,product_id:row.product_id,product_variant_id:row.product_variant_id,branch_id:row.branch_id,warehouse_id:row.warehouse_id,condition_status:row.condition_status,unit_cost:row.average_cost});
+}
+function closeModal() { if(!saving.value) {modal.value=false;batchChoice.value='';batchSearch.value='';} }
+async function submit() {
+    if(!form.value.confirmed) {errors.value={confirmation:['Confirm the operation before posting.']};return;}
+    saving.value=true; errors.value={};
     try {
-        selected.value = await InventoryApi.batchDetail(row.id, { branch_id: row.branch_id || '', warehouse_id: row.warehouse_id || '' });
-    } finally {
-        detailLoading.value = false;
-    }
-};
-
-const closeDetail = () => { selected.value = null; };
-
-const openActionModal = (row, type) => {
-    showActions.value = null;
-    closeActionMenu();
-    actionModal.value = { row, type };
-    actionForm.value = {
-        reason: '',
-        release_outcome: 'saleable',
-        quantity: type === 'transfer' ? availableQty(row) : '',
-        destination_branch_id: '',
-        destination_warehouse_id: '',
-        destination_location: '',
-        batch_number: '',
-        target_batch_id: '',
-    };
-};
-
-const closeActionModal = () => {
-    if (actionSaving.value) return;
-    actionModal.value = null;
-    actionForm.value = {};
-};
-
-const availableQty = (row) => Number(row.saleable_quantity_available ?? row.quantity_available ?? 0);
-const canMove = (row) => availableQty(row) > 0 && !['blocked', 'quarantined', 'expired', 'empty'].includes(row.batch_status);
-
-const submitAction = async () => {
-    if (!actionModal.value) return;
-    const { row, type } = actionModal.value;
-    actionSaving.value = true;
+        const payload={...form.value}; delete payload.confirmed;
+        Object.keys(payload).forEach(k=>{if(payload[k]==='')payload[k]=null;});
+        const response=await axios.post(`${base}/operations`,payload);
+        notify(response.data.document_number ? `Posted ${response.data.document_number}.` : 'Batch status updated.');
+        modal.value=false; selectedRow.value=null; await load();
+    } catch(e) { errors.value=e?.response?.data?.errors || {operation:[e?.response?.data?.message || 'Posting failed.']}; }
+    finally {saving.value=false;}
+}
+async function exportReport(format) {
+    exporting.value=true;
     try {
-        if (type === 'block' || type === 'quarantine' || type === 'release') {
-            const status = type === 'block' ? 'blocked' : type === 'quarantine' ? 'quarantined' : 'active';
-            await InventoryApi.updateBatchStatus(row.id, {
-                status,
-                reason: actionForm.value.reason,
-                release_outcome: type === 'release' ? actionForm.value.release_outcome : null,
-            });
-            showToast(type === 'release' ? 'Batch release posted.' : `Batch ${type} posted.`);
-        }
-
-        if (type === 'transfer') {
-            if (!canMove(row)) throw new Error('Only active batches with available stock can be transferred.');
-            await InventoryApi.transferBatch(row.id, {
-                source_branch_id: row.branch_id,
-                source_warehouse_id: row.warehouse_id,
-                destination_branch_id: actionForm.value.destination_branch_id,
-                destination_warehouse_id: actionForm.value.destination_warehouse_id,
-                destination_location: actionForm.value.destination_location,
-                quantity: actionForm.value.quantity,
-                remarks: actionForm.value.reason || 'Batch transfer from Batch & Expiry register',
-            });
-            showToast('Batch transfer posted.');
-        }
-
-        if (type === 'split') {
-            if (!canMove(row)) throw new Error('Only active batches with available stock can be split.');
-            await InventoryApi.splitBatch(row.id, { batch_number: actionForm.value.batch_number, quantity: actionForm.value.quantity });
-            showToast('Batch split posted.');
-        }
-
-        if (type === 'merge') {
-            await InventoryApi.mergeBatch(row.id, { target_batch_id: actionForm.value.target_batch_id });
-            showToast('Batch merge posted.');
-        }
-
-        actionModal.value = null;
-        actionForm.value = {};
-        await load(pagination.value.current_page || 1);
-    } catch (error) {
-        showToast(error?.response?.data?.message || error?.message || 'Batch action failed.', 'error');
-    } finally {
-        actionSaving.value = false;
-    }
-};
-
-const statusLabel = (status) => String(status || '-').replaceAll('_', ' ');
-
-const printBarcode = (row) => {
-    const html = `<div style="font-family:Arial;padding:18px;width:320px"><h2>${row.product_name}</h2><p>Batch: ${row.batch_number}</p><p>MFG: ${row.mfg_date || '-'}</p><p>Expiry: ${row.expiry_date || '-'}</p><div style="font-family:monospace;font-size:28px;letter-spacing:2px;border-top:1px solid #111;border-bottom:1px solid #111;padding:12px 0">${row.barcode || row.batch_number}</div></div>`;
-    const win = window.open('', '_blank');
-    win.document.write(html);
-    win.document.close();
-    win.print();
-};
-
-const exportRows = (format) => {
-    if (format === 'pdf') {
-        window.print();
-        return;
-    }
-    const source = activeReport.value === 'batch_stock' ? rows.value : reportRows.value;
-    const data = source.map((row) => ({
-        batch_number: row.batch_number,
-        product: row.product_name,
-        branch: row.branch_name,
-        warehouse: row.warehouse_name,
-        mfg_date: row.mfg_date,
-        expiry_date: row.expiry_date,
-        current_qty: row.quantity_on_hand,
-        reserved_qty: row.reserved_quantity,
-        available_qty: row.quantity_available,
-        average_cost: row.average_cost,
-        batch_value: row.batch_value,
-        status: row.batch_status,
-    }));
-    const csv = [Object.keys(data[0] || { report: activeReport.value }).join(','), ...data.map((row) => Object.values(row).map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: format === 'excel' ? 'application/vnd.ms-excel' : 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `batch-${activeReport.value}.${format === 'excel' ? 'xls' : 'csv'}`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-};
-
-watch(filters, () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => load(1), 350);
-}, { deep: true });
-
-onMounted(async () => {
-    await loadReferences();
-    await load();
-});
+        const response=await axios.get(`${base}/export`,{params:{...requestFilters.value,format},responseType:'blob'});
+        const url=URL.createObjectURL(response.data), link=document.createElement('a');
+        link.href=url; link.download=`batch-${isMovement.value?'movements':report.value}.${format==='excel'?'xlsx':format}`; link.click(); URL.revokeObjectURL(url);
+    } catch(e) {fail(e);} finally {exporting.value=false;}
+}
+watch(filters,()=>{clearTimeout(timer);timer=setTimeout(()=>load(),300);},{deep:true});
+watch(tab,()=>{menu.value=null;load();}); watch(report,()=>load());
+watch(()=>filters.value.branch_id,()=>{filters.value.warehouse_id='';});
+watch(()=>form.value.destination_branch_id,()=>{form.value.destination_warehouse_id='';});
+watch(()=>form.value.branch_id,(v)=>{if(receipt.value && !warehouses(v).some(w=>Number(w.id)===Number(form.value.warehouse_id))) form.value.warehouse_id='';});
+watch(batchSearch,()=>{clearTimeout(batchTimer);batchTimer=setTimeout(searchBatches,300);});
+onBeforeUnmount(()=>{clearTimeout(timer);clearTimeout(batchTimer);request++;});
+onMounted(async()=>{try {refs.value=await InventoryApi.batchReferences();await load();}catch(e){fail(e);}});
 </script>
 
 <template>
-    <Layout :page="page" :title="title">
-        <template #topbar-title>
-            <div class="bill-page-title">
-                <span>INVENTORY CONTROL</span>
-                <h1>Batch & Expiry</h1>
-                <p>Ledger-backed batch inventory, expiry alerts, FEFO support, blocking, quarantine and batch valuation.</p>
-            </div>
+<Layout :page="$props.page" :title="title">
+
+    <div class="batch-page">
+    <div class="bill-page-title"><span>INVENTORY CONTROL</span><h1>Batch &amp; Expiry</h1><p>Manage batch-level inventory, expiry, FEFO, quarantine, blocked stock and batch valuation.</p></div>
+        <AppToast v-if="toast" show title="Batch & Expiry" :message="toast.message" :type="toast.type" />
+        <div class="toolbar"><button v-if="operations.length" class="primary" @click="openOperation(operations[0][0])">+ New Batch Operation</button><button :disabled="loading" @click="load()">Refresh</button><template v-if="permissions.export"><button v-for="f in ['csv','excel','pdf']" :key="f" :disabled="exporting" @click="exportReport(f)">{{ f==='csv'?'CSV':f==='pdf'?'PDF':'Excel' }}</button></template></div>
+        <nav class="tabs" aria-label="Batch inventory sections"><button v-for="t in tabs.filter(t=>t!=='Batch Movements'||permissions.view_ledger)" :key="t" :class="{active:tab===t}" @click="tab=t">{{ t }}</button></nav>
+        <TableLoadingState v-if="loading && tab==='Overview'" title="Loading batch inventory…" />
+        <template v-else-if="tab==='Overview'">
+            <div class="summary-grid"><button v-for="[title,value,status,tone] in cards" :key="title" class="summary-card" :class="tone" @click="filterStatus(status)"><span>{{ title }}</span><strong>{{ value ?? 0 }}</strong><small>View batches →</small></button></div>
+            <section class="panel"><h2>Expiry alerts</h2><div class="alert-grid"><button v-for="[title,value,expiry] in alerts" :key="title" class="alert-card" @click="filterExpiry(expiry)"><span>{{ title }}</span><strong>{{ value || 0 }}</strong><small>Review stock →</small></button></div></section>
+            <section v-if="dashboard.expired || dashboard.quarantined_batches || dashboard.blocked_batches || dashboard.near_expiry" class="panel attention"><h2>Attention Required</h2><button v-if="dashboard.expired" @click="filterExpiry('expired')">{{ dashboard.expired }} expired batches still have physical stock. Review expiry or write-off.</button><button v-if="dashboard.quarantined_batches" @click="filterStatus('quarantined')">{{ dashboard.quarantined_batches }} quarantined batches await inspection and release.</button><button v-if="dashboard.blocked_batches" @click="filterStatus('blocked')">{{ dashboard.blocked_batches }} blocked batches are excluded from sales.</button><button v-if="dashboard.near_expiry" @click="filterExpiry('near')">{{ dashboard.near_expiry }} batches are expiring soon. Review FEFO priority.</button></section>
+            <section v-if="!Number(dashboard.total_batch_quantity)" class="panel empty-state"><h2>No batch inventory yet</h2><p>Batch stock will appear when you record opening stock, purchase/inward stock, or another batch stock operation.</p><div><button v-if="allowed('opening')" class="primary" @click="openOperation('opening')">Add Opening Batch</button><a :href="localLink('/app/purchases')" class="button">Create Purchase Voucher</a></div></section>
+            <section v-else class="panel"><h2>Where batch stock comes from</h2><p>Record receipts through Opening Stock, Purchase Vouchers or controlled Stock In. Sales and returns update the same batch. Transfers and condition changes retain the lot's identity and history.</p><div class="inline-actions"><a class="button" :href="localLink('/app/inventory/opening-stock')">Opening Stock</a><a class="button" :href="localLink('/app/purchases')">Purchase Vouchers</a><button @click="tab='Batches'">Manage Batches →</button></div></section>
         </template>
-
-        <div class="batch-page">
-            <AppToast v-if="toast" show :title="toast.title" :message="toast.message" :type="toast.type" />
-
-            <div class="toolbar">
-                <button :disabled="loading" @click="load()">Refresh</button>
-                <button v-if="permissions.export" @click="exportRows('csv')">CSV</button>
-                <button v-if="permissions.export" @click="exportRows('excel')">Excel</button>
-                <button v-if="permissions.export" @click="exportRows('pdf')">PDF</button>
+        <section v-else class="panel register">
+            <div class="section-head"><h2>{{ tab==='Reports' ? reports[report] : tab }}</h2><button class="mobile-filter" @click="showFilters=!showFilters">Filters</button><select v-if="tab==='Reports'" v-model="report" aria-label="Report"><option v-for="(name,id) in reports" :key="id" :value="id">{{ name }}</option></select></div>
+            <div v-if="tab==='Expiry'" class="chips"><button v-for="[name,value] in [['Expire Today','today'],['Next 7 Days','7'],['Next 30 Days','30'],['Near Expiry','near'],['Expired','expired']]" :key="value" :class="{active:(filters.expiry_filter || 'near')===value}" @click="filters.expiry_filter=value">{{ name }}</button></div>
+            <div class="filters" :class="{'filters-open':showFilters}">
+                <label>Search<input v-model="filters.search" placeholder="Batch / product / SKU / barcode" /></label>
+                <SearchSelect v-model="filters.product_id" label="Product" :options="refs.products" placeholder="All products" />
+                <label>Branch<select v-model="filters.branch_id"><option value="">All branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label>
+                <label>Warehouse<select v-model="filters.warehouse_id"><option value="">All warehouses</option><option v-for="w in warehouses(filters.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
+                <label v-if="!isMovement && tab!=='Quarantine'">Status<select v-model="filters.batch_status"><option value="">All statuses</option><option v-for="s in refs.statuses" :key="s" :value="s">{{ label(s) }}</option></select></label>
+                <label v-if="!isMovement">Expiry<select v-model="filters.expiry_filter"><option value="">All expiry dates</option><option value="today">Expire Today</option><option value="7">Next 7 Days</option><option value="30">Next 30 Days</option><option value="near">Near Expiry</option><option value="expired">Expired</option></select></label>
+                <label v-if="isMovement">Movement type<select v-model="filters.movement_type"><option value="">All movements</option><option v-for="m in ['opening_stock','purchase','sale','sales_return_in','purchase_return_out','stock_adjustment_in','stock_adjustment_out','stock_transfer_in','stock_transfer_out','stock_reclassification_in','stock_reclassification_out','physical_count_gain','physical_count_shortage','damaged_stock','expired_stock']" :key="m" :value="m">{{ label(m) }}</option></select></label>
+                <label>From Date<input v-model="filters.date_from" type="date" /></label><label>To Date<input v-model="filters.date_to" type="date" /></label>
+                <label>Rows per page<select v-model="filters.per_page"><option v-for="n in [15,25,50,100]" :key="n" :value="n">{{ n }}</option></select></label><button @click="filters=emptyFilters()">Clear</button>
+                <button v-if="filters.batch_id" @click="filters.batch_id=''">Clear selected batch ×</button>
             </div>
-
-            <div class="batch-card-grid primary-cards">
-                <div v-for="card in summaryCards" :key="card.label" class="batch-card" :class="`tone-${card.tone}`">
-                    <span>{{ card.label }}</span>
-                    <strong>{{ card.value }}</strong>
-                </div>
+            <TableLoadingState v-if="loading" title="Loading batch records…" />
+            <div v-else-if="!rows.length" class="empty-state"><h2>{{ page.total ? 'No matching batches' : 'No batch inventory yet' }}</h2><p>Batch stock will appear when you record opening stock, purchase/inward stock, or another batch stock operation.</p><p v-if="Object.values(filters).some(v=>v && v!==15)">Try clearing the filters to see other inventory.</p><div><button v-if="allowed('opening')" class="primary" @click="openOperation('opening')">Add Opening Batch</button><a :href="localLink('/app/purchases')" class="button">Create Purchase Voucher</a></div></div>
+            <div v-else class="table-wrapper"><table v-if="isMovement"><thead><tr><th>Date &amp; Time</th><th>Document Date</th><th>Movement Type</th><th>Voucher / Reference</th><th>Batch</th><th>Product</th><th>From Branch</th><th>To Branch</th><th>From Warehouse</th><th>To Warehouse</th><th>From Condition</th><th>To Condition</th><th>IN</th><th>OUT</th><th>Net Qty</th><th>Unit Cost</th><th>Value</th><th>User</th><th>Reason / Note</th></tr></thead><tbody><tr v-for="r in rows" :key="r.id"><td>{{ r.date }}</td><td>{{ r.document_date }}</td><td>{{ r.movement_label }}</td><td>{{ r.voucher }}</td><td>{{ r.batch_number }}</td><td>{{ r.product_name }}</td><td>{{ r.from_branch || '—' }}</td><td>{{ r.to_branch || '—' }}</td><td>{{ r.from_warehouse || '—' }}</td><td>{{ r.to_warehouse || '—' }}</td><td>{{ label(r.from_condition) }}</td><td>{{ label(r.to_condition) }}</td><td class="good-text">{{ qty(r.in) }}</td><td class="bad-text">{{ qty(r.out) }}</td><td>{{ qty(r.net_qty) }}</td><td>{{ money(r.cost) }}</td><td>{{ money(r.stock_value) }}</td><td>{{ r.user }}</td><td>{{ r.remarks }}</td></tr></tbody></table>
+                <table v-else><thead><tr><th>Batch Number</th><th>Product</th><th>SKU</th><th>FEFO Priority</th><th>Condition</th><th>Branch</th><th>Warehouse</th><th>MFG Date</th><th>Expiry Date</th><th>Days Remaining</th><th v-if="tab==='Quarantine'">Quarantine Date</th><th>Current Qty</th><th>Available Qty</th><th>Reserved Qty</th><th>Unit Cost</th><th>Batch Value</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="r in rows" :key="key(r)"><td><button class="text-button" @click="view(r)">{{ r.batch_number }}</button></td><td>{{ r.product_name }}</td><td>{{ r.sku || '—' }}</td><td><span v-if="r.fefo_priority" class="priority">{{ r.fefo_priority }}</span><span v-else>—</span></td><td>{{ label(r.condition_status) }}</td><td>{{ r.branch_name || '—' }}</td><td>{{ r.warehouse_name || '—' }}</td><td>{{ date(r.mfg_date) }}</td><td>{{ date(r.expiry_date) }}</td><td>{{ r.days_remaining ?? '—' }}</td><td v-if="tab==='Quarantine'">{{ date(r.quarantined_at) }}</td><td>{{ qty(r.quantity_on_hand) }}</td><td>{{ qty(r.quantity_available) }}</td><td>{{ qty(r.reserved_quantity) }}</td><td>{{ money(r.average_cost) }}</td><td>₹ {{ money(r.batch_value) }}</td><td><span class="status" :class="r.batch_status">{{ r.status_label }}</span></td><td><RowActionMenu :open="menu===key(r)" :show-view="false" more-label="Actions" @toggle="menu=menu===key(r)?null:key(r)" @close="menu=null"><template v-for="action in r.actions" :key="action"><button v-if="allowed(action)" @click="action==='view'?view(r):action==='movements'?movements(r):openOperation(action,r)">{{ action==='view'?'View':action==='movements'?'Movement History':operationNames[action] }}</button></template></RowActionMenu></td></tr></tbody></table>
             </div>
-
-            <div class="expiry-strip">
-                <div v-for="card in expiryCards" :key="card.label" class="expiry-item" :class="`tone-${card.tone}`">
-                    <span>{{ card.label }}</span>
-                    <strong>{{ card.value }}</strong>
-                </div>
-            </div>
-
-            <TableLoadingState
-                v-if="loading && !initialLoaded"
-                title="Loading Batch & Expiry..."
-                description="Preparing batch register, expiry alerts and ledger-backed valuation."
-            />
-
-            <section v-else class="panel register-panel loading-host">
-                <div class="filters">
-                    <input v-model="filters.search" placeholder="Search batch, product, SKU, barcode" />
-                    <select v-model="filters.product_id"><option value="">All Products</option><option v-for="product in references.products" :key="product.id" :value="product.id">{{ product.name }}</option></select>
-                    <select v-model="filters.branch_id"><option value="">All Branches</option><option v-for="branch in references.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option></select>
-                    <select v-model="filters.warehouse_id"><option value="">All Warehouses</option><option v-for="warehouse in filteredWarehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option></select>
-                    <select v-model="filters.batch_status"><option value="">All Status</option><option value="active">Active</option><option value="expire_today">Expire Today</option><option value="near_expiry">Near Expiry</option><option value="expired">Expired</option><option value="blocked">Blocked</option><option value="quarantined">Quarantined</option><option value="empty">Empty</option></select>
-                    <select v-model="filters.expiry_filter"><option value="">Expiry Filter</option><option value="near">Near Expiry</option><option value="expired">Expired</option></select>
-                    <input v-model="filters.mfg_from" type="date" />
-                    <input v-model="filters.expiry_to" type="date" />
-                    <select v-model="filters.per_page"><option :value="15">15 / page</option><option :value="25">25 / page</option><option :value="50">50 / page</option></select>
-                    <button @click="clearFilters">Clear</button>
-                </div>
-
-                <TableLoadingState
-                    v-if="loading"
-                    overlay
-                    title="Refreshing batches..."
-                    description="Fetching latest batch stock from stock ledgers."
-                    :show-skeleton="false"
-                />
-
-                <div class="table-wrapper batch-table-wrapper">
-                    <table class="batch-register-table">
-                        <thead>
-                            <tr><th>Batch Number</th><th>Product</th><th>FEFO</th><th>Condition</th><th>Branch</th><th>Warehouse</th><th>Expiry</th><th>Days</th><th>Current Qty</th><th>Available Qty</th><th>Batch Value</th><th>Status</th><th>Actions</th></tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="row in rows" :key="`${row.id}-${row.branch_id}-${row.warehouse_id}`">
-                                <td><strong>{{ row.batch_number }}</strong></td>
-                                <td>{{ row.product_name }}<span>{{ row.sku }}</span></td>
-                                <td>{{ row.fefo_priority || '-' }}</td>
-                                <td>{{ row.condition_status || 'saleable' }}</td>
-                                <td>{{ row.branch_name || '-' }}</td>
-                                <td>{{ row.warehouse_name || '-' }}</td>
-                                <td>{{ dateTime(row.expiry_date) }}</td>
-                                <td>{{ row.days_remaining ?? '-' }}</td>
-                                <td>{{ qty(row.quantity_on_hand) }}</td>
-                                <td>{{ qty(availableQty(row)) }}</td>
-                                <td><strong>Rs. {{ money(row.batch_value) }}</strong></td>
-                                <td><span class="status" :class="row.batch_status">{{ statusLabel(row.batch_status) }}</span></td>
-                                <td class="actions-cell">
-                                    <div class="row-actions">
-                                        <RowActionMenu :open="openActionMenuId === rowActionId(row)" :show-view="false" more-label="Actions" more-title="Batch actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu">
-                                            <button title="View batch details" @click="openDetail(row); closeActionMenu()">View</button>
-                                            <button title="Open batch ledger" @click="openDetail(row); closeActionMenu()">Ledger</button>
-                                            <button v-if="permissions.print" title="Print batch label" @click="printBarcode(row); closeActionMenu()">Print</button>
-                                            <button v-if="permissions.block && !['blocked','empty','expired'].includes(row.batch_status)" title="Block batch from sale" @click="openActionModal(row, 'block')">Block</button>
-                                            <button v-if="permissions.unblock && row.batch_status === 'blocked'" title="Unblock batch" @click="openActionModal(row, 'release')">Unblock</button>
-                                            <button v-if="permissions.quarantine && !['quarantined','empty','expired'].includes(row.batch_status)" title="Move batch to quarantine" @click="openActionModal(row, 'quarantine')">QRT</button>
-                                            <button v-if="permissions.unblock && row.batch_status === 'quarantined'" title="Release quarantined batch" @click="openActionModal(row, 'release')">Release</button>
-                                            <button v-if="permissions.transfer && canMove(row)" title="Transfer batch stock" @click="openActionModal(row, 'transfer')">Move</button>
-                                            <button v-if="permissions.split && canMove(row)" title="Split batch quantity" @click="openActionModal(row, 'split')">Split</button>
-                                            <button v-if="permissions.merge" title="Merge identical batch" @click="openActionModal(row, 'merge')">Merge</button>
-                                            <button title="Open batch history" @click="openDetail(row); closeActionMenu()">History</button>
-                                        </RowActionMenu>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr v-if="!rows.length"><td colspan="13" class="empty">No batch stock found.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="pager">
-                    <button :disabled="pagination.current_page <= 1" @click="load(pagination.current_page - 1)">Previous</button>
-                    <span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span>
-                    <button :disabled="pagination.current_page >= pagination.last_page" @click="load(pagination.current_page + 1)">Next</button>
-                </div>
-            </section>
-
-            <section v-if="initialLoaded" class="panel reports-panel">
-                <div class="section-head">
-                    <div><h2>Batch Reports</h2><p>Reports are generated from the same batch ledger and current stock calculations.</p></div>
-                    <div class="toolbar compact"><button @click="exportRows('csv')">CSV</button><button @click="exportRows('excel')">Excel</button><button @click="exportRows('pdf')">PDF</button></div>
-                </div>
-                <div class="tabs"><button v-for="report in reportTabs" :key="report.key" :class="{active: activeReport === report.key}" @click="activeReport = report.key">{{ report.label }}</button></div>
-                <div class="table-wrapper">
-                    <table>
-                        <thead><tr><th>Batch</th><th>Product</th><th>Branch</th><th>Warehouse</th><th>Expiry</th><th>Qty</th><th>Cost</th><th>Value</th><th>Status</th></tr></thead>
-                        <tbody><tr v-for="(row, index) in reportRows" :key="index"><td>{{ row.batch_number }}</td><td>{{ row.product_name }}</td><td>{{ row.branch_name || '-' }}</td><td>{{ row.warehouse_name || '-' }}</td><td>{{ dateTime(row.expiry_date) }}</td><td>{{ qty(row.quantity_on_hand || row.quantity) }}</td><td>Rs. {{ money(row.average_cost) }}</td><td>Rs. {{ money(row.batch_value) }}</td><td>{{ statusLabel(row.batch_status) }}</td></tr><tr v-if="!reportRows.length"><td colspan="9" class="empty">No report rows found.</td></tr></tbody>
-                    </table>
-                </div>
-            </section>
-
-            <div v-if="selected" class="modal-backdrop" @click.self="closeDetail">
-                <section class="detail-modal">
-                    <button class="close" @click="closeDetail">Close</button>
-                    <TableLoadingState v-if="detailLoading" title="Loading batch..." description="Preparing batch summary and ledger." variant="compact" :show-skeleton="false" />
-                    <template v-else>
-                        <div class="detail-head">
-                            <div><h2>{{ selected.batch.batch_number }}</h2><p>{{ selected.batch.product }}</p></div>
-                            <span class="status" :class="selected.batch.status">{{ statusLabel(selected.batch.status) }}</span>
-                        </div>
-                        <p class="detail-sub">{{ selected.batch.sku || '-' }} | {{ selected.batch.barcode || '-' }} | Condition: {{ selected.batch.condition_status || 'saleable' }}</p>
-                        <div class="detail-grid">
-                            <div><span>MFG</span><strong>{{ dateTime(selected.batch.mfg_date) }}</strong></div>
-                            <div><span>Expiry</span><strong>{{ dateTime(selected.batch.expiry_date) }}</strong></div>
-                            <div><span>Current Qty</span><strong>{{ qty(selected.summary.current_qty) }}</strong></div>
-                            <div><span>Reserved</span><strong>{{ qty(selected.summary.reserved_qty) }}</strong></div>
-                            <div><span>Available</span><strong>{{ qty(selected.summary.available_qty) }}</strong></div>
-                            <div><span>Value</span><strong>Rs. {{ money(selected.summary.batch_value) }}</strong></div>
-                            <div><span>Opening</span><strong>{{ qty(selected.summary.opening_stock) }}</strong></div>
-                            <div><span>Purchases</span><strong>{{ qty(selected.summary.purchases) }}</strong></div>
-                            <div><span>Purchase Returns</span><strong>{{ qty(selected.summary.purchase_returns) }}</strong></div>
-                            <div><span>Sales</span><strong>{{ qty(selected.summary.sales) }}</strong></div>
-                            <div><span>Sale Returns</span><strong>{{ qty(selected.summary.sale_returns) }}</strong></div>
-                            <div><span>Adjusted In</span><strong>{{ qty(selected.summary.adjusted_in) }}</strong></div>
-                            <div><span>Adjusted Out</span><strong>{{ qty(selected.summary.adjusted_out) }}</strong></div>
-                            <div><span>Transfer In</span><strong>{{ qty(selected.summary.transferred_in) }}</strong></div>
-                            <div><span>Transfer Out</span><strong>{{ qty(selected.summary.transferred_out) }}</strong></div>
-                            <div><span>Produced</span><strong>{{ qty(selected.summary.produced_quantity) }}</strong></div>
-                        </div>
-                        <h3>Batch Ledger</h3>
-                        <div class="table-wrapper"><table><thead><tr><th>Date</th><th>Voucher</th><th>Type</th><th>Branch</th><th>Warehouse</th><th>IN</th><th>OUT</th><th>Balance</th><th>Cost</th><th>User</th></tr></thead><tbody><tr v-for="line in selected.ledger" :key="line.id"><td>{{ dateTime(line.date) }}</td><td>{{ line.voucher }}</td><td>{{ line.type }}</td><td>{{ line.branch || '-' }}</td><td>{{ line.warehouse || '-' }}</td><td>{{ qty(line.in) }}</td><td>{{ qty(line.out) }}</td><td>{{ qty(line.balance) }}</td><td>Rs. {{ money(line.cost) }}</td><td>{{ line.user }}</td></tr><tr v-if="!selected.ledger.length"><td colspan="10" class="empty">No ledger movement found.</td></tr></tbody></table></div>
-                        <h3>Timeline</h3>
-                        <div class="timeline">
-                            <div v-for="event in selected.history" :key="event.id" class="timeline-item">
-                                <strong>{{ statusLabel(event.event_type) }}</strong>
-                                <span>{{ dateTime(event.date) }} | {{ event.user }} | {{ event.remarks || '-' }}</span>
-                            </div>
-                            <div v-if="!selected.history?.length" class="empty">No audit events found.</div>
-                        </div>
-                    </template>
-                </section>
-            </div>
-
-            <div v-if="actionModal" class="modal-backdrop" @click.self="closeActionModal">
-                <section class="action-modal">
-                    <button class="close" type="button" @click="closeActionModal">Close</button>
-                    <div class="detail-head">
-                        <div>
-                            <h2>{{ statusLabel(actionModal.type) }}</h2>
-                            <p>{{ actionModal.row.batch_number }} | {{ actionModal.row.product_name }}</p>
-                        </div>
-                        <span class="status" :class="actionModal.row.batch_status">{{ statusLabel(actionModal.row.batch_status) }}</span>
-                    </div>
-
-                    <div class="action-form">
-                        <label v-if="['block','quarantine','release','transfer'].includes(actionModal.type)">
-                            Reason / Remarks
-                            <textarea v-model="actionForm.reason" rows="3" placeholder="Enter reason or remarks"></textarea>
-                        </label>
-
-                        <label v-if="actionModal.type === 'release'">
-                            Release Outcome
-                            <select v-model="actionForm.release_outcome">
-                                <option value="saleable">Saleable</option>
-                                <option value="damaged">Damaged</option>
-                                <option value="expired">Expired</option>
-                                <option value="blocked">Blocked</option>
-                                <option value="return_to_supplier">Return to Supplier</option>
-                            </select>
-                        </label>
-
-                        <template v-if="actionModal.type === 'transfer'">
-                            <label>
-                                Quantity
-                                <input v-model.number="actionForm.quantity" type="number" min="0.001" step="0.001" />
-                            </label>
-                            <label>
-                                Destination Branch
-                                <select v-model="actionForm.destination_branch_id">
-                                    <option value="">Select branch</option>
-                                    <option v-for="branch in references.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
-                                </select>
-                            </label>
-                            <label>
-                                Destination Warehouse
-                                <select v-model="actionForm.destination_warehouse_id">
-                                    <option value="">Select warehouse</option>
-                                    <option v-for="warehouse in references.warehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option>
-                                </select>
-                            </label>
-                            <label>
-                                Destination Location
-                                <input v-model="actionForm.destination_location" placeholder="Rack / shelf / bin" />
-                            </label>
-                        </template>
-
-                        <template v-if="actionModal.type === 'split'">
-                            <label>
-                                New Batch Number
-                                <input v-model="actionForm.batch_number" placeholder="Example: BDM-2026-07-A" />
-                            </label>
-                            <label>
-                                Split Quantity
-                                <input v-model.number="actionForm.quantity" type="number" min="0.001" step="0.001" />
-                            </label>
-                        </template>
-
-                        <label v-if="actionModal.type === 'merge'">
-                            Target Batch ID
-                            <input v-model.number="actionForm.target_batch_id" type="number" min="1" placeholder="Enter target batch ID" />
-                        </label>
-                    </div>
-
-                    <div class="modal-actions">
-                        <button type="button" :disabled="actionSaving" @click="closeActionModal">Cancel</button>
-                        <button class="primary" type="button" :disabled="actionSaving" @click="submitAction">
-                            {{ actionSaving ? 'Saving...' : 'Submit' }}
-                        </button>
-                    </div>
-                </section>
-            </div>
-        </div>
-    </Layout>
+            <div class="pager"><span>{{ page.from || 0 }}–{{ page.to || 0 }} of {{ page.total || 0 }}</span><button :disabled="loading || page.current_page<=1" @click="load(page.current_page-1)">Previous</button><button :disabled="loading || page.current_page>=page.last_page" @click="load(page.current_page+1)">Next</button></div>
+        </section>
+    </div>
+    <InventoryModal v-if="modal" :title="operationNames[form.operation]" subtitle="Post a controlled inventory operation with a document reference and reason." :errors="errors" @close="closeModal">
+        <form class="operation-form" @submit.prevent="submit">
+            <label class="full">Operation<select :value="form.operation" :disabled="saving" @change="openOperation($event.target.value)"><option v-for="[value,name] in operations" :key="value" :value="value">{{ name }}</option></select></label>
+            <template v-if="receipt"><SearchSelect v-model="form.product_id" label="Product" :options="refs.products" required /><label>Batch Number<input v-model="form.batch_number" required maxlength="100" /></label><label>Manufacturing Date<input v-model="form.manufacturing_date" type="date" /></label><label>Expiry Date<input v-model="form.expiry_date" type="date" :min="form.manufacturing_date || undefined" /></label><p class="full hint" v-if="form.operation==='stock_in'">For supplier purchases, use <a :href="localLink('/app/purchases')">Purchase Vouchers</a>. Manual Stock In posts through Stock Adjustment and its configured accounting rules.</p></template>
+            <template v-else><template v-if="!selectedRow"><label class="full">Search batch<input v-model="batchSearch" placeholder="Search batch or product" /></label><SearchSelect v-model="batchChoice" class="full" label="Batch and location" :options="operationBatchOptions" option-value-key="option_key" required @update:model-value="chooseBatch" /></template><div v-else class="selection full"><strong>{{ selectedRow.batch_number }} · {{ selectedRow.product_name }}</strong><span>{{ selectedRow.branch_name }} / {{ selectedRow.warehouse_name }} · {{ label(selectedRow.condition_status) }}</span><span>Physical {{ qty(selectedRow.quantity_on_hand) }} · Available {{ qty(selectedRow.quantity_available) }} · Reserved {{ qty(selectedRow.reserved_quantity) }}</span></div></template>
+            <template v-if="!statusOnly"><template v-if="receipt"><label>Branch<select v-model="form.branch_id" required><option value="">Select branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label><label>Warehouse<select v-model="form.warehouse_id" required><option value="">Select warehouse</option><option v-for="w in warehouses(form.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select></label><label>Stock Condition<select v-model="form.condition_status"><option v-for="c in refs.conditions" :key="c" :value="c">{{ label(c) }}</option></select></label></template>
+            <label v-if="form.operation==='adjust'">Direction<select v-model="form.direction"><option value="in">Adjustment In</option><option value="out">Adjustment Out</option></select></label><label>Quantity<input v-model="form.quantity" type="number" min="0.001" step="0.001" required /></label><label v-if="receipt || (form.operation==='adjust' && form.direction==='in')">Unit Cost<input v-model="form.unit_cost" type="number" min="0" step="0.01" required /></label><label>Document Date<input v-model="form.document_date" type="date" required /></label>
+            <template v-if="form.operation==='transfer'"><label>To Branch<select v-model="form.destination_branch_id" required><option value="">Select branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label><label>To Warehouse<select v-model="form.destination_warehouse_id" required><option value="">Select warehouse</option><option v-for="w in warehouses(form.destination_branch_id).filter(w=>Number(w.id)!==Number(form.warehouse_id))" :key="w.id" :value="w.id">{{ w.name }}</option></select></label></template>
+            <label v-if="reclassifying">To Condition<select v-model="form.to_condition" required><option v-for="c in refs.conditions.filter(c=>c!==form.condition_status)" :key="c" :value="c">{{ label(c) }}</option></select></label></template>
+            <p v-if="statusOnly" class="full hint">This changes the batch's sale eligibility across all locations. Physical quantity stays unchanged.</p>
+            <p v-if="form.operation==='writeoff'" class="full warning">Write-off permanently removes this quantity from physical stock. Correct mistakes with a new compensating operation.</p>
+            <label class="full">Reason / Notes<textarea v-model="form.reason" required maxlength="255" rows="3" /></label><label class="confirm full"><input v-model="form.confirmed" type="checkbox" /> I have checked the batch, location, quantity and reason.</label><div class="full modal-footer"><button type="button" :disabled="saving" @click="closeModal">Cancel</button><button class="primary" :disabled="saving || (!receipt && !form.batch_id)" type="submit">{{ saving?'Posting…':'Post Operation' }}</button></div>
+        </form>
+    </InventoryModal>
+    <InventoryModal v-if="detailLoading || details" :title="details ? `Batch ${details.batch.batch_number}` : 'Loading batch…'" wide @close="details=null">
+        <TableLoadingState v-if="detailLoading" title="Loading batch details…" />
+        <template v-else><h3>{{ details.batch.product }} · {{ details.batch.sku }}</h3><p>MFG {{ date(details.batch.mfg_date) }} · Expiry {{ date(details.batch.expiry_date) }} · {{ label(details.batch.status) }}</p><div class="alert-grid"><div class="selection"><span>Physical</span><strong>{{ qty(details.summary.current_qty) }}</strong></div><div class="selection"><span>Available</span><strong>{{ qty(details.summary.available_qty) }}</strong></div><div class="selection"><span>Reserved</span><strong>{{ qty(details.summary.reserved_qty) }}</strong></div><div class="selection"><span>Value</span><strong>₹ {{ money(details.summary.batch_value) }}</strong></div></div><h3>Location &amp; condition balances</h3><div class="table-wrapper"><table><thead><tr><th>Branch / Warehouse</th><th>Condition</th><th>Current</th><th>Available</th><th>Cost</th><th>Value</th></tr></thead><tbody><tr v-for="r in details.balances" :key="key(r)"><td>{{ r.branch_name }} / {{ r.warehouse_name }}</td><td>{{ label(r.condition_status) }}</td><td>{{ qty(r.quantity_on_hand) }}</td><td>{{ qty(r.quantity_available) }}</td><td>{{ money(r.average_cost) }}</td><td>{{ money(r.batch_value) }}</td></tr></tbody></table></div><h3>Recent movements</h3><p class="hint">Latest 80 entries. Use Movement History for the full paginated ledger.</p><div class="table-wrapper"><table><thead><tr><th>Date</th><th>Movement</th><th>Document</th><th>IN</th><th>OUT</th><th>Condition</th><th>User / Reason</th></tr></thead><tbody><tr v-for="r in details.ledger" :key="r.id"><td>{{ r.date }}</td><td>{{ r.movement_label }}</td><td>{{ r.voucher }}</td><td>{{ qty(r.in) }}</td><td>{{ qty(r.out) }}</td><td>{{ label(r.from_condition) }} → {{ label(r.to_condition) }}</td><td>{{ r.user }}<small>{{ r.remarks }}</small></td></tr></tbody></table></div><h3>Batch activity</h3><div v-for="(h,i) in details.history" :key="i" class="activity"><strong>{{ label(h.event_type) }}</strong><span>{{ h.date }} · {{ h.user }}</span><p>{{ h.remarks }}</p></div></template>
+    </InventoryModal>
+</Layout>
 </template>
 
 <style scoped>
-.batch-page {
-  padding: 0 0 28px;
-}
-
-.toolbar {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin: -4px 0 14px;
-}
-
-.toolbar.compact {
-  margin: 0;
-}
-
-.batch-card-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  margin-bottom: 12px;
-}
-
-.batch-card,
-.expiry-item {
-  background: #fff;
-  border: 1px solid #dfe6ef;
-  border-left: 4px solid #cbd5e1;
-  border-radius: 8px;
-  box-shadow: 0 8px 22px rgba(25, 50, 84, .035);
-  min-height: 76px;
-  padding: 13px 14px;
-}
-
-.batch-card span,
-.expiry-item span {
-  color: #7f8da4;
-  display: block;
-  font-size: 11px;
-  font-weight: 800;
-  margin-bottom: 7px;
-}
-
-.batch-card strong,
-.expiry-item strong {
-  color: #142139;
-  display: block;
-  font-size: 20px;
-  font-weight: 900;
-  line-height: 1.1;
-}
-
-.tone-good {
-  border-left-color: #22c55e;
-}
-
-.tone-warn {
-  border-left-color: #f59e0b;
-}
-
-.tone-bad {
-  border-left-color: #ef4444;
-}
-
-.tone-info {
-  border-left-color: #2563eb;
-}
-
-.tone-money {
-  border-left-color: #14b8a6;
-}
-
-.expiry-strip {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 16px;
-}
-
-.panel {
-  background: #fff;
-  border: 1px solid #dfe6ef;
-  border-radius: 8px;
-  margin-top: 18px;
-  padding: 18px;
-}
-
-.register-panel {
-  margin-top: 0;
-}
-
-.reports-panel {
-  margin-top: 16px;
-}
-
-.loading-host {
-  position: relative;
-}
-
-.filters {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(230px, 1.7fr) repeat(5, minmax(118px, 1fr)) repeat(2, minmax(118px, .9fr)) minmax(105px, .8fr) minmax(76px, auto);
-  margin-bottom: 14px;
-}
-
-.filters input,
-.filters select,
-button {
-  background: #fff;
-  border: 1px solid #d8e0eb;
-  border-radius: 8px;
-  color: #344159;
-  font-size: 12px;
-  font-weight: 750;
-  min-height: 38px;
-  padding: 8px 10px;
-}
-
-.section-head {
-  align-items: flex-start;
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.section-head h2 {
-  font-size: 18px;
-  margin: 0;
-}
-
-.section-head p {
-  color: #758197;
-  font-size: 12px;
-  margin: 4px 0 0;
-}
-
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.tabs button {
-  min-height: 34px;
-  padding: 7px 10px;
-}
-
-.tabs .active {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-}
-
-.table-wrapper {
-  border: 1px solid #edf1f5;
-  border-radius: 8px;
-  overflow: auto;
-}
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.batch-register-table {
-  min-width: 1320px;
-}
-
-th,
-td {
-  border-bottom: 1px solid #edf1f5;
-  font-size: 12px;
-  padding: 11px 10px;
-  text-align: left;
-  white-space: nowrap;
-}
-
-th {
-  background: #f8fafc;
-  color: #69758a;
-  font-size: 10px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
-td span {
-  color: #758197;
-  display: block;
-  font-size: 11px;
-  margin-top: 3px;
-}
-
-.status {
-  background: #edf2ff;
-  border-radius: 7px;
-  color: #2457d6;
-  display: inline-flex;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 5px 8px;
-  text-transform: capitalize;
-}
-
-.status.expire_today,
-.status.near_expiry {
-  background: #fff7ed;
-  color: #c2410c;
-}
-
-.status.expired,
-.status.blocked {
-  background: #fff1f2;
-  color: #be123c;
-}
-
-.status.quarantined {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.status.empty {
-  background: #f1f5f9;
-  color: #475569;
-}
-
-.actions-cell {
-  background: #fff;
-  min-width: 330px;
-  position: sticky;
-  right: 0;
-  z-index: 2;
-}
-
-.row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-width: 320px;
-}
-
-.row-actions button,
-.action-menu button {
-  min-height: 30px;
-  padding: 5px 8px;
-}
-
-.action-menu {
-  background: #fff;
-  border: 1px solid #dfe6ef;
-  border-radius: 8px;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, .16);
-  display: grid;
-  gap: 4px;
-  padding: 8px;
-  position: absolute;
-  right: 8px;
-  top: 42px;
-  z-index: 4;
-}
-
-.action-menu button {
-  text-align: left;
-}
-
-.pager {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  margin-top: 14px;
-}
-
-.empty {
-  color: #8490a2;
-  text-align: center;
-}
-
-.modal-backdrop {
-  align-items: center;
-  background: rgba(15, 23, 42, .55);
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  left: 0;
-  position: fixed;
-  right: 0;
-  top: 0;
-  z-index: 40;
-}
-
-.detail-modal {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, .28);
-  max-height: 86vh;
-  max-width: 980px;
-  overflow: auto;
-  padding: 22px;
-  position: relative;
-  width: min(92vw, 980px);
-}
-
-.action-modal {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, .28);
-  max-width: 620px;
-  padding: 22px;
-  position: relative;
-  width: min(92vw, 620px);
-}
-
-.close {
-  position: absolute;
-  right: 16px;
-  top: 16px;
-}
-
-.detail-head {
-  align-items: flex-start;
-  display: flex;
-  justify-content: space-between;
-}
-
-.detail-head h2 {
-  font-size: 24px;
-  margin: 0;
-}
-
-.detail-head p,
-.detail-sub {
-  color: #758197;
-  margin: 4px 0 0;
-}
-
-.detail-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 18px 0;
-}
-
-.detail-grid div {
-  background: #f8fafc;
-  border: 1px solid #e3e9f2;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.detail-grid span {
-  color: #7b8798;
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.detail-grid strong {
-  display: block;
-  font-size: 16px;
-  margin-top: 6px;
-}
-
-.timeline {
-  display: grid;
-  gap: 8px;
-}
-
-.timeline-item {
-  border: 1px solid #e3e9f2;
-  border-radius: 8px;
-  padding: 10px;
-}
-
-.timeline-item strong {
-  display: block;
-  font-size: 12px;
-  text-transform: capitalize;
-}
-
-.timeline-item span {
-  color: #758197;
-  font-size: 12px;
-}
-
-.action-form {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 18px;
-}
-
-.action-form label {
-  color: #344159;
-  display: grid;
-  font-size: 12px;
-  font-weight: 800;
-  gap: 7px;
-}
-
-.action-form textarea,
-.action-form input,
-.action-form select {
-  background: #fff;
-  border: 1px solid #d8e0eb;
-  border-radius: 8px;
-  color: #344159;
-  font-size: 12px;
-  font-weight: 700;
-  min-height: 40px;
-  padding: 9px 10px;
-}
-
-.action-form textarea {
-  grid-column: 1 / -1;
-  resize: vertical;
-}
-
-.modal-actions {
-  border-top: 1px solid #edf1f5;
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 18px;
-  padding-top: 14px;
-}
-
-.modal-actions .primary {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-}
-
-@media (max-width: 1400px) {
-  .batch-card-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1100px) {
-  .batch-card-grid,
-  .expiry-strip,
-  .filters,
-  .action-form,
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .toolbar,
-  .section-head {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .action-menu {
-    left: 0;
-    right: auto;
-  }
-}
+.batch-page :deep(.search-select-hint){display:none}.batch-page .bill-page-title{max-width:none}.batch-page .bill-page-title h1{white-space:normal}.batch-page{display:grid;gap:16px;color:#26364d}.toolbar,.inline-actions,.section-head,.pager,.modal-footer{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.toolbar{justify-content:flex-end}.tabs{display:flex;gap:4px;border-bottom:1px solid #dce4ee;overflow-x:auto}.tabs button{border:0;border-radius:6px 6px 0 0;white-space:nowrap;padding:12px 18px;background:transparent}.tabs .active,.chips .active{background:#e9f1ff;color:#215bd8;box-shadow:inset 0 -2px #3268dc}button,.button{border:1px solid #d8e0eb;border-radius:7px;padding:8px 12px;min-height:36px;background:#fff;color:#344159;font-size:12px;font-weight:650;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}button:hover,.button:hover{background:#f3f7fc}button:disabled{opacity:.5;cursor:not-allowed}.primary{background:#285fd4;color:#fff;border-color:#285fd4}.primary:hover{background:#1e4fb7}.panel{border:1px solid #e0e6ef;background:#fff;border-radius:10px;padding:18px}h2{font-size:16px;margin:0 0 14px}h3{font-size:14px;margin:18px 0 10px}p{font-size:13px;color:#6b7890;line-height:1.6}.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.summary-card{display:flex;align-items:flex-start;flex-direction:column;text-align:left;gap:12px;border-radius:10px;padding:18px;border-top:3px solid #5a87df}.summary-card strong{font-size:25px;color:#172e51}.summary-card span{font-size:12px;color:#68768b}.summary-card small,.alert-card small{font-size:11px;color:#7b8ba1}.summary-card.bad{border-top-color:#e36b77}.summary-card.warn{border-top-color:#e2b55b}.summary-card.good{border-top-color:#51ae94}.alert-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.alert-card{display:grid;text-align:left;justify-content:stretch;gap:10px;padding:16px;background:#fafbfe}.alert-card strong{font-size:22px}.attention{display:grid;gap:8px}.attention button{justify-content:flex-start;text-align:left;border-color:#f1dfb7;background:#fffcf4}.empty-state{text-align:center;padding:36px 20px}.empty-state p{max-width:620px;margin:10px auto 20px}.empty-state button{margin-right:8px}.section-head{justify-content:space-between;margin-bottom:12px}.section-head h2{margin:0}.filters{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:12px;align-items:end;margin:16px 0}.filters label,.operation-form label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:650;color:#52647d}input,select,textarea{border:1px solid #d8e0eb;border-radius:6px;min-height:36px;padding:8px 10px;font-family:inherit;font-size:12px;background:#fff;color:#26364d;width:100%;box-sizing:border-box}.table-wrapper{overflow:auto;width:100%}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f5f7fb;font-weight:650;color:#60718a;white-space:nowrap}th,td{padding:12px 10px;text-align:left;border-bottom:1px solid #eaf0f5;white-space:nowrap}td small{display:block;color:#7b8798;margin-top:4px}.pager{justify-content:flex-end;margin-top:14px;font-size:12px}.pager span{margin-right:auto;color:#6b7890}.text-button{padding:0;border:0;color:#245ed3;background:transparent;min-height:auto}.status{font-size:10px;padding:5px 8px;border-radius:20px;background:#eef5ef;color:#397555}.status.expired,.status.blocked,.status.damaged{background:#fff0f0;color:#a6414f}.status.quarantined,.status.near_expiry,.status.expire_today{background:#fff7e7;color:#956f24}.status.empty{background:#edf0f5;color:#75839a}.priority{background:#eaf1ff;color:#3561bc;border-radius:5px;padding:4px 8px}.chips{display:flex;gap:8px;overflow:auto;margin:12px 0}.chips button{white-space:nowrap}.mobile-filter{display:none}.operation-form{display:grid;grid-template-columns:1fr 1fr;gap:14px}.full{grid-column:1/-1}.selection{display:grid;gap:7px;background:#f3f7fd;padding:14px;border-radius:7px;font-size:12px}.selection span{color:#6b7890}.hint{font-size:12px;margin:0}.warning{padding:12px;border-radius:6px;background:#fff2ed;color:#a45133}.confirm{flex-direction:row!important;align-items:center}.confirm input{width:16px;min-height:16px}.modal-footer{justify-content:flex-end}.good-text{color:#278560}.bad-text{color:#b64b56}.activity{border-left:2px solid #d8e4f7;padding:8px 14px;font-size:12px}.activity span{display:block;color:#76849a;margin-top:5px}@media(max-width:1100px){.filters{grid-template-columns:repeat(3,minmax(120px,1fr))}.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:720px){.summary-grid,.alert-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mobile-filter{display:inline-flex}.filters{display:none}.filters.filters-open{display:grid;grid-template-columns:1fr 1fr}.toolbar{justify-content:flex-start}.toolbar .primary{width:100%}.panel{padding:12px}.tabs button{padding:10px 12px}.operation-form{grid-template-columns:1fr}.full{grid-column:auto}}@media(max-width:420px){.summary-grid,.alert-grid,.filters.filters-open{grid-template-columns:1fr}}
 </style>

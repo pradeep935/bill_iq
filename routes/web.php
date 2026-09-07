@@ -527,12 +527,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/batches/list', [InventoryController::class, 'batchList'])->name('batches.list');
         Route::get('/batches/reports', [InventoryController::class, 'batchReports'])->name('batches.reports');
         Route::get('/batches/fefo', [InventoryController::class, 'batchFefo'])->name('batches.fefo');
+        Route::get('/batches/movements', [InventoryController::class, 'batchMovements'])->name('batches.movements');
+        Route::get('/batches/export', [InventoryController::class, 'batchExport'])->name('batches.export');
+        Route::post('/batches/operations', [InventoryController::class, 'batchOperation'])->name('batches.operations');
         Route::get('/batches/{batch}', [InventoryController::class, 'batchShow'])->name('batches.show');
         Route::get('/batches/{batch}/ledger', [InventoryController::class, 'batchLedger'])->name('batches.ledger');
         Route::post('/batches/{batch}/status', [InventoryController::class, 'batchStatus'])->name('batches.status');
         Route::post('/batches/{batch}/transfer', [InventoryController::class, 'batchTransfer'])->name('batches.transfer');
-        Route::post('/batches/{batch}/split', [InventoryController::class, 'batchSplit'])->name('batches.split');
-        Route::post('/batches/{batch}/merge', [InventoryController::class, 'batchMerge'])->name('batches.merge');
 
         Route::get(
             '/serials',

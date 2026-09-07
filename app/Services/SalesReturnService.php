@@ -104,12 +104,13 @@ class SalesReturnService
     {
         return DB::transaction(function () use ($voucher, $status) {
             $this->assertBusiness($voucher);
+            $voucher = SalesReturnVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
 
             if ($voucher->status !== 'draft') {
                 return $this->fresh($voucher);
             }
 
-            $voucher->load(['items.product']);
+            $voucher->load(['items.product', 'items.salesItem']);
 
             foreach ($voucher->items as $item) {
                 if ($item->product->product_type === 'service' || $item->product->item_type === 'non_stock') {
@@ -127,17 +128,6 @@ class SalesReturnService
                     continue;
                 }
 
-                if (in_array($item->restock_status, ['damaged_stock', 'expired_stock', 'quarantine_stock'], true)) {
-                    AuditLogger::record([
-                        'module_name' => 'Sales Return',
-                        'record_id' => $voucher->id,
-                        'action_type' => 'Quarantine Stock',
-                        'business_id' => $voucher->business_id,
-                        'summary' => 'Returned item requires damaged or expired stock handling before resale',
-                    ]);
-                    continue;
-                }
-
                 $this->stock->increaseStock([
                     'business_id' => $voucher->business_id,
                     'branch_id' => $voucher->branch_id,
@@ -145,11 +135,12 @@ class SalesReturnService
                     'product_id' => $item->product_id,
                     'product_variant_id' => $item->product_variant_id,
                     'batch_id' => $item->batch_id,
+                    'stock_status' => ['damaged_stock' => 'damaged', 'expired_stock' => 'expired', 'quarantine_stock' => 'quarantined'][$item->restock_status] ?? 'saleable',
                     'transaction_type' => 'sales_return',
                     'reference_type' => SalesReturnVoucher::class,
                     'reference_id' => $voucher->id,
                     'quantity' => $item->quantity,
-                    'unit_cost' => $this->stock->getAverageCost([
+                    'unit_cost' => $item->salesItem?->cost_rate ?? $this->stock->getAverageCost([
                         'business_id' => $voucher->business_id,
                         'branch_id' => $voucher->branch_id,
                         'warehouse_id' => $voucher->warehouse_id,

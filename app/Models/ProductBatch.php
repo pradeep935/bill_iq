@@ -25,6 +25,13 @@ class ProductBatch extends Model
         'posted_at' => 'datetime',
     ];
 
+    public function isSaleEligible(): bool
+    {
+        return $this->status === 'active'
+            && !in_array($this->condition_status, ['damaged', 'expired', 'quarantined', 'defective', 'lost', 'return_to_supplier'], true)
+            && (!$this->expiry_date || !$this->expiry_date->lt(now()->startOfDay()));
+    }
+
     public function product()
     {
         return $this->belongsTo(Product::class);

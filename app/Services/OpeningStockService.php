@@ -169,8 +169,12 @@ class OpeningStockService
 
                 $batchId = $item->batch_id;
 
-                if (!$batchId && $this->requiresBatch($item->product) && $item->batch_no) {
-                    $batchId = ProductBatch::query()->create($this->batchPayload($voucher, $item))->id;
+                if ($batchId || $item->batch_no) {
+                    $batchId = app(BatchIdentityService::class)->resolve($businessId, $item->product_id, [
+                        'batch_id' => $batchId, 'batch_number' => $item->batch_no,
+                        'manufacturing_date' => $item->manufacturing_date, 'expiry_date' => $item->expiry_date,
+                        'unit_cost' => $item->purchase_cost,
+                    ])->id;
 
                     $item->update(['batch_id' => $batchId]);
                 }
@@ -183,6 +187,7 @@ class OpeningStockService
                     'product_variant_id' => $item->product_variant_id,
                     'batch_id' => $batchId,
                     'serial_id' => $item->serial_number_id,
+                    'stock_status' => $item->condition_status ?: 'saleable',
                     'transaction_type' => 'opening_stock',
                     'reference_type' => OpeningStockVoucher::class,
                     'reference_id' => $voucher->id,
@@ -383,6 +388,7 @@ class OpeningStockService
                 'product_variant_id' => $variantId,
                 'batch_id' => $item['batch_id'] ?? null,
                 'batch_no' => $item['batch_no'] ?? null,
+                'condition_status' => $item['condition_status'] ?? 'saleable',
                 'serial_number_id' => $item['serial_number_id'] ?? $item['serial_id'] ?? null,
                 'quantity' => $item['quantity'],
                 'purchase_cost' => $item['purchase_cost'] ?? 0,
@@ -513,7 +519,7 @@ class OpeningStockService
 
     private function requiresBatch(Product $product): bool
     {
-        return (bool) $product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry'], true);
+        return (bool) $product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry', 'batch_serial'], true);
     }
 
     private function requiresExpiry(Product $product): bool
@@ -544,19 +550,19 @@ class OpeningStockService
             ]);
         }
 
-        if ((float) $item->purchase_cost <= 0 && !$this->allowsFreeOpeningStock($item->business_id)) {
+        if ((float) $item->purchase_cost < 0) {
             throw ValidationException::withMessages([
-                'purchase_cost' => 'Cost price must be greater than zero.',
+                'purchase_cost' => 'Cost price cannot be negative.',
             ]);
         }
 
-        if ($item->expiry_date && $item->manufacturing_date && $item->expiry_date->lte($item->manufacturing_date)) {
+        if ($item->expiry_date && $item->manufacturing_date && $item->expiry_date->lt($item->manufacturing_date)) {
             throw ValidationException::withMessages([
                 'items' => 'Expiry date must be greater than manufacturing date.',
             ]);
         }
 
-        if ($item->expiry_date && $item->expiry_date->lt(now()->startOfDay())) {
+        if (($item->condition_status ?: 'saleable') === 'saleable' && $item->expiry_date && $item->expiry_date->lt(now()->startOfDay())) {
             throw ValidationException::withMessages([
                 'items' => 'Expired opening stock cannot be posted.',
             ]);

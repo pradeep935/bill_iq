@@ -241,16 +241,6 @@ const InventoryApi = {
         return response.data;
     },
 
-    async splitBatch(batch, payload) {
-        const response = await axios.post(`/app/inventory/batches/${batch}/split`, payload);
-        return response.data;
-    },
-
-    async mergeBatch(batch, payload) {
-        const response = await axios.post(`/app/inventory/batches/${batch}/merge`, payload);
-        return response.data;
-    },
-
     async serialReferences() {
         const response = await axios.get('/app/inventory/serials/references');
         return response.data;

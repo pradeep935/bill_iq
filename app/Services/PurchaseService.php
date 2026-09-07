@@ -137,6 +137,7 @@ class PurchaseService
     {
         return DB::transaction(function () use ($voucher, $status) {
             $this->assertBusiness($voucher);
+            $voucher = PurchaseVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
 
             if ($this->hasStockPosting($voucher)) {
                 throw ValidationException::withMessages(['status' => 'Stock ledger already posted for this purchase.']);
@@ -440,35 +441,12 @@ class PurchaseService
 
     private function batchIdForItem(PurchaseVoucher $voucher, $item): ?int
     {
-        if ($item->batch_id) {
-            return $item->batch_id;
-        }
-
-        if (!$item->batch_number) {
-            return null;
-        }
-
-        $identity = ['product_id' => $item->product_id, 'batch_no' => $item->batch_number];
-        if (Schema::hasColumn('product_batches', 'business_id')) $identity['business_id'] = $voucher->business_id;
-        if (Schema::hasColumn('product_batches', 'tenant_id')) $identity['tenant_id'] = $voucher->business_id;
-
-        $payload = [
-            'batch_number' => $item->batch_number,
-            'manufacturing_date' => $item->manufacturing_date,
-            'mfg_date' => $item->manufacturing_date,
-            'expiry_date' => $item->expiry_date,
-            'purchase_price' => $item->purchase_rate,
-            'cost_price' => $item->purchase_rate,
-            'selling_price' => $item->selling_price ?: 0,
-            'mrp' => $item->mrp,
-            'quantity' => 0,
-            'status' => 'active',
-        ];
-
-        $batch = ProductBatch::query()->firstOrCreate(
-            array_filter($identity, fn ($value, $key) => Schema::hasColumn('product_batches', $key), ARRAY_FILTER_USE_BOTH),
-            array_filter($payload, fn ($value, $key) => Schema::hasColumn('product_batches', $key), ARRAY_FILTER_USE_BOTH)
-        );
+        if (!$item->batch_id && !$item->batch_number) return null;
+        $batch = app(BatchIdentityService::class)->resolve($voucher->business_id, $item->product_id, [
+            'batch_id' => $item->batch_id, 'batch_number' => $item->batch_number,
+            'manufacturing_date' => $item->manufacturing_date, 'expiry_date' => $item->expiry_date,
+            'unit_cost' => $item->purchase_rate,
+        ]);
 
         $item->update(['batch_id' => $batch->id]);
 
@@ -499,7 +477,7 @@ class PurchaseService
                 throw ValidationException::withMessages(["items.$index.product_id" => 'Services and non-stock products cannot be posted to stock.']);
             }
 
-            if (($product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry'], true)) && empty($item['batch_number']) && empty($item['batch_id'])) {
+            if (($product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry', 'batch_serial'], true)) && empty($item['batch_number']) && empty($item['batch_id'])) {
                 throw ValidationException::withMessages(["items.$index.batch_number" => 'Batch number is required for this product.']);
             }
 

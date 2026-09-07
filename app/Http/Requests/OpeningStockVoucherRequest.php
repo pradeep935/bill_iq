@@ -33,6 +33,7 @@ class OpeningStockVoucherRequest extends FormRequest
             'items.*.batch_no' => ['nullable', 'string', 'max:100'],
             'items.*.serial_number_id' => ['nullable', 'integer'],
             'items.*.serial_id' => ['nullable', 'integer'],
+            'items.*.condition_status' => ['nullable', 'in:saleable,damaged,expired,defective,quarantined'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0'],
             'items.*.purchase_cost' => ['required', 'numeric', 'min:0'],
             'items.*.selling_price' => ['nullable', 'numeric', 'min:0'],
@@ -68,10 +69,10 @@ class OpeningStockVoucherRequest extends FormRequest
 
                 if (
                     $this->input('status') === 'posted' &&
-                    !$this->allowsFreeOpeningStock() &&
-                    ($purchaseCost === null || $purchaseCost === '' || (float) $purchaseCost <= 0)
+
+                    ($purchaseCost === null || $purchaseCost === '' || (float) $purchaseCost < 0)
                 ) {
-                    $validator->errors()->add("items.$index.purchase_cost", 'Cost price must be greater than zero.');
+                    $validator->errors()->add("items.$index.purchase_cost", 'Cost price cannot be negative.');
                 }
 
                 if (
@@ -88,15 +89,15 @@ class OpeningStockVoucherRequest extends FormRequest
                 if (
                     !empty($item['manufacturing_date']) &&
                     !empty($item['expiry_date']) &&
-                    strtotime($item['expiry_date']) <= strtotime($item['manufacturing_date'])
+                    strtotime($item['expiry_date']) < strtotime($item['manufacturing_date'])
                 ) {
-                    $validator->errors()->add("items.$index.expiry_date", 'Expiry date must be greater than manufacturing date.');
+                    $validator->errors()->add("items.$index.expiry_date", 'Expiry cannot be before manufacturing date.');
                 }
 
                 if (
                     $this->input('status') === 'posted' &&
                     !empty($item['expiry_date']) &&
-                    strtotime($item['expiry_date']) < strtotime(date('Y-m-d'))
+                    ($item['condition_status'] ?? 'saleable') === 'saleable' && strtotime($item['expiry_date']) < strtotime(date('Y-m-d'))
                 ) {
                     $validator->errors()->add("items.$index.expiry_date", 'Expired opening stock cannot be posted.');
                 }

@@ -118,30 +118,30 @@ class SalesInventoryFlowTest extends TestCase
         $this->assertSame('partial', $sale->payment_status);
     }
 
-    private function fixture(): array
+    protected function fixture(): array
     {
         $businessId = DB::table('companies')->insertGetId(['name' => 'Bill IQ Test', 'created_at' => now(), 'updated_at' => now()]);
         $user = User::factory()->create(['role_id' => 1, 'is_active' => 1, 'status' => 'active']);
         $branch = DB::table('branches')->insertGetId(['business_id' => $businessId, 'name' => 'Main', 'code' => 'MAIN', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $warehouse = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'name' => 'Store', 'code' => 'ST', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
-        $customer = DB::table('customers')->insertGetId(['business_id' => $businessId, 'customer_name' => 'Acme Customer', 'mobile' => '9999999999', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $customer = DB::table('customers')->insertGetId(['company_id' => $businessId, 'name' => 'Acme Customer', 'business_id' => $businessId, 'customer_name' => 'Acme Customer', 'mobile' => '9999999999', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $product = Product::query()->create(['business_id' => $businessId, 'company_id' => $businessId, 'name' => 'Inventory Item', 'sku' => 'INV-1', 'product_type' => 'goods', 'item_type' => 'stock', 'track_inventory' => true, 'tracking_type' => 'none', 'status' => 'active']);
 
         return [$businessId, $user, $product, $branch, $warehouse, $customer];
     }
 
-    private function loginBusiness(User $user, int $businessId): void
+    protected function loginBusiness(User $user, int $businessId): void
     {
         Auth::login($user);
         session(['business_id' => $businessId]);
     }
 
-    private function openingStock(int $businessId, int $branch, int $warehouse, int $productId, float $quantity): void
+    protected function openingStock(int $businessId, int $branch, int $warehouse, int $productId, float $quantity): void
     {
         StockLedger::query()->create(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $productId, 'transaction_type' => 'opening_stock', 'reference_type' => Product::class, 'reference_id' => $productId, 'quantity_in' => $quantity, 'quantity_out' => 0, 'unit_cost' => 10, 'stock_value' => $quantity * 10]);
     }
 
-    private function order(int $businessId, int $branch, int $warehouse, int $customer, int $productId, float $quantity): SalesOrder
+    protected function order(int $businessId, int $branch, int $warehouse, int $customer, int $productId, float $quantity): SalesOrder
     {
         $order = SalesOrder::query()->create(['business_id' => $businessId, 'order_number' => 'SO-' . uniqid(), 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'customer_id' => $customer, 'order_date' => now()->toDateString(), 'order_status' => 'draft', 'reservation_status' => 'none', 'dispatch_status' => 'pending', 'invoice_status' => 'not_invoiced']);
         SalesOrderItem::query()->create(['sales_order_id' => $order->id, 'product_id' => $productId, 'ordered_quantity' => $quantity, 'unit_price' => 10, 'line_total' => $quantity * 10]);
@@ -150,7 +150,7 @@ class SalesInventoryFlowTest extends TestCase
         return $order->fresh();
     }
 
-    private function sale(int $businessId, int $branch, int $warehouse, int $customer, int $productId, float $quantity, string $status = 'draft'): SalesVoucher
+    protected function sale(int $businessId, int $branch, int $warehouse, int $customer, int $productId, float $quantity, string $status = 'draft'): SalesVoucher
     {
         $sale = SalesVoucher::query()->create(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'customer_id' => $customer, 'voucher_number' => 'SV-' . uniqid(), 'invoice_number' => 'INV-' . uniqid(), 'invoice_date' => now()->toDateString(), 'sale_type' => 'cash', 'invoice_type' => 'tax_invoice', 'tax_type' => 'intrastate', 'subtotal' => $quantity * 10, 'taxable_amount' => $quantity * 10, 'grand_total' => $quantity * 10, 'paid_amount' => $quantity * 10, 'balance_amount' => 0, 'payment_status' => 'paid', 'status' => $status]);
         $sale->items()->create(['product_id' => $productId, 'product_name_snapshot' => 'Inventory Item', 'sku_snapshot' => 'INV-1', 'quantity' => $quantity, 'free_quantity' => 0, 'selling_rate' => 10, 'discount_amount' => 0, 'taxable_amount' => $quantity * 10, 'gst_rate' => 0, 'cgst_rate' => 0, 'sgst_rate' => 0, 'igst_rate' => 0, 'cgst_amount' => 0, 'sgst_amount' => 0, 'igst_amount' => 0, 'cess_rate' => 0, 'cess_amount' => 0, 'line_total' => $quantity * 10, 'cost_rate' => 10]);
@@ -158,7 +158,7 @@ class SalesInventoryFlowTest extends TestCase
         return $sale->fresh(['items.product']);
     }
 
-    private function salesReturn(int $businessId, int $branch, int $warehouse, int $customer, SalesVoucher $sale): SalesReturnVoucher
+    protected function salesReturn(int $businessId, int $branch, int $warehouse, int $customer, SalesVoucher $sale): SalesReturnVoucher
     {
         $return = SalesReturnVoucher::query()->create(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'customer_id' => $customer, 'sales_voucher_id' => $sale->id, 'voucher_number' => 'SR-' . uniqid(), 'credit_note_number' => 'CN-' . uniqid(), 'return_date' => now()->toDateString(), 'return_type' => 'against_sale', 'tax_type' => 'intrastate', 'subtotal' => 10, 'taxable_amount' => 10, 'grand_total' => 10, 'settlement_type' => 'customer_credit', 'balance_amount' => 10, 'status' => 'draft']);
         $return->items()->create(['sales_item_id' => $sale->items->first()->id, 'product_id' => $sale->items->first()->product_id, 'product_name_snapshot' => 'Inventory Item', 'sku_snapshot' => 'INV-1', 'quantity' => 1, 'selling_rate' => 10, 'discount_amount' => 0, 'taxable_amount' => 10, 'gst_rate' => 0, 'cgst_rate' => 0, 'sgst_rate' => 0, 'igst_rate' => 0, 'cgst_amount' => 0, 'sgst_amount' => 0, 'igst_amount' => 0, 'cess_rate' => 0, 'cess_amount' => 0, 'line_total' => 10, 'restock_status' => 'restock']);
@@ -166,15 +166,15 @@ class SalesInventoryFlowTest extends TestCase
         return $return->fresh(['items.product']);
     }
 
-    private function taxedSale(int $businessId, int $branch, int $warehouse, int $customer, int $productId, float $quantity, float $rate, float $discount, float $taxable, float $cgst, float $sgst): SalesVoucher
+    protected function taxedSale(int $businessId, int $branch, int $warehouse, int $customer, int $productId, float $quantity, float $rate, float $discount, float $taxable, float $cgst, float $sgst): SalesVoucher
     {
-        $sale = SalesVoucher::query()->create(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'customer_id' => $customer, 'voucher_number' => 'SV-' . uniqid(), 'invoice_number' => 'INV-' . uniqid(), 'invoice_date' => now()->toDateString(), 'sale_type' => 'cash', 'invoice_type' => 'tax_invoice', 'tax_type' => 'intrastate', 'subtotal' => $quantity * $rate, 'discount_amount' => $discount, 'taxable_amount' => $taxable, 'cgst_amount' => $cgst, 'sgst_amount' => $sgst, 'grand_total' => $taxable + $cgst + $sgst, 'paid_amount' => $taxable + $cgst + $sgst, 'balance_amount' => 0, 'payment_status' => 'paid', 'status' => 'approved']);
+        $sale = SalesVoucher::query()->create(['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'customer_id' => $customer, 'voucher_number' => 'SV-' . uniqid(), 'invoice_number' => 'INV-' . uniqid(), 'invoice_date' => now()->toDateString(), 'sale_type' => 'cash', 'invoice_type' => 'tax_invoice', 'tax_type' => 'intrastate', 'subtotal' => $quantity * $rate, 'item_discount_amount' => $discount, 'taxable_amount' => $taxable, 'cgst_amount' => $cgst, 'sgst_amount' => $sgst, 'grand_total' => $taxable + $cgst + $sgst, 'paid_amount' => $taxable + $cgst + $sgst, 'balance_amount' => 0, 'payment_status' => 'paid', 'status' => 'approved']);
         $sale->items()->create(['product_id' => $productId, 'product_name_snapshot' => 'Inventory Item', 'sku_snapshot' => 'INV-1', 'quantity' => $quantity, 'free_quantity' => 0, 'selling_rate' => $rate, 'discount_amount' => $discount, 'taxable_amount' => $taxable, 'gst_rate' => 10, 'cgst_rate' => 5, 'sgst_rate' => 5, 'igst_rate' => 0, 'cgst_amount' => $cgst, 'sgst_amount' => $sgst, 'igst_amount' => 0, 'cess_rate' => 0, 'cess_amount' => 0, 'line_total' => $taxable + $cgst + $sgst, 'cost_rate' => 10]);
 
         return $sale->fresh(['items.product']);
     }
 
-    private function returnPayload(SalesVoucher $sale, float $quantity): array
+    protected function returnPayload(SalesVoucher $sale, float $quantity): array
     {
         $item = $sale->items->first();
 

@@ -105,10 +105,13 @@ class StockService
 
     public function getAvailableToSell(array $scope, ?int $excludeReservationReferenceId = null, bool $lockReservations = false): float
     {
-        return round(
-            $this->getCurrentStock($scope) - $this->getActiveReservedQuantity($scope, $excludeReservationReferenceId, $lockReservations),
-            3
-        );
+        $eligibleScope = $scope;
+        $eligibleScope['sale_eligible'] = true;
+        return max(0, round(
+            (float) $this->quantityQuery(array_merge($eligibleScope, ['stock_status' => 'saleable']))->value('available_quantity')
+                - $this->getActiveReservedQuantity($scope, $excludeReservationReferenceId, $lockReservations), 3
+        ));
+
     }
 
     public function getBranchStock(int $businessId, int $branchId, int $productId): float
@@ -161,6 +164,7 @@ class StockService
     public function decreaseStock(array $data): StockLedger
     {
         return DB::transaction(function () use ($data) {
+            $this->productForScope($data);
             $data['quantity_out'] = (float) ($data['quantity'] ?? $data['quantity_out'] ?? 0);
             $data['quantity_in'] = 0;
 
@@ -174,7 +178,7 @@ class StockService
     {
         $product = $this->productForScope($scope);
 
-        if ((bool) ($product->allow_negative_stock ?? false)) {
+        if (empty($scope['batch_id']) && (bool) ($product->allow_negative_stock ?? false)) {
             return;
         }
 
@@ -191,7 +195,7 @@ class StockService
     {
         $product = $this->productForScope($scope);
 
-        if ((bool) ($product->allow_negative_stock ?? false)) {
+        if (empty($scope['batch_id']) && (bool) ($product->allow_negative_stock ?? false)) {
             return;
         }
 
@@ -287,6 +291,7 @@ class StockService
             ? "product_id, SUBSTRING_INDEX(GROUP_CONCAT(image_path ORDER BY is_primary DESC, sort_order ASC, id DESC SEPARATOR '|'), '|', 1) as image_path"
             : 'product_id, MIN(image_path) as image_path';
 
+        $eligibleBatch = Schema::hasColumn('product_batches', 'status') ? "(stock_ledgers.batch_id IS NULL OR (product_batches.status = 'active' AND COALESCE(product_batches.condition_status, 'saleable') = 'saleable' AND (product_batches.expiry_date IS NULL OR product_batches.expiry_date >= '".now()->toDateString()."')))" : '1=1';
         $query = StockLedger::query()
             ->join('products', 'products.id', '=', 'stock_ledgers.product_id')
             ->leftJoin('branches', 'branches.id', '=', 'stock_ledgers.branch_id')
@@ -371,6 +376,7 @@ class StockService
                 'product_images.image_path',
                 'product_batches.batch_no',
                 'product_batches.expiry_date',
+                ...((Schema::hasColumn('product_batches', 'status') && Schema::hasColumn('product_batches', 'condition_status')) ? ['product_batches.status', 'product_batches.condition_status'] : []),
             ])
             ->selectRaw('
                 stock_ledgers.business_id,
@@ -411,7 +417,7 @@ class StockService
                 COALESCE(SUM(CASE WHEN stock_ledgers.stock_status = "lost" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as lost_quantity,
                 COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) as quantity_on_hand,
                 COALESCE(MAX(reservations.reserved_quantity), 0) as reserved_quantity,
-                COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) - COALESCE(MAX(reservations.reserved_quantity), 0) as quantity_available,
+                CASE WHEN ' . $eligibleBatch . ' THEN COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" THEN stock_ledgers.quantity_in - stock_ledgers.quantity_out ELSE 0 END), 0) - COALESCE(MAX(reservations.reserved_quantity), 0) ELSE 0 END as quantity_available,
                 CASE
                     WHEN COALESCE(SUM(CASE WHEN COALESCE(stock_ledgers.stock_status, "saleable") = "saleable" AND stock_ledgers.quantity_in > 0 THEN stock_ledgers.quantity_in ELSE 0 END), 0) = 0
                     THEN 0
@@ -1041,6 +1047,18 @@ class StockService
         if ($validate) {
             $this->validateOwnership($businessId, $data);
         }
+        $product = $this->productForScope($data);
+        if (($product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry', 'batch_serial'], true)) && empty($data['batch_id'])) {
+            throw ValidationException::withMessages(['batch_id' => 'Select a batch for this tracked product before posting stock.']);
+        }
+        if ($quantityOut > 0 && !empty($data['batch_id'])) {
+            $batch = ProductBatch::query()->whereKey($data['batch_id'])->lockForUpdate()->firstOrFail();
+            if (in_array($transactionType, ['sale', 'delivery_challan'], true) && (!$batch->isSaleEligible() || ($data['stock_status'] ?? 'saleable') !== 'saleable')) {
+                throw ValidationException::withMessages(['batch_id' => 'This batch is not eligible for sale.']);
+            }
+            $this->validateAvailableStock($data, $quantityOut);
+        }
+
 
         if (empty($data['skip_freeze_check'])) {
             app(InventoryFreezeService::class)->assertWarehouseAvailable(
@@ -1241,7 +1259,7 @@ class StockService
         return Product::query()
             ->where('id', $scope['product_id'])
             ->where(fn (Builder $query) => $this->scopeProductBusiness($query, $businessId))
-            ->firstOrFail();
+            ->lockForUpdate()->firstOrFail();
     }
 
     private function scopeProductBusiness(Builder $query, int $businessId): void
@@ -1259,7 +1277,8 @@ class StockService
     private function quantityQuery(array $scope)
     {
         $query = $this->baseLedgerQuery($scope)
-            ->selectRaw('COALESCE(SUM(quantity_in), 0) - COALESCE(SUM(quantity_out), 0) as available_quantity');
+            ->selectRaw('COALESCE(SUM(quantity_in), 0) - COALESCE(SUM(quantity_out), 0) as available_quantity')
+            ->when(DB::transactionLevel() > 0, fn ($q) => $q->lockForUpdate());
 
         return DB::query()->fromSub($query, 'stock_quantity');
     }
@@ -1276,6 +1295,14 @@ class StockService
             ->when(array_key_exists('product_variant_id', $scope), fn (Builder $q) => $q->where('product_variant_id', $scope['product_variant_id']))
             ->when(array_key_exists('batch_id', $scope), fn (Builder $q) => $q->where('batch_id', $scope['batch_id']))
             ->when(array_key_exists('warehouse_location_id', $scope) && Schema::hasColumn('stock_ledgers', 'warehouse_location_id'), fn (Builder $q) => $q->where('warehouse_location_id', $scope['warehouse_location_id']))
+            ->when(!empty($scope['sale_eligible']), function (Builder $q) {
+                $q->where(function (Builder $eligible) {
+                    $eligible->whereNull('batch_id')->orWhereHas('batch', fn (Builder $batch) => $batch
+                        ->where('status', 'active')
+                        ->where(fn ($condition) => $condition->whereNull('condition_status')->orWhere('condition_status', 'saleable'))
+                        ->where(fn ($expiry) => $expiry->whereNull('expiry_date')->orWhereDate('expiry_date', '>=', now()->toDateString())));
+                });
+            })
             ->when(array_key_exists('stock_status', $scope), fn (Builder $q) => $q->where('stock_status', $scope['stock_status']))
             ->when(!empty($scope['exclude_stock_statuses']), fn (Builder $q) => $q->whereNotIn('stock_status', (array) $scope['exclude_stock_statuses']));
     }

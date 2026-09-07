@@ -53,6 +53,7 @@ class InventoryControlService
             'products' => Product::query()->where(function (Builder $q) use ($businessId) {
                 $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
             })->where('status', 'active')->orderBy('name')->limit(200)->get($this->productReferenceColumns()),
+            'batches' => ProductBatch::query()->where('business_id', $businessId)->orderBy('expiry_date')->get(['id','product_id','batch_no','status','expiry_date']),
             'settings' => BusinessInventorySetting::query()->where('business_id', $businessId)->first(),
         ]);
     }
@@ -820,6 +821,9 @@ class InventoryControlService
                 $this->assertBatch((int) $row['source_batch_id'], $product->id);
             }
 
+            if (!empty($row['source_batch_id']) && !empty($row['destination_batch_id']) && (int)$row['source_batch_id'] !== (int)$row['destination_batch_id']) {
+                throw ValidationException::withMessages(["items.$index.destination_batch_id" => 'A transfer must retain the source batch identity.']);
+            }
             if (!empty($row['destination_batch_id'])) {
                 $this->assertBatch((int) $row['destination_batch_id'], $product->id);
             }

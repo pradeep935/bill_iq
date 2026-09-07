@@ -258,7 +258,7 @@ return new class extends Migration
             $table->string('status', 20)->default('created')->index();
             $table->text('remarks')->nullable();
             $table->timestamps();
-            $table->unique(['recurring_expense_template_id', 'run_date']);
+            $table->unique(['recurring_expense_template_id', 'run_date'], 'rec_exp_run_template_date_unique');
         });
     }
 

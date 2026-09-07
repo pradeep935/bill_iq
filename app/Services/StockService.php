@@ -71,6 +71,13 @@ class StockService
 
     public function getConditionStock(array $scope, string $condition): float
     {
+        // Posting must read committed quantities even if its transaction already
+        // performed a non-locking read (MySQL REPEATABLE READ).
+        if (DB::transactionLevel() > 0) {
+            return (float) $this->baseLedgerQuery(array_merge($scope, ['stock_status' => $condition]))
+                ->lockForUpdate()->get(['quantity_in', 'quantity_out'])
+                ->sum(fn ($row) => (float) $row->quantity_in - (float) $row->quantity_out);
+        }
         return $this->quantityQuery(array_merge($scope, ['stock_status' => $condition]))->value('available_quantity') ?: 0.0;
     }
 
@@ -95,7 +102,8 @@ class StockService
             ->when($excludeReferenceId, fn ($q) => $q->where('reference_id', '!=', $excludeReferenceId));
 
         if ($lock) {
-            $query->lockForUpdate();
+            return (float) $query->lockForUpdate()->get(['reserved_quantity', 'fulfilled_quantity', 'released_quantity'])
+                ->sum(fn ($row) => (float) $row->reserved_quantity - (float) $row->fulfilled_quantity - (float) $row->released_quantity);
         }
 
         return (float) $query

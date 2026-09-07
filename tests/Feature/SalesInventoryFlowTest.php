@@ -23,6 +23,13 @@ class SalesInventoryFlowTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function beforeRefreshingDatabase(): void
+    {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            DB::connection()->getPdo()->sqliteCreateFunction('CONCAT', fn (...$parts) => implode('', $parts));
+        }
+    }
+
     public function test_reservation_uses_available_to_sell_without_stock_ledger_movement(): void
     {
         [$businessId, $user, $product, $branch, $warehouse, $customer] = $this->fixture();
@@ -116,6 +123,55 @@ class SalesInventoryFlowTest extends TestCase
         $sale->refresh();
         $this->assertSame(20.0, (float) $sale->balance_amount);
         $this->assertSame('partial', $sale->payment_status);
+    }
+
+    public function test_fefo_sale_reconciles_all_batches_and_preserves_invoice_allocations(): void
+    {
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-07'));
+        [$businessId, $user, $product, $branch, $warehouse, $customer] = $this->fixture();
+        $this->loginBusiness($user, $businessId);
+        $product->update(['name' => 'Mustard Oil 1L', 'tracking_type' => 'batch_expiry', 'batch_required' => true]);
+        $scope = ['business_id' => $businessId, 'branch_id' => $branch, 'warehouse_id' => $warehouse, 'product_id' => $product->id];
+        $batches = [];
+        foreach ([['MO-BATCH-001', '2026-12-31', 10], ['MO-BATCH-002', '2026-11-30', 5]] as [$number, $expiry, $quantity]) {
+            $batch = \App\Models\ProductBatch::create(['business_id' => $businessId, 'product_id' => $product->id, 'batch_no' => $number, 'batch_number' => $number, 'expiry_date' => $expiry, 'status' => 'active', 'condition_status' => 'saleable']);
+            app(StockService::class)->increaseStock(array_merge($scope, ['batch_id' => $batch->id, 'quantity' => $quantity, 'unit_cost' => 10, 'transaction_type' => 'opening_stock', 'reference_type' => Product::class, 'reference_id' => $product->id]));
+            $batches[] = $batch;
+        }
+        $allocator = app(\App\Services\SalesBatchAllocator::class);
+        $this->assertSame(15.0, (float) $allocator->eligible($scope)->sum('available_stock'));
+        $this->assertSame(15.0, (float) app(SalesService::class)->searchProducts('Mustard Oil', $scope)->first()['available_stock']);
+        $expected = [['batch_id' => $batches[1]->id, 'quantity' => 5.0], ['batch_id' => $batches[0]->id, 'quantity' => 2.0]];
+        $this->assertSame($expected, $allocator->allocate($scope, 7));
+        $sale = $this->sale($businessId, $branch, $warehouse, $customer, $product->id, 7);
+        app(SalesService::class)->post($sale);
+        app(SalesService::class)->post($sale);
+        $movements = StockLedger::where('transaction_type', 'sale')->where('reference_id', $sale->id)->orderBy('id')->get();
+        $this->assertCount(2, $movements);
+        $this->assertEquals($expected, $sale->items()->first()->batch_allocations);
+        $this->assertSame([5.0, 2.0], $movements->map(fn ($row) => (float) $row->quantity_out)->all());
+        $this->assertSame(0.0, app(StockService::class)->getCurrentStock(array_merge($scope, ['batch_id' => $batches[1]->id])));
+        $this->assertSame(8.0, app(StockService::class)->getAvailableToSell($scope));
+        $this->assertSame(8.0, (float) app(SalesService::class)->searchProducts('Mustard Oil', $scope)->first()['available_stock']);
+        $this->assertSame(8.0, (float) $allocator->eligible($scope)->sum('available_stock'));
+        $this->assertSame($batches[0]->id, $allocator->eligible($scope)->first()['id']);
+
+        $failedSale = $this->sale($businessId, $branch, $warehouse, $customer, $product->id, 9);
+        try {
+            app(SalesService::class)->post($failedSale);
+            $this->fail('Insufficient stock must fail posting.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertSame('draft', $failedSale->fresh()->status);
+            $this->assertSame(0, StockLedger::where('reference_type', SalesVoucher::class)->where('reference_id', $failedSale->id)->count());
+        }
+        $manual = $this->sale($businessId, $branch, $warehouse, $customer, $product->id, 1);
+        $manual->items()->update(['batch_id' => $batches[1]->id]);
+        try {
+            app(SalesService::class)->post($manual);
+            $this->fail('An explicit depleted batch must not switch batches.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertSame(8.0, app(StockService::class)->getAvailableToSell($scope));
+        }
     }
 
     protected function fixture(): array

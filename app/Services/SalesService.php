@@ -176,6 +176,8 @@ class SalesService
         return DB::transaction(function () use ($voucher, $status) {
             $this->assertBusiness($voucher);
             $voucher = SalesVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
+            // Serialize product stock consumers before taking any quantity snapshots.
+            Product::query()->whereIn('id', $voucher->items()->pluck('product_id'))->orderBy('id')->lockForUpdate()->get();
 
             if ($this->hasStockPosting($voucher)) {
                 return $this->fresh($voucher);
@@ -197,6 +199,28 @@ class SalesService
                     'product_variant_id' => $item->product_variant_id,
                     'batch_id' => $item->batch_id,
                 ];
+                if ($item->batch_id || $item->product->batch_required || in_array($item->product->tracking_type, ['batch', 'batch_expiry', 'batch_serial'], true)) {
+                    $allocations = app(SalesBatchAllocator::class)->allocate($scope, $quantity, true, fn ($batchScope) => $this->customerReservedQuantity($voucher, $batchScope, true));
+                    foreach ($allocations as $allocation) {
+                        $batchScope = array_merge($scope, ['batch_id' => $allocation['batch_id']]);
+                        $this->stock->decreaseStock(array_merge($batchScope, [
+                            'transaction_type' => 'sale',
+                            'reference_type' => SalesVoucher::class,
+                            'reference_id' => $voucher->id,
+                            'quantity' => $allocation['quantity'],
+                            'unit_cost' => $this->stock->getAverageCost($batchScope),
+                            'transaction_date' => $voucher->invoice_date,
+                            'remarks' => 'Sale ' . $voucher->invoice_number . ' item ' . $item->id,
+                        ]));
+                    }
+                    foreach ($allocations as $allocation) {
+                        $allocatedItem = clone $item;
+                        $allocatedItem->batch_id = $allocation['batch_id'];
+                        $this->consumeCustomerReservations($voucher, $allocatedItem, $allocation['quantity']);
+                    }
+                    $item->update(['batch_allocations' => $allocations]);
+                    continue;
+                }
                 $customerReserved = $this->customerReservedQuantity($voucher, $scope, true);
                 $this->stock->validateAvailableToSell($scope, max(0, $quantity - $customerReserved), null, true);
                 $this->stock->decreaseStock([
@@ -831,9 +855,6 @@ class SalesService
             }
 
             $batchRequired = $product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry', 'batch_serial'], true);
-            if ($batchRequired && empty($item['batch_id'])) {
-                throw ValidationException::withMessages(["items.$index.batch_id" => 'Batch is required for this product.']);
-            }
 
             if (!empty($item['batch_id'])) {
                 $batch = ProductBatch::query()->where('business_id', $businessId)->where('product_id', $product->id)->where('id', $item['batch_id'])->firstOrFail();
@@ -854,6 +875,10 @@ class SalesService
                     'product_variant_id' => $item['product_variant_id'] ?? null,
                     'batch_id' => $item['batch_id'] ?? null,
                 ];
+                if ($batchRequired || !empty($item['batch_id'])) {
+                    app(SalesBatchAllocator::class)->allocate($scope, (float) $item['quantity'] + (float) ($item['free_quantity'] ?? 0), false, fn ($batchScope) => $this->customerReservedQuantityForData($businessId, $data, $batchScope));
+                    continue;
+                }
                 $customerReserved = $this->customerReservedQuantityForData($businessId, $data, $scope);
                 $this->stock->validateAvailableToSell($scope, max(0, (float) $item['quantity'] + (float) ($item['free_quantity'] ?? 0) - $customerReserved));
             }
@@ -910,17 +935,12 @@ class SalesService
             $stockScope['warehouse_id'] = $warehouseId;
         }
 
-        $batches = $product->batches->filter(fn ($batch) => $batch->isSaleEligible())->sortBy(fn ($batch) => ($batch->expiry_date?->format('Y-m-d') ?? '9999-12-31').sprintf('%020d', $batch->id))->map(function ($batch) use ($stockScope) {
-            $scope = array_merge($stockScope, ['batch_id' => $batch->id]);
-            return [
-                'id' => $batch->id,
-                'batch_no' => $batch->batch_no ?: $batch->batch_number,
-                'expiry_date' => optional($batch->expiry_date)->format('Y-m-d'),
-                'available_stock' => $this->stock->getAvailableToSell($scope),
-            ];
-        })->filter(fn ($batch) => (float) $batch['available_stock'] > 0 || (int) $batch['id'] === (int) $batchId)->values();
-        $selectedBatchId = $batchId ?: ($batches->first()['id'] ?? null);
-        $availableStock = $product->product_type === 'service' ? null : $this->stock->getAvailableToSell($selectedBatchId ? array_merge($stockScope, ['batch_id' => $selectedBatchId]) : $stockScope);
+        $batches = app(SalesBatchAllocator::class)->eligible($stockScope);
+        $selectedBatchId = $batchId;
+        $batchTracked = $product->batch_required || in_array($product->tracking_type, ['batch', 'batch_expiry', 'batch_serial'], true);
+        $availableStock = $product->product_type === 'service' ? null : ($batchTracked
+            ? ($batchId ? (float) ($batches->firstWhere('id', $batchId)['available_stock'] ?? 0) : round($batches->sum('available_stock'), 3))
+            : $this->stock->getAvailableToSell($stockScope));
 
         return [
             'id' => $product->id,

@@ -389,7 +389,7 @@ body:has(.bill-app) .main-content {
 body:has(.bill-app) #sidebar,
 body:has(.bill-app) .page-header,
 body:has(.bill-app) .top-header,
-body:has(.bill-app) header:not(.bill-topbar) {
+body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.product-drawer-header) {
     display: none !important;
 }
 

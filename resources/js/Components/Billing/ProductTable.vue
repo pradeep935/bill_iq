@@ -46,9 +46,17 @@
             <td><span class="bill-stock-pill">{{ item.hsn_code || '-' }}</span></td>
             <td>
               <select class="bill-row-select" v-model="item.batch_id" title="Select batch" @change="$emit('batch-change', item)">
-                <option value="">Batch</option>
+                <option value="">Automatic FEFO</option>
                 <option v-for="batch in item.batches || []" :key="batch.id" :value="batch.id">{{ batch.batch_no }}{{ batch.expiry_date ? ` | ${batch.expiry_date}` : '' }}</option>
               </select>
+              <template v-if="(item.batches || []).length">
+                <small>Available: {{ item.available_stock }}</small>
+                <small>{{ item.batch_id ? 'Manual single batch' : 'FEFO allocation' }}</small>
+                <small v-for="batch in allocationPreview(item)" :key="batch.id" style="display: block">
+                  {{ batch.batch_no }}: {{ batch.allocated }} / {{ batch.available_stock }} available
+                  <span v-if="batch.expiry_date"> ? Exp {{ dateText(batch.expiry_date) }}</span>
+                </small>
+              </template>
             </td>
             <td>
               <div class="bill-qty-control">
@@ -88,6 +96,14 @@ const props = defineProps({
 
 defineEmits(['increment', 'decrement', 'remove', 'change', 'quantity-change', 'batch-change']);
 
+const allocationPreview = (item) => {
+  let remaining = Number(item.quantity || 0) + Number(item.free_quantity || 0);
+  return (item.batches || []).filter(batch => !item.batch_id || Number(batch.id) === Number(item.batch_id)).map(batch => {
+    const allocated = Math.min(remaining, Number(batch.available_stock || 0));
+    remaining = Math.max(0, remaining - allocated);
+    return { ...batch, allocated };
+  });
+};
 const initials = (name = '') => String(name).split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'BI';
 const rowKey = (item) => `${item.product_id}-${item.product_variant_id || 0}-${item.batch_id || 0}`;
 const money = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

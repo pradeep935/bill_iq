@@ -46,3 +46,13 @@ SELECT 'batch.writeoff', 'inventory', 'Batch Writeoff', NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE name = 'batch.writeoff');
 
 -- Existing role permissions are unchanged.
+
+-- Preserve the actual FEFO batch split on each invoice item.
+SET @batch_allocations_sql = IF(
+    EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales_items' AND COLUMN_NAME = 'batch_allocations'),
+    'SELECT 1',
+    'ALTER TABLE sales_items ADD COLUMN batch_allocations JSON NULL'
+);
+PREPARE batch_allocations_statement FROM @batch_allocations_sql;
+EXECUTE batch_allocations_statement;
+DEALLOCATE PREPARE batch_allocations_statement;

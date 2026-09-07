@@ -10,6 +10,7 @@ class SalesItem extends Model
     protected $guarded = [];
 
     protected $casts = [
+        'batch_allocations' => 'array',
         'quantity' => 'decimal:3',
         'free_quantity' => 'decimal:3',
         'selling_rate' => 'decimal:2',

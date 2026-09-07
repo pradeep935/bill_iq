@@ -441,8 +441,7 @@ const searchProducts = async () => {
 };
 
 const addProduct = async (product, fromScan = false) => {
-    const batch = (product.batches || []).find((item) => Number(item.id || 0) === Number(product.batch_id || 0))
-        || (product.batches || []).find((item) => Number(item.available_stock || 0) > 0);
+    const batch = (product.batches || []).find((item) => Number(item.id || 0) === Number(product.batch_id || 0));
     const available = Number(batch?.available_stock ?? product.available_stock ?? 0);
     if (product.serial_required) {
         showToast('Serial-number products require serial selection before billing.', 'error');
@@ -558,8 +557,10 @@ const updateBatchStock = (item) => {
     const selected = (item.batches || []).find((batch) => Number(batch.id) === Number(item.batch_id));
     if (selected) {
         item.available_stock = Number(selected.available_stock || 0);
-        normalizeQty(item);
+    } else {
+        item.available_stock = (item.batches || []).reduce((sum, batch) => sum + Number(batch.available_stock || 0), 0);
     }
+    normalizeQty(item);
 };
 const removeItem = (index) => {
     form.items.splice(index, 1);

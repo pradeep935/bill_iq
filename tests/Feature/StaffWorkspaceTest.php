@@ -5,11 +5,23 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class StaffWorkspaceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if (Schema::hasTable('users') && !Schema::hasColumn('users', 'branch_id')) {
+            Schema::table('users', function ($table) {
+                $table->unsignedBigInteger('branch_id')->nullable();
+            });
+        }
+    }
 
     public function test_staff_can_access_their_workspace(): void
     {

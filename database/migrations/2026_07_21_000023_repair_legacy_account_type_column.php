@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasTable('accounts') || !Schema::hasColumn('accounts', 'account_type')) {
+        if (DB::connection()->getDriverName() === 'sqlite' || !Schema::hasTable('accounts') || !Schema::hasColumn('accounts', 'account_type')) {
             return;
         }
 

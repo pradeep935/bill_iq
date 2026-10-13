@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Services\Admin\AdminWorkspaceService;
+use App\Services\CompanyOnboardingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class SetupController extends Controller
@@ -59,6 +61,68 @@ class SetupController extends Controller
             'initial_tab' => 'settings',
             'businessProfile' => $this->businessProfile(),
         ], $workspace->build(AppController::businessId(), $request->user(), 'settings')));
+    }
+
+    public function companyOnboarding(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user && ($user->isSuperAdmin() || $user->isAdmin()), 403);
+
+        $draft = [
+            'legal_name' => 'PHOOLTAS TRANSRAIL LIMITED',
+            'gstin' => '05AABCP5818M1Z7',
+            'state_code' => '05',
+            'state' => 'Uttarakhand',
+            'financial_year' => '2026-27',
+            'period_start_date' => '2026-04-01',
+            'period_end_date' => '2027-03-31',
+            'default_branch_name' => 'Head Office',
+            'default_branch_code' => 'HO',
+            'default_warehouse_name' => 'Main Warehouse',
+            'default_warehouse_code' => 'MW',
+            'registered_address' => '',
+        ];
+
+        return Inertia::render('Setup/CompanyOnboarding', [
+            'page' => 'company-onboarding',
+            'title' => 'Company Onboarding',
+            'draft' => $draft,
+            'users' => Schema::hasTable('users')
+                ? DB::table('users')->where(function ($query) {
+                    $query->whereNull('status')->orWhere('status', 'active');
+                })->orderBy('name')->get(['id', 'name', 'role_id'])
+                : [],
+            'verification' => $this->draftVerification($draft),
+        ]);
+    }
+
+    public function validateCompanyDraft(Request $request)
+    {
+        $user = $request->user();
+        abort_unless($user && ($user->isSuperAdmin() || $user->isAdmin()), 403);
+
+        $data = $request->validate([
+            'legal_name' => ['required', 'string', 'max:255'],
+            'gstin' => ['required', 'string', 'size:15', 'regex:/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/'],
+            'state' => ['required', 'string', 'max:120'],
+            'state_code' => ['required', 'string', 'size:2'],
+            'financial_year' => ['required', 'string', 'max:30', 'regex:/^\d{4}-\d{2}$/'],
+            'period_start_date' => ['required', 'date'],
+            'period_end_date' => ['required', 'date', 'after_or_equal:period_start_date'],
+            'default_branch_name' => ['required', 'string', 'max:255'],
+            'default_branch_code' => ['nullable', 'string', 'max:50'],
+            'default_warehouse_name' => ['required', 'string', 'max:255'],
+            'default_warehouse_code' => ['nullable', 'string', 'max:50'],
+            'registered_address' => ['nullable', 'string', 'max:2000'],
+            'authorized_user_ids' => ['nullable', 'array'],
+            'authorized_user_ids.*' => ['integer', Rule::exists('users', 'id')],
+        ]);
+
+        return response()->json([
+            'message' => 'Draft validated. Company creation still requires explicit approval.',
+            'verification' => $this->draftVerification($data),
+            'payload' => $data,
+        ]);
     }
 
     public function updateBusinessProfile(Request $request)
@@ -120,6 +184,38 @@ class SetupController extends Controller
         ]);
     }
 
+    public function storeCompany(Request $request, CompanyOnboardingService $onboarding)
+    {
+        $user = $request->user();
+        abort_unless($user && ($user->isSuperAdmin() || $user->isAdmin()), 403);
+
+        $data = $request->validate([
+            'legal_name' => ['required', 'string', 'max:255'],
+            'gstin' => ['nullable', 'string', 'size:15', 'regex:/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/'],
+            'state' => ['required', 'string', 'max:120'],
+            'financial_year' => ['required', 'string', 'max:30', 'regex:/^\d{4}-\d{2}$/'],
+            'period_start_date' => ['nullable', 'date'],
+            'period_end_date' => ['nullable', 'date', 'after_or_equal:period_start_date'],
+            'accounting_period_status' => ['nullable', Rule::in(['open', 'active'])],
+            'default_branch_name' => ['required', 'string', 'max:255'],
+            'default_branch_code' => ['nullable', 'string', 'max:50'],
+            'default_warehouse_name' => ['required', 'string', 'max:255'],
+            'default_warehouse_code' => ['nullable', 'string', 'max:50'],
+            'authorized_user_ids' => ['nullable', 'array'],
+            'authorized_user_ids.*' => ['integer', Rule::exists('users', 'id')],
+        ]);
+
+        $result = $onboarding->create($data, $user);
+
+        return response()->json([
+            'message' => 'Company created successfully. Review legal verification before importing client data.',
+            'company' => $result['company'],
+            'accounting_period' => $result['accounting_period'],
+            'branch' => $result['branch'],
+            'warehouse' => $result['warehouse'],
+        ], 201);
+    }
+
     private function businessProfile(): array
     {
         $businessId = AppController::businessId();
@@ -149,6 +245,30 @@ class SetupController extends Controller
             'thermal_footer_text' => $value('thermal_footer_text', 'Thank You'),
             'a4_print_options' => $this->printOptions($value('a4_print_options'), $this->defaultA4PrintOptions()),
             'thermal_print_options' => $this->printOptions($value('thermal_print_options'), $this->defaultThermalPrintOptions()),
+        ];
+    }
+
+    private function draftVerification(array $draft): array
+    {
+        $gstin = strtoupper((string) ($draft['gstin'] ?? ''));
+        $stateCode = (string) ($draft['state_code'] ?? '');
+        $warnings = [];
+        $checks = [
+            ['label' => 'GSTIN format', 'status' => preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', $gstin) ? 'passed' : 'blocked'],
+            ['label' => 'GSTIN state code', 'status' => substr($gstin, 0, 2) === $stateCode ? 'passed' : 'blocked'],
+            ['label' => 'Duplicate company GSTIN', 'status' => Schema::hasTable('companies') && DB::table('companies')->whereRaw('UPPER(gstin) = ?', [$gstin])->exists() ? 'blocked' : 'passed'],
+            ['label' => 'Legal name source document', 'status' => 'pending'],
+        ];
+
+        if ($checks[3]['status'] === 'pending') {
+            $warnings[] = 'Legal company name must be verified from a source document before final creation.';
+        }
+
+        return [
+            'checks' => $checks,
+            'warnings' => $warnings,
+            'can_create' => false,
+            'create_policy' => 'PHOOLTAS will not be created until final details are explicitly approved.',
         ];
     }
 

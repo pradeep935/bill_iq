@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class OnboardingWorkflowTest extends TestCase
@@ -19,8 +20,14 @@ class OnboardingWorkflowTest extends TestCase
             ->withSession(['business_id' => $businessId])
             ->get('/app/admin/onboarding')
             ->assertOk()
-            ->assertSee('BillIQ Setup Progress')
-            ->assertSee('Setup Checklist');
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/Onboarding/Index')
+                ->where('page', 'onboarding')
+                ->where('title', 'Onboarding')
+                ->where('summary.0.label', 'Setup Progress')
+                ->where('steps.0.title', 'Business Profile')
+                ->has('steps', 20)
+                ->etc());
     }
 
     public function test_unauthorized_user_receives_403(): void
@@ -204,9 +211,13 @@ class OnboardingWorkflowTest extends TestCase
             ->withSession(['business_id' => $businessId])
             ->get('/app/admin/onboarding?filter=bad')
             ->assertOk()
-            ->assertSee('Business Profile')
-            ->assertSee('First Test Sale')
-            ->assertDontSee('Previous')
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/Onboarding/Index')
+                ->where('filters.active', 'all')
+                ->where('steps.0.title', 'Business Profile')
+                ->where('steps.19.title', 'First Test Sale')
+                ->has('steps', 20)
+                ->etc())
             ->assertDontSee('1-3 of 3');
     }
 

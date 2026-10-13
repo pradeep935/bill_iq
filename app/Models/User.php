@@ -59,4 +59,11 @@ class User extends Authenticatable
     {
         return (int) $this->role_id === 3;
     }
+
+    public function companies()
+    {
+        return $this->belongsToMany(Company::class, 'company_user_access', 'user_id', 'company_id')
+            ->withPivot(['access_role', 'is_default', 'status', 'created_by'])
+            ->withTimestamps();
+    }
 }

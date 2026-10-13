@@ -80,7 +80,10 @@ return new class extends Migration
                 $moduleColumn = Schema::hasColumn('audit_logs', 'module') ? 'module' : (Schema::hasColumn('audit_logs', 'module_name') ? 'module_name' : null);
 
                 if ($actionColumn && $moduleColumn) {
-                    $updates['summary'] = DB::raw("COALESCE(summary, CONCAT(COALESCE({$actionColumn}, 'Activity'), ' ', COALESCE({$moduleColumn}, '')))");
+                    $summaryExpression = DB::connection()->getDriverName() === 'sqlite'
+                        ? "COALESCE(summary, COALESCE({$actionColumn}, 'Activity') || ' ' || COALESCE({$moduleColumn}, ''))"
+                        : "COALESCE(summary, CONCAT(COALESCE({$actionColumn}, 'Activity'), ' ', COALESCE({$moduleColumn}, '')))";
+                    $updates['summary'] = DB::raw($summaryExpression);
                 }
             }
 

@@ -9,7 +9,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('ALTER TABLE hsn_masters MODIFY description TEXT NOT NULL');
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE hsn_masters MODIFY description TEXT NOT NULL');
+        }
 
         Schema::table('hsn_masters', function (Blueprint $table) {
             $table->string('verification_status', 30)->default('verified')->after('taxability')->index();

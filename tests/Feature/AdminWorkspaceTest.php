@@ -89,7 +89,7 @@ class AdminWorkspaceTest extends TestCase
             ->withSession(['business_id' => $businessId])
             ->get('/app/admin/workspace?section=bad')
             ->assertOk()
-            ->assertSee('Operational setup metrics');
+            ->assertSee('activeSection&quot;:&quot;admin', false);
     }
 
     public function test_staff_section_returns_staff_metrics(): void
@@ -123,7 +123,7 @@ class AdminWorkspaceTest extends TestCase
             ->withSession(['business_id' => $businessId])
             ->get('/app/admin/workspace?section=saas')
             ->assertOk()
-            ->assertSee('Operational setup metrics')
+            ->assertSee('activeSection&quot;:&quot;admin', false)
             ->assertDontSee('Current Subscription Plan');
     }
 

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
+use App\Services\CompanyAccessService;
 
 class AppController extends Controller
 {
@@ -16,21 +17,36 @@ class AppController extends Controller
 
     public static function businessId(): int
     {
+        $user = Auth::user();
         $businessId = session('business_id')
             ?: session('company_id')
             ?: session('tenant_id');
 
-        if ($businessId) {
+        if ($user) {
+            $access = app(CompanyAccessService::class);
+
+            if ($businessId && $access->canAccess($user, (int) $businessId)) {
+                return (int) $businessId;
+            }
+
+            $defaultCompanyId = $access->defaultCompanyId($user);
+
+            abort_unless($defaultCompanyId, 403, 'No company access is assigned to this user.');
+
+            session([
+                'business_id' => $defaultCompanyId,
+                'company_id' => $defaultCompanyId,
+                'tenant_id' => $defaultCompanyId,
+            ]);
+
+            return (int) $defaultCompanyId;
+        }
+
+        if ($businessId && self::allowsUnauthenticatedBootstrap()) {
             return (int) $businessId;
         }
 
-        $user = Auth::user();
-
-        if ($user && $user->tenant_id) {
-            return (int) $user->tenant_id;
-        }
-
-        if (Schema::hasTable('companies')) {
+        if (self::allowsUnauthenticatedBootstrap() && Schema::hasTable('companies')) {
             $companyId = DB::table('companies')->value('id');
 
             if ($companyId) {
@@ -47,6 +63,13 @@ class AppController extends Controller
         }
 
         return 1;
+    }
+
+    private static function allowsUnauthenticatedBootstrap(): bool
+    {
+        return app()->environment(['local', 'testing'])
+            && app()->runningInConsole()
+            && ! app()->runningUnitTests();
     }
 
     public static function branchId(): ?int
@@ -155,7 +178,12 @@ class AppController extends Controller
         $businessId = self::businessId();
         $branchId = self::branchId();
         $businesses = Schema::hasTable('companies')
-            ? DB::table('companies')->orderBy('name')->get(['id', 'name', 'state', 'financial_year'])
+            ? app(CompanyAccessService::class)->accessibleCompanies(Auth::user())->map(fn ($company) => (object) [
+                'id' => $company->id,
+                'name' => $company->name,
+                'state' => $company->state,
+                'financial_year' => $company->financial_year,
+            ])
             : collect();
         $business = Schema::hasTable('companies') ? DB::table('companies')->where('id', $businessId)->first() : null;
         $branchColumns = ['id', 'name', 'code', 'state'];
@@ -233,6 +261,9 @@ class AppController extends Controller
 
         $businessId = (int) ($data['business_id'] ?? self::businessId());
 
+        $user = $request->user();
+        abort_unless($user && app(CompanyAccessService::class)->canAccess($user, $businessId), 403);
+
         if (Schema::hasTable('companies')) {
             abort_unless(DB::table('companies')->where('id', $businessId)->exists(), 422);
         }
@@ -247,6 +278,9 @@ class AppController extends Controller
         }
 
         if (!empty($data['financial_year_id'])) {
+            if (Schema::hasTable('accounting_periods')) {
+                abort_unless(DB::table('accounting_periods')->where('business_id', $businessId)->where('id', $data['financial_year_id'])->exists(), 422);
+            }
             $session['financial_year_id'] = (int) $data['financial_year_id'];
         }
         if (!empty($data['financial_year'])) {

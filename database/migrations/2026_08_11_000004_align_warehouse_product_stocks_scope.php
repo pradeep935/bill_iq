@@ -55,8 +55,7 @@ return new class extends Migration
 
     private function addScopeIndex(): void
     {
-        $exists = collect(DB::select('SHOW INDEX FROM warehouse_product_stocks'))
-            ->contains(fn ($index) => $index->Key_name === 'warehouse_stock_variant_batch_scope_index');
+        $exists = $this->indexExists('warehouse_product_stocks', 'warehouse_stock_variant_batch_scope_index');
 
         if ($exists) {
             return;
@@ -72,8 +71,7 @@ return new class extends Migration
 
     private function dropIndexIfExists(string $table, string $indexName): void
     {
-        $exists = collect(DB::select("SHOW INDEX FROM {$table}"))
-            ->contains(fn ($index) => $index->Key_name === $indexName);
+        $exists = $this->indexExists($table, $indexName);
 
         if (!$exists) {
             return;
@@ -82,5 +80,16 @@ return new class extends Migration
         Schema::table($table, function (Blueprint $blueprint) use ($indexName) {
             $blueprint->dropIndex($indexName);
         });
+    }
+
+    private function indexExists(string $table, string $indexName): bool
+    {
+        if (DB::connection()->getDriverName() === 'mysql') {
+            return collect(DB::select("SHOW INDEX FROM {$table}"))
+                ->contains(fn ($index) => $index->Key_name === $indexName);
+        }
+
+        return collect(Schema::getIndexes($table))
+            ->contains(fn (array $index) => ($index['name'] ?? null) === $indexName);
     }
 };

@@ -7,11 +7,13 @@ use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\InteractsWithCompanyAccess;
 use Tests\TestCase;
 
 class ProductMasterTest extends TestCase
 {
     use RefreshDatabase;
+    use InteractsWithCompanyAccess;
 
     public function test_product_creation_saves_simple_master_fields(): void
     {
@@ -20,7 +22,7 @@ class ProductMasterTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
         $hsn = HsnMaster::query()->create([
             'hsn_code' => '1905',
             'description' => 'Bread and bakery',
@@ -90,7 +92,7 @@ class ProductMasterTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
         $hsn = HsnMaster::query()->create([
             'business_id' => null,
             'code_type' => 'HSN',
@@ -157,7 +159,7 @@ class ProductMasterTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
         $hsn = HsnMaster::query()->create([
             'business_id' => null,
             'code_type' => 'HSN',
@@ -171,7 +173,7 @@ class ProductMasterTest extends TestCase
 
         $this->actingAs($user)
             ->withSession(['business_id' => $businessId])
-            ->putJson("/app/masters/hsn/{$hsn->id}", [
+            ->putJson("/app/setup/masters/hsn/{$hsn->id}", [
                 'rate_update_only' => true,
                 'taxability' => 'taxable',
                 'gst_rate' => 18,
@@ -193,7 +195,7 @@ class ProductMasterTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
 
         $response = $this->actingAs($user)
             ->withSession(['business_id' => $businessId])
@@ -231,7 +233,7 @@ class ProductMasterTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
         $product = Product::query()->create([
             'company_id' => $businessId,
             'business_id' => $businessId,
@@ -299,7 +301,7 @@ class ProductMasterTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
         $categoryId = DB::table('product_categories')->insertGetId([
             'business_id' => $businessId,
             'name' => 'Grocery',
@@ -396,7 +398,8 @@ class ProductMasterTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($firstBusinessId, ['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $this->grantCompanyAccess($user, $secondBusinessId);
 
         Product::query()->create([
             'company_id' => $firstBusinessId,
@@ -433,6 +436,7 @@ class ProductMasterTest extends TestCase
             'tax_inclusive' => false,
             'selling_price' => 100,
             'cost_price' => 80,
+            'mrp' => 120,
             'tracking_type' => 'none',
             'status' => 'active',
         ];

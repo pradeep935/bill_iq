@@ -11,11 +11,13 @@ use App\Services\CustomerAnalyticsService;
 use App\Services\MobileNumberService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\InteractsWithCompanyAccess;
 use Tests\TestCase;
 
 class CustomerCrmWhatsappTest extends TestCase
 {
     use RefreshDatabase;
+    use InteractsWithCompanyAccess;
 
     public function test_mobile_numbers_are_normalized_for_lookup_and_whatsapp(): void
     {
@@ -32,7 +34,9 @@ class CustomerCrmWhatsappTest extends TestCase
         [$businessId, $user] = $this->businessAndUser();
 
         Customer::query()->create([
+            'company_id' => $businessId,
             'business_id' => $businessId,
+            'name' => 'Asha Traders',
             'customer_code' => 'CUS-00001',
             'customer_name' => 'Asha Traders',
             'customer_type' => 'retail',
@@ -117,7 +121,7 @@ class CustomerCrmWhatsappTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
 
         return [$businessId, $user];
     }
@@ -125,7 +129,9 @@ class CustomerCrmWhatsappTest extends TestCase
     private function customerAndProduct(int $businessId): array
     {
         $customer = Customer::query()->create([
+            'company_id' => $businessId,
             'business_id' => $businessId,
+            'name' => 'Walkup Retail',
             'customer_code' => 'CUS-' . str_pad((string) $businessId, 5, '0', STR_PAD_LEFT),
             'customer_name' => 'Walkup Retail',
             'customer_type' => 'retail',

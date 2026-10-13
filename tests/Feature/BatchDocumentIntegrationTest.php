@@ -19,7 +19,10 @@ class BatchDocumentIntegrationTest extends SalesInventoryFlowTest
 {
     public function test_batch_documents_post_and_reconcile_on_mysql(): void
     {
-        $this->assertSame('mysql', DB::connection()->getDriverName(), 'Run using scripts/test-batches-mysql.php');
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Run using scripts/test-batches-mysql.php');
+        }
+
         $this->travelTo(now()->setDate(2026, 9, 6)->startOfDay());
         [$business,$user,$product,$branch,$warehouse,$customer] = $this->fixture();
         $this->loginBusiness($user, $business);

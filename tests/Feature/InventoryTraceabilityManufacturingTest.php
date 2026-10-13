@@ -10,11 +10,13 @@ use App\Models\StockLedger;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\InteractsWithCompanyAccess;
 use Tests\TestCase;
 
 class InventoryTraceabilityManufacturingTest extends TestCase
 {
     use RefreshDatabase;
+    use InteractsWithCompanyAccess;
 
     public function test_duplicate_serial_is_rejected(): void
     {
@@ -182,7 +184,7 @@ class InventoryTraceabilityManufacturingTest extends TestCase
     private function fixture(): array
     {
         $businessId = DB::table('companies')->insertGetId(['name' => 'ABC Retail Pvt Ltd', 'created_at' => now(), 'updated_at' => now()]);
-        $user = User::factory()->create(['role_id' => 1, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 1, 'is_active' => 1, 'status' => 'active']);
         $branch = DB::table('branches')->insertGetId(['business_id' => $businessId, 'name' => 'Main', 'code' => 'MAIN', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $warehouse = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'name' => 'Store', 'code' => 'ST', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $otherWarehouse = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'name' => 'Backroom', 'code' => 'BK', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);

@@ -6,8 +6,10 @@ use App\Models\Product;
 use App\Models\StockAdjustmentVoucher;
 use App\Models\StockCountSession;
 use App\Models\StockLedger;
+use App\Models\User;
 use App\Services\InventoryControlService;
 use App\Services\StockService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -53,6 +55,17 @@ class InventoryConditionAdjustmentTest extends TestCase
         Schema::create('companies', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->timestamps();
+        });
+
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->unsignedBigInteger('tenant_id')->nullable();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->unsignedBigInteger('role_id')->default(1);
+            $table->string('status')->default('active');
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
 
@@ -861,10 +874,12 @@ class InventoryConditionAdjustmentTest extends TestCase
     private function fixture(): array
     {
         $businessId = DB::table('companies')->insertGetId(['name' => 'Bill IQ Test', 'created_at' => now(), 'updated_at' => now()]);
+        $userId = DB::table('users')->insertGetId(['name' => 'Inventory Test User', 'tenant_id' => $businessId, 'role_id' => 1, 'status' => 'active', 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
         $branch = DB::table('branches')->insertGetId(['business_id' => $businessId, 'name' => 'Default Branch', 'code' => 'MAIN', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $warehouse = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'name' => 'Default warehouse', 'code' => 'ST', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $product = Product::query()->create(['business_id' => $businessId, 'company_id' => $businessId, 'name' => 'Mustard Oil 1L', 'sku' => 'MO-1L', 'product_type' => 'goods', 'item_type' => 'stock', 'track_inventory' => true, 'tracking_type' => 'none', 'status' => 'active']);
 
+        Auth::login(User::findOrFail($userId));
         session(['business_id' => $businessId]);
 
         return [$businessId, $product, $branch, $warehouse];

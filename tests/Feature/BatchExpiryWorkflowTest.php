@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\User;
 use App\Models\StockLedger;
 use App\Services\BatchIdentityService;
 use App\Services\BatchManagementService;
 use App\Services\StockService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -50,12 +52,18 @@ class BatchExpiryWorkflowTest extends InventoryConditionAdjustmentTest
         Schema::create('users', function (Blueprint $t) {
             $t->id();
             $t->string('name');
+            $t->unsignedBigInteger('tenant_id')->nullable();
+            $t->unsignedBigInteger('branch_id')->nullable();
             $t->unsignedBigInteger('role_id')->default(1);
+            $t->string('status')->default('active');
+            $t->boolean('is_active')->default(true);
             $t->timestamps();
         });
         $business = DB::table('companies')->insertGetId(['name' => 'Batch Test']);
+        $userId = DB::table('users')->insertGetId(['name' => 'Batch Test User', 'tenant_id' => $business, 'role_id' => 1, 'status' => 'active', 'is_active' => 1, 'created_at' => now(), 'updated_at' => now()]);
         $branch = DB::table('branches')->insertGetId(['business_id' => $business, 'name' => 'Default Branch']);
         $warehouse = DB::table('warehouses')->insertGetId(['business_id' => $business, 'branch_id' => $branch, 'name' => 'Default warehouse']);
+        Auth::login(User::findOrFail($userId));
         session(['business_id' => $business]);
         $this->product = Product::query()->create(['business_id' => $business, 'company_id' => $business, 'name' => 'Mustard Oil 1L', 'sku' => 'MO-1L', 'product_type' => 'goods', 'item_type' => 'stock', 'batch_required' => true, 'tracking_type' => 'batch', 'status' => 'active']);
         $this->scope = ['business_id' => $business, 'product_id' => $this->product->id, 'branch_id' => $branch, 'warehouse_id' => $warehouse];

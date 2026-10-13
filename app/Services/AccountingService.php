@@ -17,6 +17,8 @@ use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class AccountingService
 {
@@ -55,6 +57,7 @@ class AccountingService
     public function saveAccount(array $data, ?int $id = null): Account
     {
         $businessId = AppController::businessId();
+        $this->validateBranchOwnership($businessId, $data['branch_id'] ?? null);
         $account = $id ? Account::query()->where('business_id', $businessId)->findOrFail($id) : new Account(['business_id' => $businessId, 'created_by' => Auth::id()]);
         $account->fill([
             'account_group_id' => $data['account_group_id'], 'parent_account_id' => $data['parent_account_id'] ?? null,
@@ -69,6 +72,17 @@ class AccountingService
             'status' => $data['status'] ?? 'active', 'updated_by' => Auth::id(),
         ])->save();
         return $account->fresh('group');
+    }
+
+    private function validateBranchOwnership(int $businessId, $branchId): void
+    {
+        if (!$branchId || !Schema::hasTable('branches')) {
+            return;
+        }
+
+        if (!DB::table('branches')->where('business_id', $businessId)->where('id', $branchId)->exists()) {
+            throw ValidationException::withMessages(['branch_id' => 'Selected branch does not belong to the current company.']);
+        }
     }
 
     public function updateSettings(array $data): BusinessAccountSetting

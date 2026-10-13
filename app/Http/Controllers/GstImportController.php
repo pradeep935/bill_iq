@@ -142,6 +142,7 @@ class GstImportController extends Controller
                 'total_value' => (float) $row->total_value,
                 'severity' => $row->severity,
                 'messages' => $row->messages_json ?: [],
+                'payload' => $row->payload_json ?: [],
             ])->values(),
             'reconciliation' => $batch->reconciliationItems->map(fn ($item) => [
                 'category' => $item->category,

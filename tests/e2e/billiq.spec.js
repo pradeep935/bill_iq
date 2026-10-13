@@ -133,6 +133,15 @@ test('login, dashboard, onboarding, GST validation, preview, reconciliation and 
   await expect(page.getByText('17,62,57,540.36')).toBeVisible();
   await expect(page.getByText('gstr1_hsn_summary_evidence').first()).toBeVisible();
   await expect(page.getByText('gstr1_document_issue_evidence').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /B2B Sales\s+0/i })).toBeVisible();
+  await expect(page.getByText('No records in source file')).toBeVisible();
+  await page.getByRole('button', { name: /HSN Summary\s+4/i }).click();
+  await expect(page.getByText('86040000').first()).toBeVisible();
+  await expect(page.getByText(/Railway Or Tramway Maintenance Or Service Vehicles/i)).toBeVisible();
+  await expect(page.getByText('11').first()).toBeVisible();
+  await page.getByRole('button', { name: /Documents Issued\s+3/i }).click();
+  await expect(page.getByText('PTL/H/079/26-27').first()).toBeVisible();
+  await expect(page.getByText('PTL/H/090/26-27').first()).toBeVisible();
   await shot(page, '05-file-preview.png');
   await shot(page, '07-reconciliation-summary.png');
 

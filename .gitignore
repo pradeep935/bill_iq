@@ -27,6 +27,7 @@ debug.log
 test-results/
 
 /public/build
+/\.tools/
 /storage/pail
 .env.backup
 .env.production

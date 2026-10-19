@@ -81,12 +81,12 @@ class AccountingPostingService
         });
     }
 
-    public function addDebitEntry(array &$entries, int $accountId, float $amount, array $extra = []): void
+    public function addDebitEntry(array &$entries, ?int $accountId, float $amount, array $extra = []): void
     {
         if ($amount > 0) $entries[] = array_merge($extra, ['account_id' => $accountId, 'debit_amount' => round($amount, 2), 'credit_amount' => 0]);
     }
 
-    public function addCreditEntry(array &$entries, int $accountId, float $amount, array $extra = []): void
+    public function addCreditEntry(array &$entries, ?int $accountId, float $amount, array $extra = []): void
     {
         if ($amount > 0) $entries[] = array_merge($extra, ['account_id' => $accountId, 'debit_amount' => 0, 'credit_amount' => round($amount, 2)]);
     }

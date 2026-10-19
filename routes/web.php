@@ -30,6 +30,7 @@ use App\Http\Controllers\SetupController;
 use App\Http\Controllers\StockSummaryController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\TallyIntegrationController;
 use App\Http\Controllers\WarehouseController;
 
 
@@ -660,6 +661,16 @@ Route::middleware('auth')->group(function () {
             Route::get('/gst-imports/{batch}', [GstImportController::class, 'show'])->name('gst-imports.show');
             Route::post('/gst-imports/{batch}/approve', [GstImportController::class, 'approve'])->name('gst-imports.approve');
             Route::post('/gst-imports/{batch}/commit', [GstImportController::class, 'commit'])->name('gst-imports.commit');
+            Route::get('/tally', [TallyIntegrationController::class, 'index'])->name('tally.index');
+            Route::post('/tally/connections', [TallyIntegrationController::class, 'storeConnection'])->name('tally.connections.store');
+            Route::post('/tally/connections/{connection}/pair', [TallyIntegrationController::class, 'pair'])->name('tally.connections.pair');
+            Route::post('/tally/connections/{connection}/test', [TallyIntegrationController::class, 'test'])->name('tally.connections.test');
+            Route::post('/tally/connections/{connection}/revoke', [TallyIntegrationController::class, 'revoke'])->name('tally.connections.revoke');
+            Route::get('/tally/batches/{batch}', [TallyIntegrationController::class, 'batch'])->name('tally.batches.show');
+            Route::post('/tally/mappings', [TallyIntegrationController::class, 'mapping'])->name('tally.mappings.store');
+            Route::post('/tally/batches/{batch}/approve', [TallyIntegrationController::class, 'approve'])->name('tally.batches.approve');
+            Route::post('/tally/batches/{batch}/reconcile', [TallyIntegrationController::class, 'reconcile'])->name('tally.batches.reconcile');
+            Route::post('/tally/batches/{batch}/import', [TallyIntegrationController::class, 'import'])->name('tally.batches.import');
         });
 
         Route::prefix('fixed-assets')->name('fixed-assets.')->group(function () {

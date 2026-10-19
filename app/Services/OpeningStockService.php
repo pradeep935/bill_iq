@@ -361,6 +361,25 @@ class OpeningStockService
 
     private function syncItems(OpeningStockVoucher $voucher, array $items): void
     {
+        // Older installations retain a NOT NULL legacy link on opening_stock_items.
+        // Keep that schema valid while the canonical voucher/ledger remains the
+        // opening_stock_vouchers record used by the current inventory service.
+        $legacyEntryId = null;
+        if (Schema::hasTable('opening_stock_entries') && Schema::hasColumn('opening_stock_items', 'opening_stock_entry_id')) {
+            $legacyEntryId = DB::table('opening_stock_entries')->insertGetId([
+                'business_id' => $voucher->business_id,
+                'branch_id' => $voucher->branch_id,
+                'warehouse_id' => $voucher->warehouse_id,
+                'entry_date' => $voucher->opening_date,
+                'status' => 'posted',
+                'created_by' => Auth::id(),
+                'approved_by' => Auth::id(),
+                'approved_at' => now(),
+                'remarks' => 'Compatibility link for ' . $voucher->voucher_number,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
         foreach ($items as $item) {
             $product = $this->validProduct($voucher->business_id, (int) $item['product_id']);
             $variantId = $item['product_variant_id'] ?? null;
@@ -400,6 +419,7 @@ class OpeningStockService
                 'manufacturing_date' => $item['manufacturing_date'] ?? null,
                 'expiry_date' => $item['expiry_date'] ?? null,
                 'remarks' => $item['remarks'] ?? null,
+                'opening_stock_entry_id' => $legacyEntryId,
             ]);
         }
     }

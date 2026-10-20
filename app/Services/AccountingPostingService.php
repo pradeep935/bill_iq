@@ -111,6 +111,10 @@ class AccountingPostingService
     {
         return DB::transaction(function () use ($voucher, $remarks) {
             $this->assertBusiness($voucher->business_id);
+            $voucher = JournalVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
+            if ($voucher->voucher_type === 'reversal' || $voucher->reversal_of_id) {
+                throw ValidationException::withMessages(['status' => 'Reverse the source transaction only; reversal journals cannot be reversed.']);
+            }
             if (!in_array($voucher->status, ['approved', 'posted'], true) || $voucher->reversed_by_id) {
                 throw ValidationException::withMessages(['status' => 'Voucher cannot be reversed.']);
             }
@@ -142,8 +146,48 @@ class AccountingPostingService
                 'entries' => $entries,
             ]);
             $voucher->update(['status' => 'reversed', 'reversed_by_id' => $reversal->id]);
+            $this->reopenReversedSettlement($voucher);
 
-            return $reversal;
+            return $reversal->fresh();
+        });
+    }
+
+    /** Also reconciles previously reversed settlements, without creating another journal. */
+    public function reopenReversedSettlement(JournalVoucher $voucher): void
+    {
+        DB::transaction(function () use ($voucher) {
+            $this->assertBusiness($voucher->business_id);
+            $voucher = JournalVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
+            if (!in_array($voucher->reference_type, [ReceiptVoucher::class, PaymentVoucher::class], true)) return;
+            if ($voucher->status !== 'reversed' || !$voucher->reversed_by_id) throw ValidationException::withMessages(['status' => 'A posted reversal is required.']);
+            $reversal = JournalVoucher::query()->where('business_id', $voucher->business_id)->whereKey($voucher->reversed_by_id)->where('reference_id', $voucher->id)->where('reference_type', JournalVoucher::class)->whereIn('status', ['approved', 'posted'])->firstOrFail();
+            $source = $voucher->reference_type::query()->where('business_id', $voucher->business_id)->whereKey($voucher->reference_id)->where('journal_voucher_id', $voucher->id)->lockForUpdate()->firstOrFail();
+            $isReceipt = $source instanceof ReceiptVoucher;
+            $documentClass = $isReceipt ? SalesVoucher::class : PurchaseVoucher::class;
+            $partyColumn = $isReceipt ? 'customer_id' : 'supplier_id';
+            $originals = LedgerAllocation::query()->where('business_id', $voucher->business_id)->whereIn('journal_entry_id', $voucher->entries()->select('id'))->orderBy('reference_id')->get();
+            $entry = $reversal->entries()->where($partyColumn, $source->$partyColumn)->firstOrFail();
+            foreach ($originals as $allocation) {
+                if ($allocation->reference_type !== $documentClass) throw ValidationException::withMessages(['allocations' => 'Unexpected settlement reference type.']);
+                $document = $documentClass::query()->where('business_id', $voucher->business_id)->where($partyColumn, $source->$partyColumn)->whereKey($allocation->reference_id)->lockForUpdate()->firstOrFail();
+                $type = 'reversal_'.$allocation->id;
+                if (LedgerAllocation::query()->where('journal_entry_id', $entry->id)->where('allocation_type', $type)->exists()) continue;
+                $amount = (float) $allocation->allocated_amount;
+                if ($amount <= 0) throw ValidationException::withMessages(['allocations' => 'Invalid original settlement allocation.']);
+                LedgerAllocation::query()->create([
+                    'business_id' => $voucher->business_id, 'journal_entry_id' => $entry->id,
+                    'allocation_type' => $type, 'reference_type' => $documentClass, 'reference_id' => $document->id,
+                    'original_amount' => $allocation->original_amount, 'allocated_amount' => -$amount,
+                    'discount_amount' => -(float) $allocation->discount_amount, 'write_off_amount' => -(float) $allocation->write_off_amount,
+                    'allocation_date' => $reversal->voucher_date, 'created_by' => Auth::id(),
+                ]);
+                $paid = max(0, round((float) $document->paid_amount - $amount, 2));
+                $creditNote = $isReceipt ? SalesReturnVoucher::invoiceAdjustmentTotal($voucher->business_id, $document->id) : 0.0;
+                $balance = max(0, round((float) $document->grand_total - $paid - $creditNote, 2));
+                $document->update(['paid_amount' => $paid, 'balance_amount' => $balance, 'payment_status' => $balance <= 0 && $creditNote > 0 ? 'paid' : ($paid <= 0 ? 'unpaid' : ($balance > 0 ? 'partial' : 'paid'))]);
+            }
+            $source->update(['status' => 'reversed']);
+            $reversal->update(['reversal_of_id' => $voucher->id]);
         });
     }
 
@@ -225,7 +269,9 @@ class AccountingPostingService
             $s = $this->settings($receipt->business_id);
             $entries = [];
             $this->addDebitEntry($entries, $receipt->cash_bank_account_id, (float) $receipt->amount);
-            $this->addDebitEntry($entries, $s->discount_allowed_account_id, (float) $receipt->discount_allowed);
+            if ((float) $receipt->discount_allowed > 0) {
+                $this->addDebitEntry($entries, $s->discount_allowed_account_id, (float) $receipt->discount_allowed);
+            }
             $this->addCreditEntry($entries, $s->accounts_receivable_id, (float) $receipt->amount + (float) $receipt->discount_allowed + (float) $receipt->write_off_amount, ['customer_id' => $receipt->customer_id]);
             $journal = $this->sourceVoucher('receipt', $receipt, $receipt->receipt_date, $receipt->voucher_number, $entries);
             $receipt->update(['status' => 'approved', 'journal_voucher_id' => $journal->id, 'approved_by' => Auth::id(), 'approved_at' => now()]);
@@ -241,7 +287,9 @@ class AccountingPostingService
             $entries = [];
             $this->addDebitEntry($entries, $s->accounts_payable_id, (float) $payment->amount + (float) $payment->discount_received + (float) $payment->write_off_amount, ['supplier_id' => $payment->supplier_id]);
             $this->addCreditEntry($entries, $payment->cash_bank_account_id, (float) $payment->amount);
-            $this->addCreditEntry($entries, $s->discount_received_account_id, (float) $payment->discount_received);
+            if ((float) $payment->discount_received > 0) {
+                $this->addCreditEntry($entries, $s->discount_received_account_id, (float) $payment->discount_received);
+            }
             $journal = $this->sourceVoucher('payment', $payment, $payment->payment_date, $payment->voucher_number, $entries);
             $payment->update(['status' => 'approved', 'journal_voucher_id' => $journal->id, 'approved_by' => Auth::id(), 'approved_at' => now()]);
             $this->allocations($journal, $allocations, 'supplier_payment', $payment->payment_date);
@@ -303,7 +351,12 @@ class AccountingPostingService
             if ($this->alreadyPosted(PettyCashAdvance::class, $advance->id)) return null;
             $s = $this->settings($advance->business_id);
             $entries = [];
-            $this->addDebitEntry($entries, $s->petty_cash_advance_account_id ?: $s->supplier_advance_account_id, (float) $advance->amount, ['narration' => 'Employee petty cash advance']);
+            $advanceAccountId = $s->fresh()->petty_cash_advance_account_id ?: $s->supplier_advance_account_id;
+            $advanceAccount = $advanceAccountId ? Account::query()->where('business_id', $advance->business_id)->where('status', 'active')->find($advanceAccountId) : null;
+            if (!$advanceAccount) {
+                throw ValidationException::withMessages(['status' => 'Cannot issue this advance: configure an active Petty Cash Advance account in Accounting settings, then try again.']);
+            }
+            $this->addDebitEntry($entries, $advanceAccount->id, (float) $advance->amount, ['narration' => 'Employee petty cash advance']);
             $this->addCreditEntry($entries, $advance->cash_account_id, (float) $advance->amount);
             return $this->sourceVoucher('petty_cash', $advance, $advance->advance_date, $advance->voucher_number, $entries);
         });
@@ -427,7 +480,9 @@ class AccountingPostingService
 
     private function allocations(JournalVoucher $journal, array $allocations, string $type, string $date): void
     {
-        $entry = $journal->entries()->first();
+        $entry = $type === 'customer_receipt'
+            ? $journal->entries()->whereNotNull('customer_id')->where('credit_amount', '>', 0)->firstOrFail()
+            : $journal->entries()->first();
         foreach ($allocations as $allocation) {
             LedgerAllocation::query()->create([
                 'business_id' => $journal->business_id, 'journal_entry_id' => $entry->id, 'allocation_type' => $type,

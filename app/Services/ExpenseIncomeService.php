@@ -8,6 +8,7 @@ use App\Models\BankReconciliation;
 use App\Models\BankStatementImport;
 use App\Models\BankStatementLine;
 use App\Models\ExpenseCategory;
+use App\Models\Employee;
 use App\Models\ExpenseVoucher;
 use App\Models\IncomeCategory;
 use App\Models\JournalEntry;
@@ -32,10 +33,13 @@ class ExpenseIncomeService
     {
         $businessId = AppController::businessId();
         return [
+            'petty_cash_employees' => Employee::query()->where('business_id', $businessId)->where('status', 'active')->where('employment_status', 'active')->orderBy('display_name')->get(['id', 'display_name', 'employee_code', 'branch_id']),
             'expense_categories' => ExpenseCategory::query()->with('account')->where('business_id', $businessId)->where('status', 'active')->orderBy('category_name')->get(),
             'income_categories' => IncomeCategory::query()->with('account')->where('business_id', $businessId)->where('status', 'active')->orderBy('category_name')->get(),
             'expense_accounts' => Account::query()->where('business_id', $businessId)->where('account_type', 'expense')->where('status', 'active')->orderBy('account_name')->get(),
             'income_accounts' => Account::query()->where('business_id', $businessId)->where('account_type', 'income')->where('status', 'active')->orderBy('account_name')->get(),
+            'category_expense_accounts' => Account::query()->categoryPosting($businessId, 'expense')->orderBy('account_name')->get(),
+            'category_income_accounts' => Account::query()->categoryPosting($businessId, 'income')->orderBy('account_name')->get(),
             'cash_bank_accounts' => Account::query()->where('business_id', $businessId)->whereIn('account_type', ['cash', 'bank'])->where('status', 'active')->orderBy('account_name')->get()->map(function ($account) {
                 $account->masked_account_number = $account->maskAccountNumber();
                 return $account;
@@ -158,7 +162,6 @@ class ExpenseIncomeService
 
             $expense->fill(array_merge($data, $totals, [
                 'net_paid_amount' => $data['payment_status'] === 'unpaid' ? 0 : $totals['net_paid_amount'],
-                'updated_by' => Auth::id(),
             ]))->save();
             $expense->items()->delete();
             $expense->items()->createMany($items);
@@ -210,7 +213,7 @@ class ExpenseIncomeService
     {
         return DB::transaction(function () use ($data, $id) {
             $businessId = AppController::businessId();
-            $income = $id ? OtherIncomeVoucher::query()->where('business_id', $businessId)->findOrFail($id) : new OtherIncomeVoucher(['business_id' => $businessId, 'created_by' => Auth::id(), 'voucher_number' => $this->nextNumber('OIN', OtherIncomeVoucher::class, 'voucher_number')]);
+            $income = $id ? OtherIncomeVoucher::query()->where('business_id', $businessId)->lockForUpdate()->findOrFail($id) : new OtherIncomeVoucher(['business_id' => $businessId, 'created_by' => Auth::id(), 'voucher_number' => $this->nextNumber('OIN', OtherIncomeVoucher::class, 'voucher_number')]);
             if (in_array($income->status, ['approved', 'posted', 'reversed'], true)) throw ValidationException::withMessages(['status' => 'Posted income cannot be directly edited.']);
             $this->assertIncomeCategory($data['income_category_id']);
             $this->assertAccount($data['income_account_id'], ['income']);
@@ -228,7 +231,7 @@ class ExpenseIncomeService
     public function postOtherIncome(int $id): OtherIncomeVoucher
     {
         return DB::transaction(function () use ($id) {
-            $income = OtherIncomeVoucher::query()->where('business_id', AppController::businessId())->findOrFail($id);
+            $income = OtherIncomeVoucher::query()->where('business_id', AppController::businessId())->lockForUpdate()->findOrFail($id);
             $journal = $this->posting->postOtherIncomeVoucher($income);
             if ($journal) $income->update(['status' => 'posted', 'journal_voucher_id' => $journal->id, 'approved_by' => Auth::id(), 'approved_at' => now()]);
             return $income->fresh('journal');
@@ -248,7 +251,7 @@ class ExpenseIncomeService
 
     public function recurring(array $filters)
     {
-        return RecurringExpenseTemplate::query()->with(['category', 'paidFromAccount'])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
+        return RecurringExpenseTemplate::query()->with(['category', 'account', 'paidFromAccount'])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
     }
 
     public function saveRecurring(array $data, ?int $id = null): RecurringExpenseTemplate
@@ -259,12 +262,12 @@ class ExpenseIncomeService
         if (!empty($data['paid_from_account_id'])) $this->assertAccount($data['paid_from_account_id'], ['cash', 'bank']);
         $template = $id ? RecurringExpenseTemplate::query()->where('business_id', $businessId)->findOrFail($id) : new RecurringExpenseTemplate(['business_id' => $businessId, 'created_by' => Auth::id()]);
         $template->fill($data)->save();
-        return $template->fresh(['category', 'paidFromAccount']);
+        return $template->fresh(['category', 'account', 'paidFromAccount']);
     }
 
     public function pettyCash(array $filters)
     {
-        return PettyCashAdvance::query()->with(['cashAccount', 'branch'])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
+        return PettyCashAdvance::query()->with(['cashAccount', 'branch', 'employee' => fn ($query) => $query->where('business_id', AppController::businessId())->select('id', 'display_name', 'employee_code', 'business_id')])->where('business_id', AppController::businessId())->latest('id')->paginate(20);
     }
 
     public function savePettyCash(array $data, ?int $id = null): PettyCashAdvance
@@ -272,14 +275,55 @@ class ExpenseIncomeService
         return DB::transaction(function () use ($data, $id) {
             $businessId = AppController::businessId();
             $this->assertAccount($data['cash_account_id'], ['cash']);
-            $advance = $id ? PettyCashAdvance::query()->where('business_id', $businessId)->findOrFail($id) : new PettyCashAdvance(['business_id' => $businessId, 'created_by' => Auth::id(), 'voucher_number' => $this->nextNumber('PC', PettyCashAdvance::class, 'voucher_number')]);
+            $advance = $id ? PettyCashAdvance::query()->where('business_id', $businessId)->lockForUpdate()->findOrFail($id) : new PettyCashAdvance(['business_id' => $businessId, 'created_by' => Auth::id(), 'voucher_number' => $this->nextNumber('PC', PettyCashAdvance::class, 'voucher_number')]);
             if (!in_array($advance->status ?: 'draft', ['draft'], true)) throw ValidationException::withMessages(['status' => 'Issued petty cash cannot be directly edited.']);
+            if ($id) {
+                $this->assertUnpostedPettyDraft($advance);
+                if ($data['status'] !== 'draft') throw ValidationException::withMessages(['status' => 'Use the Issue action to issue a saved draft.']);
+            }
             $advance->fill(array_merge($data, ['balance_amount' => $data['amount'], 'settled_amount' => 0]))->save();
             if ($data['status'] === 'issued') {
                 $journal = $this->posting->postPettyCashAdvance($advance);
                 if ($journal) $advance->update(['journal_voucher_id' => $journal->id, 'approved_by' => Auth::id(), 'status' => 'issued']);
             }
-            return $advance->fresh(['cashAccount', 'journal']);
+            return $advance->fresh(['cashAccount', 'journal', 'employee' => fn ($query) => $query->where('business_id', $businessId)->select('id', 'display_name', 'employee_code', 'business_id')]);
+        });
+    }
+
+    private function assertUnpostedPettyDraft(PettyCashAdvance $advance): void
+    {
+        $hasJournal = \App\Models\JournalVoucher::query()->where('business_id', $advance->business_id)
+            ->where('reference_type', PettyCashAdvance::class)->where('reference_id', $advance->id)->exists();
+        if ($advance->status !== 'draft' || $advance->journal_voucher_id || $hasJournal) {
+            throw ValidationException::withMessages(['status' => 'Only an unposted draft advance can use this action.']);
+        }
+    }
+
+    public function issuePettyCash(int $id): PettyCashAdvance
+    {
+        return DB::transaction(function () use ($id) {
+            $advance = PettyCashAdvance::query()->where('business_id', AppController::businessId())->lockForUpdate()->findOrFail($id);
+            $this->assertUnpostedPettyDraft($advance);
+            // Revalidate the stored draft against today's employee/branch eligibility.
+            $request = new \App\Http\Requests\PettyCashAdvanceRequest();
+            $data = $advance->only(['branch_id', 'employee_id', 'cash_account_id', 'advance_date', 'amount', 'purpose', 'status']);
+            $data['advance_date'] = $advance->advance_date->format('Y-m-d');
+            $request->replace($data);
+            \Illuminate\Support\Facades\Validator::make($data, $request->rules())->validate();
+            $this->assertAccount($advance->cash_account_id, ['cash']);
+            $journal = $this->posting->postPettyCashAdvance($advance);
+            if (!$journal) throw ValidationException::withMessages(['status' => 'This advance already has an accounting posting.']);
+            $advance->update(['status' => 'issued', 'journal_voucher_id' => $journal->id, 'approved_by' => Auth::id()]);
+            return $advance->fresh(['cashAccount', 'journal', 'employee' => fn ($query) => $query->where('business_id', $advance->business_id)->select('id', 'display_name', 'employee_code', 'business_id')]);
+        });
+    }
+
+    public function deletePettyCashDraft(int $id): void
+    {
+        DB::transaction(function () use ($id) {
+            $advance = PettyCashAdvance::query()->where('business_id', AppController::businessId())->lockForUpdate()->findOrFail($id);
+            $this->assertUnpostedPettyDraft($advance);
+            $advance->delete();
         });
     }
 

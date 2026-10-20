@@ -254,6 +254,11 @@ class SalesController extends Controller
         return response()->json($this->sales->references());
     }
 
+    public function serialCandidates(Request $request, \App\Services\VoucherSerialService $serials)
+    {
+        return response()->json($serials->candidates($request->all(), 'sale'));
+    }
+
     public function searchProducts(Request $request)
     {
         abort_unless(AppController::canOpen('sales') || AppController::canOpen('pos'), 403);

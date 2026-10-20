@@ -266,6 +266,7 @@ class StockService
                     'product_id' => $entry->product_id,
                     'product_variant_id' => $entry->product_variant_id,
                     'batch_id' => $entry->batch_id,
+                    'serial_id' => $entry->serial_id ?: $entry->serial_number_id,
                     'transaction_type' => $reversalType,
                     'reference_type' => $referenceType,
                     'reference_id' => $referenceId,

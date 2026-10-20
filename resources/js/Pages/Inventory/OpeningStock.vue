@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 import InventoryApi from './InventoryApi';
+import SerialAssignment from '../../Components/Common/SerialAssignment.vue';
 import AppToast from '../../Components/Common/AppToast.vue';
 import CrudTable from '../../Components/Common/CrudTable.vue';
 import DrawerField from '../../Components/Common/DrawerField.vue';
@@ -253,7 +254,7 @@ const addProduct = (product) => {
         mrp: product.mrp || '',
         current_stock: product.current_stock || 0,
         warehouse_location: '',
-        serial_number_id: product.serial_number_id || '',
+        serials: [],
         remarks: '',
         row_uid: makeRowUid(),
     };
@@ -295,7 +296,7 @@ const editVoucher = (voucher) => {
         variants: [],
         unit: item.unit || 'PCS',
         current_stock: item.current_stock || 0,
-        serial_number_id: item.serial_number_id || '',
+        serials: (item.serials || []).map(serial => ({ ...serial })),
         row_uid: makeRowUid(),
     }));
     errors.value = {};
@@ -324,7 +325,7 @@ const copyVoucherAsNew = (voucher) => {
         variants: [],
         unit: item.unit || 'PCS',
         current_stock: item.current_stock || 0,
-        serial_number_id: item.serial_number_id || '',
+        serials: [],
         row_uid: makeRowUid(),
     }));
     errors.value = {};
@@ -355,14 +356,14 @@ const payload = (status) => ({
         unit: item.unit || 'PCS',
         purchase_cost: item.purchase_cost || 0,
         warehouse_location: item.warehouse_location || null,
-        serial_number_id: item.serial_number_id || null,
+        serials: (item.serials || []).map(({ serial_number_id, serial_number }) => ({ serial_number_id, serial_number })),
         remarks: item.remarks || null,
     })),
 });
 
 const fieldError = (field) => errors.value?.[field]?.[0] || '';
 
-const rowError = (index, field) => fieldError(`items.${index}.${field}`);
+const rowError = (index, field) => fieldError(`items.${index}.${field}`) || Object.entries(errors.value).find(([key]) => key.startsWith(`items.${index}.${field}.`))?.[1]?.[0] || '';
 
 const showMessage = (title, message, type = 'info') => {
     if (toastTimer) {
@@ -376,6 +377,16 @@ const showMessage = (title, message, type = 'info') => {
     }, type === 'error' ? 5200 : 3200);
 };
 
+const isSerialTracked = item => item.serial_required || ['serial', 'batch_serial'].includes(item.tracking_type);
+const serialScope = item => ({ product_id: item.product_id, branch_id: form.branch_id, warehouse_id: form.warehouse_id, product_variant_id: item.product_variant_id || null, batch_id: item.batch_id || null, branch_name: references.value.branches.find(b => Number(b.id) === Number(form.branch_id))?.name, warehouse_name: references.value.warehouses.find(w => Number(w.id) === Number(form.warehouse_id))?.name });
+const serialPostingError = (item) => {
+    if (!isSerialTracked(item)) return '';
+    const count = (item.serials || []).length;
+    if (!Number.isInteger(Number(item.quantity))) return 'Serial-tracked quantity must be an integer.';
+    if (count !== Number(item.quantity)) return `${item.product_name || item.product}: exactly ${item.quantity} unique serial numbers required; ${count} assigned.`;
+    return '';
+};
+
 const validateClient = (posting = false) => {
     const nextErrors = {};
 
@@ -385,8 +396,11 @@ const validateClient = (posting = false) => {
     if (!form.items.length) nextErrors.items = ['At least one product row is required.'];
 
     const seen = {};
+    const seenSerials = new Set();
 
     form.items.forEach((item, index) => {
+        const serialError = posting ? serialPostingError(item) : '';
+        if (serialError) nextErrors[`items.${index}.serials`] = [serialError];
         if (item.quantity === '' || item.quantity === null || item.quantity === undefined) nextErrors[`items.${index}.quantity`] = ['Quantity is required.'];
         if (Number(item.quantity || 0) <= 0) nextErrors[`items.${index}.quantity`] = ['Quantity must be greater than zero.'];
         if (Number(item.purchase_cost || 0) < 0) nextErrors[`items.${index}.purchase_cost`] = ['Cost price cannot be negative.'];
@@ -400,6 +414,11 @@ const validateClient = (posting = false) => {
             nextErrors[`items.${index}.expiry_date`] = ['Expiry date must be greater than manufacturing date.'];
         }
 
+        for (const serial of item.serials || []) {
+            const key = String(serial.serial_number || '').toUpperCase().replace(/[\s-]+/g, '');
+            if (!key || seenSerials.has(key)) nextErrors[`items.${index}.serials`] = ['Serial numbers must be nonempty and unique across the voucher.'];
+            seenSerials.add(key);
+        }
         const key = rowKey(item);
         if (seen[key]) nextErrors[`items.${index}.product_id`] = ['This product already exists in the voucher. Please update the existing quantity.'];
         seen[key] = true;
@@ -446,6 +465,12 @@ const saveVoucher = async (status = 'draft') => {
 };
 
 const approveVoucher = async (voucher) => {
+    const serialError = (voucher.items || []).map(serialPostingError).find(Boolean);
+    if (serialError) {
+        showMessage('Serial Assignment Required', serialError, 'error');
+        return;
+    }
+
     if (!window.confirm('Are you sure you want to post this opening stock voucher? Stock will be updated and the voucher cannot be edited after posting.')) {
         return;
     }
@@ -517,6 +542,7 @@ watch(
             return;
         }
 
+        if (form.items.some(item => item.serials?.length)) showMessage('Serial Assignments Cleared', 'Branch changed; assign serials again for the new location.', 'warning');
         form.warehouse_id = '';
         form.items = [];
         productSearch.value = '';
@@ -533,7 +559,10 @@ watch(
 watch(
     () => form.warehouse_id,
     () => {
+        if (fillingForm.value || isReadOnly.value) return;
+        if (form.items.some(item => item.serials?.length)) showMessage('Serial Assignments Cleared', 'Warehouse changed; assign serials again for the new location.', 'warning');
         form.items.forEach((item) => {
+            item.serials = [];
             item.warehouse_location = '';
         });
     }
@@ -656,6 +685,7 @@ onMounted(async () => {
                 >
                     <template #cell-product="{ row: item }">
                         <div class="product-information">
+                            <SerialAssignment v-if="isSerialTracked(item)" v-model="item.serials" :quantity="Number(item.quantity)" :scope="serialScope(item)" :readonly="Boolean(isReadOnly)" :error="rowError(form.items.indexOf(item), 'serials')" @error="showMessage('Serial Assignment', $event, 'error')" />
                             <strong>{{ item.product_name }}</strong>
                             <span>{{ item.sku || '-' }}</span>
                             <span>Current: {{ formatQty(item.current_stock) }} {{ item.unit || 'PCS' }}</span>
@@ -914,6 +944,11 @@ onMounted(async () => {
 
 <style scoped>
 .inventory-page { padding: 4px 0 28px; }
+/* Keep the table's transparent menu space from covering voucher actions below it. */
+.inventory-page :deep(.crud-table-wrap) {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
 .page-actions { display: flex; gap: 10px; justify-content: flex-end; margin-bottom: 18px; }
 .page-actions button,
 .actions button,
@@ -944,7 +979,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .field-stack { min-width: 0; }
 .field-span-2 { grid-column: span 2; }
 .listing-toolbar { align-items: center; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 16px; position: relative; }
-.compact-toolbar { justify-content: stretch; }
+.compact-toolbar {
+    justify-content: stretch;
+    position: relative;
+    z-index: 50;
+}
 .search-box { align-items: center; background: #fff; border: 1px solid #d8e0eb; border-radius: 9px; display: flex; gap: 10px; min-height: 42px; padding: 0 12px; width: min(420px, 100%); }
 .wide-search { width: 100%; }
 .search-box span { border: 2px solid #8b98ac; border-radius: 50%; height: 13px; position: relative; width: 13px; }
@@ -973,7 +1012,22 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .date-control { min-width: 132px; }
 .qty-control { min-width: 86px; }
 .money-control { min-width: 96px; }
-.search-results { position: absolute; z-index: 20; right: 0; left: 0; top: 44px; display: grid; max-height: 220px; overflow: auto; background: #fff; border: 1px solid #dce4ef; border-radius: 9px; box-shadow: 0 12px 30px rgba(15, 34, 66, .12); }
+.search-results {
+    position: absolute;
+    z-index: 100;
+    left: 0;
+    right: 0;
+    top: calc(100% + 6px);
+
+    display: grid;
+    max-height: 280px;
+    overflow-y: auto;
+
+    background: #fff;
+    border: 1px solid #dce4ef;
+    border-radius: 9px;
+    box-shadow: 0 12px 30px rgba(15, 34, 66, .16);
+}
 .search-results button { background: #fff; border: 0; border-bottom: 1px solid #eef2f6; border-radius: 0; color: #27344c; cursor: pointer; display: grid; font-size: 12px; font-weight: 750; justify-items: start; min-height: 44px; padding: 9px 12px; }
 .search-results span,
 .product-information span { color: #7a869a; display: block; font-size: 10px; line-height: 1.5; }

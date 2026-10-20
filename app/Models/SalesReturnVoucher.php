@@ -27,6 +27,21 @@ class SalesReturnVoucher extends Model
         'balance_amount' => 'decimal:2',
     ];
 
+    /**
+     * Amount of posted credit notes applied against an invoice's open balance.
+     * Draft, cancelled and reversed returns never reduce the invoice outstanding;
+     * any credit beyond the adjusted amount stays as customer credit.
+     */
+    public static function invoiceAdjustmentTotal(int $businessId, int $salesVoucherId): float
+    {
+        return round((float) static::query()
+            ->where('business_id', $businessId)
+            ->where('sales_voucher_id', $salesVoucherId)
+            ->whereIn('status', ['approved', 'confirmed'])
+            ->where('settlement_type', 'invoice_adjustment')
+            ->sum('adjustment_amount'), 2);
+    }
+
     public function sale()
     {
         return $this->belongsTo(SalesVoucher::class, 'sales_voucher_id');

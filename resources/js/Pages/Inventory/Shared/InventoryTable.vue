@@ -1,4 +1,5 @@
 <script setup>
+import { formatDateField } from '../../../Support/dateFormat.js';
 defineProps({
     columns: { type: Array, required: true },
     rows: { type: Array, default: () => [] },
@@ -19,7 +20,7 @@ defineProps({
                 <tr v-for="row in rows" :key="row.id">
                     <td v-for="column in columns" :key="column.key">
                         <slot :name="`cell-${column.key}`" :row="row" :value="row[column.key]">
-                            {{ row[column.key] ?? '-' }}
+                            {{ formatDateField(column.key, row[column.key]) ?? '-' }}
                         </slot>
                     </td>
                     <td v-if="$slots.actions" class="actions-cell"><slot name="actions" :row="row" /></td>

@@ -93,6 +93,7 @@ class PosController extends Controller
                     'id' => $product->id,
                     'name' => $product->name,
                     'sku' => $product->sku,
+                    'serial_required' => \App\Services\VoucherSerialService::tracked($product),
                     'barcode' => $product->primary_barcode ?: $product->barcode,
                     'image_url' => $this->imageUrl(optional($product->images->sortByDesc('is_primary')->first())->image_path),
                     'unit_id' => $product->unit_id,

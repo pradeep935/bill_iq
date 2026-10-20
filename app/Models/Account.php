@@ -19,6 +19,17 @@ class Account extends Model
         'is_reconciliation_enabled' => 'boolean',
     ];
 
+    public function scopeCategoryPosting($query, int $businessId, string $type)
+    {
+        $settings = BusinessAccountSetting::query()->where('business_id', $businessId)->first();
+        $roles = ['sales_account_id', 'purchase_account_id', 'sales_return_account_id', 'purchase_return_account_id', 'cost_of_goods_sold_account_id', 'round_off_account_id'];
+        $excluded = collect($roles)->map(fn ($role) => $settings?->{$role})->filter()->values()->all();
+        return $query->where('business_id', $businessId)->where('account_type', $type)
+            ->where('status', 'active')->where('is_control_account', false)
+            ->whereNotIn('id', $excluded)
+            ->whereNotIn('account_code', ['SALES', 'PURCHASE', 'SALES-RET', 'PUR-RET', 'COGS', 'ROUND']);
+    }
+
     public function group()
     {
         return $this->belongsTo(AccountGroup::class, 'account_group_id');

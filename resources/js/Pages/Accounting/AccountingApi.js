@@ -133,9 +133,15 @@ const AccountingApi = {
         const response = await axios.get('/app/accounting/petty-cash/list', { params });
         return response.data;
     },
-    async savePettyCash(payload) {
-        const response = await axios.post('/app/accounting/petty-cash', payload);
+    async savePettyCash(payload, id = null) {
+        const response = id ? await axios.put(`/app/accounting/petty-cash/${id}`, payload) : await axios.post('/app/accounting/petty-cash', payload);
         return response.data;
+    },
+    async issuePettyCash(id) {
+        return (await axios.post(`/app/accounting/petty-cash/${id}/issue`)).data;
+    },
+    async deletePettyCash(id) {
+        return (await axios.delete(`/app/accounting/petty-cash/${id}`)).data;
     },
     async bankStatementImports(params = {}) {
         const response = await axios.get('/app/accounting/bank-statement-imports/list', { params });

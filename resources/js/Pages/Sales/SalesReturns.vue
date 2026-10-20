@@ -1,9 +1,9 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { formatDate } from '../../Support/dateFormat.js';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
 import SalesApi from './SalesApi';
 import FilterCard from '../../Components/Billing/FilterCard.vue';
-import InvoiceHeader from '../../Components/Billing/InvoiceHeader.vue';
 import SummaryCard from '../../Components/Billing/SummaryCard.vue';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 
@@ -25,6 +25,7 @@ const invoiceSearchRef = ref(null);
 const refundPanelRef = ref(null);
 const lastReturn = ref(null);
 const openActionMenuId = ref(null);
+const activeTab = ref('entry');
 let invoiceSearchTimer = null;
 
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
@@ -93,8 +94,11 @@ const paymentMethods = computed(() => references.value.payment_methods || []);
 const activeRefundLabel = computed(() => refundOptions.find((option) => option.settlement === form.settlement_type)?.label || 'Customer Credit');
 const invoiceBalance = computed(() => toNumber(selectedInvoice.value?.balance_amount ?? selectedInvoice.value?.balance ?? 0));
 const selectedCustomerLabel = computed(() => selectedInvoice.value?.customer || selectedCustomer.value?.customer_name || 'Walk-in Customer');
-const selectedReturnItemIds = computed(() => new Set(form.items.map((item) => Number(item.sales_item_id))));
-const returnableInvoiceItems = computed(() => invoiceItems.value.filter((item) => !selectedReturnItemIds.value.has(Number(item.sales_item_id))));
+const returnItemKey = (item) => `${Number(item.sales_item_id)}-${Number(item.batch_id || 0)}`;
+const selectedReturnItemKeys = computed(() => new Set(form.items.map((item) => returnItemKey(item))));
+const returnableInvoiceItems = computed(() => invoiceItems.value.filter((item) => !selectedReturnItemKeys.value.has(returnItemKey(item))));
+const returnableBatchCount = computed(() => returnableInvoiceItems.value.length);
+const selectedBatchCount = computed(() => form.items.length);
 const filteredInvoiceItems = computed(() => {
   const term = returnProductSearch.value.trim().toLowerCase();
   const source = returnableInvoiceItems.value;
@@ -184,7 +188,7 @@ const selectInvoice = async (invoice) => {
   invoiceResults.value = [];
 };
 const addReturnItem = (item) => {
-  if (selectedReturnItemIds.value.has(Number(item.sales_item_id))) return;
+  if (selectedReturnItemKeys.value.has(returnItemKey(item))) return;
   const available = toNumber(item.available_quantity);
   form.items.push({
     ...item,
@@ -254,6 +258,7 @@ const editReturn = (row) => {
   returnProductSearch.value = '';
   invoiceSearch.value = row.invoice_number || '';
   lastReturn.value = row;
+  activeTab.value = 'entry';
 };
 const printCreditNote = (row = null) => {
   const target = row || lastReturn.value;
@@ -280,9 +285,13 @@ const clearFilters = () => { Object.assign(filters, { search: '', status: '', re
 const statusLabel = (status) => ({ confirmed: 'Approved', reversed: 'Cancelled' }[status] || status || 'Draft');
 const refundStatus = (row) => toNumber(row.refund_amount) <= 0 ? 'Pending' : (toNumber(row.refund_amount) >= toNumber(row.grand_total) ? 'Refunded' : 'Partial');
 const paymentStatus = (row) => row.settlement_type === 'customer_credit' ? 'Credit' : refundStatus(row);
-const handleShortcut = (event) => {
+const handleShortcut = async (event) => {
   if (!shortcuts.some((shortcut) => shortcut.key === event.key)) return;
   event.preventDefault();
+  if (['F1', 'F2', 'F3'].includes(event.key) && activeTab.value !== 'entry') {
+    activeTab.value = 'entry';
+    await nextTick();
+  }
   if (event.key === 'F1') reset();
   if (event.key === 'F2') invoiceSearchRef.value?.focus();
   if (event.key === 'F3') refundPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -304,86 +313,99 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
       <div class="bill-page-title">
         <span>SALES MANAGEMENT</span>
         <h1>Sales Returns</h1>
-        <p>Approve returns, credit notes, refunds and stock adjustments from one billing workspace.</p>
       </div>
     </template>
 
     <div class="return-saas-page">
-      <InvoiceHeader title="Sales Return" subtitle="Invoice-backed credit notes with GST, stock and refund adjustments." :shortcuts="shortcuts" />
+      <div class="return-toolbar">
+        <div class="return-tabs" role="tablist" aria-label="Sales return views">
+          <button type="button" role="tab" :aria-selected="activeTab === 'entry'" :class="{ active: activeTab === 'entry' }" title="Create or edit a sales return" @click="activeTab = 'entry'">{{ form.id ? 'Edit Return' : 'New Return' }}</button>
+          <button type="button" role="tab" :aria-selected="activeTab === 'history'" :class="{ active: activeTab === 'history' }" title="View return history" @click="activeTab = 'history'">Return History <span class="return-tab-count">{{ pagination.total || returns.length }}</span></button>
+        </div>
+        <div class="bill-shortcuts" aria-label="Keyboard shortcuts">
+          <span v-for="shortcut in shortcuts" :key="shortcut.key"><kbd>{{ shortcut.key }}</kbd>{{ shortcut.label }}</span>
+        </div>
+      </div>
 
-      <div class="return-workspace">
+      <div v-show="activeTab === 'entry'" class="return-workspace">
         <main class="return-main">
-          <FilterCard title="Return Information" eyebrow="RETURN">
-            <label class="bill-field">
-              <span>Workflow</span>
-              <span class="bill-status-badge primary">Return Against Invoice</span>
-            </label>
-            <label class="bill-field"><span>Return Date</span><input v-model="form.return_date" type="date" title="Return date" /></label>
-            <label class="bill-field"><span>Status</span><span class="bill-status-badge">{{ form.id ? 'Draft' : 'New' }}</span></label>
-            <label class="bill-field"><span>Tax Type</span><select v-model="form.tax_type" title="Tax treatment"><option value="intrastate">Intrastate</option><option value="interstate">Interstate</option><option value="exempt">Exempt</option><option value="nil_rated">Nil Rated</option></select></label>
-            <label class="bill-field"><span>Reason</span><select v-model="form.reason" title="Primary return reason"><option value="">Select reason</option><option v-for="reason in reasonOptions" :key="reason" :value="reason">{{ reason }}</option></select></label>
-            <label class="bill-field bill-field-wide"><span>Remarks</span><input v-model="form.remarks" placeholder="Internal return remarks" title="Internal return remarks" /></label>
-          </FilterCard>
+          <div v-if="Object.keys(errors).length" class="return-error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
 
-          <div class="return-two-column single">
-            <FilterCard title="Customer & Original Invoice" eyebrow="INVOICE">
-              <label class="bill-field"><span>Branch</span><select v-model="form.branch_id" title="Return branch"><option value="">Select branch</option><option v-for="branch in references.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option></select></label>
-              <label class="bill-field"><span>Warehouse</span><select v-model="form.warehouse_id" title="Return warehouse"><option value="">Select warehouse</option><option v-for="warehouse in filteredWarehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option></select></label>
-              <div class="return-search bill-field-wide">
+          <section class="bill-ui-card return-info-card">
+            <div class="return-card-head">
+              <h2>Return Information</h2>
+              <span class="bill-status-badge primary" title="Workflow">Return Against Invoice</span>
+              <span class="bill-status-badge" title="Status">{{ form.id ? 'Draft' : 'New' }}</span>
+            </div>
+            <div class="return-info-grid">
+              <div class="return-search return-span-2">
                 <label class="bill-field"><span>Original Invoice</span><input ref="invoiceSearchRef" v-model="invoiceSearch" placeholder="Search invoice number, customer, mobile or GSTIN" title="Search original invoice" @input="searchInvoices" /></label>
                 <div v-if="invoiceResults.length" class="return-search-results">
                   <button v-for="invoice in invoiceResults" :key="invoice.id" type="button" title="Load invoice for return" @click="selectInvoice(invoice)">
                     <strong>{{ invoice.invoice_number }}</strong>
-                    <span>{{ invoice.customer || 'Walk-in Customer' }} | {{ invoice.invoice_date }} | {{ formatMoney(invoice.grand_total) }} | {{ invoice.payment_status }}</span>
+                    <span>{{ invoice.customer || 'Walk-in Customer' }} | {{ formatDate(invoice.invoice_date) }} | {{ formatMoney(invoice.grand_total) }} | {{ invoice.payment_status }}</span>
                   </button>
                 </div>
               </div>
-              <div v-if="selectedInvoice" class="return-invoice-meta bill-field-wide">
-                <div><span>Invoice Number</span><strong>{{ selectedInvoice.invoice_number }}</strong></div>
-                <div><span>Invoice Date</span><strong>{{ selectedInvoice.invoice_date || '-' }}</strong></div>
-                <div><span>Customer</span><strong>{{ selectedCustomerLabel }}</strong></div>
-                <div><span>Payment Status</span><strong>{{ selectedInvoice.payment_status || '-' }}</strong></div>
-                <div><span>Warehouse</span><strong>{{ selectedWarehouse?.name || selectedInvoice.warehouse || '-' }}</strong></div>
-                <div><span>Invoice Total</span><strong>{{ formatMoney(selectedInvoice.grand_total) }}</strong></div>
-                <div><span>Invoice Balance</span><strong>{{ formatMoney(invoiceBalance) }}</strong></div>
-              </div>
-            </FilterCard>
-          </div>
+              <label class="bill-field"><span>Return Date</span><input v-model="form.return_date" type="date" title="Return date" /></label>
+              <label class="bill-field"><span>Reason</span><select v-model="form.reason" title="Primary return reason"><option value="">Select reason</option><option v-for="reason in reasonOptions" :key="reason" :value="reason">{{ reason }}</option></select></label>
+              <label class="bill-field"><span>Branch</span><select v-model="form.branch_id" title="Return branch"><option value="">Select branch</option><option v-for="branch in references.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option></select></label>
+              <label class="bill-field"><span>Warehouse</span><select v-model="form.warehouse_id" title="Return warehouse"><option value="">Select warehouse</option><option v-for="warehouse in filteredWarehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option></select></label>
+              <label class="bill-field"><span>Tax Type</span><select v-model="form.tax_type" title="Tax treatment"><option value="intrastate">Intrastate</option><option value="interstate">Interstate</option><option value="exempt">Exempt</option><option value="nil_rated">Nil Rated</option></select></label>
+              <label class="bill-field return-span-5"><span>Remarks</span><input v-model="form.remarks" placeholder="Internal return remarks" title="Internal return remarks" /></label>
+            </div>
+            <div v-if="selectedInvoice" class="return-invoice-meta">
+              <div><span>Invoice</span><strong>{{ selectedInvoice.invoice_number }}</strong></div>
+              <div><span>Date</span><strong>{{ formatDate(selectedInvoice.invoice_date) }}</strong></div>
+              <div><span>Customer</span><strong>{{ selectedCustomerLabel }}</strong></div>
+              <div><span>Payment</span><strong>{{ selectedInvoice.payment_status || '-' }}</strong></div>
+              <div><span>Warehouse</span><strong>{{ selectedWarehouse?.name || selectedInvoice.warehouse || '-' }}</strong></div>
+              <div><span>Invoice Total</span><strong>{{ formatMoney(selectedInvoice.grand_total) }}</strong></div>
+              <div><span>Invoice Balance</span><strong>{{ formatMoney(invoiceBalance) }}</strong></div>
+            </div>
+          </section>
 
-          <section class="bill-ui-card">
-            <div class="bill-ui-card-head">
-              <div><span>INVOICE ITEMS</span><h2>Returned Products</h2></div>
+          <section class="bill-ui-card return-products-card">
+            <div class="return-card-head">
+              <h2>Returned Products</h2>
               <span class="bill-status-badge">{{ form.items.length }} item{{ form.items.length === 1 ? '' : 's' }}</span>
+              <span v-if="selectedInvoice" class="return-selection-strip"><span><b>{{ selectedBatchCount }}</b> batch allocation{{ selectedBatchCount === 1 ? '' : 's' }} selected</span><span><b>{{ returnableBatchCount }}</b> still returnable</span></span>
             </div>
             <div class="return-product-search">
-              <label>
-                <span>Search / Scan invoice product</span>
-                <input v-model="returnProductSearch" :disabled="!selectedInvoice" placeholder="Product name, SKU, barcode, HSN, variant or batch" title="Search only products from selected invoice" />
-              </label>
+              <input v-model="returnProductSearch" :disabled="!selectedInvoice" :placeholder="selectedInvoice ? 'Search / scan invoice product: name, SKU, barcode, HSN or batch' : 'Select an original invoice first'" title="Search only products from selected invoice. Each original FEFO batch is shown separately so you can return the exact sold batch." />
               <div v-if="selectedInvoice && filteredInvoiceItems.length" class="return-product-results">
-                <button v-for="item in filteredInvoiceItems" :key="item.sales_item_id" type="button" title="Add product to this return" @click="addReturnItem(item)">
-                  <strong>{{ item.product }}</strong>
-                  <span>{{ item.sku || '-' }} | {{ item.barcode || '-' }} | {{ item.hsn_code || '-' }} | Returnable {{ item.available_quantity }} {{ item.unit || '' }}</span>
+                <button v-for="item in filteredInvoiceItems" :key="returnItemKey(item)" type="button" title="Add this batch allocation to the return" @click="addReturnItem(item)">
+                  <div class="return-result-title">
+                    <strong>{{ item.product }}</strong>
+                    <span v-if="item.batch" class="return-batch-chip">{{ item.batch }}</span>
+                  </div>
+                  <span>{{ item.sku || '-' }} | HSN {{ item.hsn_code || '-' }} | Exp {{ formatDate(item.expiry_date) }}</span>
+                  <span class="return-result-meta"><b>Sold {{ item.sold_quantity || 0 }}</b><b>Returned {{ item.previously_returned || 0 }}</b><b>Returnable {{ item.available_quantity }} {{ item.unit || '' }}</b></span>
                 </button>
               </div>
-              <p v-else-if="selectedInvoice && returnProductSearch.trim()">No returnable invoice product found.</p>
+              <p v-else-if="selectedInvoice && returnProductSearch.trim()" class="return-search-empty">No returnable invoice product found.</p>
             </div>
-            <div class="return-recent-products">
-              <button v-for="item in form.items.slice(0, 5)" :key="`${item.product_id}-${item.sales_item_id || item.sku}`" type="button" title="Recently loaded return product" @click="item.quantity = Math.min(toNumber(item.available_quantity || item.quantity || 999), toNumber(item.quantity) + 1)">
-                {{ item.product }}
+            <div v-if="form.items.length" class="return-recent-products">
+              <button v-for="item in form.items.slice(0, 5)" :key="returnItemKey(item)" type="button" title="Increase quantity for this selected batch" @click="item.quantity = Math.min(toNumber(item.available_quantity || item.quantity || 999), toNumber(item.quantity) + 1)">
+                {{ item.product }} <span v-if="item.batch">· {{ item.batch }}</span>
               </button>
             </div>
             <div class="return-table-wrap">
               <table class="return-products-table">
                 <thead><tr><th>Image</th><th>Product Name</th><th>SKU</th><th>Barcode</th><th>HSN</th><th>Batch</th><th>Sold Qty</th><th>Returned Qty</th><th>Available Qty</th><th>Return Qty</th><th>Unit</th><th>Rate</th><th>Discount</th><th>GST</th><th>Return Amount</th><th>Product Condition</th><th>Restock Option</th><th>Return Reason</th><th>Delete</th></tr></thead>
                 <tbody>
-                  <tr v-for="(item,index) in form.items" :key="`${item.product_id}-${item.sales_item_id || index}`">
+                  <tr v-for="(item,index) in form.items" :key="returnItemKey(item)">
                     <td><img v-if="item.image_url" :src="item.image_url" :alt="item.product" /><span v-else class="return-product-placeholder">{{ (item.product || 'P').slice(0, 1) }}</span></td>
                     <td><strong>{{ item.product }}</strong><small>{{ item.variant || 'Default' }}</small></td>
                     <td>{{ item.sku || '-' }}</td>
                     <td>{{ item.barcode || '-' }}</td>
                     <td>{{ item.hsn_code || '-' }}</td>
-                    <td>{{ item.batch || '-' }}</td>
+                    <td>
+                      <div class="return-batch-cell">
+                        <span class="return-batch-chip">{{ item.batch || 'No Batch' }}</span>
+                        <small v-if="item.expiry_date">Exp {{ formatDate(item.expiry_date) }}</small>
+                      </div>
+                    </td>
                     <td>{{ item.sold_quantity || '-' }}</td>
                     <td>{{ item.previously_returned || '-' }}</td>
                     <td>{{ item.available_quantity || '-' }}</td>
@@ -403,9 +425,15 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
               </table>
             </div>
           </section>
+        </main>
 
-          <section ref="refundPanelRef" class="bill-ui-card">
-            <div class="bill-ui-card-head"><div><span>REFUND</span><h2>Refund / Credit Note</h2></div><span class="bill-status-badge">{{ activeRefundLabel }}</span></div>
+        <aside class="return-side">
+          <SummaryCard class="return-summary-card" title="Return Summary" eyebrow="SUMMARY" :rows="summaryRows">
+            <template #badge><span class="bill-status-badge primary">Grand Total</span></template>
+          </SummaryCard>
+
+          <section ref="refundPanelRef" class="bill-ui-card return-settlement-card">
+            <div class="return-card-head"><h2>Settlement</h2><span class="bill-status-badge">{{ activeRefundLabel }}</span></div>
             <div class="return-payment-methods">
               <button v-for="option in refundOptions" :key="option.key" type="button" :class="{ active: form.settlement_type === option.settlement }" :disabled="option.key === 'adjustment' && invoiceBalance <= 0" :title="`Set refund method to ${option.label}`" @click="setRefundMethod(option)">{{ option.label }}</button>
             </div>
@@ -413,7 +441,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
               <div v-for="(refund,index) in form.refunds" :key="index" class="return-refund-line">
                 <label class="bill-field"><span>Method</span><select v-model="refund.payment_method_id" title="Refund payment method"><option v-for="method in paymentMethods" :key="method.id" :value="method.id">{{ method.name }}</option></select></label>
                 <label class="bill-field"><span>Refund Amount</span><input v-model="refund.amount" type="number" step="0.01" placeholder="Refund amount" title="Refund amount" /></label>
-                <label class="bill-field"><span>Reference</span><input v-model="refund.reference_number" placeholder="UTR, card ref or receipt no" title="Refund reference number" /></label>
+                <label class="bill-field return-refund-ref"><span>Reference</span><input v-model="refund.reference_number" placeholder="UTR, card ref or receipt no" title="Refund reference number" /></label>
                 <button type="button" class="danger" title="Remove refund line" @click="removeRefund(index)">Remove</button>
               </div>
             </div>
@@ -422,17 +450,11 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
               <div><span>Change</span><strong>{{ formatMoney(Math.max(0, totals.refundAmount - totals.returnAmount)) }}</strong></div>
             </div>
           </section>
-        </main>
 
-        <aside class="return-side">
-          <SummaryCard title="Return Summary" eyebrow="SUMMARY" :rows="summaryRows">
-            <template #badge><span class="bill-status-badge primary">Grand Total</span></template>
-          </SummaryCard>
           <section class="bill-ui-card return-actions-card">
-            <div class="bill-ui-card-head"><div><span>ACTIONS</span><h2>Credit Note Actions</h2></div></div>
             <div class="return-side-actions">
+              <button type="button" title="Approve return and post inventory/accounting entries" class="primary return-approve" @click="saveReturn('approved')">Approve Return</button>
               <button type="button" title="Save return as draft" @click="saveReturn('draft')">Save Draft</button>
-              <button type="button" title="Approve return and post inventory/accounting entries" class="primary" @click="saveReturn('approved')">Approve Return</button>
               <button type="button" title="Print credit note" @click="printCreditNote()">Print Credit Note</button>
               <button type="button" title="Post refund against saved return" @click="refundSavedReturn">Process Refund</button>
               <button type="button" class="danger" title="Cancel current return" @click="cancelWork">Cancel</button>
@@ -441,7 +463,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
         </aside>
       </div>
 
-      <section class="bill-ui-card return-history">
+      <section v-show="activeTab === 'history'" class="bill-ui-card return-history">
         <div class="bill-ui-card-head">
           <div><span>HISTORY</span><h2>Return History</h2></div>
           <div class="bill-ui-card-actions"><button type="button" title="Export return history" @click="exportRows">Export</button><button type="button" title="Clear history filters" @click="clearFilters">Clear</button></div>
@@ -459,7 +481,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
             <thead><tr><th>Credit Note Number</th><th>Invoice Number</th><th>Customer</th><th>Refund Status</th><th>Payment Status</th><th>Return Status</th><th>Amount</th><th>Actions</th></tr></thead>
             <tbody>
               <tr v-for="row in returns" :key="row.id">
-                <td><strong>{{ row.credit_note_number }}</strong><small>{{ row.return_date }}</small></td>
+                <td><strong>{{ row.credit_note_number }}</strong><small>{{ formatDate(row.return_date) }}</small></td>
                 <td>{{ row.invoice_number || '-' }}</td>
                 <td>{{ row.customer || 'Walk-in Customer' }}</td>
                 <td><span class="bill-status-badge">{{ refundStatus(row) }}</span></td>
@@ -475,11 +497,10 @@ onUnmounted(() => window.removeEventListener('keydown', handleShortcut));
         <div v-if="pagination.total > 0 && pagination.last_page > 1" class="return-pagination"><button :disabled="pagination.current_page <= 1" title="Previous page" @click="loadReturns(pagination.current_page - 1)">Previous</button><span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span><button :disabled="pagination.current_page >= pagination.last_page" title="Next page" @click="loadReturns(pagination.current_page + 1)">Next</button></div>
       </section>
 
-      <div v-if="Object.keys(errors).length" class="return-error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
     </div>
   </Layout>
 </template>
 
 <style scoped>
-.return-saas-page{padding:4px 0 28px}.return-workspace{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}.return-main{display:grid;gap:14px}.return-side{position:sticky;top:84px;display:grid;gap:14px}.return-two-column{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(420px,1.2fr);gap:14px}.return-two-column.single{grid-template-columns:1fr}.bill-field-wide{grid-column:1/-1}.return-search{position:relative}.return-search>input{width:100%}.return-search-results{position:absolute;z-index:30;top:calc(100% + 6px);left:0;right:0;display:grid;max-height:260px;overflow:auto;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 18px 42px rgba(16,24,40,.16)}.return-search-results button{display:grid;gap:3px;justify-items:start;padding:11px 12px;border:0;border-bottom:1px solid #eef2f6;border-radius:0;background:#fff;text-align:left}.return-search-results span,.return-products-table small{display:block;color:#7a869a;font-size:11px}.return-product-search{position:relative;display:grid;gap:8px;margin-top:12px}.return-product-search label{display:grid;gap:6px}.return-product-search span{color:#69758a;font-size:10px;font-weight:850;text-transform:uppercase}.return-product-search input{width:100%;min-height:38px;padding:8px 10px;border:1px solid #d8e0eb;border-radius:8px;color:#344159;background:#fff;font-size:12px}.return-product-search p{margin:0;color:#8490a2;font-size:12px}.return-product-results{position:absolute;z-index:25;top:64px;left:0;right:0;display:grid;max-height:240px;overflow:auto;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 18px 42px rgba(16,24,40,.14)}.return-product-results button{display:grid;gap:3px;justify-items:start;padding:10px 12px;border:0;border-bottom:1px solid #eef2f6;border-radius:0;background:#fff;text-align:left;color:#344159}.return-product-results button:hover{background:#edf4ff}.return-product-results strong{color:#142139;font-size:12px}.return-product-results span{font-size:11px;text-transform:none;letter-spacing:0}.return-invoice-meta,.return-balance-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.return-invoice-meta div,.return-balance-grid div{padding:10px;background:#f8fafc;border:1px solid #e7ecf2;border-radius:8px}.return-invoice-meta span,.return-balance-grid span{display:block;color:#69758a;font-size:10px;font-weight:800;text-transform:uppercase}.return-invoice-meta strong,.return-balance-grid strong{color:#142139;font-size:12px}.return-recent-products,.return-payment-methods,.return-history-filters,.return-row-actions,.return-pagination{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.return-recent-products{margin-top:10px}.return-recent-products button,.return-payment-methods button{min-height:34px;padding:7px 10px;background:#f8fafc;border:1px solid #e4eaf2;border-radius:8px;color:#344159;font-size:12px;font-weight:750}.return-payment-methods button.active{color:#2457d6;background:#edf4ff;border-color:#b8cdf8}.return-payment-methods button:disabled{cursor:not-allowed;opacity:.48}.return-table-wrap{max-height:520px;margin-top:12px;overflow:auto;border:1px solid #e4eaf2;border-radius:8px}.return-table-wrap.compact{max-height:460px}.return-products-table{width:100%;min-width:1760px;border-collapse:separate;border-spacing:0}.return-products-table th{position:sticky;top:0;z-index:4;padding:11px 10px;color:#65758b;background:#f8fafc;border-bottom:1px solid #e4eaf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:850;text-transform:uppercase}.return-products-table td{padding:10px;border-bottom:1px solid #edf1f5;color:#27344c;vertical-align:middle;white-space:nowrap;font-size:12px}.return-products-table img,.return-product-placeholder{width:36px;height:36px;border-radius:8px;object-fit:cover}.return-product-placeholder{display:grid;place-items:center;color:#2457d6;background:#edf4ff;font-weight:850}.return-products-table input,.return-products-table select,.return-history-filters input,.return-history-filters select{min-height:34px;padding:7px 9px;border:1px solid #d8e0eb;border-radius:8px;background:#fff;color:#344159;font-size:12px}.return-products-table input{width:86px}.qty-stepper{display:grid;grid-template-columns:30px 74px 30px;gap:4px;align-items:center}.qty-stepper button,.bill-icon-button,.return-row-actions button,.return-pagination button,.return-side-actions button,.return-refund-line button,.return-history button{min-height:34px;padding:7px 10px;border:1px solid #d8e0eb;border-radius:8px;background:#fff;color:#344159;font-size:12px;font-weight:800;cursor:pointer}.return-side-actions{display:grid;gap:8px}.primary,.return-side-actions .primary{color:#fff!important;background:#2457d6!important;border-color:#2457d6!important}.danger{color:#d23f49!important;background:#fff3f4!important;border-color:#ffd6da!important}.return-refund-lines{display:grid;gap:10px;margin-top:12px}.return-refund-line{display:grid;grid-template-columns:1fr 150px 1fr auto;gap:10px;align-items:end}.return-history{margin-top:14px}.return-pagination{justify-content:flex-end;margin-top:12px}.return-empty{padding:32px!important;color:#8490a2;text-align:center}.return-error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.bill-status-badge.primary{color:#2457d6;background:#edf4ff}.bill-status-badge.approved,.bill-status-badge.confirmed{color:#168757;background:#eaf8f1}.bill-status-badge.cancelled,.bill-status-badge.reversed{color:#d23f49;background:#fff3f4}@media(max-width:1180px){.return-workspace,.return-two-column{grid-template-columns:1fr}.return-side{position:static}.return-invoice-meta,.return-balance-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:720px){.return-refund-line,.return-invoice-meta,.return-balance-grid{grid-template-columns:1fr}.return-products-table{min-width:1500px}.return-history-filters>*{width:100%}}
+.return-saas-page{padding:2px 0 16px}.return-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}.return-tabs{display:inline-flex;gap:3px;padding:3px;border:1px solid #e4eaf2;border-radius:9px;background:#f8fafc}.return-tabs button{display:inline-flex;align-items:center;gap:5px;min-height:30px;padding:5px 12px;border:0;border-radius:7px;background:transparent;color:#5c6b80;font-size:12px;font-weight:800;cursor:pointer}.return-tabs button.active{color:#2457d6;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.12)}.return-tab-count{padding:1px 6px;border-radius:999px;background:#edf4ff;color:#2457d6;font-size:10px}.return-toolbar .bill-shortcuts{max-width:none}.return-toolbar .bill-shortcuts span{min-height:24px;padding:2px 7px}.return-workspace{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:10px;align-items:start}.return-main{display:grid;gap:10px;min-width:0}.return-side{position:sticky;top:76px;display:grid;gap:10px;max-height:calc(100vh - 88px);overflow:auto}.return-workspace .bill-ui-card,.return-history{padding:10px 12px}.return-card-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.return-card-head h2{margin:0 auto 0 0;color:#142139;font-size:14px}.return-info-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.return-span-2{grid-column:span 2}.return-span-5{grid-column:span 5}.return-workspace .bill-field{gap:3px}.return-workspace .bill-field>span{font-size:10px}.return-workspace .bill-ui-card input,.return-workspace .bill-ui-card select{min-height:32px;padding:5px 8px}.return-search{position:relative}.return-search-results{position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;display:grid;max-height:260px;overflow:auto;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 18px 42px rgba(16,24,40,.16)}.return-search-results button{display:grid;gap:2px;justify-items:start;padding:8px 10px;border:0;border-bottom:1px solid #eef2f6;border-radius:0;background:#fff;text-align:left;cursor:pointer}.return-search-results button:hover{background:#edf4ff}.return-search-results span,.return-products-table small{display:block;color:#7a869a;font-size:11px}.return-invoice-meta{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;padding:6px 10px;background:#f8fafc;border:1px solid #e7ecf2;border-radius:8px}.return-invoice-meta div{display:flex;align-items:baseline;gap:5px}.return-invoice-meta span,.return-balance-grid span{color:#69758a;font-size:10px;font-weight:800;text-transform:uppercase}.return-invoice-meta strong,.return-balance-grid strong{color:#142139;font-size:12px}.return-product-search{position:relative}.return-product-search input{width:100%}.return-search-empty{margin:4px 0 0;color:#8490a2;font-size:12px}.return-product-results{position:absolute;z-index:25;top:calc(100% + 4px);left:0;right:0;display:grid;max-height:240px;overflow:auto;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 18px 42px rgba(16,24,40,.14)}.return-product-results button{display:grid;gap:4px;justify-items:stretch;padding:8px 10px;border:0;border-bottom:1px solid #eef2f6;border-radius:0;background:#fff;text-align:left;color:#344159;cursor:pointer}.return-product-results button:hover{background:#edf4ff}.return-product-results strong{color:#142139;font-size:12px}.return-product-results span{font-size:11px;text-transform:none;letter-spacing:0}.return-result-title{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%}.return-result-meta{display:flex;gap:12px;flex-wrap:wrap;color:#4f5f78}.return-result-meta b{font-size:11px}.return-batch-chip{display:inline-flex;align-items:center;min-height:20px;padding:2px 7px;border:1px solid #bfd0f4;border-radius:999px;background:#eef4ff;color:#2457d6;font-size:10px;font-weight:850;letter-spacing:.02em}.return-batch-cell{display:grid;gap:2px;justify-items:start}.return-selection-strip{display:inline-flex;gap:6px;flex-wrap:wrap}.return-selection-strip>span{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid #e0e7f0;border-radius:999px;background:#f8fafc;color:#5c6b80;font-size:11px}.return-selection-strip b{color:#2457d6}.return-recent-products,.return-history-filters,.return-row-actions,.return-pagination{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.return-recent-products{margin-top:6px}.return-recent-products button{min-height:26px;padding:3px 8px;background:#f8fafc;border:1px solid #e4eaf2;border-radius:8px;color:#344159;font-size:11px;font-weight:750;cursor:pointer}.return-table-wrap{max-height:max(240px,calc(100vh - 380px));margin-top:8px;overflow:auto;border:1px solid #e4eaf2;border-radius:8px}.return-table-wrap.compact{max-height:max(320px,calc(100vh - 250px))}.return-products-table{width:100%;min-width:1600px;border-collapse:separate;border-spacing:0}.return-products-table th{position:sticky;top:0;z-index:4;padding:7px 8px;color:#65758b;background:#f8fafc;border-bottom:1px solid #e4eaf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:850;text-transform:uppercase}.return-products-table td{padding:5px 8px;border-bottom:1px solid #edf1f5;color:#27344c;vertical-align:middle;white-space:nowrap;font-size:12px}.return-products-table img,.return-product-placeholder{width:28px;height:28px;border-radius:6px;object-fit:cover}.return-product-placeholder{display:grid;place-items:center;color:#2457d6;background:#edf4ff;font-weight:850}.return-workspace .return-products-table input,.return-workspace .return-products-table select,.return-history-filters input,.return-history-filters select{width:auto;min-height:28px;padding:4px 7px;border:1px solid #d8e0eb;border-radius:7px;background:#fff;color:#344159;font-size:12px}.return-history-filters input,.return-history-filters select{min-height:32px}.return-workspace .return-products-table input{width:76px}.qty-stepper{display:grid;grid-template-columns:26px 64px 26px;gap:3px;align-items:center}.return-workspace .qty-stepper input{width:64px}.qty-stepper button,.bill-icon-button,.return-row-actions button,.return-pagination button,.return-side-actions button,.return-refund-line button,.return-history button{min-height:30px;padding:5px 9px;border:1px solid #d8e0eb;border-radius:7px;background:#fff;color:#344159;font-size:12px;font-weight:800;cursor:pointer}.qty-stepper button,.return-products-table .bill-icon-button{min-height:28px;padding:3px 7px}.return-summary-card{position:static}.return-summary-card :deep(.bill-ui-card-head){margin-bottom:4px}.return-summary-card :deep(.bill-ui-card-head h2){font-size:14px}.return-summary-card :deep(.bill-summary-row){padding:4px 0;font-size:12px}.return-summary-card :deep(.bill-summary-row strong){color:#142139}.return-summary-card :deep(.bill-summary-row.grand){padding-top:6px}.return-summary-card :deep(.bill-summary-row.grand strong){color:#2457d6;font-size:20px}.return-payment-methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.return-payment-methods button{min-height:30px;padding:4px 6px;background:#f8fafc;border:1px solid #e4eaf2;border-radius:7px;color:#344159;font-size:11px;font-weight:750;line-height:1.15;cursor:pointer}.return-payment-methods button.active{color:#2457d6;background:#edf4ff;border-color:#b8cdf8}.return-payment-methods button:disabled{cursor:not-allowed;opacity:.48}.return-refund-lines{display:grid;gap:6px;margin-top:8px}.return-refund-line{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:6px;align-items:end}.return-refund-line>label:nth-child(2),.return-refund-ref{grid-column:span 2}.return-balance-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.return-balance-grid div{display:flex;align-items:baseline;justify-content:space-between;gap:6px;padding:5px 8px;background:#f8fafc;border:1px solid #e7ecf2;border-radius:7px}.return-actions-card{position:sticky;bottom:0;z-index:5;padding:8px!important}.return-side-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.return-side-actions .return-approve{grid-column:1/-1;min-height:38px;font-size:13px}.primary,.return-side-actions .primary{color:#fff!important;background:#2457d6!important;border-color:#2457d6!important}.danger{color:#d23f49!important;background:#fff3f4!important;border-color:#ffd6da!important}.return-history .bill-ui-card-head{margin-bottom:8px}.return-pagination{justify-content:flex-end;margin-top:8px}.return-empty{padding:24px!important;color:#8490a2;text-align:center}.return-error-box{display:grid;gap:4px;padding:8px 10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.bill-status-badge.primary{color:#2457d6;background:#edf4ff}.bill-status-badge.approved,.bill-status-badge.confirmed{color:#168757;background:#eaf8f1}.bill-status-badge.cancelled,.bill-status-badge.reversed{color:#d23f49;background:#fff3f4}@media(max-width:1180px){.return-workspace{grid-template-columns:1fr}.return-side{position:static;max-height:none;overflow:visible}.return-actions-card{position:static}.return-info-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.return-span-5{grid-column:1/-1}.return-table-wrap{max-height:520px}}@media(max-width:720px){.return-info-grid{grid-template-columns:1fr}.return-span-2,.return-span-5{grid-column:1/-1}.return-toolbar .bill-shortcuts{justify-content:flex-start}.return-payment-methods{grid-template-columns:repeat(2,minmax(0,1fr))}.return-products-table{min-width:1400px}.return-history-filters>*{width:100%}}
 </style>

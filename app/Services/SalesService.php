@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\ProductVariantItem;
 use App\Models\SalesOrder;
+use App\Models\SalesReturnVoucher;
 use App\Models\SalesVoucher;
 use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
@@ -185,7 +186,7 @@ class SalesService
 
             $voucher->load(['items.product']);
 
-            foreach ($voucher->items as $item) {
+            foreach ($voucher->items as $index => $item) {
                 if ($item->product->product_type === 'service' || $item->product->item_type === 'non_stock' || !(bool) ($item->product->track_inventory ?? true)) {
                     continue;
                 }
@@ -199,6 +200,11 @@ class SalesService
                     'product_variant_id' => $item->product_variant_id,
                     'batch_id' => $item->batch_id,
                 ];
+                if (VoucherSerialService::tracked($item->product)) {
+                    app(VoucherSerialService::class)->sell($voucher, $item, "items.$index.serials");
+                    $this->consumeCustomerReservations($voucher, $item, $quantity);
+                    continue;
+                }
                 if ($item->batch_id || $item->product->batch_required || in_array($item->product->tracking_type, ['batch', 'batch_expiry', 'batch_serial'], true)) {
                     $allocations = app(SalesBatchAllocator::class)->allocate($scope, $quantity, true, fn ($batchScope) => $this->customerReservedQuantity($voucher, $batchScope, true));
                     foreach ($allocations as $allocation) {
@@ -307,11 +313,13 @@ class SalesService
             ]);
 
             $paid = round((float) $voucher->payments()->sum('amount'), 2);
+            $creditNote = SalesReturnVoucher::invoiceAdjustmentTotal($voucher->business_id, $voucher->id);
+            $balance = round(max(0, (float) $voucher->grand_total - $paid - $creditNote), 2);
             $voucher->update([
                 'paid_amount' => min($paid, (float) $voucher->grand_total),
-                'balance_amount' => round(max(0, (float) $voucher->grand_total - $paid), 2),
+                'balance_amount' => $balance,
                 'change_returned' => round(max(0, $paid - (float) $voucher->grand_total), 2),
-                'payment_status' => $paid <= 0 ? 'unpaid' : ($paid >= (float) $voucher->grand_total ? 'paid' : 'partial'),
+                'payment_status' => $balance <= 0 && $creditNote > 0 ? 'paid' : ($paid <= 0 ? 'unpaid' : ($paid >= (float) $voucher->grand_total ? 'paid' : 'partial')),
             ]);
 
             return $this->fresh($voucher);
@@ -345,6 +353,9 @@ class SalesService
                 throw ValidationException::withMessages(['status' => 'Only posted invoices can be reversed.']);
             }
 
+            if ($voucher->items()->whereNotNull('serials')->get()->contains(fn ($item) => count($item->serials ?? []) > 0)) {
+                throw ValidationException::withMessages(['serials' => 'Serial-tracked sales require a controlled serial return; invoice reversal is not supported.']);
+            }
             $this->stock->reverseTransaction(SalesVoucher::class, $voucher->id, $remarks ?: 'Sales reversal');
             $voucher->update(['status' => 'reversed']);
 
@@ -587,6 +598,8 @@ class SalesService
                     'id' => $item->id,
                     'product_id' => $item->product_id,
                     'product' => $item->product_name_snapshot,
+                    'serials' => $item->serials ?? [],
+                    'serial_required' => VoucherSerialService::tracked($item->product),
                     'product_variant_id' => $item->product_variant_id,
                     'batch_id' => $item->batch_id,
                     'unit_id' => $item->unit_id,
@@ -720,6 +733,7 @@ class SalesService
             ];
 
             $voucher->items()->create([
+                'serials' => $item['serials'] ?? [],
                 'product_id' => $product->id,
                 'product_variant_id' => $item['product_variant_id'] ?? null,
                 'batch_id' => $item['batch_id'] ?? null,
@@ -960,7 +974,7 @@ class SalesService
             'item_type' => $product->item_type,
             'tracking_type' => $product->tracking_type ?: 'none',
             'batch_required' => (bool) $product->batch_required,
-            'serial_required' => (bool) ($product->serial_required || $product->tracking_type === 'serial'),
+            'serial_required' => VoucherSerialService::tracked($product),
             'product_variant_id' => $variantId,
             'batch_id' => $selectedBatchId,
             'available_stock' => $availableStock,

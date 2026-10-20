@@ -1,4 +1,5 @@
 <script setup>
+import { formatDate } from '../../Support/dateFormat.js';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
@@ -257,7 +258,7 @@ onMounted(async () => {
                                 <td data-label="Received">{{ qty(order.received_qty) }}</td>
                                 <td data-label="Pending">{{ qty(order.pending_qty) }}</td>
                                 <td data-label="Amount">Rs. {{ money(order.grand_total) }}</td>
-                                <td data-label="Expected Date">{{ order.expected_delivery_date || '-' }}</td>
+                                <td data-label="Expected Date">{{ formatDate(order.expected_delivery_date) }}</td>
                                 <td data-label="Status"><span class="badge" :class="order.status">{{ labelize(order.status) }}</span></td>
                                 <td data-label="Action" class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === order.id" :show-view="false" more-label="Actions" more-title="Inventory order actions" @toggle="toggleActionMenu(order)" @close="closeActionMenu"><button type="button" @click="detailOrder = order; closeActionMenu()">View</button><button v-if="order.raw_status === 'draft'" type="button" @click="editOrder(order); closeActionMenu()">Edit</button><button v-if="['draft','approved','sent'].includes(order.raw_status)" type="button" @click="markOrdered(order); closeActionMenu()">Mark Ordered</button><button v-if="['confirmed','partially_received','partial_received'].includes(order.raw_status)" type="button" @click="receiveGoods(order); closeActionMenu()">Receive Goods</button><button type="button" @click="printPage(); closeActionMenu()">Print</button><button v-if="!['fully_received','received','closed','cancelled'].includes(order.raw_status)" type="button" class="danger" @click="cancelOrder(order); closeActionMenu()">Cancel</button></RowActionMenu></div></td>
                             </tr>
@@ -299,7 +300,7 @@ onMounted(async () => {
                 <section class="drawer">
                     <div class="drawer-head"><div><span>Inventory Order</span><h3>{{ detailOrder.order_number }}</h3></div><button @click="detailOrder = null">Close</button></div>
                     <span class="badge" :class="detailOrder.status">{{ labelize(detailOrder.status) }}</span>
-                    <div class="detail-grid"><article><h4>Order Information</h4><p>Source: {{ sourceLabel(detailOrder) }}</p><p>Branch: {{ detailOrder.branch?.name || '-' }}</p><p>Warehouse: {{ detailOrder.warehouse?.name || '-' }}</p><p>Supplier: {{ supplierName(detailOrder.supplier) }}</p><p>Order Date: {{ detailOrder.order_date }}</p><p>Expected: {{ detailOrder.expected_delivery_date || '-' }}</p></article><article><h4>Totals</h4><p>Subtotal: Rs. {{ money(detailOrder.subtotal) }}</p><p>Tax: Rs. {{ money(detailOrder.tax_amount) }}</p><p>Grand Total: Rs. {{ money(detailOrder.grand_total) }}</p></article></div>
+                    <div class="detail-grid"><article><h4>Order Information</h4><p>Source: {{ sourceLabel(detailOrder) }}</p><p>Branch: {{ detailOrder.branch?.name || '-' }}</p><p>Warehouse: {{ detailOrder.warehouse?.name || '-' }}</p><p>Supplier: {{ supplierName(detailOrder.supplier) }}</p><p>Order Date: {{ formatDate(detailOrder.order_date) }}</p><p>Expected: {{ formatDate(detailOrder.expected_delivery_date) }}</p></article><article><h4>Totals</h4><p>Subtotal: Rs. {{ money(detailOrder.subtotal) }}</p><p>Tax: Rs. {{ money(detailOrder.tax_amount) }}</p><p>Grand Total: Rs. {{ money(detailOrder.grand_total) }}</p></article></div>
                     <h4>Products</h4><table><thead><tr><th>Product</th><th>Ordered</th><th>Received</th><th>Pending</th><th>Rate</th><th>Amount</th></tr></thead><tbody><tr v-for="item in detailOrder.items" :key="item.id"><td>{{ item.product?.name || '-' }}</td><td>{{ qty(item.ordered_quantity) }}</td><td>{{ qty(item.received_quantity) }}</td><td>{{ qty(item.pending_quantity) }}</td><td>Rs. {{ money(item.purchase_rate) }}</td><td>Rs. {{ money(item.line_total) }}</td></tr></tbody></table>
                     <h4>GRN History</h4><p class="muted">Goods receipts are available from Stock Inward / GRN for this order.</p>
                     <h4>Activity / Audit</h4><ul><li>Created as {{ sourceLabel(detailOrder) }}</li><li v-if="detailOrder.raw_status !== 'draft'">Sent / Ordered</li><li v-if="detailOrder.received_qty > 0">GRN Received</li><li v-if="['fully_received','received'].includes(detailOrder.raw_status)">Closed by receipt</li></ul>

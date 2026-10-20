@@ -1,4 +1,5 @@
 <script setup>
+import { formatDate } from '../../Support/dateFormat.js';
 import { computed, onMounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
@@ -241,7 +242,7 @@ onMounted(async () => {
             <aside v-if="detailRow" class="drawer-backdrop" @click.self="detailRow = null">
                 <section class="drawer">
                     <div class="drawer-head"><div><span>Recommendation Details</span><h3>{{ detailRow.product_name }}</h3></div><button @click="detailRow = null">Close</button></div>
-                    <div class="detail-grid"><article><h4>Current Stock</h4><p>Saleable: {{ qty(detailRow.current_stock) }} {{ detailRow.unit }}</p><p>Reserved: {{ qty(detailRow.reserved_stock) }} {{ detailRow.unit }}</p><p>Available: {{ qty(detailRow.available_stock) }} {{ detailRow.unit }}</p><p>Pending Orders: {{ qty(detailRow.pending_order_qty) }} {{ detailRow.unit }}</p><p>Projected: {{ qty(detailRow.projected_stock) }} {{ detailRow.unit }}</p></article><article><h4>Stock Settings</h4><p>Reorder Level: {{ qty(detailRow.reorder_level) }}</p><p>Minimum: {{ qty(detailRow.minimum_stock) }}</p><p>Target: {{ qty(detailRow.target_stock) }}</p></article><article><h4>Purchase Information</h4><p>Last Purchase Rate: Rs. {{ money(detailRow.purchase_rate) }}</p><p>Last Supplier: {{ detailRow.preferred_supplier }}</p><p>Last Purchase: {{ detailRow.last_purchase_date || '-' }}</p></article></div>
+                    <div class="detail-grid"><article><h4>Current Stock</h4><p>Saleable: {{ qty(detailRow.current_stock) }} {{ detailRow.unit }}</p><p>Reserved: {{ qty(detailRow.reserved_stock) }} {{ detailRow.unit }}</p><p>Available: {{ qty(detailRow.available_stock) }} {{ detailRow.unit }}</p><p>Pending Orders: {{ qty(detailRow.pending_order_qty) }} {{ detailRow.unit }}</p><p>Projected: {{ qty(detailRow.projected_stock) }} {{ detailRow.unit }}</p></article><article><h4>Stock Settings</h4><p>Reorder Level: {{ qty(detailRow.reorder_level) }}</p><p>Minimum: {{ qty(detailRow.minimum_stock) }}</p><p>Target: {{ qty(detailRow.target_stock) }}</p></article><article><h4>Purchase Information</h4><p>Last Purchase Rate: Rs. {{ money(detailRow.purchase_rate) }}</p><p>Last Supplier: {{ detailRow.preferred_supplier }}</p><p>Last Purchase: {{ formatDate(detailRow.last_purchase_date) }}</p></article></div>
                 </section>
             </aside>
 

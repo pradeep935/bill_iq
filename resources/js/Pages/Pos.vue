@@ -5,6 +5,7 @@ import SalesApi from './Sales/SalesApi';
 import ActionFooter from '@/Components/Billing/ActionFooter.vue';
 import FilterCard from '@/Components/Billing/FilterCard.vue';
 import PaymentPanel from '@/Components/Billing/PaymentPanel.vue';
+import SerialAssignment from '../Components/Common/SerialAssignment.vue';
 import ProductTable from '@/Components/Billing/ProductTable.vue';
 import SummaryCard from '@/Components/Billing/SummaryCard.vue';
 import AppToast from '@/Components/Common/AppToast.vue';
@@ -274,7 +275,7 @@ const validateCartStock = () => {
             showToast(`Insufficient stock for ${item.product}. Available ${item.available_stock}.`, 'error');
             return false;
         }
-        if (item.serial_required) {
+        if (item.serial_required && ((item.serials || []).length !== Number(item.quantity) + Number(item.free_quantity || 0) || !Number.isInteger(Number(item.quantity) + Number(item.free_quantity || 0)))) {
             showToast(`Serial number is required for ${item.product}.`, 'error');
             return false;
         }
@@ -443,10 +444,6 @@ const searchProducts = async () => {
 const addProduct = async (product, fromScan = false) => {
     const batch = (product.batches || []).find((item) => Number(item.id || 0) === Number(product.batch_id || 0));
     const available = Number(batch?.available_stock ?? product.available_stock ?? 0);
-    if (product.serial_required) {
-        showToast('Serial-number products require serial selection before billing.', 'error');
-        return false;
-    }
     if (product.product_type !== 'service' && product.item_type !== 'non_stock' && available <= 0) {
         showToast('Insufficient stock', 'error');
         return false;
@@ -485,6 +482,7 @@ const addProduct = async (product, fromScan = false) => {
             available_stock: product.product_type === 'service' || product.item_type === 'non_stock' ? null : available,
             tax_inclusive: product.tax_inclusive || false,
             serial_required: Boolean(product.serial_required),
+            serials: [],
             previous_purchase: null,
         };
         form.items.push(touched);
@@ -644,6 +642,8 @@ const recallBill = async (bill) => {
         form.voucher_discount_value = sale.voucher_discount_value || '';
         form.items = (sale.items || []).map((item) => ({
             product_id: item.product_id,
+            serials: item.serials || [],
+            serial_required: item.serial_required,
             product: item.product,
             sku: item.sku_snapshot || item.sku || '',
             barcode: item.barcode_snapshot || item.barcode || '',
@@ -989,7 +989,10 @@ onUnmounted(() => {
 	                        @quantity-change="normalizeQty"
 	                        @batch-change="updateBatchStock"
 	                    >
-	                        <template #footer>
+	                        <template #serials="{ item }">
+                            <SerialAssignment v-if="item.serial_required" v-model="item.serials" :quantity="Number(item.quantity) + Number(item.free_quantity || 0)" :scope="{ product_id: item.product_id, branch_id: form.branch_id, warehouse_id: form.warehouse_id, product_variant_id: item.product_variant_id || null, batch_id: item.batch_id || null }" purpose="sale" @error="showToast($event, 'error')" />
+                        </template>
+                        <template #footer>
 	                            <button type="button" class="pos-manual-product-button" @click="showToast('Manual product entry is available through product search for now.', 'info')">+ Add Manual Product</button>
 	                            <span class="pos-table-items">{{ form.items.length }} Items</span>
 	                            <button type="button" class="pos-clear-cart-button" :disabled="!hasCartItems" @click="form.items = []; syncPaymentAmount()">Clear Cart</button>
@@ -1586,7 +1589,7 @@ onUnmounted(() => {
 }
 
 :deep(.bill-product-table) {
-    min-width: 860px;
+    min-width: 820px;
 }
 
 :deep(.bill-product-table th:nth-child(9)),

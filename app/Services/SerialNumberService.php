@@ -105,7 +105,7 @@ class SerialNumberService
             ])->values(),
             'history' => $history->map(fn (SerialNumberHistory $row) => [
                 'id' => $row->id,
-                'date' => optional($row->created_at)->format('Y-m-d H:i'),
+                'date' => optional($row->occurred_at ?: $row->created_at)->format('Y-m-d H:i'),
                 'event_type' => $row->event_type,
                 'from_status' => $row->from_status,
                 'to_status' => $row->to_status,
@@ -121,6 +121,7 @@ class SerialNumberService
     {
         return DB::transaction(function () use ($data) {
             $businessId = AppController::businessId();
+            app(VoucherSerialService::class)->lockBusiness($businessId);
             $product = $this->assertProduct((int) $data['product_id']);
             $this->assertSerialTracked($product);
             $this->assertLocation($businessId, $data);
@@ -285,9 +286,9 @@ class SerialNumberService
 
     private function assertUnique(int $businessId, int $productId, string $normalized): void
     {
-        $exists = ProductSerialNumber::withTrashed()->where('business_id', $businessId)->where('product_id', $productId)->where('normalized_serial_number', $normalized)->exists();
+        $exists = ProductSerialNumber::withTrashed()->where('business_id', $businessId)->where(fn ($q) => $q->where('normalized_serial_number', $normalized)->orWhereNull('normalized_serial_number'))->get()->contains(fn ($serial) => self::normalize($serial->serial_number) === $normalized);
         if ($exists) {
-            throw ValidationException::withMessages(['serial_number' => 'Serial number already exists for this product.']);
+            throw ValidationException::withMessages(['serial_number' => 'Serial number already exists in this business.']);
         }
     }
 

@@ -7,6 +7,7 @@ import AppToast from '../../Components/Common/AppToast.vue';
 import SearchSelect from '../../Components/Common/SearchSelect.vue';
 import TableLoadingState from '../../Components/Common/TableLoadingState.vue';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
+import CrudTable from '../../Components/Common/CrudTable.vue';
 import CrudDrawer from '../../Components/Common/CrudDrawer.vue';
 import FormInput from '../../Components/Form/FormInput.vue';
 import FormSelect from '../../Components/Form/FormSelect.vue';
@@ -117,6 +118,51 @@ watch(()=>form.value.branch_id,(v)=>{if(receipt.value && !warehouses(v).some(w=>
 watch(batchSearch,()=>{clearTimeout(batchTimer);batchTimer=setTimeout(searchBatches,300);});
 onBeforeUnmount(()=>{clearTimeout(timer);clearTimeout(batchTimer);request++;});
 onMounted(async()=>{try {refs.value=await InventoryApi.batchReferences();await load();}catch(e){fail(e);}});
+
+const movementColumns = computed(() => [
+    { key: "col0", label: "Date & Time" },
+    { key: "col1", label: "Document Date" },
+    { key: "col2", label: "Movement Type" },
+    { key: "col3", label: "Voucher / Reference" },
+    { key: "col4", label: "Batch" },
+    { key: "col5", label: "Product" },
+    { key: "col6", label: "From Branch" },
+    { key: "col7", label: "To Branch" },
+    { key: "col8", label: "From Warehouse" },
+    { key: "col9", label: "To Warehouse" },
+    { key: "col10", label: "From Condition" },
+    { key: "col11", label: "To Condition" },
+    { key: "col12", label: "IN" },
+    { key: "col13", label: "OUT" },
+    { key: "col14", label: "Net Qty" },
+    { key: "col15", label: "Unit Cost" },
+    { key: "col16", label: "Value" },
+    { key: "col17", label: "User" },
+    { key: "col18", label: "Reason / Note" }
+]);
+const batchColumns = computed(() => [
+    { key: "col0", label: "Batch Number" },
+    { key: "col1", label: "Product" },
+    { key: "col2", label: "SKU" },
+    { key: "col3", label: "FEFO Priority" },
+    { key: "col4", label: "Condition" },
+    { key: "col5", label: "Branch" },
+    { key: "col6", label: "Warehouse" },
+    { key: "col7", label: "MFG Date" },
+    { key: "col8", label: "Expiry Date" },
+    { key: "col9", label: "Days Remaining" },
+    ...(tab.value === 'Quarantine' ? [{ key: "col10", label: "Quarantine Date" }] : []),
+    { key: "col11", label: "Current Qty" },
+    { key: "col12", label: "Available Qty" },
+    { key: "col13", label: "Reserved Qty" },
+    { key: "col14", label: "Unit Cost" },
+    { key: "col15", label: "Batch Value" },
+    { key: "col16", label: "Status" }
+]);
+const visiblePages = computed(() => {
+    const start = Math.max(1, Math.min(page.value.current_page - 2, page.value.last_page - 4));
+    return Array.from({ length: Math.min(5, page.value.last_page || 1) }, (_, i) => start + i);
+});
 </script>
 
 <template>
@@ -150,12 +196,51 @@ onMounted(async()=>{try {refs.value=await InventoryApi.batchReferences();await l
                 <label>Rows per page<select v-model="filters.per_page"><option v-for="n in [15,25,50,100]" :key="n" :value="n">{{ n }}</option></select></label><button @click="filters=emptyFilters()">Clear</button>
                 <button v-if="filters.batch_id" @click="filters.batch_id=''">Clear selected batch ×</button>
             </div>
+            <div class="register-caption"><strong>{{ tab==='Reports' ? reports[report] : tab }}</strong><span>Showing {{ page.from || 0 }} to {{ page.to || 0 }} of {{ page.total || 0 }} records</span></div>
             <TableLoadingState v-if="loading" title="Loading batch records…" />
             <div v-else-if="!rows.length" class="empty-state"><h2>{{ page.total ? 'No matching batches' : 'No batch inventory yet' }}</h2><p>Batch stock will appear when you record opening stock, purchase/inward stock, or another batch stock operation.</p><p v-if="Object.values(filters).some(v=>v && v!==15)">Try clearing the filters to see other inventory.</p><div><button v-if="allowed('opening')" class="primary" @click="openOperation('opening')">Add Opening Batch</button><a :href="localLink('/app/purchases')" class="button">Create Purchase Voucher</a></div></div>
-            <div v-else class="table-wrapper"><table v-if="isMovement"><thead><tr><th>Date &amp; Time</th><th>Document Date</th><th>Movement Type</th><th>Voucher / Reference</th><th>Batch</th><th>Product</th><th>From Branch</th><th>To Branch</th><th>From Warehouse</th><th>To Warehouse</th><th>From Condition</th><th>To Condition</th><th>IN</th><th>OUT</th><th>Net Qty</th><th>Unit Cost</th><th>Value</th><th>User</th><th>Reason / Note</th></tr></thead><tbody><tr v-for="r in rows" :key="r.id"><td>{{ r.date }}</td><td>{{ r.document_date }}</td><td>{{ r.movement_label }}</td><td>{{ r.voucher }}</td><td>{{ r.batch_number }}</td><td>{{ r.product_name }}</td><td>{{ r.from_branch || '—' }}</td><td>{{ r.to_branch || '—' }}</td><td>{{ r.from_warehouse || '—' }}</td><td>{{ r.to_warehouse || '—' }}</td><td>{{ label(r.from_condition) }}</td><td>{{ label(r.to_condition) }}</td><td class="good-text">{{ qty(r.in) }}</td><td class="bad-text">{{ qty(r.out) }}</td><td>{{ qty(r.net_qty) }}</td><td>{{ money(r.cost) }}</td><td>{{ money(r.stock_value) }}</td><td>{{ r.user }}</td><td>{{ r.remarks }}</td></tr></tbody></table>
-                <table v-else><thead><tr><th>Batch Number</th><th>Product</th><th>SKU</th><th>FEFO Priority</th><th>Condition</th><th>Branch</th><th>Warehouse</th><th>MFG Date</th><th>Expiry Date</th><th>Days Remaining</th><th v-if="tab==='Quarantine'">Quarantine Date</th><th>Current Qty</th><th>Available Qty</th><th>Reserved Qty</th><th>Unit Cost</th><th>Batch Value</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="r in rows" :key="key(r)"><td><button class="text-button" @click="view(r)">{{ r.batch_number }}</button></td><td>{{ r.product_name }}</td><td>{{ r.sku || '—' }}</td><td><span v-if="r.fefo_priority" class="priority">{{ r.fefo_priority }}</span><span v-else>—</span></td><td>{{ label(r.condition_status) }}</td><td>{{ r.branch_name || '—' }}</td><td>{{ r.warehouse_name || '—' }}</td><td>{{ date(r.mfg_date) }}</td><td>{{ date(r.expiry_date) }}</td><td>{{ r.days_remaining ?? '—' }}</td><td v-if="tab==='Quarantine'">{{ date(r.quarantined_at) }}</td><td>{{ qty(r.quantity_on_hand) }}</td><td>{{ qty(r.quantity_available) }}</td><td>{{ qty(r.reserved_quantity) }}</td><td>{{ money(r.average_cost) }}</td><td>₹ {{ money(r.batch_value) }}</td><td><span class="status" :class="r.batch_status">{{ r.status_label }}</span></td><td><RowActionMenu :open="menu===key(r)" :show-view="false" more-label="Actions" @toggle="menu=menu===key(r)?null:key(r)" @close="menu=null"><template v-for="action in r.actions" :key="action"><button v-if="allowed(action)" @click="action==='view'?view(r):action==='movements'?movements(r):openOperation(action,r)">{{ action==='view'?'View':action==='movements'?'Movement History':operationNames[action] }}</button></template></RowActionMenu></td></tr></tbody></table>
-            </div>
-            <div class="pager"><span>{{ page.from || 0 }}–{{ page.to || 0 }} of {{ page.total || 0 }}</span><button :disabled="loading || page.current_page<=1" @click="load(page.current_page-1)">Previous</button><button :disabled="loading || page.current_page>=page.last_page" @click="load(page.current_page+1)">Next</button></div>
+            <CrudTable v-if="!loading && rows.length && isMovement" :columns="movementColumns" :rows="rows" :show-status="false" :show-actions="false" row-key="id">
+                    <template #cell-col0="{ row: r }"><span>{{ r.date }}</span></template>
+                    <template #cell-col1="{ row: r }"><span>{{ r.document_date }}</span></template>
+                    <template #cell-col2="{ row: r }"><span>{{ r.movement_label }}</span></template>
+                    <template #cell-col3="{ row: r }"><span>{{ r.voucher }}</span></template>
+                    <template #cell-col4="{ row: r }"><span>{{ r.batch_number }}</span></template>
+                    <template #cell-col5="{ row: r }"><span>{{ r.product_name }}</span></template>
+                    <template #cell-col6="{ row: r }"><span>{{ r.from_branch || '—' }}</span></template>
+                    <template #cell-col7="{ row: r }"><span>{{ r.to_branch || '—' }}</span></template>
+                    <template #cell-col8="{ row: r }"><span>{{ r.from_warehouse || '—' }}</span></template>
+                    <template #cell-col9="{ row: r }"><span>{{ r.to_warehouse || '—' }}</span></template>
+                    <template #cell-col10="{ row: r }"><span>{{ label(r.from_condition) }}</span></template>
+                    <template #cell-col11="{ row: r }"><span>{{ label(r.to_condition) }}</span></template>
+                    <template #cell-col12="{ row: r }"><span class="good-text">{{ qty(r.in) }}</span></template>
+                    <template #cell-col13="{ row: r }"><span class="bad-text">{{ qty(r.out) }}</span></template>
+                    <template #cell-col14="{ row: r }"><span>{{ qty(r.net_qty) }}</span></template>
+                    <template #cell-col15="{ row: r }"><span>{{ money(r.cost) }}</span></template>
+                    <template #cell-col16="{ row: r }"><span>{{ money(r.stock_value) }}</span></template>
+                    <template #cell-col17="{ row: r }"><span>{{ r.user }}</span></template>
+                    <template #cell-col18="{ row: r }"><span>{{ r.remarks }}</span></template>
+            </CrudTable>
+            <CrudTable v-if="!loading && rows.length && !isMovement" :columns="batchColumns" :rows="rows" :show-status="false" :show-actions="true" :row-key="key">
+                    <template #cell-col0="{ row: r }"><span><button class="text-button" @click="view(r)">{{ r.batch_number }}</button></span></template>
+                    <template #cell-col1="{ row: r }"><span>{{ r.product_name }}</span></template>
+                    <template #cell-col2="{ row: r }"><span>{{ r.sku || '—' }}</span></template>
+                    <template #cell-col3="{ row: r }"><span><span v-if="r.fefo_priority" class="priority">{{ r.fefo_priority }}</span><span v-else>—</span></span></template>
+                    <template #cell-col4="{ row: r }"><span>{{ label(r.condition_status) }}</span></template>
+                    <template #cell-col5="{ row: r }"><span>{{ r.branch_name || '—' }}</span></template>
+                    <template #cell-col6="{ row: r }"><span>{{ r.warehouse_name || '—' }}</span></template>
+                    <template #cell-col7="{ row: r }"><span>{{ date(r.mfg_date) }}</span></template>
+                    <template #cell-col8="{ row: r }"><span>{{ date(r.expiry_date) }}</span></template>
+                    <template #cell-col9="{ row: r }"><span>{{ r.days_remaining ?? '—' }}</span></template>
+                    <template #cell-col10="{ row: r }"><span>{{ date(r.quarantined_at) }}</span></template>
+                    <template #cell-col11="{ row: r }"><span>{{ qty(r.quantity_on_hand) }}</span></template>
+                    <template #cell-col12="{ row: r }"><span>{{ qty(r.quantity_available) }}</span></template>
+                    <template #cell-col13="{ row: r }"><span>{{ qty(r.reserved_quantity) }}</span></template>
+                    <template #cell-col14="{ row: r }"><span>{{ money(r.average_cost) }}</span></template>
+                    <template #cell-col15="{ row: r }"><span>₹ {{ money(r.batch_value) }}</span></template>
+                    <template #cell-col16="{ row: r }"><span><span class="status" :class="r.batch_status">{{ r.status_label }}</span></span></template>
+                    <template #actions="{ row: r }"><RowActionMenu :open="menu===key(r)" :show-view="false" more-label="Actions" @toggle="menu=menu===key(r)?null:key(r)" @close="menu=null"><template v-for="action in r.actions" :key="action"><button v-if="allowed(action)" @click="action==='view'?view(r):action==='movements'?movements(r):openOperation(action,r)">{{ action==='view'?'View':action==='movements'?'Movement History':operationNames[action] }}</button></template></RowActionMenu></template>
+            </CrudTable>
+            <div class="pager"><span>{{ page.from || 0 }}–{{ page.to || 0 }} of {{ page.total || 0 }}</span><button :disabled="loading || page.current_page<=1" @click="load(page.current_page-1)">Previous</button><button v-for="n in visiblePages" :key="n" :class="{active:n===page.current_page}" :disabled="loading" @click="load(n)">{{ n }}</button><button :disabled="loading || page.current_page>=page.last_page" @click="load(page.current_page+1)">Next</button></div>
         </section>
     </div>
     <CrudDrawer :model-value="modal" eyebrow="BATCH &amp; EXPIRY" save-label="Post Operation" :processing="saving" :save-disabled="!form.confirmed || (!receipt && !form.batch_id)" @save="submit" :title="operationNames[form.operation]" description="Post a controlled inventory operation with a document reference and reason." :errors="errors" @close="closeModal">
@@ -185,4 +270,8 @@ onMounted(async()=>{try {refs.value=await InventoryApi.batchReferences();await l
 
 <style scoped>
 .operation-heading{display:flex;align-items:center;gap:14px;border-bottom:1px solid #edf1f7;padding-bottom:18px}.operation-heading>span{background:#eaf0ff;color:#2455df;border-radius:10px;padding:12px;font-weight:800}.operation-heading h2{margin:0}.operation-heading p{margin:5px 0 0}.operation-form :deep(.form-control){box-sizing:border-box;width:100%;min-height:46px;border:1px solid #d8e2f2;border-radius:9px;padding:12px;font-family:inherit;font-size:13px;color:#172b4d;background:#fff}.operation-form :deep(.form-control:focus){outline:0;border-color:#5782e8;box-shadow:0 0 0 3px #edf2ff}.operation-form :deep(.form-control::placeholder){color:#94a0b5}.operation-form :deep(label){font-size:12px;font-weight:700;color:#344159}.operation-form{gap:22px}.operation-form :deep(.field-hint){line-height:1.5}.operation-form>*{min-width:0}@media(max-width:720px){.operation-form{padding:16px}}
+</style>
+
+<style scoped>
+.register{padding:0;overflow:hidden;border-radius:14px}.register>.section-head,.register>.chips,.register>.filters,.register>.empty-state{margin:0;padding:18px 20px}.register-caption{display:grid;gap:5px;padding:14px 20px;border-block:1px solid #e7ecf2;background:#fafbfd;font-size:12px}.register-caption span{color:#75839a;font-size:11px}.register>.pager{position:relative;background:#fff;border-top:1px solid #e7ecf2;margin:0;padding:16px 20px}.pager .active{background:#2457d6;color:#fff;border-color:#2457d6}.register :deep(.crud-row-actions){min-width:100px}.register :deep(td.crud-action-column:has(.action-menu)){z-index:40}.register :deep(.crud-table-wrap){margin-bottom:0;padding-bottom:0;min-height:180px;max-height:60vh}
 </style>

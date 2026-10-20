@@ -246,6 +246,20 @@ class PurchaseController extends Controller
         return response()->json($this->purchases->references());
     }
 
+    public function previewTotals(Request $request, \App\Services\PurchaseCalculationService $calculator)
+    {
+        abort_unless(AppController::canOpen('purchases'), 403);
+        // Only calculation inputs are accepted; preview never reads or writes vouchers.
+        $rules = (new \App\Http\Requests\PurchaseVoucherRequest())->rules();
+        $fields = ['tax_type', 'discount_type', 'discount_value', 'paid_amount', 'items',
+            'items.*.quantity', 'items.*.purchase_rate', 'items.*.discount_type',
+            'items.*.discount_value', 'items.*.gst_rate', 'items.*.cess_rate'];
+        $rules = array_intersect_key($rules, array_flip($fields));
+        $rules['items'] = ['present', 'array', 'max:500'];
+        $rules['items.*.quantity'] = ['required', 'numeric', 'min:0'];
+        return response()->json($calculator->calculateVoucherTotals($request->validate($rules)));
+    }
+
     public function searchProducts(Request $request)
     {
         abort_unless(AppController::canOpen('purchases'), 403);

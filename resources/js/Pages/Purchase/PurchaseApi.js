@@ -1,6 +1,10 @@
 import axios from 'axios';
 
 const PurchaseApi = {
+    async previewTotals(payload) {
+        const response = await axios.post('/app/purchase/bills/preview-totals', payload);
+        return response.data;
+    },
     async suppliers(params = {}) {
         const response = await axios.get('/app/purchase/suppliers/list', { params });
         return response.data;

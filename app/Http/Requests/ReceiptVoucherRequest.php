@@ -20,7 +20,7 @@ class ReceiptVoucherRequest extends FormRequest
             'receipt_date' => ['required', 'date'],
             'receipt_mode' => ['required', Rule::in(['cash', 'bank_transfer', 'upi', 'card', 'cheque', 'wallet', 'mixed'])],
             'cash_bank_account_id' => ['required', 'integer'],
-            'amount' => ['required', 'numeric', 'gt:0'],
+            'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
             'discount_allowed' => ['nullable', 'numeric', 'min:0'],
             'write_off_amount' => ['nullable', 'numeric', 'min:0'],
             'reference_number' => ['nullable', 'string', 'max:255'],
@@ -29,11 +29,11 @@ class ReceiptVoucherRequest extends FormRequest
             'bank_name' => ['nullable', 'string', 'max:255'],
             'remarks' => ['nullable', 'string', 'max:2000'],
             'status' => ['required', Rule::in(['draft', 'approved'])],
-            'allocations' => ['nullable', 'array'],
+            'allocations' => ['required', 'array', 'min:1', 'max:200'],
             'allocations.*.reference_type' => ['required_with:allocations', 'string'],
             'allocations.*.reference_id' => ['required_with:allocations', 'integer'],
             'allocations.*.original_amount' => ['nullable', 'numeric', 'min:0'],
-            'allocations.*.allocated_amount' => ['required_with:allocations', 'numeric', 'min:0.01'],
+            'allocations.*.allocated_amount' => ['required_with:allocations', 'numeric', 'min:0.01', 'decimal:0,2'],
         ];
     }
 }

@@ -17,11 +17,13 @@ use App\Services\StockService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\InteractsWithCompanyAccess;
 use Tests\TestCase;
 
 class SalesInventoryFlowTest extends TestCase
 {
     use RefreshDatabase;
+    use InteractsWithCompanyAccess;
 
     protected function beforeRefreshingDatabase(): void
     {
@@ -177,7 +179,7 @@ class SalesInventoryFlowTest extends TestCase
     protected function fixture(): array
     {
         $businessId = DB::table('companies')->insertGetId(['name' => 'Bill IQ Test', 'created_at' => now(), 'updated_at' => now()]);
-        $user = User::factory()->create(['role_id' => 1, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 1, 'is_active' => 1, 'status' => 'active']);
         $branch = DB::table('branches')->insertGetId(['business_id' => $businessId, 'name' => 'Main', 'code' => 'MAIN', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $warehouse = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $branch, 'name' => 'Store', 'code' => 'ST', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $customer = DB::table('customers')->insertGetId(['company_id' => $businessId, 'name' => 'Acme Customer', 'business_id' => $businessId, 'customer_name' => 'Acme Customer', 'mobile' => '9999999999', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
@@ -188,6 +190,7 @@ class SalesInventoryFlowTest extends TestCase
 
     protected function loginBusiness(User $user, int $businessId): void
     {
+        $this->grantCompanyAccess($user, $businessId, 'owner');
         Auth::login($user);
         session(['business_id' => $businessId]);
     }

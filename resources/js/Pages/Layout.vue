@@ -272,6 +272,7 @@ const sections = [
       { label: 'Payroll', page: 'payroll', href: routeUrl('app.payroll.index', '/app/payroll'), icon: 'id-card' },
       { label: 'GST', page: 'gst', href: routeUrl('app.accounting.gst', '/app/accounting/gst'), icon: 'percent' },
       { label: 'GST Returns', page: 'inventory-gst-returns', href: routeUrl('app.accounting.gst-returns', '/app/accounting/gst-returns'), icon: 'file-check' },
+      { label: 'Tally Integration', page: 'tally-integration', href: routeUrl('app.accounting.tally.index', '/app/accounting/tally'), icon: 'rotate-cw' },
     ],
   },
   {

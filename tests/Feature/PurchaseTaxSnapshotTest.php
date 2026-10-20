@@ -7,11 +7,13 @@ use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Support\InteractsWithCompanyAccess;
 use Tests\TestCase;
 
 class PurchaseTaxSnapshotTest extends TestCase
 {
     use RefreshDatabase;
+    use InteractsWithCompanyAccess;
 
     public function test_purchase_item_snapshots_current_business_product_hsn_and_gst(): void
     {
@@ -20,7 +22,7 @@ class PurchaseTaxSnapshotTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $user = User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        $user = $this->createAccessibleUser($businessId, ['role_id' => 2, 'is_active' => 1, 'status' => 'active']);
         $branchId = DB::table('branches')->insertGetId(['business_id' => $businessId, 'name' => 'Main', 'code' => 'MAIN', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $warehouseId = DB::table('warehouses')->insertGetId(['business_id' => $businessId, 'branch_id' => $branchId, 'name' => 'Store', 'code' => 'ST', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $supplierId = DB::table('suppliers')->insertGetId(['business_id' => $businessId, 'supplier_name' => 'Acme Supplier', 'name' => 'Acme Supplier', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);

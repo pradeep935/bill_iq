@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasTable('products') || !Schema::hasColumn('products', 'status')) {
+        if (DB::connection()->getDriverName() === 'sqlite' || !Schema::hasTable('products') || !Schema::hasColumn('products', 'status')) {
             return;
         }
 
@@ -17,7 +17,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (!Schema::hasTable('products') || !Schema::hasColumn('products', 'status')) {
+        if (DB::connection()->getDriverName() === 'sqlite' || !Schema::hasTable('products') || !Schema::hasColumn('products', 'status')) {
             return;
         }
 

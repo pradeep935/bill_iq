@@ -77,8 +77,12 @@ return new class extends Migration
             }
         });
 
+        $accountCodeExpression = DB::connection()->getDriverName() === 'sqlite'
+            ? "COALESCE(code, 'ACC-' || id)"
+            : "COALESCE(code, CONCAT('ACC-', id))";
+
         DB::table('accounts')->whereNull('account_name')->update(['account_name' => DB::raw('COALESCE(name, "Account")')]);
-        DB::table('accounts')->whereNull('account_code')->update(['account_code' => DB::raw('COALESCE(code, CONCAT("ACC-", id))')]);
+        DB::table('accounts')->whereNull('account_code')->update(['account_code' => DB::raw($accountCodeExpression)]);
     }
 
     private function accountingTables(): void

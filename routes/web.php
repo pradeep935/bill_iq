@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\GeneralController;
+use App\Http\Controllers\GstImportController;
 use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Admin\OnboardingController;
@@ -29,6 +30,7 @@ use App\Http\Controllers\SetupController;
 use App\Http\Controllers\StockSummaryController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\TallyIntegrationController;
 use App\Http\Controllers\WarehouseController;
 
 
@@ -654,6 +656,21 @@ Route::middleware('auth')->group(function () {
             Route::get('/expense-reports', [AccountingController::class, 'expenseReports'])->name('expense-reports');
             Route::get('/gst', [AccountingController::class, 'gst'])->name('gst');
             Route::get('/gst-returns', [AccountingController::class, 'gstReturns'])->name('gst-returns');
+            Route::get('/gst-imports', [GstImportController::class, 'index'])->name('gst-imports');
+            Route::post('/gst-imports', [GstImportController::class, 'store'])->name('gst-imports.store');
+            Route::get('/gst-imports/{batch}', [GstImportController::class, 'show'])->name('gst-imports.show');
+            Route::post('/gst-imports/{batch}/approve', [GstImportController::class, 'approve'])->name('gst-imports.approve');
+            Route::post('/gst-imports/{batch}/commit', [GstImportController::class, 'commit'])->name('gst-imports.commit');
+            Route::get('/tally', [TallyIntegrationController::class, 'index'])->name('tally.index');
+            Route::post('/tally/connections', [TallyIntegrationController::class, 'storeConnection'])->name('tally.connections.store');
+            Route::post('/tally/connections/{connection}/pair', [TallyIntegrationController::class, 'pair'])->name('tally.connections.pair');
+            Route::post('/tally/connections/{connection}/test', [TallyIntegrationController::class, 'test'])->name('tally.connections.test');
+            Route::post('/tally/connections/{connection}/revoke', [TallyIntegrationController::class, 'revoke'])->name('tally.connections.revoke');
+            Route::get('/tally/batches/{batch}', [TallyIntegrationController::class, 'batch'])->name('tally.batches.show');
+            Route::post('/tally/mappings', [TallyIntegrationController::class, 'mapping'])->name('tally.mappings.store');
+            Route::post('/tally/batches/{batch}/approve', [TallyIntegrationController::class, 'approve'])->name('tally.batches.approve');
+            Route::post('/tally/batches/{batch}/reconcile', [TallyIntegrationController::class, 'reconcile'])->name('tally.batches.reconcile');
+            Route::post('/tally/batches/{batch}/import', [TallyIntegrationController::class, 'import'])->name('tally.batches.import');
         });
 
         Route::prefix('fixed-assets')->name('fixed-assets.')->group(function () {
@@ -762,6 +779,9 @@ Route::middleware('auth')->group(function () {
             Route::get('/acceptance', [ReportsController::class, 'setupAcceptance'])->name('acceptance');
             Route::get('/settings', [SetupController::class, 'settings'])->name('settings');
             Route::post('/settings/business-profile', [SetupController::class, 'updateBusinessProfile'])->name('settings.business-profile');
+            Route::get('/companies/onboarding', [SetupController::class, 'companyOnboarding'])->name('companies.onboarding');
+            Route::post('/companies/validate-draft', [SetupController::class, 'validateCompanyDraft'])->name('companies.validate-draft');
+            Route::post('/companies', [SetupController::class, 'storeCompany'])->name('companies.store');
         });
     });
 

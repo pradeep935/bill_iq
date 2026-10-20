@@ -36,8 +36,12 @@ return new class extends Migration
             if (!Schema::hasColumn('expense_categories', 'deleted_at')) $table->softDeletes();
         });
 
+        $categoryCodeExpression = DB::connection()->getDriverName() === 'sqlite'
+            ? "COALESCE('EXP-' || id, 'EXP')"
+            : "COALESCE(CONCAT('EXP-', id), 'EXP')";
+
         DB::table('expense_categories')->whereNull('category_name')->update(['category_name' => DB::raw('COALESCE(name, "Expense Category")')]);
-        DB::table('expense_categories')->whereNull('category_code')->update(['category_code' => DB::raw('COALESCE(CONCAT("EXP-", id), "EXP")')]);
+        DB::table('expense_categories')->whereNull('category_code')->update(['category_code' => DB::raw($categoryCodeExpression)]);
         DB::table('expense_categories')->whereNull('expense_account_id')->update(['expense_account_id' => DB::raw('account_id')]);
     }
 

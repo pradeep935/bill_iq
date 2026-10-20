@@ -73,8 +73,9 @@ return new class extends Migration
 
     private function addIndexIfMissing(string $table, array $columns, string $name, bool $unique = false): void
     {
-        $indexExists = collect(DB::select("SHOW INDEX FROM {$table}"))
-            ->contains(fn ($index) => ($index->Key_name ?? null) === $name);
+        $indexExists = DB::connection()->getDriverName() === 'mysql'
+            ? collect(DB::select("SHOW INDEX FROM {$table}"))->contains(fn ($index) => ($index->Key_name ?? null) === $name)
+            : collect(Schema::getIndexes($table))->contains(fn (array $index) => ($index['name'] ?? null) === $name);
 
         if ($indexExists) {
             return;

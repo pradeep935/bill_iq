@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return;
+        }
+
         foreach (['accounts', 'branches', 'customers', 'suppliers', 'products'] as $tableName) {
             if (!Schema::hasTable($tableName) || !Schema::hasColumn($tableName, 'tenant_id')) {
                 continue;

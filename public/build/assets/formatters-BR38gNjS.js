@@ -1,0 +1,1 @@
+const i=n=>{const o=Number.isFinite(Number(n))?Number(n):0,t=Math.round(o*1e3)/1e3,r=Math.abs(t-Math.round(t))<4e-4;return t.toLocaleString("en-IN",{minimumFractionDigits:0,maximumFractionDigits:3})};export{i as f};

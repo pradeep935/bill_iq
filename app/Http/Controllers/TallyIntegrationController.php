@@ -21,11 +21,14 @@ class TallyIntegrationController extends Controller
             'page' => 'tally-integration', 'title' => 'Tally Integration Center',
             'company' => ['id' => $businessId, 'name' => $company->name ?? 'Current Company', 'gstin' => $company->gstin ?? null],
             'overview' => $service->overview($businessId),
+            'migration_capabilities' => $service->migrationCapabilities(),
+            'can_manage_migrations' => request()->user()?->isSuperAdmin() ?? false,
         ]);
     }
 
     public function storeConnection(Request $request, TallyIntegrationService $service)
     {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:120'], 'location' => ['required', Rule::in(['local', 'cloud'])],
             'cloud_type' => ['nullable', Rule::in(['api', 'hosted_windows'])], 'provider' => ['nullable', 'string', 'max:80'], 'endpoint_url' => ['nullable', 'url', 'max:500'],
@@ -41,6 +44,7 @@ class TallyIntegrationController extends Controller
     public function pair(Request $request, TallyConnection $connection, TallyIntegrationService $service)
     {
         $this->authorizeConnection($connection);
+        abort_unless($request->user()?->isSuperAdmin(), 403);
         return response()->json([
             'message' => 'A new pairing code was created. Enter it in the Windows connector within 15 minutes.',
             'pairing_code' => $service->issuePairingCode($connection),
@@ -89,7 +93,7 @@ class TallyIntegrationController extends Controller
     public function approve(Request $request, TallySyncBatch $batch, TallyIntegrationService $service)
     {
         abort_unless((int) $batch->business_id === AppController::businessId(), 404);
-        abort_unless($request->user()->isAdmin() || $request->user()->isSuperAdmin(), 403);
+        abort_unless($request->user()->isSuperAdmin(), 403);
         return response()->json(['batch' => $service->batchPayload($service->approve($batch, $request->user()->id)), 'message' => 'Batch approved. Posting is still a separate explicit step.']);
     }
 
@@ -102,7 +106,7 @@ class TallyIntegrationController extends Controller
     public function import(Request $request, TallySyncBatch $batch, TallyPostingImportService $imports, TallyIntegrationService $service)
     {
         abort_unless((int) $batch->business_id === AppController::businessId(), 404);
-        abort_unless($request->user()->isAdmin() || $request->user()->isSuperAdmin(), 403);
+        abort_unless($request->user()->isSuperAdmin(), 403);
         return response()->json(['batch' => $service->batchPayload($imports->import($batch, $request->user()->id)), 'message' => 'Approved records posted through BillIQ services.']);
     }
 

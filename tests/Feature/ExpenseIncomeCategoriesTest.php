@@ -25,7 +25,17 @@ class ExpenseIncomeCategoriesTest extends TestCase
     private function setupBusiness(): int
     {
         $id = DB::table('companies')->insertGetId(['name' => 'Category Test']);
-        $this->actingAs(User::factory()->create(['role_id' => 2, 'is_active' => 1, 'status' => 'active']))->withSession(['business_id' => $id]);
+        $user = User::factory()->create(['tenant_id' => $id, 'role_id' => 2, 'is_active' => 1, 'status' => 'active']);
+        DB::table('company_user_access')->insert([
+            'company_id' => $id,
+            'user_id' => $user->id,
+            'access_role' => 'admin',
+            'is_default' => true,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->actingAs($user)->withSession(['business_id' => $id]);
         foreach ([['SHIP-E','expense'], ['SHIP-I','income'], ['CASH','cash'], ['SALES-RET','expense']] as [$code,$type]) {
             Account::create(['business_id' => $id, 'account_code' => $code, 'account_name' => $code, 'name' => $code, 'account_type' => $type, 'status' => 'active']);
         }
@@ -193,6 +203,15 @@ class ExpenseIncomeCategoriesTest extends TestCase
 
         // Another tenant can neither see nor delete this business's draft.
         $other = DB::table('companies')->insertGetId(['name' => 'Other business']);
+        DB::table('company_user_access')->insert([
+            'company_id' => $other,
+            'user_id' => auth()->id(),
+            'access_role' => 'admin',
+            'is_default' => false,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $this->withSession(['business_id' => $other])->deleteJson($url.'/'.$draft['id'])->assertNotFound();
         $this->assertDatabaseHas('petty_cash_advances', ['id' => $draft['id'], 'status' => 'draft']);
         $this->withSession(['business_id' => $business]);

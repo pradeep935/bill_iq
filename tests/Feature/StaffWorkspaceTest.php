@@ -156,6 +156,15 @@ class StaffWorkspaceTest extends TestCase
             'is_active' => 1,
             'status' => 'active',
         ]);
+        DB::table('company_user_access')->insert([
+            'company_id' => $businessId,
+            'user_id' => $user->id,
+            'access_role' => $roleId === 3 ? 'member' : 'admin',
+            'is_default' => true,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         return [$businessId, $user];
     }

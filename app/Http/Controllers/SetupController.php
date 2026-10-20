@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Services\Admin\AdminWorkspaceService;
+use App\Services\CompanyAccessService;
 use App\Services\CompanyOnboardingService;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -214,6 +216,55 @@ class SetupController extends Controller
             'branch' => $result['branch'],
             'warehouse' => $result['warehouse'],
         ], 201);
+    }
+
+    public function companyAccess(Request $request, int $companyId)
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+        abort_unless(Schema::hasTable('companies') && DB::table('companies')->where('id', $companyId)->exists(), 404);
+
+        $users = DB::table('users')
+            ->leftJoin('company_user_access as access', function ($join) use ($companyId) {
+                $join->on('access.user_id', '=', 'users.id')->where('access.company_id', '=', $companyId);
+            })
+            ->orderBy('users.name')
+            ->select([
+                'users.id', 'users.name', 'users.email', 'users.role_id', 'users.status as user_status', 'users.is_active',
+                'access.access_role', 'access.status as access_status', 'access.is_default',
+            ])
+            ->get();
+
+        return response()->json([
+            'company' => DB::table('companies')->where('id', $companyId)->first(['id', 'name']),
+            'users' => $users,
+        ]);
+    }
+
+    public function updateCompanyAccess(Request $request, int $companyId, User $user, CompanyAccessService $access)
+    {
+        $actor = $request->user();
+        abort_unless($actor?->isSuperAdmin(), 403);
+        abort_unless(Schema::hasTable('companies') && DB::table('companies')->where('id', $companyId)->exists(), 404);
+
+        $data = $request->validate([
+            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'access_role' => ['required_if:status,active', Rule::in(['owner', 'admin', 'member'])],
+            'is_default' => ['nullable', 'boolean'],
+        ]);
+
+        if ($data['status'] === 'active') {
+            $access->grant(
+                $user,
+                $companyId,
+                $data['access_role'] ?? 'member',
+                (bool) ($data['is_default'] ?? false),
+                $actor->id
+            );
+        } else {
+            $access->setStatus($user, $companyId, 'inactive', $actor->id);
+        }
+
+        return response()->json(['message' => 'Company access updated.']);
     }
 
     private function businessProfile(): array

@@ -21,6 +21,63 @@ class AdminWorkspaceTest extends TestCase
             ->assertOk();
     }
 
+    public function test_unassigned_super_admin_can_open_workspace_and_select_any_company(): void
+    {
+        $firstCompanyId = DB::table('companies')->insertGetId(['name' => 'Alpha Company', 'created_at' => now(), 'updated_at' => now()]);
+        $secondCompanyId = DB::table('companies')->insertGetId(['name' => 'Beta Company', 'created_at' => now(), 'updated_at' => now()]);
+        $superAdmin = User::factory()->create([
+            'tenant_id' => null,
+            'role_id' => 1,
+            'is_active' => 1,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($superAdmin)
+            ->get('/app/admin/workspace')
+            ->assertOk()
+            ->assertSee('Alpha Company')
+            ->assertSee('Beta Company');
+
+        $this->actingAs($superAdmin)
+            ->withSession(['business_id' => $firstCompanyId])
+            ->post('/app/context', ['business_id' => $secondCompanyId])
+            ->assertRedirect();
+
+        $this->assertSame($secondCompanyId, session('business_id'));
+        $this->assertDatabaseMissing('company_user_access', ['company_id' => $firstCompanyId, 'user_id' => $superAdmin->id]);
+        $this->assertDatabaseMissing('company_user_access', ['company_id' => $secondCompanyId, 'user_id' => $superAdmin->id]);
+    }
+
+    public function test_only_super_admin_can_manage_company_access(): void
+    {
+        [$companyId, $companyAdmin] = $this->businessUser(2);
+        $superAdmin = User::factory()->create(['role_id' => 1, 'is_active' => 1, 'status' => 'active']);
+        $staff = User::factory()->create(['role_id' => 3, 'is_active' => 1, 'status' => 'active']);
+
+        $this->actingAs($companyAdmin)
+            ->get("/app/setup/companies/{$companyId}/access")
+            ->assertForbidden();
+
+        $this->actingAs($superAdmin)
+            ->putJson("/app/setup/companies/{$companyId}/access/{$staff->id}", [
+                'status' => 'active',
+                'access_role' => 'member',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('company_user_access', [
+            'company_id' => $companyId,
+            'user_id' => $staff->id,
+            'access_role' => 'member',
+            'status' => 'active',
+        ]);
+    }
+
+    public function test_unauthenticated_workspace_request_is_redirected_to_login(): void
+    {
+        $this->get('/app/admin/workspace')->assertRedirect('/');
+    }
+
     public function test_unauthorized_staff_receives_403(): void
     {
         [$businessId, $user] = $this->businessUser(3);
@@ -145,6 +202,15 @@ class AdminWorkspaceTest extends TestCase
             'role_id' => $roleId,
             'is_active' => 1,
             'status' => 'active',
+        ]);
+        DB::table('company_user_access')->insert([
+            'company_id' => $businessId,
+            'user_id' => $user->id,
+            'access_role' => $roleId === 3 ? 'member' : 'admin',
+            'is_default' => true,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         return [$businessId, $user];

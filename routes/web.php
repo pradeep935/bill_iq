@@ -788,6 +788,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/companies/onboarding', [SetupController::class, 'companyOnboarding'])->name('companies.onboarding');
             Route::post('/companies/validate-draft', [SetupController::class, 'validateCompanyDraft'])->name('companies.validate-draft');
             Route::post('/companies', [SetupController::class, 'storeCompany'])->name('companies.store');
+            Route::get('/companies/{companyId}/access', [SetupController::class, 'companyAccess'])->whereNumber('companyId')->name('companies.access.index');
+            Route::put('/companies/{companyId}/access/{user}', [SetupController::class, 'updateCompanyAccess'])->whereNumber('companyId')->name('companies.access.update');
         });
     });
 

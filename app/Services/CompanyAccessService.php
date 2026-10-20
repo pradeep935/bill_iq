@@ -16,6 +16,14 @@ class CompanyAccessService
             return collect();
         }
 
+        // Role 1 is the application's System/Super Admin role (see User::isSuperAdmin).
+        // It is intentionally not represented by a row per company: this account must be
+        // able to select and administer any existing tenant without weakening the access
+        // rules applied to Company Admins and Staff.
+        if ($user->isSuperAdmin()) {
+            return Company::query()->orderBy('name')->get();
+        }
+
         if (Schema::hasTable('company_user_access')) {
             $companies = Company::query()
                 ->select('companies.*')
@@ -26,9 +34,9 @@ class CompanyAccessService
                 ->orderBy('companies.name')
                 ->get();
 
-            if ($companies->isNotEmpty()) {
-                return $companies;
-            }
+            // Once the access table exists, a tenant_id is legacy metadata and
+            // must not become an implicit cross-tenant authorization grant.
+            return $companies;
         }
 
         if ($user->tenant_id) {
@@ -50,6 +58,10 @@ class CompanyAccessService
             return null;
         }
 
+        if ($user->isSuperAdmin()) {
+            return Company::query()->orderBy('name')->value('id');
+        }
+
         if (Schema::hasTable('company_user_access')) {
             $defaultId = DB::table('company_user_access')
                 ->where('user_id', $user->id)
@@ -61,6 +73,8 @@ class CompanyAccessService
             if ($defaultId && DB::table('companies')->where('id', $defaultId)->exists()) {
                 return (int) $defaultId;
             }
+
+            return null;
         }
 
         if ($user->tenant_id && DB::table('companies')->where('id', $user->tenant_id)->exists()) {
@@ -95,5 +109,22 @@ class CompanyAccessService
                 ]
             );
         });
+    }
+
+    public function setStatus(User $user, int $companyId, string $status, ?int $createdBy = null): void
+    {
+        if (!Schema::hasTable('company_user_access')) {
+            return;
+        }
+
+        DB::table('company_user_access')
+            ->where('company_id', $companyId)
+            ->where('user_id', $user->id)
+            ->update([
+                'status' => $status,
+                'is_default' => false,
+                'created_by' => $createdBy,
+                'updated_at' => now(),
+            ]);
     }
 }

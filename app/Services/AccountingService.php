@@ -12,6 +12,7 @@ use App\Models\JournalVoucher;
 use App\Models\PaymentVoucher;
 use App\Models\PurchaseVoucher;
 use App\Models\ReceiptVoucher;
+use App\Models\SalesReturnVoucher;
 use App\Models\SalesVoucher;
 use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Builder;
@@ -141,10 +142,52 @@ class AccountingService
     {
         return DB::transaction(function () use ($data) {
             $businessId = AppController::businessId();
+            $fail = fn ($field, $message) => throw \Illuminate\Validation\ValidationException::withMessages([$field => $message]);
+            if (!Customer::query()->where('business_id', $businessId)->whereKey($data['customer_id'])->exists()) $fail('customer_id', 'Select a customer from the current business.');
+            if (!Account::query()->where('business_id', $businessId)->whereKey($data['cash_bank_account_id'])->whereIn('account_type', ['cash', 'bank'])->where('status', 'active')->exists()) $fail('cash_bank_account_id', 'Select an active cash/bank account from the current business.');
+            if (!empty($data['branch_id']) && !Branch::query()->where('business_id', $businessId)->whereKey($data['branch_id'])->exists()) $fail('branch_id', 'Invalid branch.');
+            if (($data['discount_allowed'] ?? 0) != 0 || ($data['write_off_amount'] ?? 0) != 0) $fail('amount', 'Bill receipts currently support receipt amount only; discount/write-off adjustments are not supported.');
+            $allocations = $data['allocations'] ?? [];
+            unset($data['allocations']);
+            if (!$allocations) $fail('allocations', 'Allocate the receipt to at least one open sales invoice.');
+            $ids = array_column($allocations, 'reference_id');
+            if (count(array_unique($ids)) !== count($ids)) $fail('allocations', 'An invoice can appear only once.');
+            // Lock in a stable order so concurrent receipts cannot settle the same balance twice.
+            $invoices = SalesVoucher::query()->where('business_id', $businessId)->where('customer_id', $data['customer_id'])
+                ->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $sourceBranches = $invoices->map(fn ($invoice) => $invoice->branch_id ? (int) $invoice->branch_id : null)->unique()->values();
+            if ($sourceBranches->count() > 1) $fail('branch_id', 'Allocate bills from one branch per receipt. Create separate receipts for different branches.');
+            $sourceBranch = $sourceBranches->first();
+            if (!empty($data['branch_id']) && (int) $data['branch_id'] !== $sourceBranch) $fail('branch_id', 'Receipt branch must match the allocated sales invoices.');
+            if ($sourceBranch && !Branch::query()->where('business_id', $businessId)->whereKey($sourceBranch)->exists()) $fail('branch_id', 'Sales branch does not belong to the current business.');
+            $data['branch_id'] = $sourceBranch;
+            $total = 0;
+            foreach ($allocations as $i => &$allocation) {
+                $invoice = $invoices->get($allocation['reference_id']);
+                if (($allocation['reference_type'] ?? '') !== SalesVoucher::class || !$invoice || !in_array($invoice->status, ['approved', 'confirmed'])) $fail("allocations.$i.allocated_amount", 'Select an approved invoice belonging to this customer and business.');
+                $already = (float) DB::table('ledger_allocations')->where('business_id', $businessId)->where('reference_type', SalesVoucher::class)->where('reference_id', $invoice->id)->sum('allocated_amount');
+                $paid = max($already, (float) $invoice->paid_amount);
+                $outstanding = round((float) $invoice->grand_total - $paid - SalesReturnVoucher::invoiceAdjustmentTotal($businessId, $invoice->id), 2);
+                $amount = round((float) $allocation['allocated_amount'], 2);
+                if ($amount <= 0 || $amount > $outstanding) $fail("allocations.$i.allocated_amount", 'Allocation exceeds the bill outstanding amount of '.number_format(max(0, $outstanding), 2).'.');
+                $allocation = ['reference_type' => SalesVoucher::class, 'reference_id' => $invoice->id, 'allocated_amount' => $amount, 'original_amount' => (float) $invoice->grand_total];
+                $total += (int) round($amount * 100);
+            }
+            unset($allocation);
+            if ($total !== (int) round((float) $data['amount'] * 100)) $fail('allocations', 'Total allocated must equal the receipt amount. Unallocated advances are not supported in this flow.');
             $receipt = ReceiptVoucher::query()->create(array_merge($data, [
                 'business_id' => $businessId, 'voucher_number' => $this->nextNumber('RCPT'), 'status' => 'draft', 'created_by' => Auth::id(),
             ]));
-            if ($data['status'] === 'approved') $this->posting->postCustomerReceipt($receipt, $data['allocations'] ?? []);
+            if ($data['status'] === 'approved') {
+                $this->posting->postCustomerReceipt($receipt, $allocations);
+                foreach ($allocations as $allocation) {
+                    $invoice = $invoices->get($allocation['reference_id']);
+                    $paid = max((float) $invoice->paid_amount, (float) DB::table('ledger_allocations')->where('business_id', $businessId)->where('reference_type', SalesVoucher::class)->where('reference_id', $invoice->id)->sum('allocated_amount') - $allocation['allocated_amount']);
+                    $paid = round($paid + $allocation['allocated_amount'], 2);
+                    $balance = max(0, round((float) $invoice->grand_total - $paid - SalesReturnVoucher::invoiceAdjustmentTotal($businessId, $invoice->id), 2));
+                    $invoice->update(['paid_amount' => $paid, 'balance_amount' => $balance, 'payment_status' => $balance > 0 ? 'partial' : 'paid']);
+                }
+            }
             return $receipt->fresh(['customer', 'journal']);
         });
     }
@@ -153,10 +196,52 @@ class AccountingService
     {
         return DB::transaction(function () use ($data) {
             $businessId = AppController::businessId();
+            $fail = fn ($field, $message) => throw \Illuminate\Validation\ValidationException::withMessages([$field => $message]);
+            if (!Supplier::query()->where('business_id', $businessId)->whereKey($data['supplier_id'])->exists()) $fail('supplier_id', 'Select a supplier from the current business.');
+            if (!Account::query()->where('business_id', $businessId)->whereKey($data['cash_bank_account_id'])->whereIn('account_type', ['cash', 'bank'])->where('status', 'active')->exists()) $fail('cash_bank_account_id', 'Select an active cash/bank account from the current business.');
+            if (!empty($data['branch_id']) && !Branch::query()->where('business_id', $businessId)->whereKey($data['branch_id'])->exists()) $fail('branch_id', 'Invalid branch.');
+            if (($data['discount_received'] ?? 0) != 0 || ($data['write_off_amount'] ?? 0) != 0) $fail('amount', 'Bill payments currently support payment amount only; discount/write-off adjustments are not supported.');
+            $allocations = $data['allocations'] ?? [];
+            unset($data['allocations']);
+            if (!$allocations) $fail('allocations', 'Allocate the payment to at least one open purchase bill.');
+            $ids = array_column($allocations, 'reference_id');
+            if (count(array_unique($ids)) !== count($ids)) $fail('allocations', 'A purchase bill can appear only once.');
+            // Lock in a stable order so concurrent payments cannot settle the same balance twice.
+            $purchases = PurchaseVoucher::query()->where('business_id', $businessId)->where('supplier_id', $data['supplier_id'])
+                ->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $sourceBranches = $purchases->map(fn ($purchase) => $purchase->branch_id ? (int) $purchase->branch_id : null)->unique()->values();
+            if ($sourceBranches->count() > 1) $fail('branch_id', 'Allocate bills from one branch per payment. Create separate payments for different branches.');
+            $sourceBranch = $sourceBranches->first();
+            if (!empty($data['branch_id']) && (int) $data['branch_id'] !== $sourceBranch) $fail('branch_id', 'Payment branch must match the allocated purchase bills.');
+            if ($sourceBranch && !Branch::query()->where('business_id', $businessId)->whereKey($sourceBranch)->exists()) $fail('branch_id', 'Purchase branch does not belong to the current business.');
+            $data['branch_id'] = $sourceBranch;
+            $total = 0;
+            foreach ($allocations as $i => &$allocation) {
+                $purchase = $purchases->get($allocation['reference_id']);
+                if (($allocation['reference_type'] ?? '') !== PurchaseVoucher::class || !$purchase || !in_array($purchase->status, ['approved', 'confirmed'])) $fail("allocations.$i.allocated_amount", 'Select an approved purchase belonging to this supplier and business.');
+                $already = (float) DB::table('ledger_allocations')->where('business_id', $businessId)->where('reference_type', PurchaseVoucher::class)->where('reference_id', $purchase->id)->sum('allocated_amount');
+                $paid = max($already, (float) $purchase->paid_amount);
+                $outstanding = round((float) $purchase->grand_total - $paid, 2);
+                $amount = round((float) $allocation['allocated_amount'], 2);
+                if ($amount <= 0 || $amount > $outstanding) $fail("allocations.$i.allocated_amount", 'Allocation exceeds the bill outstanding amount of '.number_format(max(0, $outstanding), 2).'.');
+                $allocation = ['reference_type' => PurchaseVoucher::class, 'reference_id' => $purchase->id, 'allocated_amount' => $amount, 'original_amount' => (float) $purchase->grand_total];
+                $total += (int) round($amount * 100);
+            }
+            unset($allocation);
+            if ($total !== (int) round((float) $data['amount'] * 100)) $fail('allocations', 'Total allocated must equal the payment amount. Unallocated advances are not supported in this flow.');
             $payment = PaymentVoucher::query()->create(array_merge($data, [
                 'business_id' => $businessId, 'voucher_number' => $this->nextNumber('PAY'), 'status' => 'draft', 'created_by' => Auth::id(),
             ]));
-            if ($data['status'] === 'approved') $this->posting->postSupplierPayment($payment, $data['allocations'] ?? []);
+            if ($data['status'] === 'approved') {
+                $this->posting->postSupplierPayment($payment, $allocations);
+                foreach ($allocations as $allocation) {
+                    $purchase = $purchases->get($allocation['reference_id']);
+                    $paid = max((float) $purchase->paid_amount, (float) DB::table('ledger_allocations')->where('business_id', $businessId)->where('reference_type', PurchaseVoucher::class)->where('reference_id', $purchase->id)->sum('allocated_amount') - $allocation['allocated_amount']);
+                    $paid = round($paid + $allocation['allocated_amount'], 2);
+                    $balance = max(0, round((float) $purchase->grand_total - $paid, 2));
+                    $purchase->update(['paid_amount' => $paid, 'balance_amount' => $balance, 'payment_status' => $balance > 0 ? 'partial' : 'paid']);
+                }
+            }
             return $payment->fresh(['supplier', 'journal']);
         });
     }
@@ -183,9 +268,10 @@ class AccountingService
             ->join('journal_vouchers', 'journal_vouchers.id', '=', 'journal_entries.journal_voucher_id')
             ->join('accounts', 'accounts.id', '=', 'journal_entries.account_id')
             ->where('journal_entries.business_id', $businessId)
-            ->whereIn('journal_vouchers.status', ['posted', 'approved'])
+            ->whereIn('journal_vouchers.status', ['posted', 'approved', 'reversed'])
             ->when(!empty($filters['account_id']), fn ($q) => $q->where('journal_entries.account_id', $filters['account_id']))
             ->when(!empty($filters['customer_id']), fn ($q) => $q->where('journal_entries.customer_id', $filters['customer_id']))
+            ->when(!empty($filters['customer_id']) && empty($filters['account_id']), fn ($q) => $q->whereIn('journal_entries.account_id', BusinessAccountSetting::query()->where('business_id', $businessId)->select('accounts_receivable_id')))
             ->when(!empty($filters['supplier_id']), fn ($q) => $q->where('journal_entries.supplier_id', $filters['supplier_id']))
             ->when(!empty($filters['branch_id']), fn ($q) => $q->where('journal_entries.branch_id', $filters['branch_id']))
             ->when(!empty($filters['date_from']), fn ($q) => $q->whereDate('journal_vouchers.voucher_date', '>=', $filters['date_from']))
@@ -205,21 +291,30 @@ class AccountingService
         return $this->ledger(['account_id' => $filters['account_id'] ?? null, 'date_from' => $filters['date_from'] ?? null, 'date_to' => $filters['date_to'] ?? null, 'branch_id' => $filters['branch_id'] ?? null]);
     }
 
-    public function customerOutstanding(?int $customerId = null)
+    private function ageingDays($date): int
+    {
+        return $date ? max(0, (int) $date->copy()->startOfDay()->diffInDays(now()->startOfDay(), false)) : 0;
+    }
+
+    public function customerOutstanding(?int $customerId = null, ?int $branchId = null)
     {
         $businessId = AppController::businessId();
-        return SalesVoucher::query()->where('business_id', $businessId)->whereIn('status', ['approved', 'confirmed'])->when($customerId, fn ($q) => $q->where('customer_id', $customerId))->get()->map(function ($invoice) {
+        return SalesVoucher::query()->where('business_id', $businessId)->whereIn('status', ['approved', 'confirmed'])->when($customerId, fn ($q) => $q->where('customer_id', $customerId))->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->get()->map(function ($invoice) {
             $allocated = DB::table('ledger_allocations')->where('business_id', $invoice->business_id)->where('reference_type', SalesVoucher::class)->where('reference_id', $invoice->id)->sum('allocated_amount');
-            return ['customer_id' => $invoice->customer_id, 'invoice_number' => $invoice->invoice_number, 'invoice_date' => optional($invoice->invoice_date)->format('Y-m-d'), 'due_date' => optional($invoice->due_date)->format('Y-m-d'), 'invoice_amount' => (float) $invoice->grand_total, 'received_amount' => (float) $allocated, 'outstanding_amount' => round((float) $invoice->grand_total - (float) $allocated, 2), 'ageing_days' => now()->diffInDays($invoice->due_date ?: $invoice->invoice_date, false) * -1];
+            $allocated = max((float) $allocated, (float) $invoice->paid_amount);
+            // Credit notes adjusted against this invoice close it; any excess stays as customer credit in the ledger.
+            $creditNote = SalesReturnVoucher::invoiceAdjustmentTotal($invoice->business_id, $invoice->id);
+            return ['invoice_id' => $invoice->id, 'branch_id' => $invoice->branch_id, 'customer_id' => $invoice->customer_id, 'invoice_number' => $invoice->invoice_number, 'invoice_date' => optional($invoice->invoice_date)->format('Y-m-d'), 'due_date' => optional($invoice->due_date)->format('Y-m-d'), 'invoice_amount' => (float) $invoice->grand_total, 'received_amount' => (float) $allocated, 'credit_note_amount' => $creditNote, 'outstanding_amount' => max(0, round((float) $invoice->grand_total - (float) $allocated - $creditNote, 2)), 'ageing_days' => $this->ageingDays($invoice->due_date ?: $invoice->invoice_date)];
         });
     }
 
-    public function supplierOutstanding(?int $supplierId = null)
+    public function supplierOutstanding(?int $supplierId = null, ?int $branchId = null)
     {
         $businessId = AppController::businessId();
-        return PurchaseVoucher::query()->where('business_id', $businessId)->whereIn('status', ['approved', 'confirmed'])->when($supplierId, fn ($q) => $q->where('supplier_id', $supplierId))->get()->map(function ($purchase) {
+        return PurchaseVoucher::query()->where('business_id', $businessId)->whereIn('status', ['approved', 'confirmed'])->when($supplierId, fn ($q) => $q->where('supplier_id', $supplierId))->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->get()->map(function ($purchase) {
             $allocated = DB::table('ledger_allocations')->where('business_id', $purchase->business_id)->where('reference_type', PurchaseVoucher::class)->where('reference_id', $purchase->id)->sum('allocated_amount');
-            return ['supplier_id' => $purchase->supplier_id, 'purchase_number' => $purchase->voucher_number, 'purchase_date' => optional($purchase->purchase_date)->format('Y-m-d'), 'due_date' => optional($purchase->due_date)->format('Y-m-d'), 'purchase_amount' => (float) $purchase->grand_total, 'paid_amount' => (float) $allocated, 'outstanding_amount' => round((float) $purchase->grand_total - (float) $allocated, 2), 'ageing_days' => now()->diffInDays($purchase->due_date ?: $purchase->purchase_date, false) * -1];
+            $allocated = max((float) $allocated, (float) $purchase->paid_amount);
+            return ['purchase_id' => $purchase->id, 'branch_id' => $purchase->branch_id, 'supplier_id' => $purchase->supplier_id, 'purchase_number' => $purchase->voucher_number, 'purchase_date' => optional($purchase->purchase_date)->format('Y-m-d'), 'due_date' => optional($purchase->due_date)->format('Y-m-d'), 'purchase_amount' => (float) $purchase->grand_total, 'paid_amount' => (float) $allocated, 'outstanding_amount' => round((float) $purchase->grand_total - (float) $allocated, 2), 'ageing_days' => $this->ageingDays($purchase->due_date ?: $purchase->purchase_date)];
         });
     }
 

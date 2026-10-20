@@ -48,6 +48,7 @@ class HandleInertiaRequests extends Middleware
                 'financial_year' => $context['financial_year']['name'] ?? '2026-27',
             ],
             'context' => $context,
+            'csrf_token' => fn () => $request->session()->token(),
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'failure' => fn () => $request->session()->get('failure'),

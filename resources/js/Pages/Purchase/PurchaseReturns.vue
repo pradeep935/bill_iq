@@ -1,4 +1,5 @@
 <script setup>
+import { formatDate } from '../../Support/dateFormat.js';
 import { computed, onMounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
@@ -247,7 +248,7 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
                         <input v-model="purchaseSearch" placeholder="Search approved purchase voucher" @input="searchPurchases" />
                         <div v-if="purchaseResults.length" class="search-results">
                             <button v-for="purchase in purchaseResults" :key="purchase.id" type="button" @click="selectPurchase(purchase)">
-                                <strong>{{ purchase.voucher_number }}</strong><span>{{ purchase.supplier }} | {{ purchase.purchase_date }}</span>
+                                <strong>{{ purchase.voucher_number }}</strong><span>{{ purchase.supplier }} | {{ formatDate(purchase.purchase_date) }}</span>
                             </button>
                         </div>
                     </div>
@@ -279,7 +280,7 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
                                         <span v-if="form.return_type === 'against_purchase'">{{ item.batch || item.batch_id || '-' }}</span>
                                         <select v-else-if="(item.batches || []).length" v-model="item.batch_id">
                                             <option value="">Batch</option>
-                                            <option v-for="batch in item.batches || []" :key="batch.id" :value="batch.id">{{ batch.batch_no }}{{ batch.expiry_date ? ` | ${batch.expiry_date}` : '' }}</option>
+                                            <option v-for="batch in item.batches || []" :key="batch.id" :value="batch.id">{{ batch.batch_no }}{{ batch.expiry_date ? ` | ${formatDate(batch.expiry_date)}` : '' }}</option>
                                         </select>
                                         <input v-else v-model="item.batch_id" type="number" placeholder="Batch ID" />
                                     </td>
@@ -323,7 +324,7 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
                                 </tr>
                             </template>
                             <tr v-for="row in returns" :key="row.id">
-                                <td>{{ row.voucher_number }}</td><td>{{ row.return_date }}</td><td>{{ row.purchase_number || '-' }}</td><td>{{ row.supplier }}</td><td>{{ row.branch || '-' }}</td><td>{{ row.warehouse || '-' }}</td><td>{{ row.return_type }}</td><td>Rs. {{ formatMoney(row.grand_total) }}</td><td>{{ row.settlement_type }}</td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td>{{ row.created_by || '-' }}</td>
+                                <td>{{ row.voucher_number }}</td><td>{{ formatDate(row.return_date) }}</td><td>{{ row.purchase_number || '-' }}</td><td>{{ row.supplier }}</td><td>{{ row.branch || '-' }}</td><td>{{ row.warehouse || '-' }}</td><td>{{ row.return_type }}</td><td>Rs. {{ formatMoney(row.grand_total) }}</td><td>{{ row.settlement_type }}</td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td>{{ row.created_by || '-' }}</td>
                                 <td class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === row.id" :show-view="false" more-label="Actions" more-title="Purchase return actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button v-if="row.status === 'draft'" type="button" @click="editReturn(row); closeActionMenu()">Edit</button><button v-if="row.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchaseReturn, row, 'Post return?'); closeActionMenu()">Post</button><button v-if="row.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchaseReturn, row, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" class="danger" @click="reverseReturn(row); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
                             </tr>
                             <tr v-if="!returns.length && !loading"><td colspan="12" class="empty">No purchase returns found.</td></tr>

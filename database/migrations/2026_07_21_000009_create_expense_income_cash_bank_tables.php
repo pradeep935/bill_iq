@@ -376,29 +376,7 @@ return new class extends Migration
 
     private function seedCategories(): void
     {
-        $expenseNames = ['Rent', 'Electricity', 'Internet', 'Telephone', 'Office Supplies', 'Travel', 'Fuel', 'Repairs and Maintenance', 'Marketing', 'Advertising', 'Salary', 'Professional Fees', 'Software Subscription', 'Bank Charges', 'Courier', 'Insurance', 'Staff Welfare', 'Miscellaneous Expense'];
-        $incomeNames = ['Interest Income', 'Commission Income', 'Rental Income', 'Service Charges', 'Delivery Charges', 'Scrap Sales', 'Incentives', 'Cashback', 'Miscellaneous Income'];
-
         foreach (DB::table('companies')->get(['id']) as $company) {
-            $expenseAccount = DB::table('accounts')->where('business_id', $company->id)->where('account_code', 'SHIP-E')->value('id')
-                ?: DB::table('accounts')->where('business_id', $company->id)->where('account_type', 'expense')->value('id');
-            $incomeAccount = DB::table('accounts')->where('business_id', $company->id)->where('account_code', 'SHIP-I')->value('id')
-                ?: DB::table('accounts')->where('business_id', $company->id)->where('account_type', 'income')->value('id');
-
-            foreach ($expenseNames as $index => $name) {
-                DB::table('expense_categories')->updateOrInsert(
-                    ['business_id' => $company->id, 'category_code' => 'EXP-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT)],
-                    ['category_name' => $name, 'name' => $name, 'expense_account_id' => $expenseAccount, 'account_id' => $expenseAccount, 'is_system' => true, 'status' => 'active', 'updated_at' => now(), 'created_at' => now()]
-                );
-            }
-
-            foreach ($incomeNames as $index => $name) {
-                DB::table('income_categories')->updateOrInsert(
-                    ['business_id' => $company->id, 'category_code' => 'INC-' . str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT)],
-                    ['category_name' => $name, 'income_account_id' => $incomeAccount, 'is_system' => true, 'status' => 'active', 'updated_at' => now(), 'created_at' => now()]
-                );
-            }
-
             $this->seedAccount($company->id, 'TDS-PAY', 'TDS Payable', 'tax', 'TAX');
             $this->seedAccount($company->id, 'EMP-REIMB', 'Employee Reimbursement Payable', 'supplier', 'AP');
             $this->seedAccount($company->id, 'PETTY-ADV', 'Employee Petty Cash Advance', 'ledger', 'CA');

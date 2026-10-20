@@ -127,6 +127,87 @@ class SalesInventoryFlowTest extends TestCase
         $this->assertSame('partial', $sale->payment_status);
     }
 
+    /** Invoice ₹360, received ₹200, outstanding ₹160 — same shape as INV-2026-00025. */
+    protected function partlyPaidInvoice(): array
+    {
+        [$businessId, $user, $product, $branch, $warehouse, $customer] = $this->fixture();
+        $this->loginBusiness($user, $businessId);
+        $sale = $this->sale($businessId, $branch, $warehouse, $customer, $product->id, 36, 'approved');
+        $sale->update(['paid_amount' => 200, 'balance_amount' => 160, 'payment_status' => 'partial']);
+
+        return [$businessId, $customer, $sale->fresh(['items.product'])];
+    }
+
+    protected function postReturn(SalesVoucher $sale, float $quantity, string $settlement = 'invoice_adjustment', bool $post = true): SalesReturnVoucher
+    {
+        $return = app(SalesReturnService::class)->create(array_merge($this->returnPayload($sale, $quantity), ['settlement_type' => $settlement]));
+
+        return $post ? app(SalesReturnService::class)->post($return) : $return;
+    }
+
+    protected function outstandingRow(int $customer, SalesVoucher $sale): array
+    {
+        return app(\App\Services\AccountingService::class)->customerOutstanding($customer)->firstWhere('invoice_id', $sale->id);
+    }
+
+    public function test_credit_note_larger_than_outstanding_closes_invoice_and_keeps_excess_as_customer_credit(): void
+    {
+        [$businessId, $customer, $sale] = $this->partlyPaidInvoice();
+        $return = $this->postReturn($sale, 36);
+
+        $this->assertSame(160.0, (float) $return->adjustment_amount);
+        $this->assertSame(200.0, (float) $return->balance_amount, 'Excess ₹200 stays as customer credit.');
+        $row = $this->outstandingRow($customer, $sale);
+        $this->assertSame(0.0, (float) $row['outstanding_amount']);
+        $this->assertSame(200.0, (float) $row['received_amount'], 'Credit note is not treated as a cash receipt.');
+        $this->assertSame(160.0, (float) $row['credit_note_amount']);
+        $this->assertSame(0.0, (float) $sale->fresh()->balance_amount);
+
+        $cash = \App\Models\Account::create(['business_id' => $businessId, 'account_code' => 'CASH', 'account_name' => 'Cash', 'name' => 'Cash', 'account_type' => 'cash', 'status' => 'active']);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(\App\Services\AccountingService::class)->createReceipt(['customer_id' => $customer, 'receipt_date' => now()->toDateString(), 'receipt_mode' => 'cash', 'cash_bank_account_id' => $cash->id, 'amount' => 1, 'status' => 'approved', 'allocations' => [['reference_type' => SalesVoucher::class, 'reference_id' => $sale->id, 'allocated_amount' => 1]]]);
+    }
+
+    public function test_credit_note_smaller_than_outstanding_leaves_remaining_outstanding_and_receipt_keeps_it(): void
+    {
+        [$businessId, $customer, $sale] = $this->partlyPaidInvoice();
+        $this->postReturn($sale, 6);
+
+        $row = $this->outstandingRow($customer, $sale);
+        $this->assertSame(100.0, (float) $row['outstanding_amount']);
+        $this->assertSame(60.0, (float) $row['credit_note_amount']);
+        $this->assertSame(200.0, (float) $row['received_amount']);
+
+        // Settling the remaining ₹100 must close the invoice without re-opening the credit note amount.
+        $cash = \App\Models\Account::create(['business_id' => $businessId, 'account_code' => 'CASH', 'account_name' => 'Cash', 'name' => 'Cash', 'account_type' => 'cash', 'status' => 'active']);
+        app(\App\Services\AccountingService::class)->createReceipt(['customer_id' => $customer, 'receipt_date' => now()->toDateString(), 'receipt_mode' => 'cash', 'cash_bank_account_id' => $cash->id, 'amount' => 100, 'status' => 'approved', 'allocations' => [['reference_type' => SalesVoucher::class, 'reference_id' => $sale->id, 'allocated_amount' => 100]]]);
+        $sale->refresh();
+        $this->assertSame(0.0, (float) $sale->balance_amount);
+        $this->assertSame('paid', $sale->payment_status);
+        $row = $this->outstandingRow($customer, $sale);
+        $this->assertSame(0.0, (float) $row['outstanding_amount']);
+        $this->assertSame(300.0, (float) $row['received_amount']);
+    }
+
+    public function test_draft_customer_credit_and_reversed_returns_do_not_reduce_invoice_outstanding(): void
+    {
+        [, $customer, $sale] = $this->partlyPaidInvoice();
+
+        $this->postReturn($sale, 5, 'invoice_adjustment', false);
+        $this->assertSame(160.0, (float) $this->outstandingRow($customer, $sale)['outstanding_amount'], 'Draft return');
+
+        $this->postReturn($sale->fresh(['items.product']), 2, 'customer_credit');
+        $this->assertSame(160.0, (float) $this->outstandingRow($customer, $sale)['outstanding_amount'], 'Customer-credit settlement leaves the invoice open');
+
+        $adjusted = $this->postReturn($sale->fresh(['items.product']), 10);
+        $this->assertSame(60.0, (float) $this->outstandingRow($customer, $sale)['outstanding_amount']);
+        app(SalesReturnService::class)->reverse($adjusted, 'Test reversal');
+        $this->assertSame(160.0, (float) $this->outstandingRow($customer, $sale)['outstanding_amount'], 'Reversed return');
+        $this->assertSame(0.0, (float) $this->outstandingRow($customer, $sale)['credit_note_amount']);
+        $this->assertSame(160.0, (float) $sale->fresh()->balance_amount);
+        $this->assertSame('partial', $sale->fresh()->payment_status);
+    }
+
     public function test_fefo_sale_reconciles_all_batches_and_preserves_invoice_allocations(): void
     {
         $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-07'));

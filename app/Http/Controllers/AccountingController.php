@@ -147,12 +147,12 @@ class AccountingController extends Controller
 
     public function customerOutstanding(Request $request)
     {
-        return response()->json($this->accounting->customerOutstanding($request->integer('customer_id') ?: null));
+        return response()->json($this->accounting->customerOutstanding($request->integer('customer_id') ?: null, $request->integer('branch_id') ?: null));
     }
 
     public function supplierOutstanding(Request $request)
     {
-        return response()->json($this->accounting->supplierOutstanding($request->integer('supplier_id') ?: null));
+        return response()->json($this->accounting->supplierOutstanding($request->integer('supplier_id') ?: null, $request->integer('branch_id') ?: null));
     }
 
     public function expenses()
@@ -278,6 +278,22 @@ class AccountingController extends Controller
     public function pettyCashStore(PettyCashAdvanceRequest $request)
     {
         return response()->json(['message' => 'Petty cash advance saved.', 'advance' => $this->expenseIncome->savePettyCash($request->validated())], 201);
+    }
+
+    public function pettyCashUpdate(PettyCashAdvanceRequest $request, int $advance)
+    {
+        return response()->json(['message' => 'Draft advance updated.', 'advance' => $this->expenseIncome->savePettyCash($request->validated(), $advance)]);
+    }
+
+    public function pettyCashIssue(int $advance)
+    {
+        return response()->json(['message' => 'Advance issued.', 'advance' => $this->expenseIncome->issuePettyCash($advance)]);
+    }
+
+    public function pettyCashDelete(int $advance)
+    {
+        $this->expenseIncome->deletePettyCashDraft($advance);
+        return response()->json(['message' => 'Draft advance deleted.']);
     }
 
     public function bankImportList(Request $request)

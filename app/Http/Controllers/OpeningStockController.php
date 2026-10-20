@@ -69,6 +69,12 @@ class OpeningStockController extends Controller
         );
     }
 
+    public function serialCandidates(Request $request, \App\Services\VoucherSerialService $serials)
+    {
+        $this->authorizeView();
+        return response()->json($serials->candidates($request->all(), 'opening'));
+    }
+
     public function store(OpeningStockVoucherRequest $request)
     {
         $voucher = $this->openingStock->create($request->validated());
@@ -170,6 +176,7 @@ class OpeningStockController extends Controller
                 'batch_id' => $item->batch_id,
                 'batch_no' => $item->batch_no ?: optional($item->batch)->batch_no,
                 'serial_number_id' => $item->serial_number_id,
+                'serials' => $item->serials ?? [],
                 'quantity' => (float) $item->quantity,
                 'purchase_cost' => (float) $item->purchase_cost,
                 'stock_value' => (float) $item->stock_value,

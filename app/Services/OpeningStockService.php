@@ -83,6 +83,7 @@ class OpeningStockService
     public function update(OpeningStockVoucher $voucher, array $data): OpeningStockVoucher
     {
         return DB::transaction(function () use ($voucher, $data) {
+            $voucher = OpeningStockVoucher::where('business_id', AppController::businessId())->lockForUpdate()->findOrFail($voucher->id);
             if ($voucher->status !== 'draft') {
                 throw ValidationException::withMessages([
                     'status' => 'Only draft opening stock vouchers can be edited.',
@@ -159,7 +160,7 @@ class OpeningStockService
                 ]);
             }
 
-            foreach ($voucher->items as $item) {
+            foreach ($voucher->items as $index => $item) {
                 $this->validateTrackingForItem($item->product, [
                     'batch_id' => $item->batch_id,
                     'batch_no' => $item->batch_no,
@@ -177,6 +178,11 @@ class OpeningStockService
                     ])->id;
 
                     $item->update(['batch_id' => $batchId]);
+                }
+
+                if (VoucherSerialService::tracked($item->product)) {
+                    app(VoucherSerialService::class)->open($voucher, $item, "items.$index.serials");
+                    continue;
                 }
 
                 $this->stock->increaseStock([
@@ -262,12 +268,14 @@ class OpeningStockService
             $businessId = AppController::businessId();
             $this->validateVoucher($voucher, $businessId);
 
+            $voucher = OpeningStockVoucher::where('business_id', $businessId)->lockForUpdate()->findOrFail($voucher->id);
             if ($voucher->status !== 'posted') {
                 throw ValidationException::withMessages([
                     'status' => 'Only posted opening stock can be reversed.',
                 ]);
             }
 
+            app(VoucherSerialService::class)->reverseOpening($voucher->load('items'));
             $this->stock->reverseTransaction(OpeningStockVoucher::class, $voucher->id, $remarks ?: 'Opening stock reversal');
 
             $voucher->update([
@@ -380,7 +388,7 @@ class OpeningStockService
                 'updated_at' => now(),
             ]);
         }
-        foreach ($items as $item) {
+        foreach ($items as $index => $item) {
             $product = $this->validProduct($voucher->business_id, (int) $item['product_id']);
             $variantId = $item['product_variant_id'] ?? null;
             $sellingPrice = (float) ($product->selling_price ?: $product->sale_price ?: 0);
@@ -399,7 +407,14 @@ class OpeningStockService
             $this->validateQuantityForUnit((float) $item['quantity'], (string) ($product->unit ?: 'PCS'), $product->name);
             $stockValue = round((float) $item['quantity'] * (float) ($item['purchase_cost'] ?? 0), 2);
 
+            $serials = $item['serials'] ?? [];
+            if (VoucherSerialService::tracked($product)) {
+                $serials = app(VoucherSerialService::class)->assignments($serials, (float) $item['quantity'], false, "items.$index.serials");
+            } elseif ($serials) {
+                throw ValidationException::withMessages(["items.$index.serials" => 'This product does not use serial tracking.']);
+            }
             $voucher->items()->create([
+                'serials' => $serials,
                 'business_id' => $voucher->business_id,
                 'branch_id' => $voucher->branch_id,
                 'warehouse_id' => $voucher->warehouse_id,

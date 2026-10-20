@@ -10,6 +10,7 @@ class OpeningStockItem extends Model
     protected $guarded = [];
 
     protected $casts = [
+        'serials' => 'array',
         'quantity' => 'decimal:3',
         'purchase_cost' => 'decimal:2',
         'selling_price' => 'decimal:2',

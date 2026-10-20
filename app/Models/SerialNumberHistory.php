@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class SerialNumberHistory extends Model
 {
     protected $guarded = [];
+    protected $casts = ['occurred_at' => 'datetime'];
 
     public function serial() { return $this->belongsTo(ProductSerialNumber::class, 'serial_number_id'); }
     public function product() { return $this->belongsTo(Product::class); }

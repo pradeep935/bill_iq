@@ -1,0 +1,17 @@
+# Customer invoice receipts
+
+ReceiptVoucher already linked to an accounting journal; ledger_allocations already linked journal entries to SalesVoucher references. The Receipt form sent no allocations, the service passed the allocation array into the voucher model, no invoice settlement fields were synchronized, and allocation references lacked ownership/branch/outstanding validation. The generic allocation writer used the first journal entry, which is the cash debit for receipts.
+
+The Receipt form now exposes labelled details and Open Sales Invoices, positive balances only, branch per invoice, allocation inputs and receipt/allocated/unallocated totals. One branch per receipt is derived from allocated invoices. Other branches are disabled after allocation. Existing outstanding endpoint supplies invoice_id and branch_id and reconciles existing paid fields with recorded allocations without double counting. Closed invoices remain in history and are excluded by the existing positive-balance filters.
+
+Backend locks source invoices, validates customer/business/status, active cash/bank account, branch match, mixed branches, duplicate references and outstanding limits. Allocation sum must equal receipt amount. Receipt paid/balance/payment_status updates are atomic with journal and allocation creation. Receipt advances and discount/write-off adjustments are explicitly unavailable in this invoice-settlement flow.
+
+Accounting remains Dr selected Cash/Bank, Cr Accounts Receivable with customer_id. Zero discount no longer requires an optional discount account. Receipt allocations now reference the customer credit journal entry and sales invoice; branch propagates from receipt to journal header and all lines. Supplier payment code is unchanged by this work.
+
+No schema migration. Files: AccountingService.php, AccountingPostingService.php, ReceiptVoucherRequest.php, Vouchers.vue, tests/frontend/supplier-payment.test.mjs, tests/Manual/customer-receipt.php, this document and build assets.
+
+Browser check: select Doli, verify INV-2026-00025 and Default Branch, receive/allocate 200, then verify paid 200/balance 160 and selected cash/bank +200. Receive/allocate 160, verify paid status and disappearance from open invoices/Customer Outstanding while customer ledger keeps sales and both receipts. Backend mixed-branch validation is covered by the rollback integration script.
+
+Verification completed: ten frontend regression tests passed, production build passed, PHP syntax and diff checks passed. The real INV-2026-00025 rollback test passed 200/160 receipts, partial/paid invoice states, Customer Outstanding, receivable running balances, selected cash-book increase, both receipt debit/credit entries, source/allocation links and branch propagation. Mixed branches, branch mismatch, invalid customer and over-allocation were rejected. All test data writes were rolled back; auto-increment IDs may be consumed. Browser verification is still required.
+
+The test also exposed Doli's historical 125 cash sale incorrectly inflating the generic customer ledger balance. Party-only customer ledger queries now restrict journal entries to the business's configured accounts-receivable account. The older cash-sale posting is retained in cash/account ledgers and sales history; it is not receivable debt. Supplier queries are unchanged. This application uses a configured central receivable account; explicit account-ledger queries retain their existing account filter behavior.

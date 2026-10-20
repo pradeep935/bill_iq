@@ -239,6 +239,10 @@ class PurchaseService
     public function searchProducts(string $search)
     {
         $businessId = AppController::businessId();
+        $search = trim($search);
+        if ($search === '') {
+            return collect();
+        }
         $productId = null;
 
         if (preg_match('/^id:(\d+)$/', trim($search), $matches)) {
@@ -246,9 +250,9 @@ class PurchaseService
         }
 
         return Product::query()
-            ->with(['barcodes', 'variantItems', 'batches' => fn ($q) => $q->where('status', 'active')->orderBy('batch_no')])
+            ->with(['variantItems' => fn ($q) => $q->where('business_id', $businessId), 'batches' => fn ($q) => $q->where('business_id', $businessId)->where('status', 'active')->orderBy('batch_no')])
             ->where(function (Builder $q) use ($businessId) {
-                $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
+                $q->where('business_id', $businessId)->orWhere(fn (Builder $legacy) => $legacy->whereNull('business_id')->where('company_id', $businessId));
             })
             ->where('product_type', 'goods')
             ->where('item_type', 'stock')
@@ -260,11 +264,21 @@ class PurchaseService
                     return;
                 }
 
+                if (mb_strlen($search) < 2) {
+                    $q->where('sku', $search)->orWhere('primary_barcode', $search)->orWhere('barcode', $search);
+
+                    return;
+                }
+
                 $q->where('name', 'like', '%' . $search . '%')
+                  ->orWhere('short_name', 'like', '%' . $search . '%')
+                  ->orWhere('barcode', 'like', '%' . $search . '%')
                   ->orWhere('sku', 'like', '%' . $search . '%')
                   ->orWhere('primary_barcode', 'like', '%' . $search . '%')
                   ->orWhereHas('barcodes', fn (Builder $barcodeQuery) => $barcodeQuery->where('barcode', 'like', '%' . $search . '%'));
             })
+            ->orderBy('name')
+            ->orderBy('id')
             ->limit(20)
             ->get()
             ->map(fn (Product $product) => [
@@ -272,8 +286,9 @@ class PurchaseService
                 'name' => $product->name,
                 'sku' => $product->sku,
                 'barcode' => $product->primary_barcode ?: $product->barcode,
+                'current_stock' => (float) $product->current_stock,
                 'unit_id' => $product->unit_id,
-                'unit' => $product->unit ?: 'PCS',
+                'unit' => $product->getRawOriginal('unit') ?: 'PCS',
                 'gst_rate' => (float) $product->gst_rate,
                 'cess_rate' => (float) $product->cess_rate,
                 'purchase_rate' => (float) ($product->cost_price ?: $product->purchase_price ?: $product->default_purchase_price),

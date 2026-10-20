@@ -1,0 +1,23 @@
+# Supplier bill payment
+
+Existing architecture: PaymentVoucher -> supplier payment journal -> ledger_allocations. The form sent an empty allocation list, allocations lacked ownership/balance validation, the allocations array was passed to the payment model as a database column, and purchase paid/balance fields were not updated. Zero discount also attempted to use a null discount account and failed posting.
+
+Payment now shows labelled supplier, date, mode, cash/bank account, amount, branch, reference and remarks fields. Selecting a supplier fetches existing outstanding data, now including purchase_id. Only positive balances are presented. Each bill has an allocation input. Multiple bills and partial settlement use the existing allocation records. Payment, allocated and unallocated totals are visible; invalid allocation disables Save. Stale supplier responses are ignored and successful posting clears the amount and refreshes bills.
+
+Backend validates supplier, account and optional branch against the current business. It locks purchases in ID order, checks supplier/status/type/ownership, duplicate references, positive allocations and available outstanding, and requires allocated amount to equal payment. It does not allow implicit advances. Existing discount/write-off fields are explicitly rejected when nonzero in this flow: write-off posting was incomplete, and adjustment allocation semantics are not implemented here. The UI states this limitation. No new payment system or migration was introduced.
+
+Posting retains Debit Accounts Payable (supplier) / Credit selected Cash or Bank. The zero-discount lookup is skipped. Allocations and purchase paid/balance/status updates occur atomically with posting. Outstanding uses the greater of recorded paid amount and allocated amount, preserving already recorded purchase payments without counting them twice. Journal numbering is unchanged.
+
+Files: resources/js/Pages/Accounting/Vouchers.vue; app/Services/AccountingService.php; app/Services/AccountingPostingService.php; app/Http/Requests/PaymentVoucherRequest.php; tests/frontend/supplier-payment.test.mjs; tests/Manual/supplier-payment.php; generated build assets.
+
+Validation: production build, PHP syntax and diff checks passed. Two frontend tests passed for partial/multiple allocations, invalid totals, settled-bill exclusion and stale responses. The rollback integration test on PUR-2026-00002 passed: 600 paid / 450 balance, supplier debit 600, cash/bank credit 600, allocation 500 rejected with available balance 450, unallocated payment rejected, second 450 settles paid 1050 / balance 0 and supplier ledger balance 0. All database test writes were rolled back (auto-increment IDs may be consumed). Browser interaction was not exercised.
+
+Manual browser retest: hard refresh, Accounting > Vouchers > Payment, select GLOBAL HORECA SOLUTIONS and a cash/bank account; enter 600 and allocate 600 to PUR-2026-00002. Save and verify purchase paid 600/outstanding 450 and ledgers. Try allocating 500: Save is disabled; the backend rejection is separately covered by the rollback integration test. Enter and allocate 450, save, and verify the bill disappears from Open Purchase Bills, paid is 1050 and supplier balance zero. The actual bill remains unpaid after the rollback test.
+
+## Branch consistency
+
+Payment Branch is now read-only and derived from allocated bills; outstanding responses include each purchase's branch_id, displayed alongside the bill. Allocating a bill disables allocation inputs for other branches until that allocation is cleared. Backend derives a missing branch, rejects an explicitly mismatched branch, rejects mixed branches (including a mix of branchless and branch-specific bills), and validates the derived branch belongs to the business. A genuinely branchless source remains branchless.
+
+Branch is stored on purchase_vouchers, payment_vouchers, journal_vouchers and journal_entries. ledger_allocations has no branch column; it links to a journal entry and source purchase. Consequently one payment is restricted to one branch. No schema or posting-convention change is needed.
+
+Branch follow-up files: AccountingService.php, Vouchers.vue, supplier-payment.test.mjs, tests/Manual/supplier-payment-branch.php, this document and build assets. Three frontend tests pass. Rollback integration check for the remaining 450 passed: payment/header/all lines inherited the purchase branch, cash/bank credit was 450, purchase and supplier balances reached zero and positive outstanding disappeared. All test payment writes were rolled back; the real remaining balance is still 450. Browser retest remains pending. Previously posted payments are not retroactively reassigned.

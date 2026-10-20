@@ -16,6 +16,7 @@ class PettyCashAdvance extends Model
         'balance_amount' => 'decimal:2',
     ];
 
+    public function employee() { return $this->belongsTo(Employee::class, 'employee_id')->withTrashed(); }
     public function cashAccount() { return $this->belongsTo(Account::class, 'cash_account_id'); }
     public function branch() { return $this->belongsTo(Branch::class); }
     public function journal() { return $this->belongsTo(JournalVoucher::class, 'journal_voucher_id'); }

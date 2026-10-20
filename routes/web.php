@@ -181,6 +181,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/invoices/create', [SalesController::class, 'invoices'])->name('invoices.create');
             Route::get('/invoices/list', [SalesController::class, 'list'])->name('invoices.list');
             Route::get('/invoices/references', [SalesController::class, 'references'])->name('invoices.references');
+            Route::get('/invoices/serials', [SalesController::class, 'serialCandidates'])->name('invoices.serials');
             Route::get('/invoices/products/search', [SalesController::class, 'searchProducts'])->name('invoices.products.search');
             Route::get('/invoices/products/scan', [SalesController::class, 'scanProduct'])->name('invoices.products.scan');
             Route::get('/invoices/products/last-purchase', [SalesController::class, 'productLastPurchase'])->name('invoices.products.last-purchase');
@@ -274,6 +275,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/bills/list', [PurchaseController::class, 'list'])->name('bills.list');
             Route::get('/bills/references', [PurchaseController::class, 'references'])->name('bills.references');
             Route::get('/bills/products/search', [PurchaseController::class, 'searchProducts'])->name('bills.products.search');
+            Route::post('/bills/preview-totals', [PurchaseController::class, 'previewTotals'])->name('bills.preview-totals');
             Route::post('/bills', [PurchaseController::class, 'store'])->name('bills.store');
             Route::put('/bills/{purchase}', [PurchaseController::class, 'update'])->name('bills.update');
             Route::post('/bills/{purchase}/duplicate', [PurchaseController::class, 'duplicate'])->name('bills.duplicate');
@@ -431,6 +433,7 @@ Route::middleware('auth')->group(function () {
             [OpeningStockController::class, 'references']
         )->name('opening-stock.references');
 
+        Route::get('/opening-stock/serials', [OpeningStockController::class, 'serialCandidates'])->name('opening-stock.serials');
         Route::get(
             '/opening-stock/products/search',
             [OpeningStockController::class, 'searchProducts']
@@ -647,6 +650,9 @@ Route::middleware('auth')->group(function () {
             Route::put('/recurring-expenses/{template}', [AccountingController::class, 'recurringUpdate'])->name('recurring-expenses.update');
             Route::get('/petty-cash/list', [AccountingController::class, 'pettyCashList'])->name('petty-cash.list');
             Route::post('/petty-cash', [AccountingController::class, 'pettyCashStore'])->name('petty-cash.store');
+            Route::put('/petty-cash/{advance}', [AccountingController::class, 'pettyCashUpdate'])->name('petty-cash.update');
+            Route::post('/petty-cash/{advance}/issue', [AccountingController::class, 'pettyCashIssue'])->name('petty-cash.issue');
+            Route::delete('/petty-cash/{advance}', [AccountingController::class, 'pettyCashDelete'])->name('petty-cash.delete');
             Route::get('/bank-statement-imports/list', [AccountingController::class, 'bankImportList'])->name('bank-statement-imports.list');
             Route::post('/bank-statement-imports', [AccountingController::class, 'bankImportStore'])->name('bank-statement-imports.store');
             Route::get('/bank-statement-lines', [AccountingController::class, 'bankStatementLines'])->name('bank-statement-lines');

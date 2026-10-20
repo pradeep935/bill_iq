@@ -356,7 +356,7 @@ const productPrefillFromQuery = () => {
 
     quickCreateReturnTo.value = params.get('return_to') || '';
 
-    if (!prefillName) {
+    if (!prefillName && !quickCreateReturnTo.value) {
         return;
     }
 

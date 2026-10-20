@@ -1,5 +1,5 @@
 import { createApp, h } from 'vue';
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import axios from 'axios';
 import { normalizeAxiosError } from './Support/errorMessages';
@@ -39,6 +39,18 @@ import MediaDisplay from '@/Components/Common/MediaDisplay.vue';
 
 const appBasePath = window.location.pathname.split('/app')[0] || '';
 axios.defaults.baseURL = `${window.location.origin}${appBasePath}`;
+
+// Send this app's own session token instead of relying only on the XSRF-TOKEN cookie:
+// other Laravel apps on the same host (e.g. MAMP localhost:8888) overwrite that shared
+// cookie at path "/", which made requests fail with "CSRF token mismatch."
+let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+router.on('navigate', (event) => {
+  csrfToken = event.detail.page.props?.csrf_token || csrfToken;
+});
+axios.interceptors.request.use((config) => {
+  if (csrfToken) config.headers['X-CSRF-TOKEN'] = csrfToken;
+  return config;
+});
 axios.interceptors.response.use(
   (response) => response,
   normalizeAxiosError

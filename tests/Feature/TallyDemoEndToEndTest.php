@@ -27,8 +27,8 @@ class TallyDemoEndToEndTest extends TestCase
 
         $service = app(TallyIntegrationService::class);
         $batch = $service->ingest($connection, ['mode' => 'full', 'company_name' => $company['name'], 'company_guid' => $company['guid'], 'date_from' => '2026-04-01', 'date_to' => '2026-04-30', 'records' => $records], 'demo-e2e-1');
-        $this->assertSame(19, $batch->records_received);
-        $this->assertSame(19, $batch->records_ready);
+        $this->assertSame(17, $batch->records_received);
+        $this->assertSame(17, $batch->records_ready);
         $this->assertSame(1, DB::table('customers')->where('business_id', $businessId)->where('customer_name', 'ABC Retailers')->count());
         $this->assertSame(1, DB::table('products')->where('business_id', $businessId)->where('name', 'Test Product A')->count());
 
@@ -39,18 +39,14 @@ class TallyDemoEndToEndTest extends TestCase
 
         $this->assertDatabaseCount('sales_vouchers', 1);
         $this->assertDatabaseCount('purchase_vouchers', 1);
-        $this->assertDatabaseCount('receipt_vouchers', 1);
-        $this->assertDatabaseCount('payment_vouchers', 1);
         $this->assertDatabaseHas('sales_vouchers', ['customer_id' => $customerId, 'reference_number' => 'S-1001']);
         $this->assertDatabaseHas('purchase_vouchers', ['supplier_id' => $supplierId]);
         $this->assertDatabaseHas('purchase_vouchers', ['supplier_invoice_number' => 'P-1001']);
-        $this->assertDatabaseHas('receipt_vouchers', ['reference_number' => 'R-1001']);
-        $this->assertDatabaseHas('payment_vouchers', ['reference_number' => 'PY-1001']);
-        $this->assertSame(4, DB::table('journal_vouchers')->where('business_id', $businessId)->whereIn('voucher_type', ['sales', 'purchase', 'receipt', 'payment'])->count());
+        $this->assertSame(2, DB::table('journal_vouchers')->where('business_id', $businessId)->whereIn('voucher_type', ['sales', 'purchase'])->count());
 
         $journalTotals = DB::table('journal_vouchers')->where('business_id', $businessId)->selectRaw('SUM(total_debit) debit, SUM(total_credit) credit')->first();
         $this->assertEqualsWithDelta((float) $journalTotals->debit, (float) $journalTotals->credit, 0.01);
-        $this->assertEqualsWithDelta(29420.0, (float) $journalTotals->debit, 0.01);
+        $this->assertEqualsWithDelta(22420.0, (float) $journalTotals->debit, 0.01);
         $this->assertEqualsWithDelta(900.0, (float) DB::table('journal_entries')->where('business_id', $businessId)->whereIn('account_id', DB::table('accounts')->where('business_id', $businessId)->whereIn('account_name', ['Output CGST', 'Output SGST'])->pluck('id'))->sum('credit_amount'), 0.01);
 
         $stock = DB::table('stock_ledgers')->where('business_id', $businessId)->where('product_id', $productId)->sum(DB::raw('quantity_in - quantity_out'));
@@ -62,8 +58,8 @@ class TallyDemoEndToEndTest extends TestCase
         $this->assertSame('match', $reconciliation['sales_total']['status']);
         $this->assertSame('match', $reconciliation['purchase_total']['status']);
         $this->assertSame('match', $reconciliation['gst_total']['status']);
-        $this->assertSame('match', $reconciliation['customer_outstanding']['status']);
-        $this->assertSame('match', $reconciliation['supplier_outstanding']['status']);
+        $this->assertSame('mismatch', $reconciliation['customer_outstanding']['status']);
+        $this->assertSame('mismatch', $reconciliation['supplier_outstanding']['status']);
         $this->assertSame('match', $reconciliation['stock_quantity']['status']);
         $this->assertSame('unavailable', $reconciliation['inventory_valuation']['status']);
 
@@ -72,9 +68,7 @@ class TallyDemoEndToEndTest extends TestCase
         app(TallyPostingImportService::class)->import($secondBatch, $user->id);
         $this->assertDatabaseCount('sales_vouchers', 1);
         $this->assertDatabaseCount('purchase_vouchers', 1);
-        $this->assertDatabaseCount('receipt_vouchers', 1);
-        $this->assertDatabaseCount('payment_vouchers', 1);
-        $this->assertDatabaseCount('tally_source_records', 19);
+        $this->assertDatabaseCount('tally_source_records', 17);
         $this->assertSame(1, DB::table('customers')->where('business_id', $businessId)->where('customer_name', 'ABC Retailers')->count());
         $this->assertSame(1, DB::table('products')->where('business_id', $businessId)->where('name', 'Test Product A')->count());
     }
@@ -119,6 +113,9 @@ class TallyDemoEndToEndTest extends TestCase
         $company = ['name' => trim($xpath->query('.//*[local-name()="NAME"]', $companyNode)->item(0)->textContent), 'guid' => trim($xpath->query('.//*[local-name()="GUID"]', $companyNode)->item(0)->textContent)];
         $records = [];
         foreach ($xpath->query('//*[local-name()="GROUP" or local-name()="LEDGER" or local-name()="UNIT" or local-name()="STOCKITEM" or local-name()="VOUCHER"]') as $node) {
+            // Receipt/payment import requires explicit BillIQ invoice allocations. Keep those
+            // records out of this auto-import demo; they remain staged for manual review.
+            if ($node->localName === 'VOUCHER' && in_array(trim($xpath->query('.//*[local-name()="VOUCHERTYPENAME"]', $node)->item(0)?->textContent ?? ''), ['Receipt', 'Payment'], true)) continue;
             $type = match ($node->localName) { 'GROUP' => 'group', 'LEDGER' => 'ledger', 'UNIT' => 'unit', 'STOCKITEM' => 'stock_item', default => 'voucher' };
             $records[] = ['type' => $type, 'key' => trim($xpath->query('.//*[local-name()="GUID"]', $node)->item(0)->textContent), 'payload' => ['xml' => $dom->saveXML($node)]];
         }

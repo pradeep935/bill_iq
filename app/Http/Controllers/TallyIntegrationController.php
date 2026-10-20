@@ -41,10 +41,23 @@ class TallyIntegrationController extends Controller
     public function pair(Request $request, TallyConnection $connection, TallyIntegrationService $service)
     {
         $this->authorizeConnection($connection);
+        return response()->json([
+            'message' => 'A new pairing code was created. Enter it in the Windows connector within 15 minutes.',
+            'pairing_code' => $service->issuePairingCode($connection),
+            'connection' => $service->connectionPayload($connection->fresh()),
+        ]);
+    }
+
+    public function connectorPair(Request $request, TallyIntegrationService $service)
+    {
         $data = $request->validate(['pairing_code' => ['required', 'string', 'max:20']]);
-        abort_unless($service->authenticateConnector($data['pairing_code'])?->id === $connection->id, 422, 'Pairing code is invalid or expired.');
-        $connection->update(['status' => 'connected', 'pairing_expires_at' => null]);
-        return response()->json(['message' => 'Connector paired. Keep the connector token private.', 'connector_token' => $data['pairing_code'], 'connection' => $service->connectionPayload($connection->fresh())]);
+        $result = $service->exchangePairingCode(strtoupper(trim($data['pairing_code'])));
+        abort_unless($result, 401, 'Pairing code is invalid, expired, already used, or the connection was revoked.');
+
+        return response()->json([
+            'connector_token' => $result['connector_token'],
+            'connection' => $service->connectionPayload($result['connection']),
+        ]);
     }
 
     public function test(TallyConnection $connection, TallyIntegrationService $service)

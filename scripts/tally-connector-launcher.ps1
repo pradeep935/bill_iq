@@ -17,7 +17,7 @@ Write-Host ''
 
 if (-not (Test-Path -LiteralPath $ConnectorScript)) { throw "Connector file not found: $ConnectorScript" }
 $billIqUrl = Read-Required 'BillIQ HTTPS address (example: https://app.example.com)'
-$token = Read-Required 'BillIQ connector token'
+$pairingCode = Read-Required 'One-time pairing code from BillIQ (valid for 15 minutes)'
 $tallyUrl = Read-Host 'Tally XML address [http://127.0.0.1:9000]'
 if ([string]::IsNullOrWhiteSpace($tallyUrl)) { $tallyUrl = 'http://127.0.0.1:9000' }
 $company = Read-Host 'Company name (optional; leave blank to choose from the list)'
@@ -29,7 +29,7 @@ if ($fromText) { if (-not [datetime]::TryParseExact($fromText, 'yyyy-MM-dd', $nu
 if ($toText) { if (-not [datetime]::TryParseExact($toText, 'yyyy-MM-dd', $null, [Globalization.DateTimeStyles]::None, [ref]$to)) { throw 'End date must use YYYY-MM-DD.' } }
 if ($from -and $to -and $from.Date -gt $to.Date) { throw 'Start date cannot be later than end date.' }
 
-$arguments = @{ BillIqUrl=$billIqUrl; ConnectorToken=$token; TallyUrl=$tallyUrl }
+$arguments = @{ BillIqUrl=$billIqUrl; PairingCode=$pairingCode; TallyUrl=$tallyUrl }
 if ($company) { $arguments.CompanyName = $company }
 if ($from) { $arguments.DateFrom = $from }
 if ($to) { $arguments.DateTo = $to }
@@ -39,7 +39,7 @@ try {
     Write-Host 'Finished. Sign in to BillIQ and review the staged batch before approval.' -ForegroundColor Green
 } catch {
     Write-Host "Connector could not complete: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host 'Check: TallyPrime is open, the XML address is correct, the BillIQ address uses HTTPS, and the token has not expired or been revoked.' -ForegroundColor Yellow
+    Write-Host 'Check: the pairing code is unused and under 15 minutes old, TallyPrime is open, the XML address is correct, and the BillIQ address uses HTTPS.' -ForegroundColor Yellow
     Read-Host 'Press Enter to close'
     exit 1
 }

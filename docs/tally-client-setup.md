@@ -14,12 +14,12 @@ This is a client launcher, not a signed Windows installer. It does not install a
 Double-click `Start-TallyConnector.cmd`. Enter:
 
 - BillIQ HTTPS address
-- Pairing/connector token
+- The **one-time pairing code** displayed by BillIQ (not a connector token)
 - Tally XML address, normally `http://127.0.0.1:9000` unless the Tally host is configured differently
 - Company name, or leave blank to select from the detected companies
 - Optional start and end dates in `YYYY-MM-DD`
 
-The launcher checks the date range before connecting. It reports unavailable Tally, invalid XML, invalid tokens, expired pairing, and HTTPS errors in plain language.
+The launcher first exchanges the one-time pairing code over HTTPS for its own connector token. That token is never shown or saved by the launcher; it exists only while the connector is running. The launcher then checks the date range before connecting. It reports unavailable Tally, invalid XML, invalid or used pairing codes, expired pairing, and HTTPS errors in plain language.
 
 ## Complete the BillIQ workflow
 

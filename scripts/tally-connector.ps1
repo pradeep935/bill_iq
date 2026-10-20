@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)][string]$BillIqUrl,
-    [Parameter(Mandatory=$true)][string]$ConnectorToken,
+    [Parameter(Mandatory=$true)][string]$PairingCode,
     [string]$TallyUrl = 'http://127.0.0.1:9000',
     [string]$CompanyName,
     [string]$CompanyGuid,
@@ -24,6 +24,18 @@ function Get-NodeText($Node, [string]$Name) {
     if ($null -eq $value -and $Node.Attributes[$Name]) { return $Node.Attributes[$Name].Value.Trim() }
     if ($null -eq $value) { return $null }
     return $value.InnerText.Trim()
+}
+
+function Exchange-PairingCode {
+    try {
+        $response = Invoke-RestMethod -Method Post -Uri ("{0}/api/tally/connector/pair" -f $BillIqUrl.TrimEnd('/')) -ContentType 'application/json' -Body (@{ pairing_code=$PairingCode } | ConvertTo-Json) -TimeoutSec 30
+        if ([string]::IsNullOrWhiteSpace([string]$response.connector_token)) { throw 'BillIQ did not return a connector token.' }
+        return [string]$response.connector_token
+    } catch {
+        $detail = $_.ErrorDetails.Message
+        if ($detail) { throw "Pairing failed: $detail" }
+        throw "Pairing failed. Confirm the code is entered exactly once within 15 minutes: $($_.Exception.Message)"
+    }
 }
 
 function Invoke-Tally([string]$Report, [hashtable]$Variables = @{}) {
@@ -84,6 +96,9 @@ function Convert-Report($Response, [string]$Type) {
 }
 
 try {
+    Write-Host 'Exchanging one-time BillIQ pairing code...'
+    $connectorToken = Exchange-PairingCode
+    Write-Host 'Paired. The connector token is kept only in this running process.' -ForegroundColor Green
     Write-Host "Testing TallyPrime at $TallyUrl ..."
     $companies = Get-Companies; $company = Select-Company $companies
     Write-Host "Selected: $($company.Name)"
@@ -100,7 +115,7 @@ try {
     foreach ($report in $reports) { Write-Host "Fetching $($report.type) data..."; $all += Convert-Report (Invoke-Tally $report.name $variables) $report.type }
     $pending = @($all | Where-Object { -not $state.completed.ContainsKey([string]$_.key) })
     Write-Host ("Fetched {0} records; {1} remain after resume filtering." -f $all.Count, $pending.Count)
-    $headers = @{ 'X-BillIQ-Connector-Token'=$ConnectorToken }
+    $headers = @{ 'X-BillIQ-Connector-Token'=$connectorToken }
     for ($offset = 0; $offset -lt $pending.Count; $offset += $BatchSize) {
         $end = [math]::Min($offset + $BatchSize - 1, $pending.Count - 1); $chunk = @($pending[$offset..$end])
         $body = @{ mode=if($Full){'full'}else{'incremental'}; company_name=$company.Name; company_guid=$company.Guid; date_from=if($DateFrom){$DateFrom.ToString('yyyy-MM-dd')}else{$null}; date_to=if($DateTo){$DateTo.ToString('yyyy-MM-dd')}else{$null}; records=$chunk } | ConvertTo-Json -Depth 12

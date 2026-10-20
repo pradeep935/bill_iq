@@ -52,16 +52,45 @@ class TallyIntegrationService
 
     public function issuePairingCode(TallyConnection $connection): string
     {
-        $token = strtoupper(Str::random(4)) . '-' . strtoupper(Str::random(4));
+        $token = strtoupper(Str::random(6)) . '-' . strtoupper(Str::random(6));
         $connection->update(['pairing_token_hash' => hash('sha256', $token), 'pairing_expires_at' => now()->addMinutes(15), 'status' => 'pairing']);
         return $token;
     }
 
+    /**
+     * Exchanges a short-lived, single-use code for the credential used by the Windows connector.
+     * The plaintext credential is intentionally returned only once, to the holder of the code.
+     */
+    public function exchangePairingCode(string $code): ?array
+    {
+        return DB::transaction(function () use ($code) {
+            $connection = TallyConnection::where('pairing_token_hash', hash('sha256', $code))
+                ->whereIn('status', ['pending', 'pairing', 'connected'])
+                ->whereNull('revoked_at')
+                ->where('pairing_expires_at', '>', now())
+                ->lockForUpdate()
+                ->first();
+
+            if (!$connection) return null;
+
+            $token = bin2hex(random_bytes(32));
+            $connection->update([
+                'connector_token_hash' => hash('sha256', $token),
+                'connector_token_issued_at' => now(),
+                'pairing_token_hash' => null,
+                'pairing_expires_at' => null,
+                'status' => 'connected',
+            ]);
+
+            return ['connection' => $connection->fresh(), 'connector_token' => $token];
+        });
+    }
+
     public function authenticateConnector(string $token): ?TallyConnection
     {
-        return TallyConnection::where('pairing_token_hash', hash('sha256', $token))
-            ->whereIn('status', ['pairing', 'connected'])->whereNull('revoked_at')
-            ->where(function ($q) { $q->whereNull('pairing_expires_at')->orWhere('pairing_expires_at', '>', now()); })->first();
+        if ($token === '') return null;
+        return TallyConnection::where('connector_token_hash', hash('sha256', $token))
+            ->where('status', 'connected')->whereNull('revoked_at')->first();
     }
 
     public function ingest(TallyConnection $connection, array $payload, ?string $requestId = null): TallySyncBatch
@@ -223,7 +252,7 @@ class TallyIntegrationService
 
     public function revoke(TallyConnection $connection): void
     {
-        $connection->update(['status' => 'revoked', 'revoked_at' => now(), 'pairing_token_hash' => null, 'pairing_expires_at' => null]);
+        $connection->update(['status' => 'revoked', 'revoked_at' => now(), 'pairing_token_hash' => null, 'pairing_expires_at' => null, 'connector_token_hash' => null, 'connector_token_issued_at' => null]);
     }
 
     private function suggestMapping(int $businessId, string $type, string $key, array $record): array

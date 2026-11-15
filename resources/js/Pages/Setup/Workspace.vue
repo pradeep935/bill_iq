@@ -122,7 +122,7 @@ const saveBusinessProfile = async () => {
             profileErrors.value = error.response.data.errors || {};
             return;
         }
-        profileErrors.value = { general: [error.response?.data?.message || 'Business profile save nahi ho saka.'] };
+        profileErrors.value = { general: [error.response?.data?.message || 'Could not save the business profile. Please try again.'] };
     } finally {
         savingProfile.value = false;
     }
@@ -145,7 +145,7 @@ const uploadLogo = async (event) => {
         profileForm.logo_path = response.data.path || '';
         profileForm.logo_url = response.data.url || '';
     } catch (error) {
-        profileErrors.value = { logo_path: [error.response?.data?.message || 'Logo upload nahi ho saka.'] };
+        profileErrors.value = { logo_path: [error.response?.data?.message || 'Could not upload the logo. Please try again.'] };
     } finally {
         logoUploading.value = false;
         event.target.value = '';
@@ -269,7 +269,7 @@ const showEmpty = computed(() => Object.values(props.emptyStates || {}).some((it
                         </div>
                         <div class="logo-actions">
                             <input type="file" accept="image/*" :disabled="logoUploading" @change="uploadLogo" />
-                            <small>{{ logoUploading ? 'Uploading...' : 'Invoice print header mein logo/image use hoga.' }}</small>
+                            <small>{{ logoUploading ? 'Uploading...' : 'This logo appears in the header of printed invoices.' }}</small>
                             <button v-if="profileForm.logo_path" type="button" @click="removeLogo">Remove Logo</button>
                         </div>
                     </div>

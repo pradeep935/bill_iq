@@ -27,23 +27,8 @@ const {
     'hint'
 ]);
 
-const purposeHint = computed(() => {
-    if (hint) {
-        return hint;
-    }
-
-    const text = `${label || name || placeholder}`.toLowerCase();
-
-    if (!text.trim()) {
-        return '';
-    }
-
-    if (text.includes('remark') || text.includes('note') || text.includes('description') || text.includes('narration')) {
-        return 'Ye detail internal explanation, audit trail, print note ya future follow-up ke liye use hoti hai.';
-    }
-
-    return 'Ye long text record ka context clear karta hai aur reports/audit mein reference ke kaam aata hai.';
-});
+// Helper text is shown only when a page passes an explicit `hint` (no auto-generated filler text).
+const purposeHint = computed(() => hint || '');
 
 const processedReq = computed(() => {
     if (!req && !validate) {

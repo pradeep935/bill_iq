@@ -22,9 +22,10 @@
         @keydown="handleKeydown"
         @input="handleInput"
       />
-      <button v-if="modelValue && !disabled" class="search-select-clear" type="button" aria-label="Clear selection" @click.prevent="clearSelection">
-        x
+      <button v-if="modelValue && !disabled && !required" class="search-select-clear" type="button" aria-label="Clear selection" title="Clear" @click.prevent="clearSelection">
+        &times;
       </button>
+      <span v-else-if="!disabled" class="search-select-caret" aria-hidden="true"></span>
 
       <div v-if="open && !disabled" :id="listboxId" ref="listRef" class="search-select-menu" role="listbox">
         <button
@@ -99,17 +100,9 @@ const filteredOptions = computed(() => {
   });
 });
 const activeOptionId = computed(() => activeIndex.value >= 0 ? `${listboxId}-option-${activeIndex.value}` : undefined);
-const purposeHint = computed(() => {
-  if (props.hint) return props.hint;
-
-  const text = `${props.label || props.selectPlaceholder}`.toLowerCase();
-  if (text.includes('branch')) return 'This links the record to the correct branch for billing, stock and reports.';
-  if (text.includes('city') || text.includes('state')) return 'This keeps address, tax and reporting location consistent with master data.';
-  if (text.includes('warehouse')) return 'This tracks stock location, transfers and availability.';
-  if (text.includes('status')) return 'Status controls record availability in transactions.';
-
-  return 'Search and select from the configured master list.';
-});
+// Only show helper text when a page passes an explicit hint. The old auto-generated filler text made every field taller
+// and misaligned form rows.
+const purposeHint = computed(() => props.hint || '');
 
 const syncSearchToSelection = () => {
   search.value = selectedOption.value ? optionLabel(selectedOption.value) : (props.allowCustom && props.modelValue ? String(props.modelValue) : '');
@@ -234,7 +227,7 @@ onBeforeUnmount(() => {
   display: block;
   font-size: 12px;
   font-weight: 700;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
 }
 
 .required-mark {
@@ -255,10 +248,12 @@ onBeforeUnmount(() => {
   color: #17233b;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 650;
-  min-height: 44px;
+  font-weight: 500;
+  min-height: 38px;
   outline: none;
-  padding: 10px 38px 10px 12px;
+  overflow: hidden;
+  padding: 8px 34px 8px 10px;
+  text-overflow: ellipsis;
   transition: border-color .15s ease, box-shadow .15s ease;
   width: 100%;
 }
@@ -297,9 +292,26 @@ onBeforeUnmount(() => {
   height: 22px;
   justify-content: center;
   position: absolute;
-  right: 10px;
-  top: 11px;
+  right: 8px;
+  top: 8px;
   width: 22px;
+}
+
+.search-select-clear:hover {
+  background: #dfe6f0;
+  color: #17233b;
+}
+
+.search-select-caret {
+  border-bottom: 2px solid #8591a5;
+  border-right: 2px solid #8591a5;
+  height: 7px;
+  pointer-events: none;
+  position: absolute;
+  right: 14px;
+  top: 13px;
+  transform: rotate(45deg);
+  width: 7px;
 }
 
 .search-select-menu {
@@ -327,14 +339,14 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 3px;
   justify-items: start;
-  min-height: 38px;
-  padding: 9px 12px;
+  min-height: 36px;
+  padding: 8px 12px;
   text-align: left;
 }
 
 .search-select-option span {
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .search-select-option small {

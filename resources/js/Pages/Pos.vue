@@ -286,7 +286,7 @@ const validatePaymentBeforeSave = (status) => {
     const paid = Number(totals.value.paid.toFixed(2));
     if (!['confirmed', 'approved'].includes(status)) {
         if (paid > 0) {
-            showToast('Payment entered hai. Invoice post karne ke liye Complete Sale use karo.', 'error');
+            showToast('A payment amount is entered. Click Complete Sale to post this invoice.', 'error');
             return false;
         }
         return true;

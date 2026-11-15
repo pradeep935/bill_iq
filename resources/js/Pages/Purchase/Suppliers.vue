@@ -135,14 +135,14 @@ const saveSupplier = async () => {
             return;
         }
         const data = error.response?.data || {};
-        alert(data.message || data.error || error.message || 'Supplier save nahi ho saka.');
+        alert(data.message || data.error || error.message || 'Could not save the supplier. Please try again.');
     } finally {
         saving.value = false;
     }
 };
 
 const deleteSupplier = async (supplier) => {
-    if (!window.confirm(`${supplier.supplier_name} delete karna hai?`)) return;
+    if (!window.confirm(`Delete supplier "${supplier.supplier_name}"? You can restore it later from the Deleted filter.`)) return;
     await PurchaseApi.deleteSupplier(supplier.id);
     await loadSuppliers(pagination.value.current_page || 1);
 };

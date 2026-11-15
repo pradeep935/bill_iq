@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\OpeningStockReverseRequest;
 use App\Http\Requests\PurchaseVoucherRequest;
 use App\Models\PurchaseVoucher;
+use Illuminate\Database\Eloquent\Builder;
 use App\Services\InventoryOrderService;
 use App\Services\PurchaseService;
 use App\Services\ReorderSuggestionService;
@@ -13,6 +14,24 @@ use Inertia\Inertia;
 
 class PurchaseController extends Controller
 {
+    /** GST summary of posted purchase bills (used by the GST screen). */
+    public function reports(Request $request)
+    {
+        abort_unless(AppController::canOpen('purchases') || AppController::canOpen('gst'), 403);
+        $from = $request->input('from_date', $request->input('date_from'));
+        $to = $request->input('to_date', $request->input('date_to'));
+        $query = PurchaseVoucher::query()->whereIn('status', ['confirmed', 'approved'])
+            ->when($from, fn (Builder $q) => $q->whereDate('purchase_date', '>=', $from))
+            ->when($to, fn (Builder $q) => $q->whereDate('purchase_date', '<=', $to));
+        AppController::applyTenantScope($query, 'purchase_vouchers');
+        $t = $query->selectRaw('COALESCE(SUM(taxable_amount),0) taxable, COALESCE(SUM(cgst_amount),0) cgst, COALESCE(SUM(sgst_amount),0) sgst, COALESCE(SUM(igst_amount),0) igst, COALESCE(SUM(cess_amount),0) cess')->first();
+
+        return response()->json(['summary' => [
+            'taxable_purchases' => round((float) $t->taxable, 2), 'cgst' => round((float) $t->cgst, 2), 'sgst' => round((float) $t->sgst, 2), 'igst' => round((float) $t->igst, 2),
+            'tax' => round((float) $t->cgst + (float) $t->sgst + (float) $t->igst + (float) $t->cess, 2),
+        ]]);
+    }
+
     private PurchaseService $purchases;
     private ReorderSuggestionService $reorderSuggestions;
     private InventoryOrderService $inventoryOrders;

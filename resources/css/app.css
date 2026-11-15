@@ -709,6 +709,7 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
 
 .bill-topbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     max-width: 1540px;
@@ -728,8 +729,8 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
 }
 
 .bill-topbar-left {
-    min-width: 0;
-    flex: 1;
+    min-width: min(340px, 100%);
+    flex: 1 1 340px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1591,13 +1592,17 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
     .bill-menu {
         display: inline-grid;
         place-items: center;
-        width: 40px;
+        width: auto;
+        min-width: 40px;
         height: 40px;
+        padding: 0 14px;
         border: 0;
         border-radius: 9px;
         background: #0f172a;
         color: #ffffff;
-        font-size: 20px;
+        font-size: 13px;
+        font-weight: 700;
+        flex: 0 0 auto;
     }
 
     .bill-main {
@@ -1619,6 +1624,8 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
 
     .bill-topbar-left {
         justify-content: flex-start;
+        flex: 0 0 auto;
+        min-width: 0;
     }
 
     .bill-page-title p {
@@ -1644,6 +1651,7 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
     .bill-global-search {
         width: 100%;
         max-width: none;
+        flex: 0 0 auto;
     }
 
     .bill-saas-context label {

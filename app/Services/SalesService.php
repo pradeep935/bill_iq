@@ -487,6 +487,9 @@ class SalesService
     public function reports(array $filters = []): array
     {
         $businessId = AppController::businessId();
+        // The GST screen sends from_date/to_date; other callers send date_from/date_to.
+        $filters['date_from'] = $filters['date_from'] ?? ($filters['from_date'] ?? null);
+        $filters['date_to'] = $filters['date_to'] ?? ($filters['to_date'] ?? null);
         $base = SalesVoucher::query()
             ->whereIn('status', ['confirmed', 'approved'])
             ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('invoice_date', '>=', $filters['date_from']))
@@ -497,7 +500,13 @@ class SalesService
         $monthStart = now()->startOfMonth()->toDateString();
         $monthEnd = now()->endOfMonth()->toDateString();
 
+        $gst = (clone $base)->selectRaw('COALESCE(SUM(taxable_amount),0) taxable, COALESCE(SUM(cgst_amount),0) cgst, COALESCE(SUM(sgst_amount),0) sgst, COALESCE(SUM(igst_amount),0) igst, COALESCE(SUM(cess_amount),0) cess')->first();
+
         return [
+            'summary' => [
+                'taxable_sales' => round((float) $gst->taxable, 2), 'cgst' => round((float) $gst->cgst, 2), 'sgst' => round((float) $gst->sgst, 2),
+                'igst' => round((float) $gst->igst, 2), 'tax' => round((float) $gst->cgst + (float) $gst->sgst + (float) $gst->igst + (float) $gst->cess, 2),
+            ],
             'daily_sales' => (clone $base)->selectRaw('invoice_date, COUNT(*) as invoices, SUM(grand_total) as total')->groupBy('invoice_date')->latest('invoice_date')->limit(30)->get(),
             'payment_modes' => DB::table('sales_payments')
                 ->join('payment_methods', 'payment_methods.id', '=', 'sales_payments.payment_method_id')

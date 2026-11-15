@@ -79,7 +79,9 @@ class PriceReviewSheet extends Command
             ['4. Do not change column A (Product ID). Return the file and we will apply it in one step.'],
         ], null, 'A1');
         $help->getColumnDimension('A')->setWidth(120); $help->getStyle('A1')->getFont()->setBold(true);
-        IOFactory::createWriter($ss, 'Xlsx')->save(base_path($this->option('file')));
+        $target = base_path($this->option('file'));
+        if (!is_dir(dirname($target))) mkdir(dirname($target), 0775, true);
+        IOFactory::createWriter($ss, 'Xlsx')->save($target);
         $withSuggest = count(array_filter($rows, fn ($r) => $r[6] !== null));
         $this->info("Wrote {$this->option('file')} | products listed: " . count($rows) . " | with a suggested selling price: $withSuggest | overall median markup: " . round($overall, 2));
         return self::SUCCESS;

@@ -27,6 +27,8 @@ class InventoryOrderService
 
     public function references(): array
     {
+        $businessId = AppController::businessId();
+
         return array_merge($this->orders->references(), [
             'approved_requisitions' => PurchaseRequisition::query()
                 ->where('business_id', $businessId)

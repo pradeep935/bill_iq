@@ -22,6 +22,27 @@ use Illuminate\Validation\ValidationException;
 
 class TallyIntegrationService
 {
+    public function migrationCapabilities(): array
+    {
+        return [
+            'supported' => [
+                ['name' => 'Company identity', 'detail' => 'Company name and GUID are recorded on the connection.'],
+                ['name' => 'Account groups, ledgers and units', 'detail' => 'Staged, mapped, and imported only after Super Admin approval.'],
+                ['name' => 'Stock items and opening stock', 'detail' => 'Staged with duplicate detection; warehouse and mapping review are required.'],
+                ['name' => 'Sales, purchases, debit notes, credit notes, journals and contra', 'detail' => 'Normalized into staging when their source XML is complete.'],
+                ['name' => 'GST totals, sales/purchase totals and stock quantities', 'detail' => 'Reconciled after staging/import where BillIQ has matching data.'],
+            ],
+            'review_required' => [
+                ['name' => 'Receipts and payments', 'detail' => 'Staged for review; posting requires explicit BillIQ invoice allocations.'],
+                ['name' => 'Opening balances', 'detail' => 'Requires mapped accounts and a Super Admin review.'],
+            ],
+            'unsupported' => [
+                ['name' => 'Stock groups and godowns', 'detail' => 'Not imported as independent BillIQ structures yet.'],
+                ['name' => 'Voucher allocations, cost centres, payroll, manufacturing and TDS/TCS detail', 'detail' => 'Preserved only in staged source XML where supplied; no final posting support.'],
+                ['name' => 'Reliable inventory valuation', 'detail' => 'Reported as unavailable until a verified valuation mapping is implemented.'],
+            ],
+        ];
+    }
     public function overview(int $businessId): array
     {
         $connections = TallyConnection::where('business_id', $businessId)->latest()->get();

@@ -1,4 +1,4 @@
-<?php $version = env('JS_VERSION'); ?>
+<?php $version = config('app.asset_version') ?: (is_file($loginCss = public_path('assets/css/login.css')) ? filemtime($loginCss) : time()); ?>
 <!DOCTYPE html>
 <html>
 <head>

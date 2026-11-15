@@ -228,6 +228,11 @@ class InvoiceDocumentRenderer
             return $path;
         }
 
+        // Logos shipped with the code live in public/images (tracked in git); uploads live in storage.
+        if (str_starts_with(ltrim($path, '/'), 'images/')) {
+            return asset(ltrim($path, '/'));
+        }
+
         return asset('storage/' . ltrim($path, '/'));
     }
 

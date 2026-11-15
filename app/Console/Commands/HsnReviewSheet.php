@@ -75,6 +75,7 @@ class HsnReviewSheet extends Command
         $help->getStyle('A1')->getFont()->setBold(true);
 
         $path = base_path($this->option('file'));
+        if (!is_dir(dirname($path))) mkdir(dirname($path), 0775, true);
         IOFactory::createWriter($ss, 'Xlsx')->save($path);
         $need = count(array_filter($rows, fn ($r) => ($basis[$r->name][1] ?? '') === 'YES'));
         $this->info("Wrote $path | items: " . count($rows) . " | of which NOT verified by any Tally invoice: $need | value covered: " . number_format(array_sum(array_map(fn ($r) => $r->value, $rows)), 0));

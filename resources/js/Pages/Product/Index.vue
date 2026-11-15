@@ -60,6 +60,7 @@ const categoryFilter = ref('');
 const brandFilter = ref('');
 const unitFilter = ref('');
 const gstRateFilter = ref('');
+const priceFilter = ref('');
 const perPage = ref(15);
 
 const showForm = ref(false);
@@ -146,7 +147,7 @@ const resolveConfirmation = (confirmed) => {
 
 const rows = computed(() => products.value);
 
-const productColumns = [
+const allProductColumns = [
     { key: 'image', label: 'Image', hint: 'Main product photo used for quick visual verification.' },
     { key: 'name', label: 'Product Name', hint: 'Primary product/service name used in billing, purchase and reports.' },
     { key: 'sku', label: 'SKU', hint: 'Unique item code for search, import and duplicate prevention.' },
@@ -158,6 +159,21 @@ const productColumns = [
     { key: 'mrp', label: 'MRP', hint: 'Printed maximum retail price used for pricing validation.' },
     { key: 'gst_rate', label: 'GST', hint: 'Tax percentage applied during taxable billing.' },
 ];
+
+// Brand / Barcode / MRP are empty for most products: hide a column when no product on this page has a value (saves width).
+const productColumns = computed(() => {
+    const optional = {
+        barcode: (product) => { const code = primaryBarcode(product); return Boolean(code) && code !== '-'; },
+        brand: (product) => product.brand,
+        mrp: (product) => Number(product.mrp) > 0,
+    };
+
+    return allProductColumns.filter((column) => {
+        const hasValue = optional[column.key];
+
+        return !hasValue || !products.value.length || products.value.some((product) => hasValue(product));
+    });
+});
 
 const productValueFor = (product, column) => {
     const values = {
@@ -279,7 +295,8 @@ const hasFilters = computed(() => {
         categoryFilter.value ||
         brandFilter.value ||
         unitFilter.value ||
-        gstRateFilter.value
+        gstRateFilter.value ||
+        priceFilter.value
     );
 });
 
@@ -295,6 +312,7 @@ const requestParams = (page = 1) => {
         brand: brandFilter.value || undefined,
         unit: unitFilter.value || undefined,
         gst_rate: gstRateFilter.value || undefined,
+        price_missing: priceFilter.value === 'missing' ? 1 : undefined,
     };
 };
 
@@ -571,6 +589,7 @@ const clearFilters = () => {
     brandFilter.value = '';
     unitFilter.value = '';
     gstRateFilter.value = '';
+    priceFilter.value = '';
 };
 
 const toggleSelectAll = () => {
@@ -757,6 +776,7 @@ watch(
         brandFilter,
         unitFilter,
         gstRateFilter,
+        priceFilter,
         perPage,
     ],
     () => {
@@ -930,6 +950,11 @@ onMounted(() => {
                             </option>
                         </select>
 
+                        <select v-model="priceFilter" aria-label="Filter by price">
+                            <option value="">All Prices</option>
+                            <option value="missing">Price missing (needs rate)</option>
+                        </select>
+
                         <button
                             v-if="hasFilters"
                             type="button"
@@ -1060,6 +1085,11 @@ onMounted(() => {
                             <strong>{{ product.name }}</strong>
                             <span>{{ product.product_type === 'service' ? 'Service' : 'Goods' }}</span>
                         </div>
+                    </template>
+
+                    <template #cell-selling_price="{ row: product }">
+                        <button v-if="!Number(product.selling_price)" type="button" class="price-missing" title="No selling price yet. Click to set it." @click="editProduct(product)">Set price</button>
+                        <span v-else>Rs. {{ formatPrice(product.selling_price) }}</span>
                     </template>
 
                     <template #cell-gst_rate="{ row: product }">
@@ -1572,6 +1602,7 @@ onMounted(() => {
     font-size: 10px;
 }
 
+.price-missing{min-height:28px;padding:4px 10px;border:1px solid #f5c26b;border-radius:999px;background:#fff7e6;color:#a15c00;font-size:11px;font-weight:800;cursor:pointer}.price-missing:hover{background:#ffedc2}
 .gst-badge,
 .status-badge {
     display: inline-flex;

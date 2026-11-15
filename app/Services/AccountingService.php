@@ -276,8 +276,14 @@ class AccountingService
             ->when(!empty($filters['branch_id']), fn ($q) => $q->where('journal_entries.branch_id', $filters['branch_id']))
             ->when(!empty($filters['date_from']), fn ($q) => $q->whereDate('journal_vouchers.voucher_date', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn ($q) => $q->whereDate('journal_vouchers.voucher_date', '<=', $filters['date_to']))
-            ->orderBy('journal_vouchers.voucher_date')->orderBy('journal_entries.id')
-            ->get(['journal_vouchers.voucher_date', 'journal_vouchers.voucher_type', 'journal_vouchers.voucher_number', 'journal_vouchers.reference_number', 'journal_entries.narration', 'accounts.account_name', 'journal_entries.debit_amount', 'journal_entries.credit_amount', 'journal_entries.due_date']);
+            ->orderBy('journal_vouchers.voucher_date')->orderBy('journal_entries.id');
+        // "All accounts" with no filter would return every journal line of the company (tens of thousands of rows and a
+        // frozen browser). Show the latest 300 until an account, party or date range is chosen.
+        $unfiltered = empty($filters['account_id']) && empty($filters['customer_id']) && empty($filters['supplier_id']) && empty($filters['date_from']) && empty($filters['date_to']);
+        $columns = ['journal_vouchers.voucher_date', 'journal_vouchers.voucher_type', 'journal_vouchers.voucher_number', 'journal_vouchers.reference_number', 'journal_entries.narration', 'accounts.account_name', 'journal_entries.debit_amount', 'journal_entries.credit_amount', 'journal_entries.due_date'];
+        $entries = $unfiltered
+            ? $entries->reorder()->orderByDesc('journal_vouchers.voucher_date')->orderByDesc('journal_entries.id')->limit(300)->get($columns)->reverse()->values()
+            : $entries->get($columns);
         $running = 0;
         return $entries->map(function ($row) use (&$running) {
             $running += (float) $row->debit_amount - (float) $row->credit_amount;

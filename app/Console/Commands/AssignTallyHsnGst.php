@@ -27,7 +27,7 @@ class AssignTallyHsnGst extends Command
     private const STD = [0, 5, 12, 18, 28];
 
     /** [regex on lowercase name, 4-digit HSN, default GST %, group label] first match wins */
-    private function rules(): array
+    public function rules(): array
     {
         return [
             // services & non-goods first

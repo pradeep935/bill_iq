@@ -55,7 +55,7 @@
 
                     <div class="form-group">
                         <label>Email Address</label>
-                        <input type="email" name="username" class="form-control" value="{{ old('username') }}" placeholder="admin@gmail.com" required autofocus>
+                        <input type="email" name="username" class="form-control" value="{{ old('username') }}" placeholder="Enter your email" required autofocus>
                     </div>
 
                     <div class="form-group">

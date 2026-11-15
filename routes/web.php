@@ -273,6 +273,7 @@ Route::middleware('auth')->group(function () {
         Route::prefix('purchase')->name('purchase.')->group(function () {
             Route::get('/bills', [PurchaseController::class, 'bills'])->name('bills');
             Route::get('/bills/list', [PurchaseController::class, 'list'])->name('bills.list');
+            Route::get('/bills/reports', [PurchaseController::class, 'reports'])->name('bills.reports');
             Route::get('/bills/references', [PurchaseController::class, 'references'])->name('bills.references');
             Route::get('/bills/products/search', [PurchaseController::class, 'searchProducts'])->name('bills.products.search');
             Route::post('/bills/preview-totals', [PurchaseController::class, 'previewTotals'])->name('bills.preview-totals');

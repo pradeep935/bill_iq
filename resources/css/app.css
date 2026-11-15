@@ -116,7 +116,7 @@
     position: sticky;
     z-index: 17;
     background: #fff;
-    box-shadow: 8px 0 14px rgba(15, 23, 42, .05);
+    box-shadow: 8px 0 12px -6px rgba(15, 23, 42, .22);
 }
 
 .table-wrapper th:first-child,
@@ -133,7 +133,7 @@
     position: sticky;
     z-index: 17;
     background: #fff;
-    box-shadow: -8px 0 14px rgba(15, 23, 42, .05);
+    box-shadow: -8px 0 12px -6px rgba(15, 23, 42, .22);
 }
 
 .table-wrapper th:last-child,

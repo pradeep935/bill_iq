@@ -9,20 +9,8 @@ const selected_name = ref('')
 const optionValue = (opt = {}) => opt?.[opt_id] ?? opt?.value ?? opt?.id ?? opt?.code ?? opt?.name ?? opt?.label ?? '';
 const optionLabel = (opt = {}) => opt?.[opt_name] ?? opt?.label ?? opt?.name ?? opt?.title ?? opt?.code ?? opt?.value ?? opt?.id ?? '';
 
-const purposeHint = computed(() => {
-    if (hint) return hint;
-
-    const text = `${label || select_name}`.toLowerCase();
-    if (!text.trim()) return '';
-    if (text.includes('branch')) return 'Branch select karne se record us branch ke billing, stock aur reports mein link hota hai.';
-    if (text.includes('warehouse') || text.includes('godown')) return 'Warehouse/godown se stock location aur availability track hoti hai.';
-    if (text.includes('account')) return 'Account select karne se ledger posting aur financial reports sahi bante hain.';
-    if (text.includes('category')) return 'Category grouping, filtering aur reporting ke liye use hoti hai.';
-    if (text.includes('status')) return 'Status record ka workflow stage aur availability batata hai.';
-    if (text.includes('type') || text.includes('mode')) return 'Type/mode workflow, validation aur report grouping decide karta hai.';
-
-    return 'Ye selection record ko sahi master, workflow aur reports se connect karta hai.';
-});
+// Helper text is shown only when a page passes an explicit `hint` (no auto-generated filler text).
+const purposeHint = computed(() => hint || '');
 
 onMounted(() => {
     onChange();

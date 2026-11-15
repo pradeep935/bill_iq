@@ -1,6 +1,6 @@
 <script setup>
 import { formatDate } from '../../Support/dateFormat.js';
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 import SalesApi from './SalesApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
@@ -74,7 +74,7 @@ const uppercaseGstin = () => {
     form.gstin = (form.gstin || '').toUpperCase();
 };
 
-const newCustomer = () => { reset(); showForm.value = true; nextTick(() => document.getElementById('customer-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
+const newCustomer = () => { reset(); showForm.value = true; };
 const cancelForm = () => { reset(); showForm.value = false; };
 const editCustomer = (customer) => {
     Object.assign(form, customer);
@@ -82,7 +82,6 @@ const editCustomer = (customer) => {
     errors.value = {};
     detail.value = null;
     showForm.value = true;
-    nextTick(() => document.getElementById('customer-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 };
 
 const viewCustomer = async (customer) => {
@@ -192,7 +191,14 @@ watch([search, status, type, stateId, priceType, crmStatus], () => {
     timer = setTimeout(() => loadCustomers(1), 300);
 });
 
-onMounted(async () => { await loadReferences(); await loadCustomers(); });
+const onEscape = (event) => {
+    if (event.key !== 'Escape') return;
+    if (showForm.value) cancelForm();
+    else if (detail.value) closeDetail();
+};
+
+onMounted(async () => { window.addEventListener('keydown', onEscape); await loadReferences(); await loadCustomers(); });
+onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
 </script>
 
 <template>
@@ -213,8 +219,10 @@ onMounted(async () => { await loadReferences(); await loadCustomers(); });
                 </div>
             </div>
 
-            <section v-if="showForm" id="customer-form" class="panel form-panel">
-                <div class="form-head"><h2>{{ form.id ? 'Edit customer' : 'New customer' }}</h2><button type="button" @click="cancelForm">Cancel</button></div>
+            <div v-if="showForm" class="drawer-backdrop form-backdrop"></div>
+            <aside v-if="showForm" id="customer-form" class="detail-drawer form-drawer" role="dialog" aria-label="Customer form">
+                <div class="form-head"><h2>{{ form.id ? 'Edit customer' : 'New customer' }}</h2><button type="button" @click="cancelForm">Close</button></div>
+                <div class="form-body">
                 <h3 class="group-title">Basic details</h3>
                 <div class="form-grid">
                     <label class="span2"><span>Customer Name <span class="required-mark">*</span></span><input v-model="form.customer_name" placeholder="Name as it should appear on invoices" /></label>
@@ -247,8 +255,9 @@ onMounted(async () => { await loadReferences(); await loadCustomers(); });
                     <label><span>Customer Code</span><input v-model="form.customer_code" placeholder="Auto if blank" /></label>
                 </div>
                 <div v-if="Object.keys(errors).length" class="error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
-                <div class="actions"><button type="button" @click="cancelForm">Cancel</button><button type="button" class="primary" :disabled="saving" @click="saveCustomer">{{ saving ? 'Saving...' : (form.id ? 'Update Customer' : 'Save Customer') }}</button></div>
-            </section>
+                </div>
+                <div class="actions drawer-footer"><button type="button" @click="cancelForm">Cancel</button><button type="button" class="primary" :disabled="saving" @click="saveCustomer">{{ saving ? 'Saving...' : (form.id ? 'Update Customer' : 'Save Customer') }}</button></div>
+            </aside>
 
             <section class="panel">
                 <div class="toolbar">
@@ -341,7 +350,8 @@ textarea{min-height:72px;resize:vertical}button,.import-button{font-weight:750;c
 .error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:12px}
 .toast{position:fixed;top:16px;right:16px;z-index:60;display:flex;align-items:center;gap:12px;max-width:420px;padding:12px 14px;color:#065f46;background:#ecfdf3;border:1px solid #a6f4c5;border-radius:10px;box-shadow:0 10px 30px rgba(15,23,42,.18);font-size:13px;font-weight:700}.toast.error{color:#912018;background:#fef3f2;border-color:#fecdca}.toast button{min-height:24px;padding:0 8px;border:0;background:transparent;color:inherit}
 .drawer-backdrop{position:fixed;inset:0;z-index:40;background:rgba(15,23,42,.35)}.detail-drawer{position:fixed;top:0;right:0;bottom:0;z-index:50;width:min(820px,100vw);padding:20px;overflow-y:auto;background:#fff;box-shadow:-12px 0 40px rgba(15,23,42,.25)}
+.form-drawer{display:flex;flex-direction:column;width:min(720px,100vw);padding:0;overflow:hidden}.form-drawer .form-head{flex:0 0 auto;padding:16px 20px;border-bottom:1px solid #e7ecf2}.form-drawer .form-body{flex:1 1 auto;overflow-y:auto;padding:4px 20px 20px}.form-drawer .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.form-drawer .span4{grid-column:span 2}.form-drawer .group-title:first-child{margin-top:12px}.drawer-footer{flex:0 0 auto;margin:0!important;padding:12px 20px;background:#fff;border-top:1px solid #e7ecf2;box-shadow:0 -6px 12px -10px rgba(15,23,42,.25)}.form-backdrop{z-index:44}.form-drawer{z-index:50}
 .drawer-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.summary-grid span{padding:10px;background:#f8fafc;border:1px solid #e7ecf2;border-radius:8px;color:#69758a;font-size:11px}.summary-grid b{display:block;color:#142139;font-size:13px}
 @media(max-width:1000px){.form-grid,.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span4{grid-column:span 2}}
-@media(max-width:700px){.page-toolbar,.toolbar,.toolbar-actions,.detail-head{align-items:stretch;flex-direction:column}.form-grid,.summary-grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.search-box{min-width:0;width:100%}.detail-drawer{padding:14px}.actions{flex-direction:column-reverse}.actions button{width:100%}}
+@media(max-width:700px){.form-drawer .form-grid{grid-template-columns:1fr}.form-drawer .span2,.form-drawer .span4{grid-column:span 1}.form-drawer .form-body{padding:4px 14px 16px}.page-toolbar,.toolbar,.toolbar-actions,.detail-head{align-items:stretch;flex-direction:column}.form-grid,.summary-grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.search-box{min-width:0;width:100%}.detail-drawer{padding:14px}.actions{flex-direction:column-reverse}.actions button{width:100%}}
 </style>

@@ -165,7 +165,7 @@ const saveReturn = async (status = 'draft') => {
             alert(Object.values(errors.value)?.[0]?.[0] || 'Please check purchase return fields.');
             return;
         }
-        alert(error.response?.data?.message || 'Purchase return save nahi ho saka.');
+        alert(error.response?.data?.message || 'Could not save the purchase return. Please try again.');
     } finally { saving.value = false; }
 };
 

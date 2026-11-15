@@ -5,19 +5,8 @@ import VueDatePicker from '@vuepic/vue-datepicker';
 import '@vuepic/vue-datepicker/dist/main.css'
 const model = defineModel()
 
-const purposeHint = computed(() => {
-  if (hint) return hint;
-
-  const text = `${label || placeholder}`.toLowerCase();
-  if (!text.trim()) return '';
-  if (type === 'date' || text.includes('date')) return 'Is date se record timeline, ledger aur reports mein sahi period mein aata hai.';
-  if (type === 'number' || ['amount', 'price', 'rate', 'cost', 'qty', 'quantity', 'stock'].some((word) => text.includes(word))) return 'Ye number calculation, totals aur validation ke liye use hota hai.';
-  if (text.includes('name')) return 'Ye naam list, search aur reports mein record identify karne ke liye use hota hai.';
-  if (text.includes('reference')) return 'Ye external document/payment/bank reference trace karne ke liye use hota hai.';
-  if (text.includes('remark') || text.includes('note') || text.includes('description')) return 'Ye internal context aur audit note ke liye use hota hai.';
-
-  return 'Ye field record ko save, search aur report karne mein kaam aata hai.';
-});
+// Helper text is shown only when a page passes an explicit `hint` (no auto-generated filler text).
+const purposeHint = computed(() => hint || '');
 
 const format = (date) => {
   const day = date.getDate();

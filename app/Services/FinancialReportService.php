@@ -223,7 +223,7 @@ class FinancialReportService
         return Branch::query()->where('business_id', AppController::businessId())->get(['id', 'name'])->map(function ($branch) use ($filters) {
             $branchFilters = array_merge($filters, ['branch_id' => $branch->id]);
             return ['branch_id' => $branch->id, 'branch_name' => $branch->name, 'trial_balance' => $this->getTrialBalance($branchFilters)['totals'], 'profit_and_loss' => $this->getProfitAndLoss($branchFilters), 'cash_flow' => $this->getCashFlow($branchFilters)];
-        })->values();
+        })->values()->all();
     }
 
     public function getAccountSchedule(array $filters = []): array

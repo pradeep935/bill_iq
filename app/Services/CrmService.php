@@ -54,7 +54,7 @@ class CrmService
             'teams' => SalesTeam::query()->where('business_id', $businessId)->where('status', 'active')->with('members.user')->orderBy('team_name')->get(),
             'pipelines' => SalesPipeline::query()->where('business_id', $businessId)->where('status', 'active')->with('stages')->orderByDesc('is_default')->get(),
             'stages' => $pipeline ? $pipeline->stages()->get() : collect(),
-            'users' => User::query()->where('status', 'active')->where('is_active', 1)->orderBy('name')->get(['id', 'name', 'email', 'phone', 'branch_id', 'role_id']),
+            'users' => User::query()->where('status', 'active')->where('is_active', 1)->orderBy('name')->get(array_values(array_filter(['id', 'name', 'email', 'phone', 'branch_id', 'role_id'], fn ($column) => \Illuminate\Support\Facades\Schema::hasColumn('users', $column)))),
             'branches' => DB::table('branches')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
             'customers' => Customer::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(300)->get(['id', 'customer_code', 'customer_name', 'mobile', 'email', 'gstin', 'billing_address', 'shipping_address']),
             'products' => Product::query()->where(function (Builder $q) use ($businessId) { $q->where('business_id', $businessId)->orWhere('company_id', $businessId); })->where('status', 'active')->orderBy('name')->limit(300)->get(['id', 'name', 'sku', 'selling_price', 'gst_rate']),
@@ -471,7 +471,8 @@ class CrmService
             ->select(DB::raw("DATE_FORMAT(expected_closing_date, '%Y-%m') as month"), 'owner_id', DB::raw('sum(estimated_value) as open_value'), DB::raw('sum(weighted_value) as weighted_value'), DB::raw("sum(case when probability_percent >= 75 then estimated_value else 0 end) as commit_value"), DB::raw("sum(case when status = 'won' then estimated_value else 0 end) as won_value"))
             ->groupBy(DB::raw("DATE_FORMAT(expected_closing_date, '%Y-%m')"), 'owner_id')
             ->orderBy('month')
-            ->get();
+            ->get()
+            ->toArray();
     }
 
     public function saveMaster(string $type, array $data, ?int $id = null)

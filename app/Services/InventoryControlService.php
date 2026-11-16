@@ -643,7 +643,7 @@ class InventoryControlService
 
     public function movementHistory(array $filters): LengthAwarePaginator
     {
-        $perPage = in_array((int) ($filters['per_page'] ?? 25), [25, 50, 100], true) ? (int) $filters['per_page'] : 25;
+        $perPage = in_array((int) ($filters['per_page'] ?? 25), [25, 50, 100], true) ? (int) ($filters['per_page'] ?? 25) : 25;
         $query = $this->movementLedgerQuery($filters);
         $this->applyMovementSort($query, $filters);
 

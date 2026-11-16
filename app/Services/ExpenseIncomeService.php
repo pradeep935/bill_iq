@@ -370,7 +370,7 @@ class ExpenseIncomeService
     {
         $businessId = AppController::businessId();
         return JournalEntry::query()->with(['account', 'voucher'])->where('business_id', $businessId)
-            ->where('account_id', $filters['bank_account_id'])
+            ->where('account_id', $filters['bank_account_id'] ?? 0)
             ->whereDoesntHave('bankReconciliationItems')
             ->when(!empty($filters['date_from']), fn (Builder $q) => $q->whereDate('created_at', '>=', $filters['date_from']))
             ->latest('id')->limit(100)->get();

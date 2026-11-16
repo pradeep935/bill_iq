@@ -69,6 +69,11 @@ const PurchaseApi = {
         return response.data;
     },
 
+    async revisePurchase(id, remarks) {
+        const response = await axios.post(`/app/purchase/bills/${id}/revise`, { remarks });
+        return response.data;
+    },
+
     async reorderReferences() {
         const response = await axios.get('/app/purchase/reorder/references');
         return response.data;

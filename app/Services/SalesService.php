@@ -357,9 +357,25 @@ class SalesService
                 throw ValidationException::withMessages(['serials' => 'Serial-tracked sales require a controlled serial return; invoice reversal is not supported.']);
             }
             $this->stock->reverseTransaction(SalesVoucher::class, $voucher->id, $remarks ?: 'Sales reversal');
+            if (\Illuminate\Support\Facades\Schema::hasTable('journal_vouchers')) {
+                app(AccountingPostingService::class)->reverseSourceJournals(SalesVoucher::class, $voucher->id, $remarks ?: 'Sales reversal');
+            }
             $voucher->update(['status' => 'reversed']);
 
             return $this->fresh($voucher);
+        });
+    }
+
+    /** Edit a posted invoice: reverse it (stock + accounts) and return an editable draft copy with the same items. */
+    public function revise(SalesVoucher $voucher, ?string $remarks = null): SalesVoucher
+    {
+        return DB::transaction(function () use ($voucher, $remarks) {
+            $original = $voucher->invoice_number;
+            $this->reverse($voucher, $remarks ?: 'Edited: reversed for correction');
+            $copy = $this->duplicate($voucher->fresh());
+            $copy->update(['remarks' => trim(($copy->remarks ? $copy->remarks . ' | ' : '') . 'Revised from ' . $original)]);
+
+            return $this->fresh($copy);
         });
     }
 

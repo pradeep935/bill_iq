@@ -329,6 +329,13 @@ class SalesController extends Controller
         return response()->json(['message' => 'Sales invoice reversed successfully.', 'sale' => $this->sales->present($voucher)]);
     }
 
+    public function revise(OpeningStockReverseRequest $request, int $sale)
+    {
+        $voucher = $this->sales->revise($this->voucher($sale), $request->validated()['remarks'] ?? null);
+
+        return response()->json(['message' => 'Invoice reversed. Edit the new draft and post it again.', 'sale' => $this->sales->present($voucher)]);
+    }
+
     public function show(int $sale)
     {
         return response()->json($this->sales->present($this->voucher($sale), AppController::roleId() === 1));

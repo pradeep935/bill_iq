@@ -337,6 +337,13 @@ class PurchaseController extends Controller
         ]);
     }
 
+    public function revise(OpeningStockReverseRequest $request, int $purchase)
+    {
+        $voucher = $this->purchases->revise($this->voucher($purchase), $request->validated()['remarks'] ?? null);
+
+        return response()->json(['message' => 'Purchase reversed. Edit the new draft and post it again.', 'purchase' => $this->purchases->present($voucher)]);
+    }
+
     public function reverse(OpeningStockReverseRequest $request, int $purchase)
     {
         $voucher = $this->purchases->reverse($this->voucher($purchase), $request->validated()['remarks']);

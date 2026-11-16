@@ -217,9 +217,23 @@ class PurchaseService
             }
 
             $this->stock->reverseTransaction(PurchaseVoucher::class, $voucher->id, $remarks ?: 'Purchase reversal');
+            if (\Illuminate\Support\Facades\Schema::hasTable('journal_vouchers')) app(AccountingPostingService::class)->reverseSourceJournals(PurchaseVoucher::class, $voucher->id, $remarks ?: 'Purchase reversal');
             $voucher->update(['status' => 'reversed']);
 
             return $this->fresh($voucher);
+        });
+    }
+
+    /** Edit a posted purchase: reverse it (stock + accounts) and return an editable draft copy with the same items. */
+    public function revise(PurchaseVoucher $voucher, ?string $remarks = null): PurchaseVoucher
+    {
+        return DB::transaction(function () use ($voucher, $remarks) {
+            $supplierInvoice = $voucher->supplier_invoice_number;
+            $this->reverse($voucher, $remarks ?: 'Edited: reversed for correction');
+            $copy = $this->duplicate($voucher->fresh());
+            $copy->update(['supplier_invoice_number' => $supplierInvoice]);
+
+            return $this->fresh($copy);
         });
     }
 

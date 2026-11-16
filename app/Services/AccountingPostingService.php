@@ -152,6 +152,17 @@ class AccountingPostingService
         });
     }
 
+    /** Reverses the active system journal(s) posted for a source document (sale, purchase...). Returns how many were reversed. */
+    public function reverseSourceJournals(string $type, int $id, ?string $remarks = null): int
+    {
+        $journals = JournalVoucher::query()->where('business_id', AppController::businessId())
+            ->where('reference_type', $type)->where('reference_id', $id)
+            ->whereIn('status', ['posted', 'approved'])->whereNull('reversed_by_id')->whereNull('reversal_of_id')
+            ->where('voucher_type', '!=', 'reversal')->get();
+        foreach ($journals as $journal) $this->reverseJournalVoucher($journal, $remarks);
+        return $journals->count();
+    }
+
     /** Also reconciles previously reversed settlements, without creating another journal. */
     public function reopenReversedSettlement(JournalVoucher $voucher): void
     {

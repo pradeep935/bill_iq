@@ -162,6 +162,11 @@ const SalesApi = {
         return response.data;
     },
 
+    async reviseSale(id, remarks) {
+        const response = await axios.post(`/app/sales/invoices/${id}/revise`, { remarks });
+        return response.data;
+    },
+
     printUrl(id, format = 'a4') {
         const target = new URL(withId('print', '/invoices/__ID__/print', id), window.location.origin);
         if (format && format !== 'a4') target.searchParams.set('format', format);

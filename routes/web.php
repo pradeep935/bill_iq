@@ -197,6 +197,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/invoices/{sale}/duplicate', [SalesController::class, 'duplicate'])->name('invoices.duplicate');
             Route::post('/invoices/{sale}/approve', [SalesController::class, 'approve'])->name('invoices.approve');
             Route::post('/invoices/{sale}/cancel', [SalesController::class, 'cancel'])->name('invoices.cancel');
+            Route::post('/invoices/{sale}/revise', [SalesController::class, 'revise'])->name('invoices.revise');
             Route::post('/invoices/{sale}/reverse', [SalesController::class, 'reverse'])->name('invoices.reverse');
             Route::get('/invoices/{sale}/print', [SalesController::class, 'print'])->name('invoices.print');
             Route::get('/invoices/{sale}/pdf', [SalesController::class, 'pdf'])->name('invoices.pdf');
@@ -282,6 +283,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/bills/{purchase}/duplicate', [PurchaseController::class, 'duplicate'])->name('bills.duplicate');
             Route::post('/bills/{purchase}/approve', [PurchaseController::class, 'approve'])->name('bills.approve');
             Route::post('/bills/{purchase}/cancel', [PurchaseController::class, 'cancel'])->name('bills.cancel');
+            Route::post('/bills/{purchase}/revise', [PurchaseController::class, 'revise'])->name('bills.revise');
             Route::post('/bills/{purchase}/reverse', [PurchaseController::class, 'reverse'])->name('bills.reverse');
 
             Route::get('/returns', [PurchaseReturnController::class, 'index'])->name('returns');

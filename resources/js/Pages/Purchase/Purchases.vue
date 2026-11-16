@@ -406,6 +406,15 @@ const reversePurchase = async (purchase) => {
     alert(response.message || 'Purchase reversed.');
     await loadPurchases(pagination.value.current_page || 1);
 };
+const revisePurchase = async (purchase) => {
+    if (!window.confirm('This posted purchase will be reversed (stock and accounts) and an editable draft copy will open. Post the draft again after changing items. Continue?')) return;
+    try {
+        const response = await PurchaseApi.revisePurchase(purchase.id, 'Edited: reversed for correction');
+        alert(response.message || 'Purchase reversed.');
+        editPurchase(response.purchase);
+        await loadPurchases(pagination.value.current_page || 1);
+    } catch (error) { alert(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'Could not edit this purchase.'); }
+};
 const toggleActionMenu = (purchase) => { openActionMenuId.value = openActionMenuId.value === purchase.id ? null : purchase.id; };
 const closeActionMenu = () => { openActionMenuId.value = null; };
 
@@ -565,7 +574,7 @@ onMounted(async () => {
                             <tr v-for="purchase in purchases" :key="purchase.id">
                                 <td>{{ purchase.voucher_number }}</td><td>{{ formatDate(purchase.purchase_date) }}</td><td>{{ purchase.supplier }}</td><td v-if="showLocation">{{ purchase.branch || '-' }}</td><td v-if="showLocation">{{ purchase.warehouse || '-' }}</td><td>{{ purchase.supplier_invoice_number || '-' }}</td>
                                 <td>Rs. {{ formatMoney(purchase.grand_total) }}</td><td>Rs. {{ formatMoney(purchase.paid_amount) }}</td><td :class="{ due: Number(purchase.balance_amount) > 0 }">Rs. {{ formatMoney(purchase.balance_amount) }}</td><td><span class="badge pay" :class="purchase.payment_status">{{ purchase.payment_status }}</span></td><td><span class="badge" :class="purchase.status">{{ purchase.status }}</span></td><td v-if="showCreatedBy">{{ purchase.created_by || '-' }}</td>
-                                <td class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === purchase.id" :show-view="false" more-label="Actions" more-title="Purchase actions" @toggle="toggleActionMenu(purchase)" @close="closeActionMenu"><button v-if="purchase.status === 'draft'" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="purchase.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(PurchaseApi.duplicatePurchase, purchase); closeActionMenu()">Copy</button><button v-if="purchase.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" class="danger" @click="reversePurchase(purchase); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
+                                <td class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === purchase.id" :show-view="false" more-label="Actions" more-title="Purchase actions" @toggle="toggleActionMenu(purchase)" @close="closeActionMenu"><button v-if="purchase.status === 'draft'" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" @click="revisePurchase(purchase); closeActionMenu()">Edit</button><button v-if="purchase.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(PurchaseApi.duplicatePurchase, purchase); closeActionMenu()">Copy</button><button v-if="purchase.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" class="danger" @click="reversePurchase(purchase); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
                             </tr>
                             <tr v-if="!purchases.length && !loading"><td :colspan="columnCount" class="empty">No purchases found.</td></tr>
                         </tbody>

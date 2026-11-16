@@ -112,13 +112,11 @@
             <span class="bill-nav-icon" v-html="iconSvg('bar-chart')"></span>
             Reports
           </a>
-          <button type="button" title="Notifications" @click="showNotice('No unread notifications.')">
+          <button type="button" class="icon-only" title="Notifications" aria-label="Notifications" @click="showNotice('No unread notifications.')">
             <span class="bill-nav-icon" v-html="iconSvg('bell')"></span>
-            Notifications
           </button>
-          <button type="button" title="Help center" @click="showNotice('BillIQ help is available from Settings > Support.')">
+          <button type="button" class="icon-only" title="Help center" aria-label="Help" @click="showNotice('BillIQ help is available from Settings > Support.')">
             <span class="bill-nav-icon" v-html="iconSvg('circle-help')"></span>
-            Help
           </button>
         </div>
 

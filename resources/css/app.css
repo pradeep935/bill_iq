@@ -1088,9 +1088,22 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
 }
 
 .bill-global-search {
-    flex: 1 1 260px;
-    max-width: 360px;
+    flex: 1 1 200px;
+    min-width: 160px;
+    max-width: 340px;
     padding-left: 8px;
+}
+
+/* one compact row on desktop: icon-only utility buttons, slimmer user chip, no wrapping */
+.bill-top-actions .icon-only { padding: 8px; }
+@media (min-width: 1101px) {
+    .bill-topbar { flex-wrap: nowrap; gap: 10px; }
+    .bill-topbar-left { flex: 1 1 260px; min-width: 240px; }
+    .bill-topbar-left p { display: none; }
+    .bill-topbar-left h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bill-top-actions { flex-wrap: nowrap; flex: 0 0 auto; }
+    .bill-user { flex: 0 0 auto; padding: 6px 10px; }
+    .bill-user small { display: none; }
 }
 
 .bill-global-search input {

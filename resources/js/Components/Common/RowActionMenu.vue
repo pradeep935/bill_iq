@@ -17,9 +17,11 @@
       <span class="more-label">{{ moreLabel }}</span>
     </button>
 
-    <div v-if="open" ref="menu" class="action-menu" :style="menuStyle" role="menu">
-      <slot />
-    </div>
+    <Teleport to="body">
+      <div v-if="open" ref="menu" class="action-menu" :style="menuStyle" role="menu">
+        <slot />
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -43,6 +45,8 @@ const emit = defineEmits(['view', 'toggle', 'close']);
 
 const positionMenu = async () => {
   if (!props.open) return;
+  // Measure the menu as a fixed, invisible box first, otherwise a body-level block reports the full page width.
+  if (!menuStyle.value.position) menuStyle.value = { position: 'fixed', top: '0px', left: '0px', width: 'max-content', visibility: 'hidden' };
   await nextTick();
   const rect = moreButton.value?.getBoundingClientRect();
   if (!rect) return;
@@ -63,6 +67,7 @@ const positionMenu = async () => {
 
   menuStyle.value = {
     position: 'fixed',
+    width: 'max-content',
     right: openFromLeft ? 'auto' : `${right}px`,
     left: openFromLeft ? `${left}px` : 'auto',
     maxHeight: `${Math.max(160, Math.min(360, window.innerHeight - 24))}px`,
@@ -73,7 +78,7 @@ const positionMenu = async () => {
   };
 };
 
-watch(() => props.open, positionMenu);
+watch(() => props.open, (isOpen) => { if (!isOpen) menuStyle.value = {}; positionMenu(); });
 
 const closeFromOutside = (event) => {
   if (!props.open) return;
@@ -166,7 +171,7 @@ onUnmounted(() => {
   gap: 4px;
   min-width: 178px;
   padding: 8px;
-  z-index: 1000;
+  z-index: 3000;
 }
 
 .action-menu :slotted(button),

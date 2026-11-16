@@ -83,7 +83,18 @@ const summaryColumns = [
     { key: 'status', label: 'Status' },
 ];
 
-const columns = computed(() => filters.value.view_mode === 'summary' ? summaryColumns : detailedColumns);
+// Hide summary columns that carry no information for the loaded rows (empty barcode/brand, single-branch stock).
+const columns = computed(() => {
+    if (filters.value.view_mode !== 'summary') return detailedColumns;
+    const list = rows.value || [];
+    if (!list.length) return summaryColumns;
+    const allEmpty = (key) => list.every((row) => !row[key] || row[key] === '-');
+    return summaryColumns.filter((column) => {
+        if (column.key === 'barcode' || column.key === 'brand') return !allEmpty(column.key);
+        if (column.key === 'branch_count') return list.some((row) => Number(row.branch_count || 0) > 1);
+        return true;
+    });
+});
 
 let timer = null;
 
@@ -704,8 +715,8 @@ onMounted(async () => {
 .condition-badge.condition-defective { background: #fffbeb; color: #a16207; }
 .condition-badge.condition-quarantined { background: #eff6ff; color: #1d4ed8; }
 .condition-badge.condition-lost { background: #f1f5f9; color: #475569; }
-:deep(.stock-col-expand) { background: #fff; left: 0; min-width: 44px; position: sticky; z-index: 5; }
-:deep(.stock-col-image) { background: #fff; left: 44px; min-width: 62px; position: sticky; z-index: 5; }
+:deep(.stock-col-expand) { background: #fff; left: 0; min-width: 44px !important; width: 44px !important; max-width: 44px !important; padding-left: 8px; padding-right: 4px; position: sticky; z-index: 5; }
+:deep(.stock-col-image) { background: #fff; left: 44px; min-width: 62px !important; width: 62px !important; max-width: 62px !important; position: sticky; z-index: 5; }
 :deep(.stock-col-product) { background: #fff; left: 106px; min-width: 210px; position: sticky; z-index: 5; }
 :deep(.stock-col-image-first) { left: 0; }
 :deep(.stock-col-product-first) { left: 62px; }

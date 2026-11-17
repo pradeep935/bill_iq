@@ -95,22 +95,22 @@
         <div class="bill-top-actions" v-if="isSalesInvoicePage">
           <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.invoices.create', '/app/sales/invoices/create')" title="Create a new sales invoice">
             <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
-            New Invoice
+            <span class="top-label">New Invoice</span>
           </a>
         </div>
 
         <div class="bill-top-actions" v-else>
           <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.invoices.create', '/app/sales/invoices/create')" title="Create a new bill">
             <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
-            New Bill
+            <span class="top-label">New Bill</span>
           </a>
           <a v-if="permissions['accounting.create'] !== false" :href="routeUrl('app.accounting.vouchers', '/app/accounting/vouchers')" title="Open accounting vouchers">
             <span class="bill-nav-icon" v-html="iconSvg('file-plus')"></span>
-            Voucher
+            <span class="top-label">Voucher</span>
           </a>
           <a v-if="permissions['reports.view'] !== false" :href="routeUrl('app.reports.business', '/app/reports/business')" title="Open reports">
             <span class="bill-nav-icon" v-html="iconSvg('bar-chart')"></span>
-            Reports
+            <span class="top-label">Reports</span>
           </a>
           <button type="button" class="icon-only" title="Notifications" aria-label="Notifications" @click="showNotice('No unread notifications.')">
             <span class="bill-nav-icon" v-html="iconSvg('bell')"></span>

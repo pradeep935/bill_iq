@@ -562,7 +562,7 @@ onMounted(async () => {
                     </div>
                     <button type="button" class="primary" @click="openPurchaseCreate">New Purchase</button>
                 </div>
-                <div class="table-wrapper">
+                <div class="table-wrapper" :class="{ 'is-refreshing': loading }">
                     <table>
                         <thead><tr><th>Voucher</th><th>Date</th><th>Supplier</th><th v-if="showLocation">Branch</th><th v-if="showLocation">Warehouse</th><th>Invoice</th><th>Total</th><th>Paid</th><th>Balance</th><th>Payment</th><th>Status</th><th v-if="showCreatedBy">Created By</th><th>Actions</th></tr></thead>
                         <tbody :class="{ 'is-loading': loading }">
@@ -580,7 +580,7 @@ onMounted(async () => {
                         </tbody>
                     </table>
                 </div>
-                <div class="pagination"><button :disabled="pagination.current_page <= 1" @click="loadPurchases(pagination.current_page - 1)">Previous</button><span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span><button :disabled="pagination.current_page >= pagination.last_page" @click="loadPurchases(pagination.current_page + 1)">Next</button></div>
+                <div class="pagination"><button :disabled="pagination.current_page <= 1 || loading" @click="loadPurchases(pagination.current_page - 1)">Previous</button><span>{{ loading ? 'Loading…' : `${pagination.from || 0}-${pagination.to || 0} of ${pagination.total || 0}` }}</span><button :disabled="pagination.current_page >= pagination.last_page || loading" @click="loadPurchases(pagination.current_page + 1)">Next</button></div>
             </section>
         </div>
     </Layout>

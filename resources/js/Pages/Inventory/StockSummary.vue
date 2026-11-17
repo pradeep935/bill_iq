@@ -128,6 +128,7 @@ const loadSummary = async (page = 1) => {
         rows.value = response.items || [];
         dashboard.value = response.dashboard || dashboard.value;
         pagination.value = response.pagination || pagination.value;
+        document.querySelector('.stock-table-wrap')?.scrollTo({ top: 0 });
     } finally {
         loading.value = false;
     }
@@ -546,7 +547,7 @@ onMounted(async () => {
 
                 <div class="pagination">
                     <button type="button" :disabled="pagination.current_page <= 1 || loading" @click="loadSummary(pagination.current_page - 1)">Previous</button>
-                    <span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span>
+                    <span>{{ loading ? 'Loading…' : `${pagination.from || 0}-${pagination.to || 0} of ${pagination.total || 0}` }}</span>
                     <button type="button" :disabled="pagination.current_page >= pagination.last_page || loading" @click="loadSummary(pagination.current_page + 1)">Next</button>
                 </div>
             </ListingCard>

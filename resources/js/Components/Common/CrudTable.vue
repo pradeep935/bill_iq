@@ -1,5 +1,9 @@
 <template>
-  <div class="crud-table-wrap" :class="[wrapClass, { 'has-selection': selectable, 'has-actions': showActions }]">
+  <div class="crud-table-wrap" :class="[wrapClass, { 'has-selection': selectable, 'has-actions': showActions, 'is-refreshing': loading && rows.length }]" :aria-busy="loading ? 'true' : 'false'">
+    <div v-if="loading && rows.length" class="crud-refresh" role="status">
+      <span class="crud-refresh-bar"></span>
+      <span class="crud-refresh-pill"><i class="crud-refresh-spinner"></i>{{ loadingText }}</span>
+    </div>
     <table class="crud-table" :class="tableClass">
       <thead>
         <tr>
@@ -25,14 +29,14 @@
       </thead>
 
       <tbody>
-        <tr v-if="loading">
+        <tr v-if="loading && !rows.length">
           <td :colspan="colspan" class="crud-state loading-cell">
             <slot name="loading">
               <TableLoadingState :title="loadingText" :description="loadingDescription" />
             </slot>
           </td>
         </tr>
-        <tr v-else-if="!rows.length">
+        <tr v-else-if="!loading && !rows.length">
           <td :colspan="colspan" class="crud-state">{{ emptyText }}</td>
         </tr>
         <tr v-for="(row, index) in rows" :key="keyFor(row, index)" :class="rowClass(row, index)">
@@ -118,6 +122,14 @@ const statusLabel = (status) => String(status).charAt(0).toUpperCase() + String(
   overflow-y: auto;
   position: relative;
 }
+
+.crud-refresh { height: 0; position: sticky; top: 0; z-index: 30; }
+.crud-refresh-bar { animation: crud-bar 1.1s ease-in-out infinite; background: linear-gradient(90deg, transparent, #2457d6, transparent); background-size: 40% 100%; background-repeat: no-repeat; display: block; height: 3px; left: 0; position: absolute; right: 0; top: 0; }
+.crud-refresh-pill { align-items: center; background: #fff; border: 1px solid #cfe0ff; border-radius: 999px; box-shadow: 0 10px 28px rgba(36, 87, 214, .18); color: #2457d6; display: inline-flex; font-size: 12px; font-weight: 800; gap: 8px; left: 50%; padding: 8px 16px; position: absolute; top: 64px; transform: translateX(-50%); white-space: nowrap; }
+.crud-refresh-spinner { animation: crud-spin .7s linear infinite; border: 2px solid #cfe0ff; border-radius: 50%; border-top-color: #2457d6; display: inline-block; height: 14px; width: 14px; }
+.is-refreshing .crud-table tbody { opacity: .45; pointer-events: none; transition: opacity .12s ease; }
+@keyframes crud-bar { 0% { background-position: -40% 0; } 100% { background-position: 140% 0; } }
+@keyframes crud-spin { to { transform: rotate(360deg); } }
 
 .crud-table {
   border-collapse: separate;

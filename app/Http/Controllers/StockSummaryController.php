@@ -94,7 +94,8 @@ class StockSummaryController extends Controller
                 'updated_by' => $item->updated_by_id,
                 'stock_status' => $item->stock_status,
             ])->values(),
-            'dashboard' => $this->stock->dashboard($request->all()),
+            // KPI totals only change with filters (which reset to page 1); skip the heavy recount while paging.
+            'dashboard' => (int) $request->query('page', 1) > 1 ? null : $this->stock->dashboard($request->all()),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),

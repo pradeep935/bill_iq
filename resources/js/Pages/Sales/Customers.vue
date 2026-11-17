@@ -268,7 +268,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
                     <select v-model="stateId"><option value="">All States</option><option v-for="item in references.states" :key="item.id" :value="item.id">{{ item.name }}</option></select>
                     <button v-if="search || status || crmStatus || type || stateId || priceType" type="button" @click="clearFilters">Clear Filters</button>
                 </div>
-                <div class="table-wrapper">
+                <div class="table-wrapper" :class="{ 'is-refreshing': loading }">
                     <table>
                         <thead><tr><th>Customer</th><th>GSTIN</th><th>CRM</th><th class="num">Orders</th><th class="num">Outstanding</th><th>Last Purchase</th><th>Status</th><th class="sticky-col">Actions</th></tr></thead>
                         <tbody>
@@ -308,7 +308,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
                         </tbody>
                     </table>
                 </div>
-                <div v-if="pagination.total > 0 && pagination.last_page > 1" class="pagination"><button :disabled="pagination.current_page <= 1" @click="loadCustomers(pagination.current_page - 1)">Previous</button><span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span><button :disabled="pagination.current_page >= pagination.last_page" @click="loadCustomers(pagination.current_page + 1)">Next</button></div>
+                <div v-if="pagination.total > 0 && pagination.last_page > 1" class="pagination"><button :disabled="pagination.current_page <= 1 || loading" @click="loadCustomers(pagination.current_page - 1)">Previous</button><span>{{ loading ? 'Loading…' : `${pagination.from || 0}-${pagination.to || 0} of ${pagination.total || 0}` }}</span><button :disabled="pagination.current_page >= pagination.last_page || loading" @click="loadCustomers(pagination.current_page + 1)">Next</button></div>
             </section>
 
             <div v-if="detail" class="drawer-backdrop" @click="closeDetail"></div>

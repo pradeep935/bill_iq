@@ -221,7 +221,7 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
                     </div>
                     <button type="button" class="primary" @click="openSupplierCreate">New Supplier</button>
                 </div>
-                <div class="table-wrapper">
+                <div class="table-wrapper" :class="{ 'is-refreshing': loading }">
                     <table>
                         <thead>
                             <tr>
@@ -257,9 +257,9 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); });
                     </table>
                 </div>
                 <div class="pagination">
-                    <button :disabled="pagination.current_page <= 1" @click="loadSuppliers(pagination.current_page - 1)">Previous</button>
-                    <span>{{ pagination.from || 0 }}-{{ pagination.to || 0 }} of {{ pagination.total || 0 }}</span>
-                    <button :disabled="pagination.current_page >= pagination.last_page" @click="loadSuppliers(pagination.current_page + 1)">Next</button>
+                    <button :disabled="pagination.current_page <= 1 || loading" @click="loadSuppliers(pagination.current_page - 1)">Previous</button>
+                    <span>{{ loading ? 'Loading…' : `${pagination.from || 0}-${pagination.to || 0} of ${pagination.total || 0}` }}</span>
+                    <button :disabled="pagination.current_page >= pagination.last_page || loading" @click="loadSuppliers(pagination.current_page + 1)">Next</button>
                 </div>
             </section>
         </div>

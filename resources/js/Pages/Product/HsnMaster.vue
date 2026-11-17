@@ -518,7 +518,7 @@ const referenceTone = (value) => String(value || '').startsWith('Matched') ? 'ma
 .record-information strong { color: #17233b; font-size: 12px; font-weight: 800; overflow-wrap: anywhere; }
 .record-information span { color: #738098; font-size: 11px; font-weight: 700; }
 .gst-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; min-height: 26px; padding: 4px 9px; color: #2457d6; background: #eaf0ff; border-radius: 7px; font-size: 11px; font-weight: 800; }
-:deep(.crud-table-wrap) { overflow-y: visible; padding-bottom: 170px; margin-bottom: -170px; }
+
 :deep(.crud-action-column) { z-index: 40; }
 .action-menu-wrap { position: relative; }
 .status-pill, .reference-pill { display: inline-flex; border-radius: 999px; padding: 5px 9px; font-weight: 800; font-size: 12px; background: #eef4ff; }

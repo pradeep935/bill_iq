@@ -1510,9 +1510,6 @@ onMounted(() => {
 
 .table-wrapper {
     overflow-x: auto;
-    overflow-y: visible;
-    padding-bottom: 170px;
-    margin-bottom: -170px;
 }
 
 .product-table {

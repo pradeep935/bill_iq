@@ -287,10 +287,10 @@ class StockService
         });
     }
 
-    public function summary(array $filters = [])
+    public function summary(array $filters = [], int $maxPerPage = 100)
     {
         $businessId = AppController::businessId();
-        $perPage = min(max((int) ($filters['per_page'] ?? 15), 1), 100);
+        $perPage = min(max((int) ($filters['per_page'] ?? 15), 1), $maxPerPage);
         $viewMode = ($filters['view_mode'] ?? 'summary') === 'detailed' ? 'detailed' : 'summary';
         $sort = in_array($filters['sort'] ?? '', ['product_name', 'sku', 'quantity_on_hand', 'quantity_available', 'average_cost', 'stock_value', 'last_updated'], true)
             ? $filters['sort']
@@ -539,7 +539,8 @@ class StockService
 
     public function dashboard(array $filters = []): array
     {
-        $rows = $this->summary(array_merge($filters, ['per_page' => 1000]))->getCollection();
+        // KPI cards must cover every product, not just the first page of 100.
+        $rows = $this->summary(array_merge($filters, ['per_page' => 20000, 'page' => 1]), 20000)->getCollection();
 
         $physicalQuantity = round((float) $rows->sum('physical_quantity'), 3);
 

@@ -114,10 +114,8 @@ const statusLabel = (status) => String(status).charAt(0).toUpperCase() + String(
 .crud-table-wrap {
   max-height: calc(100vh - 340px);
   min-height: 280px;
-  margin-bottom: -170px;
   overflow-x: auto;
   overflow-y: auto;
-  padding-bottom: 170px;
   position: relative;
 }
 

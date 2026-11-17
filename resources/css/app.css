@@ -1096,7 +1096,14 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
 
 /* one compact row on desktop: icon-only utility buttons, slimmer user chip, no wrapping */
 .bill-top-actions .icon-only { padding: 8px; }
-@media (min-width: 1101px) {
+/* medium desktops: icon-only quick actions so the single-row topbar never exceeds the content width */
+@media (min-width: 1101px) and (max-width: 1599px) {
+    .bill-topbar-left p { display: none; }
+    .bill-top-actions .top-label { display: none; }
+    .bill-top-actions a, .bill-top-actions button { padding: 8px; }
+    .bill-user strong { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (min-width: 1280px) {
     .bill-topbar { flex-wrap: nowrap; gap: 10px; }
     .bill-topbar-left { flex: 1 1 260px; min-width: 240px; }
     .bill-topbar-left p { display: none; }

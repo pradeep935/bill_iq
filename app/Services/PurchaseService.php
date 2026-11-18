@@ -45,6 +45,10 @@ class PurchaseService
             ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(!empty($filters['purchase_type']), fn (Builder $q) => $q->where('purchase_type', $filters['purchase_type']))
             ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']))
+            ->when(!empty($filters['q']), function (Builder $q) use ($filters) {
+                $term = '%' . trim($filters['q']) . '%';
+                $q->where(fn (Builder $w) => $w->where('voucher_number', 'like', $term)->orWhere('supplier_invoice_number', 'like', $term));
+            })
             ->latest('id')
             ->paginate($perPage);
     }

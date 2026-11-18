@@ -268,7 +268,8 @@ const flashRow = (item) => {
         if (highlightedRowKey.value === rowKey(item)) highlightedRowKey.value = '';
     }, 1200);
 };
-const isStockItem = (item) => item.available_stock !== null && item.available_stock !== undefined;
+// Items that allow negative stock (and have no batch picked) are never limited by available stock, same as the server.
+const isStockItem = (item) => item.available_stock !== null && item.available_stock !== undefined && !item.allow_negative;
 const validateCartStock = () => {
     for (const item of form.items) {
         if (isStockItem(item) && Number(item.quantity || 0) + Number(item.free_quantity || 0) > Number(item.available_stock || 0)) {
@@ -444,8 +445,9 @@ const searchProducts = async () => {
 const addProduct = async (product, fromScan = false) => {
     const batch = (product.batches || []).find((item) => Number(item.id || 0) === Number(product.batch_id || 0));
     const available = Number(batch?.available_stock ?? product.available_stock ?? 0);
-    if (product.product_type !== 'service' && product.item_type !== 'non_stock' && available <= 0) {
-        showToast('Insufficient stock', 'error');
+    const allowNegative = Boolean(product.allow_negative_stock) && !(batch?.id || product.batch_id);
+    if (product.product_type !== 'service' && product.item_type !== 'non_stock' && !allowNegative && available <= 0) {
+        showToast(`Insufficient stock for ${product.name}. Available ${available}.`, 'error');
         return false;
     }
     const variantId = product.product_variant_id || '';
@@ -480,6 +482,7 @@ const addProduct = async (product, fromScan = false) => {
             cess_rate: product.cess_rate ?? '',
             batches: product.batches || [],
             available_stock: product.product_type === 'service' || product.item_type === 'non_stock' ? null : available,
+            allow_negative: allowNegative,
             tax_inclusive: product.tax_inclusive || false,
             serial_required: Boolean(product.serial_required),
             serials: [],
@@ -554,6 +557,7 @@ const normalizeQty = (item) => {
 const updateBatchStock = (item) => {
     const selected = (item.batches || []).find((batch) => Number(batch.id) === Number(item.batch_id));
     if (selected) {
+        item.allow_negative = false; // a chosen batch is always limited to its own stock
         item.available_stock = Number(selected.available_stock || 0);
     } else {
         item.available_stock = (item.batches || []).reduce((sum, batch) => sum + Number(batch.available_stock || 0), 0);

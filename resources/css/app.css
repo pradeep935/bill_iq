@@ -1717,3 +1717,6 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
 .bill-search-group a:hover { background: #eef2ff; }
 .bill-search-group a strong { font-size: 13px; }
 .bill-search-group a small { font-size: 11px; color: #758197; }
+
+/* Keep the last rows of any page clear of the floating assistant button */
+.bill-main::after { content: ''; display: block; height: 76px; }

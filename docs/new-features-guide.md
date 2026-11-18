@@ -16,3 +16,12 @@ Pick the return month. The screen shows GSTR-1 counts (B2B, B2C large, B2C small
 # Global search
 
 Type at least 2 characters in the top-bar search box to see matching invoices, customers and products. Click a result to open it. Results depend on the user's role.
+
+# Purchase vouchers: view, record payment, edit
+
+Where: Sidebar > PURCHASE > Purchases, then the "Actions" menu on a row.
+View opens the voucher in read-only mode so nothing can be changed by mistake. Record Payment (posted bills with a balance) opens Accounting > Vouchers > Payment with the supplier and that bill already selected and the full outstanding amount filled; check the cash/bank account and click Save Payment to mark the bill paid. Do not record a payment that is already entered elsewhere (for example imported from Tally) or it will be counted twice. Edit on a posted purchase reverses it (stock and accounts) and opens an editable draft copy; correct it and click "Confirm & Post" to post again. Drafts can be edited directly. The Stock Ledger report is read-only: fix a product name or spelling in Product Master and correct quantities with Stock Adjustment.
+
+# POS: selling items with zero or negative stock
+
+Products that have "allow negative stock" switched on can be added to a POS bill even when their stock is 0 or below. Products without it, and any batch you pick, are limited to the available stock. If an item will not add, the message shows its available quantity.

@@ -77,7 +77,7 @@ onMounted(load);
 
 <template>
     <Layout :page="page" :title="title">
-        <template #topbar-title><div class="bill-page-title"><span>REPORTS</span><h1>{{ title }}</h1><p>Inventory, ledger, valuation, audit and traceability reports from live modules.</p></div></template>
+        <template #topbar-title><div class="bill-page-title"><span>REPORTS</span><h1>{{ title }}</h1><p>Inventory, ledger, valuation, audit and traceability reports from live modules. This report is read-only: to fix a product name or spelling use <a href="/app/inventory/products">Product Master</a>; to correct a quantity use <a href="/app/warehouse/adjustment">Stock Adjustment</a>.</p></div></template>
         <InventoryModuleScaffold :title="title" :cards="cards" :loading="loading" :initial-loaded="loaded" :pagination="pagination" @page="(p) => { pagination.current_page = p; load(); }">
             <template #toolbar><button @click="load">Refresh</button><button @click="exportFile('csv')">CSV</button><button @click="exportFile('excel')">Excel</button><button @click="window.print()">PDF / Print</button></template>
             <template #section-actions><div class="tabs"><button v-for="t in tabs" :key="t" :class="{ active: tab === t }" @click="tab = t">{{ t }}</button></div></template>

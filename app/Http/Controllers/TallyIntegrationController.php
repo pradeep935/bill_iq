@@ -15,6 +15,7 @@ class TallyIntegrationController extends Controller
 {
     public function index(TallyIntegrationService $service)
     {
+        abort_if(AppController::roleId() === 3, 403); // staff do not get the accounting/Tally overview
         $businessId = AppController::businessId();
         $company = DB::table('companies')->where('id', $businessId)->first();
         return Inertia::render('Accounting/TallyIntegration', [

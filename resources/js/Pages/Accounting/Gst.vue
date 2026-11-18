@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
+import GstReturnsPanel from './GstReturnsPanel.vue';
 import InventoryModuleScaffold from '../Inventory/Shared/InventoryModuleScaffold.vue';
 import InventoryTable from '../Inventory/Shared/InventoryTable.vue';
 import axios from 'axios';
@@ -48,7 +49,8 @@ onMounted(load);
             <template #toolbar><button @click="load">Refresh</button><button @click="window.print()">PDF / Print</button></template>
             <template #section-actions><div class="tabs"><button :class="{ active: tab === 'summary' }" @click="tab = 'summary'">summary</button><button :class="{ active: tab === 'returns' }" @click="tab = 'returns'">returns</button></div></template>
             <template #filters><input v-model="filters.from_date" type="date" @change="load" /><input v-model="filters.to_date" type="date" @change="load" /><button @click="filters.from_date = ''; filters.to_date = ''; load()">Clear</button></template>
-            <InventoryTable :columns="[{key:'section',label:'Section'},{key:'taxable',label:'Taxable'},{key:'cgst',label:'CGST'},{key:'sgst',label:'SGST'},{key:'igst',label:'IGST'},{key:'total',label:'GST Total'}]" :rows="rows" />
+            <GstReturnsPanel v-if="tab === 'returns'" />
+            <InventoryTable v-else :columns="[{key:'section',label:'Section'},{key:'taxable',label:'Taxable'},{key:'cgst',label:'CGST'},{key:'sgst',label:'SGST'},{key:'igst',label:'IGST'},{key:'total',label:'GST Total'}]" :rows="rows" />
         </InventoryModuleScaffold>
     </Layout>
 </template>

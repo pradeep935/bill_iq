@@ -16,6 +16,12 @@ class AdminController extends Controller
 
         $section = $workspace->normalizeSection($request->query('section', 'admin'), $user);
 
+        // Users / SaaS / Settings have their own pages (own sidebar highlight and the business-profile form).
+        $dedicated = ['users' => 'app.setup.users', 'saas' => 'app.setup.saas', 'settings' => 'app.setup.settings'];
+        if (isset($dedicated[$section])) {
+            return redirect()->route($dedicated[$section]);
+        }
+
         return Inertia::render('Setup/Workspace', array_merge([
             'page' => 'admin-workspace',
             'title' => 'Admin Workspace',

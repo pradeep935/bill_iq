@@ -44,7 +44,8 @@ class SetupController extends Controller
 
     public function saas(Request $request, AdminWorkspaceService $workspace)
     {
-        if ($redirect = AppController::guardPage('settings')) return $redirect;
+        // Subscription / SaaS admin stays Super Admin only (company admins can open Users and Settings).
+        if (!$request->user()?->isSuperAdmin()) return redirect(AppController::roleHome());
 
         return Inertia::render('Setup/Workspace', array_merge([
             'page' => 'saas',

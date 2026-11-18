@@ -1,5 +1,5 @@
 <template>
-  <div class="aic">
+  <div class="aic" :class="{ raised: page === 'pos' }">
     <button v-if="!open" class="aic-fab" type="button" title="Ask BillIQ Assistant" @click="open = true">
       <span class="aic-logo aic-logo-sm"><span>Rs.</span></span>
       <span class="aic-fab-text">Ask BillIQ</span>
@@ -157,6 +157,10 @@ async function ask(raw) {
 .aic-form input:focus { border-color: var(--aic-blue); background: #fff; }
 .aic-form button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--aic-blue); color: #fff; font-size: 14px; cursor: pointer; }
 .aic-form button:disabled { opacity: .45; cursor: default; }
+
+/* POS has a fixed bottom bar with the Complete button: lift the assistant above it */
+.aic.raised .aic-fab { bottom: 104px; }
+.aic.raised .aic-panel { bottom: 104px; max-height: calc(100vh - 128px); }
 
 @media (max-width: 520px) {
   .aic-panel { right: 8px; bottom: 8px; height: calc(100vh - 16px); max-height: none; }

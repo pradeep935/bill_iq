@@ -493,7 +493,9 @@ class SalesService
         }
 
         $presented = $this->presentProduct($product, $businessId, (int) $branchId, (int) $warehouseId, $priceType, $variantId, $batchId, $barcode);
-        if ($this->requiresStock($product) && (float) ($presented['available_stock'] ?? 0) <= 0) {
+        // Products that allow negative stock can be sold at zero / negative stock (same rule as StockService), unless a batch is chosen.
+        $negativeOk = (bool) ($product->allow_negative_stock ?? false) && empty($presented['batch_id']);
+        if ($this->requiresStock($product) && !$negativeOk && (float) ($presented['available_stock'] ?? 0) <= 0) {
             throw ValidationException::withMessages(['barcode' => 'Insufficient stock']);
         }
 
@@ -1003,6 +1005,7 @@ class SalesService
             'product_variant_id' => $variantId,
             'batch_id' => $selectedBatchId,
             'available_stock' => $availableStock,
+            'allow_negative_stock' => (bool) ($product->allow_negative_stock ?? false),
             'variants' => $product->variantItems->map(fn ($variant) => ['id' => $variant->id, 'sku' => $variant->sku, 'barcode' => $variant->barcode])->values(),
             'batches' => $batches,
         ];

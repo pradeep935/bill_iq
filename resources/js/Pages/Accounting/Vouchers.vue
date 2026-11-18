@@ -103,7 +103,19 @@ const removeLine = (i) => journal.entries.splice(i, 1);
 const canReverse = (row) => ['approved', 'posted'].includes(row.status) && row.voucher_type !== 'reversal' && !row.reversed_by_id && !row.reversal_of_id;
 const reverse = async (row) => { if (!canReverse(row)) return; const remarks = prompt('Reversal remarks'); if (remarks) { await AccountingApi.reverseJournal(row.id, remarks); await load(); } };
 const money = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-onMounted(load);
+// Deep link from Purchases > Record Payment: /app/accounting/vouchers?tab=payment&supplier_id=..&purchase_id=..
+const applyDeepLink = async () => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('tab') !== 'payment' || !q.get('supplier_id')) return;
+    tab.value = 'payment';
+    payment.supplier_id = Number(q.get('supplier_id'));
+    const purchaseId = Number(q.get('purchase_id') || 0);
+    if (!purchaseId) return;
+    for (let i = 0; i < 40 && (billsLoading.value || !openBills.value.length); i++) await new Promise((r) => setTimeout(r, 100));
+    const bill = openBills.value.find((b) => Number(b.purchase_id) === purchaseId);
+    if (bill) { bill.allocate = Number(bill.outstanding_amount); payment.amount = Number(bill.outstanding_amount); }
+};
+onMounted(async () => { await load(); await applyDeepLink(); });
 </script>
 
 <template>

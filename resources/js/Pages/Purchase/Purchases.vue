@@ -37,6 +37,7 @@ const errors = ref({});
 const supplierErrors = ref({});
 const openActionMenuId = ref(null);
 const showPurchaseDrawer = ref(false);
+const viewOnly = ref(false);
 const showSupplierModal = ref(false);
 const savingSupplier = ref(false);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
@@ -105,12 +106,14 @@ const reset = () => {
 };
 
 const openPurchaseCreate = () => {
+    viewOnly.value = false;
     reset();
     showPurchaseDrawer.value = true;
 };
 
 const closePurchaseDrawer = () => {
     showPurchaseDrawer.value = false;
+    viewOnly.value = false;
     clearProductSearch();
     productSearch.value = '';
     errors.value = {};
@@ -349,7 +352,7 @@ const summaryEntries = computed(() => {
 
 const removeItem = (index) => form.items.splice(index, 1);
 
-const payload = (status) => ({ ...form, status, branch_id: form.branch_id || null, warehouse_id: form.warehouse_id || null });
+const payload = (status) => { const { voucher_number, ...rest } = form; return { ...rest, status, branch_id: form.branch_id || null, warehouse_id: form.warehouse_id || null }; };
 
 const savePurchase = async (status = 'draft') => {
     if (saving.value) return;
@@ -372,8 +375,10 @@ const savePurchase = async (status = 'draft') => {
 };
 
 const editPurchase = (purchase) => {
+    viewOnly.value = false;
     Object.assign(form, {
         id: purchase.id,
+        voucher_number: purchase.voucher_number || '',
         branch_id: purchase.branch_id || '',
         warehouse_id: purchase.warehouse_id || '',
         supplier_id: purchase.supplier_id,
@@ -406,8 +411,16 @@ const reversePurchase = async (purchase) => {
     alert(response.message || 'Purchase reversed.');
     await loadPurchases(pagination.value.current_page || 1);
 };
+const viewPurchase = (purchase) => {
+    editPurchase(purchase);
+    viewOnly.value = true;
+};
+// Opens Accounting > Vouchers > Payment with this supplier and bill already selected.
+const recordPayment = (purchase) => {
+    window.location.href = `/app/accounting/vouchers?tab=payment&supplier_id=${purchase.supplier_id}&purchase_id=${purchase.id}`;
+};
 const revisePurchase = async (purchase) => {
-    if (!window.confirm('This posted purchase will be reversed (stock and accounts) and an editable draft copy will open. Post the draft again after changing items. Continue?')) return;
+    if (!window.confirm(`Edit posted purchase ${purchase.voucher_number}?\n\nA posted purchase cannot be changed directly. To keep stock and accounts correct, the system will:\n1. Reverse this purchase (its stock and accounting entries are cancelled).\n2. Open an editable draft copy for you.\n3. After you correct it, click "Confirm & Post" to post it again.\n\nContinue?`)) return;
     try {
         const response = await PurchaseApi.revisePurchase(purchase.id, 'Edited: reversed for correction');
         alert(response.message || 'Purchase reversed.');
@@ -446,11 +459,11 @@ onMounted(async () => {
             <div v-if="showPurchaseDrawer" class="drawer-backdrop" @click.self="closePurchaseDrawer">
                 <aside class="drawer-panel">
                     <div class="drawer-heading">
-                        <div><span>PURCHASE MANAGEMENT</span><h2>{{ form.id ? 'Edit Purchase' : 'New Purchase' }}</h2></div>
+                        <div><span>PURCHASE MANAGEMENT</span><h2>{{ viewOnly ? 'View Purchase ' + (form.voucher_number || '') : (form.id ? 'Edit Purchase' : 'New Purchase') }}</h2></div>
                         <button type="button" @click="closePurchaseDrawer">Close</button>
                     </div>
 
-                    <div class="form-grid">
+                    <div class="form-grid" :inert="viewOnly">
                         <SearchSelect v-model="form.branch_id" label="Branch" :options="references.branches" option-value-key="id" option-label-key="name" select-placeholder="Select Branch" />
                         <SearchSelect v-model="form.warehouse_id" label="Warehouse" :options="filteredWarehouses" option-value-key="id" option-label-key="name" select-placeholder="Select Warehouse" />
                         <div class="supplier-picker">
@@ -469,7 +482,7 @@ onMounted(async () => {
                         <label>Remarks<input v-model="form.remarks" placeholder="Remarks" /></label>
                     </div>
 
-                    <div class="product-search">
+                    <div v-if="!viewOnly" class="product-search">
                         <div class="product-search-row">
                             <input v-model="productSearch" placeholder="Search product by name, SKU or barcode" aria-label="Search purchase products" autocomplete="off" @input="searchProducts" />
                             <button type="button" class="secondary-action" @click="openProductMasterCreate">Add Product</button>
@@ -484,7 +497,7 @@ onMounted(async () => {
                         </div>
                     </div>
 
-                    <section class="purchase-items" aria-label="Purchase items">
+                    <section class="purchase-items" aria-label="Purchase items" :inert="viewOnly">
                         <div class="items-heading"><h3>Purchase items</h3><span>{{ form.items.length }} {{ form.items.length === 1 ? 'item' : 'items' }}</span></div>
                         <p v-if="!form.items.length" class="empty">Search and add purchase items.</p>
                         <article v-for="(item, index) in form.items" :key="`${item.product_id}-${index}`" class="purchase-item">
@@ -521,7 +534,7 @@ onMounted(async () => {
                         </dl>
                     </section>
                     <div v-if="Object.keys(errors).length" class="error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
-                    <div class="actions purchase-footer"><button type="button" @click="closePurchaseDrawer">Cancel</button><button :disabled="saving" @click="savePurchase('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="savePurchase('approved')">{{ saving ? 'Saving...' : 'Confirm & Post' }}</button></div>
+                    <div class="actions purchase-footer"><button type="button" @click="closePurchaseDrawer">{{ viewOnly ? 'Close' : 'Cancel' }}</button><template v-if="!viewOnly"><button :disabled="saving" @click="savePurchase('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="savePurchase('approved')">{{ saving ? 'Saving...' : 'Confirm & Post' }}</button></template></div>
                 </aside>
             </div>
 
@@ -574,7 +587,7 @@ onMounted(async () => {
                             <tr v-for="purchase in purchases" :key="purchase.id">
                                 <td>{{ purchase.voucher_number }}</td><td>{{ formatDate(purchase.purchase_date) }}</td><td>{{ purchase.supplier }}</td><td v-if="showLocation">{{ purchase.branch || '-' }}</td><td v-if="showLocation">{{ purchase.warehouse || '-' }}</td><td>{{ purchase.supplier_invoice_number || '-' }}</td>
                                 <td>Rs. {{ formatMoney(purchase.grand_total) }}</td><td>Rs. {{ formatMoney(purchase.paid_amount) }}</td><td :class="{ due: Number(purchase.balance_amount) > 0 }">Rs. {{ formatMoney(purchase.balance_amount) }}</td><td><span class="badge pay" :class="purchase.payment_status">{{ purchase.payment_status }}</span></td><td><span class="badge" :class="purchase.status">{{ purchase.status }}</span></td><td v-if="showCreatedBy">{{ purchase.created_by || '-' }}</td>
-                                <td class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === purchase.id" :show-view="false" more-label="Actions" more-title="Purchase actions" @toggle="toggleActionMenu(purchase)" @close="closeActionMenu"><button v-if="purchase.status === 'draft'" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" @click="revisePurchase(purchase); closeActionMenu()">Edit</button><button v-if="purchase.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(PurchaseApi.duplicatePurchase, purchase); closeActionMenu()">Copy</button><button v-if="purchase.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" class="danger" @click="reversePurchase(purchase); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
+                                <td class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === purchase.id" :show-view="false" more-label="Actions" more-title="Purchase actions" @toggle="toggleActionMenu(purchase)" @close="closeActionMenu"><button type="button" @click="viewPurchase(purchase); closeActionMenu()">View</button><button v-if="['approved','confirmed'].includes(purchase.status) && Number(purchase.balance_amount) > 0" type="button" @click="recordPayment(purchase); closeActionMenu()">Record Payment</button><button v-if="purchase.status === 'draft'" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" @click="revisePurchase(purchase); closeActionMenu()">Edit</button><button v-if="purchase.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(PurchaseApi.duplicatePurchase, purchase); closeActionMenu()">Copy</button><button v-if="purchase.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" class="danger" @click="reversePurchase(purchase); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
                             </tr>
                             <tr v-if="!purchases.length && !loading"><td :colspan="columnCount" class="empty">No purchases found.</td></tr>
                         </tbody>

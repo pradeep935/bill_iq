@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import axios from 'axios';
 import Layout from '../Layout.vue';
+import TeamUsers from './TeamUsers.vue';
 
 const props = defineProps({
     page: String,
@@ -83,7 +84,15 @@ const titleCopy = computed(() => {
 });
 
 const routeUrl = (name, fallback = '#') => props.routes?.[name]?.url || fallback;
-const sectionUrl = (section) => `${routeUrl('admin.workspace', '/app/admin/workspace')}?section=${section}`;
+const dedicatedPages = {
+    users: ['admin.users.index', '/app/setup/users'],
+    saas: ['admin.subscription.show', '/app/setup/saas'],
+    settings: ['admin.settings.index', '/app/setup/settings'],
+};
+const sectionUrl = (section) => {
+    if (dedicatedPages[section]) return routeUrl(...dedicatedPages[section]).split('?')[0];
+    return `${routeUrl('admin.workspace', '/app/admin/workspace')}?section=${section}`;
+};
 
 const refresh = () => {
     refreshing.value = true;
@@ -246,6 +255,8 @@ const showEmpty = computed(() => Object.values(props.emptyStates || {}).some((it
                 </table>
             </div>
         </section>
+
+        <TeamUsers v-if="active === 'users' && permissions['users.view']" />
 
         <section v-if="active === 'settings'" class="settings-panel">
             <div class="settings-head">

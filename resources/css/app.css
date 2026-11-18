@@ -1708,3 +1708,12 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
 .table-wrapper.is-refreshing tbody { opacity: .45; pointer-events: none; transition: opacity .12s ease; }
 .table-wrapper.is-refreshing::before { animation: bill-bar 1.1s ease-in-out infinite; background: linear-gradient(90deg, transparent, #2457d6, transparent) no-repeat; background-size: 40% 100%; content: ''; height: 3px; left: 0; position: absolute; right: 0; top: 0; z-index: 5; }
 @keyframes bill-bar { 0% { background-position: -40% 0; } 100% { background-position: 140% 0; } }
+
+/* Global search dropdown */
+.bill-global-search { position: relative; }
+.bill-search-pop { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 70; background: #fff; border: 1px solid #dfe6ef; border-radius: 12px; box-shadow: 0 14px 34px rgba(15, 23, 42, .18); padding: 6px; max-height: 420px; overflow-y: auto; }
+.bill-search-group > span { display: block; padding: 8px 10px 4px; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #8490a2; }
+.bill-search-group a { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; text-decoration: none; color: #142139; }
+.bill-search-group a:hover { background: #eef2ff; }
+.bill-search-group a strong { font-size: 13px; }
+.bill-search-group a small { font-size: 11px; color: #758197; }

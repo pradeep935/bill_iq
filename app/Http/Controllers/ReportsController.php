@@ -33,7 +33,7 @@ class ReportsController extends Controller
 
     public function stockLedger()
     {
-        if ($redirect = AppController::guardPage('reports')) return $redirect;
+        if ($redirect = AppController::guardPage('stock-ledger')) return $redirect;
         return Inertia::render('Reports/InventoryReports', ['page' => 'stock-ledger', 'title' => 'Stock Ledger', 'initial_tab' => 'ledger']);
     }
 

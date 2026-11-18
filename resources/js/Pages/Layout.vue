@@ -41,7 +41,7 @@
           <a
             v-for="item in activeNavItems"
             :key="item.href"
-            :class="{ active: page === item.page }"
+            :class="{ active: navPage === item.page }"
             :href="normalizeUrl(item.href)"
             :title="item.label"
           >
@@ -89,7 +89,15 @@
 
         <div class="bill-global-search">
           <span class="bill-nav-icon" v-html="iconSvg('search')"></span>
-          <input v-model="globalSearch" type="search" placeholder="Search invoices, customers, products" @keyup.enter="runGlobalSearch" />
+          <input v-model="globalSearch" type="search" placeholder="Search invoices, customers, products" autocomplete="off" @input="onSearchInput" @keyup.enter="runGlobalSearch" @keyup.esc="searchOpen = false" @blur="closeSearchSoon" @focus="searchOpen = searchGroups.length > 0" />
+          <div v-if="searchOpen" class="bill-search-pop">
+            <div v-for="group in searchGroups" :key="group.label" class="bill-search-group">
+              <span>{{ group.label }}</span>
+              <a v-for="item in group.items" :key="item.href + item.title" :href="normalizeUrl(item.href)" @mousedown.prevent>
+                <strong>{{ item.title }}</strong><small>{{ item.sub }}</small>
+              </a>
+            </div>
+          </div>
         </div>
 
         <div class="bill-top-actions" v-if="isSalesInvoicePage">
@@ -104,11 +112,11 @@
             <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
             <span class="top-label">New Bill</span>
           </a>
-          <a v-if="permissions['accounting.create'] !== false" :href="routeUrl('app.accounting.vouchers', '/app/accounting/vouchers')" title="Open accounting vouchers">
+          <a v-if="canVoucher" :href="routeUrl('app.accounting.vouchers', '/app/accounting/vouchers')" title="Open accounting vouchers">
             <span class="bill-nav-icon" v-html="iconSvg('file-plus')"></span>
             <span class="top-label">Voucher</span>
           </a>
-          <a v-if="permissions['reports.view'] !== false" :href="routeUrl('app.reports.business', '/app/reports/business')" title="Open reports">
+          <a v-if="canReports" :href="routeUrl('app.reports.business', '/app/reports/business')" title="Open reports">
             <span class="bill-nav-icon" v-html="iconSvg('bar-chart')"></span>
             <span class="top-label">Reports</span>
           </a>
@@ -130,12 +138,14 @@
       </header>
       <slot />
     </main>
+    <AssistantChat :page="page" />
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watchEffect } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
+import AssistantChat from '../Components/Assistant/AssistantChat.vue';
 
 const props = defineProps({
   page: { type: String, required: true },
@@ -164,6 +174,12 @@ const selectedBusinessId = ref(currentBusiness.value.id || '');
 const selectedBranchId = ref(currentBranch.value.id || '');
 const selectedFinancialYearValue = ref(currentFinancialYear.value.id || currentFinancialYear.value.name || '');
 const isSalesInvoicePage = computed(() => props.page === 'sales');
+// Screens that are not menu items keep their parent menu item highlighted.
+const pageParents = { 'gst-imports': 'gst', 'company-onboarding': 'onboarding' };
+const navPage = computed(() => pageParents[props.page] || props.page);
+// Staff (role 3) only gets New Bill in the top bar; Voucher and Reports are not open to them.
+const canVoucher = computed(() => roleId.value !== 3 && permissions.value['accounting.create'] !== false);
+const canReports = computed(() => roleId.value !== 3 && permissions.value['reports.view'] !== false);
 
 const roleLabel = computed(() => {
   if (roleId.value === 1) return 'Super Admin';
@@ -207,6 +223,7 @@ const sections = [
       { label: 'POS Billing', page: 'pos', href: routeUrl('app.sales.pos', '/app/sales/pos'), icon: 'scan-barcode' },
       { label: 'Sales Invoices', page: 'sales', href: routeUrl('app.sales.invoices', '/app/sales/invoices'), icon: 'receipt' },
       { label: 'Sales Returns', page: 'sales-returns', href: routeUrl('app.sales.returns', '/app/sales/returns'), icon: 'rotate-cw' },
+      { label: 'Payment Reminders', page: 'payment-reminders', href: routeUrl('app.sales.payment-reminders', '/app/sales/payment-reminders'), icon: 'bell' },
       { label: 'Customers', page: 'customers', href: routeUrl('app.sales.customers', '/app/sales/customers'), icon: 'users' },
       { label: 'Stock Outward', page: 'inventory-outward', href: routeUrl('app.sales.stock-outward', '/app/sales/stock-outward'), icon: 'package-minus' },
       { label: 'Reserved Stock', page: 'inventory-reserved', href: routeUrl('app.sales.reserved-stock', '/app/sales/reserved-stock'), icon: 'bookmark-check' },
@@ -376,7 +393,7 @@ const visibleSections = computed(() => {
 });
 
 const currentPageSection = computed(() => (
-  visibleSections.value.find((section) => section.items.some((item) => item.page === props.page)) || visibleSections.value[0] || sections[0]
+  visibleSections.value.find((section) => section.items.some((item) => item.page === navPage.value)) || visibleSections.value[0] || sections[0]
 ));
 const activeSection = computed(() => (
   visibleSections.value.find((section) => section.key === selectedSectionKey.value) || currentPageSection.value
@@ -399,6 +416,24 @@ const switchContext = () => {
     financial_year: financialYears.value.find((year) => String(year.id || year.name) === String(selectedFinancialYearValue.value))?.name || currentFinancialYear.value.name || null,
   }, { preserveScroll: false });
 };
+
+const searchGroups = ref([]);
+const searchOpen = ref(false);
+let searchTimer = null;
+const onSearchInput = () => {
+  clearTimeout(searchTimer);
+  const q = globalSearch.value.trim();
+  if (q.length < 2) { searchGroups.value = []; searchOpen.value = false; return; }
+  searchTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`${appUrl('/app/search')}?q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
+      if (!res.ok) return;
+      searchGroups.value = (await res.json()).groups || [];
+      searchOpen.value = searchGroups.value.length > 0;
+    } catch (e) { /* ignore */ }
+  }, 250);
+};
+const closeSearchSoon = () => setTimeout(() => { searchOpen.value = false; }, 150);
 
 const runGlobalSearch = () => {
   const q = globalSearch.value.trim();

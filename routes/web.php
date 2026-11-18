@@ -3,11 +3,14 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\GeneralController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GstImportController;
+use App\Http\Controllers\GstReturnController;
 use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\Admin\OnboardingController;
 use App\Http\Controllers\AppController;
+use App\Http\Controllers\AssistantController;
 use App\Http\Controllers\BusinessHsnSacController;
 use App\Http\Controllers\CrmController;
 use App\Http\Controllers\CustomerController;
@@ -18,6 +21,7 @@ use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\OpeningStockController;
 use App\Http\Controllers\OrderManagementController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PaymentReminderController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PublicInvoiceController;
@@ -27,6 +31,7 @@ use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\SalesReturnController;
 use App\Http\Controllers\SetupController;
+use App\Http\Controllers\TeamUserController;
 use App\Http\Controllers\StockSummaryController;
 use App\Http\Controllers\StaffController;
 use App\Http\Controllers\SupplierController;
@@ -48,6 +53,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [UserController::class, 'logout'])->name('logout');
     Route::get('/business-dashboard', [DashboardController::class, 'index'])->name('business.dashboard');
     Route::get('/profile', [UserController::class, 'profile'])->name('profile.edit');
+    Route::get('/app/search', GlobalSearchController::class)->middleware('throttle:60,1')->name('app.search');
+    Route::post('/app/assistant/chat', [AssistantController::class, 'chat'])->middleware('throttle:30,1')->name('app.assistant.chat');
 
     Route::prefix('app/sales/stock-outward')->name('inventory.stock-outward.')->group(function () {
         Route::get('/', [SalesController::class, 'stockOutward'])->name('index');
@@ -176,6 +183,9 @@ Route::middleware('auth')->group(function () {
         });
 
         Route::prefix('sales')->name('sales.')->group(function () {
+            Route::get('/payment-reminders', [PaymentReminderController::class, 'index'])->name('payment-reminders');
+            Route::get('/payment-reminders/data', [PaymentReminderController::class, 'data'])->name('payment-reminders.data');
+            Route::post('/payment-reminders/{customer}/whatsapp', [PaymentReminderController::class, 'whatsapp'])->whereNumber('customer')->name('payment-reminders.whatsapp');
             Route::get('/pos', [PosController::class, 'index'])->name('pos');
             Route::get('/invoices', [SalesController::class, 'invoices'])->name('invoices');
             Route::get('/invoices/create', [SalesController::class, 'invoices'])->name('invoices.create');
@@ -665,6 +675,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/expense-reports', [AccountingController::class, 'expenseReports'])->name('expense-reports');
             Route::get('/gst', [AccountingController::class, 'gst'])->name('gst');
             Route::get('/gst-returns', [AccountingController::class, 'gstReturns'])->name('gst-returns');
+            Route::get('/gst-returns/data', [GstReturnController::class, 'data'])->name('gst-returns.data');
+            Route::get('/gst-returns/export', [GstReturnController::class, 'export'])->name('gst-returns.export');
             Route::get('/gst-imports', [GstImportController::class, 'index'])->name('gst-imports');
             Route::post('/gst-imports', [GstImportController::class, 'store'])->name('gst-imports.store');
             Route::get('/gst-imports/{batch}', [GstImportController::class, 'show'])->name('gst-imports.show');
@@ -785,6 +797,9 @@ Route::middleware('auth')->group(function () {
             Route::get('/employees', [SetupController::class, 'employees'])->name('employees');
             Route::get('/users', [SetupController::class, 'users'])->name('users');
             Route::get('/saas', [SetupController::class, 'saas'])->name('saas');
+            Route::get('/team-users', [TeamUserController::class, 'index'])->name('team-users.index');
+            Route::post('/team-users', [TeamUserController::class, 'store'])->name('team-users.store');
+            Route::put('/team-users/{id}', [TeamUserController::class, 'update'])->whereNumber('id')->name('team-users.update');
             Route::get('/acceptance', [ReportsController::class, 'setupAcceptance'])->name('acceptance');
             Route::get('/settings', [SetupController::class, 'settings'])->name('settings');
             Route::post('/settings/business-profile', [SetupController::class, 'updateBusinessProfile'])->name('settings.business-profile');

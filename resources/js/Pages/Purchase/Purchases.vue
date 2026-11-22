@@ -41,6 +41,7 @@ const viewOnly = ref(false);
 const showSupplierModal = ref(false);
 const savingSupplier = ref(false);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
+const editingPosted = ref(false);
 const filters = reactive({ status: '', payment_status: '', purchase_type: '', tax_type: '', supplier_id: '', date_from: '', date_to: '', q: '' });
 const purchaseTypes = [{ value: 'cash', label: 'Cash' }, { value: 'credit', label: 'Credit' }];
 const taxTypes = [{ value: 'intrastate', label: 'Intrastate' }, { value: 'interstate', label: 'Interstate' }, { value: 'exempt', label: 'Exempt' }];
@@ -107,6 +108,7 @@ const reset = () => {
 
 const openPurchaseCreate = () => {
     viewOnly.value = false;
+    editingPosted.value = false;
     reset();
     showPurchaseDrawer.value = true;
 };
@@ -114,6 +116,7 @@ const openPurchaseCreate = () => {
 const closePurchaseDrawer = () => {
     showPurchaseDrawer.value = false;
     viewOnly.value = false;
+    editingPosted.value = false;
     clearProductSearch();
     productSearch.value = '';
     errors.value = {};
@@ -360,7 +363,7 @@ const savePurchase = async (status = 'draft') => {
     errors.value = {};
     try {
         const response = await PurchaseApi.savePurchase(payload(status), form.id);
-        alert(response.message || 'Purchase saved.');
+        alert(editingPosted.value ? 'Purchase updated. Stock and accounts have been corrected.' : (response.message || 'Purchase saved.'));
         reset();
         closePurchaseDrawer();
         await loadPurchases();
@@ -376,6 +379,7 @@ const savePurchase = async (status = 'draft') => {
 
 const editPurchase = (purchase) => {
     viewOnly.value = false;
+    editingPosted.value = !!purchase.status && purchase.status !== 'draft';
     Object.assign(form, {
         id: purchase.id,
         voucher_number: purchase.voucher_number || '',
@@ -419,15 +423,8 @@ const viewPurchase = (purchase) => {
 const recordPayment = (purchase) => {
     window.location.href = `/app/accounting/vouchers?tab=payment&supplier_id=${purchase.supplier_id}&purchase_id=${purchase.id}`;
 };
-const revisePurchase = async (purchase) => {
-    if (!window.confirm(`Edit posted purchase ${purchase.voucher_number}?\n\nA posted purchase cannot be changed directly. To keep stock and accounts correct, the system will:\n1. Reverse this purchase (its stock and accounting entries are cancelled).\n2. Open an editable draft copy for you.\n3. After you correct it, click "Confirm & Post" to post it again.\n\nContinue?`)) return;
-    try {
-        const response = await PurchaseApi.revisePurchase(purchase.id, 'Edited: reversed for correction');
-        alert(response.message || 'Purchase reversed.');
-        editPurchase(response.purchase);
-        await loadPurchases(pagination.value.current_page || 1);
-    } catch (error) { alert(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'Could not edit this purchase.'); }
-};
+// Posted purchases are edited in place: the form opens directly and Save re-posts stock + accounts under the same voucher number.
+const revisePurchase = (purchase) => editPurchase(purchase);
 const toggleActionMenu = (purchase) => { openActionMenuId.value = openActionMenuId.value === purchase.id ? null : purchase.id; };
 const closeActionMenu = () => { openActionMenuId.value = null; };
 
@@ -459,10 +456,11 @@ onMounted(async () => {
             <div v-if="showPurchaseDrawer" class="drawer-backdrop" @click.self="closePurchaseDrawer">
                 <aside class="drawer-panel">
                     <div class="drawer-heading">
-                        <div><span>PURCHASE MANAGEMENT</span><h2>{{ viewOnly ? 'View Purchase ' + (form.voucher_number || '') : (form.id ? 'Edit Purchase' : 'New Purchase') }}</h2></div>
+                        <div><span>PURCHASE MANAGEMENT</span><h2>{{ viewOnly ? 'View Purchase ' + (form.voucher_number || '') : (form.id ? 'Edit Purchase ' + (form.voucher_number || '') : 'New Purchase') }}</h2></div>
                         <button type="button" @click="closePurchaseDrawer">Close</button>
                     </div>
 
+                    <p v-if="editingPosted && !viewOnly" class="edit-note">This purchase is already posted. Change anything you need and click <strong>Save Changes</strong> &mdash; stock and accounts are corrected automatically and the voucher number stays the same.</p>
                     <div class="form-grid" :inert="viewOnly">
                         <SearchSelect v-model="form.branch_id" label="Branch" :options="references.branches" option-value-key="id" option-label-key="name" select-placeholder="Select Branch" />
                         <SearchSelect v-model="form.warehouse_id" label="Warehouse" :options="filteredWarehouses" option-value-key="id" option-label-key="name" select-placeholder="Select Warehouse" />
@@ -534,7 +532,7 @@ onMounted(async () => {
                         </dl>
                     </section>
                     <div v-if="Object.keys(errors).length" class="error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
-                    <div class="actions purchase-footer"><button type="button" @click="closePurchaseDrawer">{{ viewOnly ? 'Close' : 'Cancel' }}</button><template v-if="!viewOnly"><button :disabled="saving" @click="savePurchase('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="savePurchase('approved')">{{ saving ? 'Saving...' : 'Confirm & Post' }}</button></template></div>
+                    <div class="actions purchase-footer"><button type="button" @click="closePurchaseDrawer">{{ viewOnly ? 'Close' : 'Cancel' }}</button><template v-if="!viewOnly"><button v-if="!editingPosted" :disabled="saving" @click="savePurchase('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="savePurchase('approved')">{{ saving ? 'Saving...' : (editingPosted ? 'Save Changes' : 'Confirm & Post') }}</button></template></div>
                 </aside>
             </div>
 
@@ -604,7 +602,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions,.modal-heading,.drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span,.modal-heading span,.drawer-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){width:220px;min-width:0}.toolbar :deep(.search-select-hint){display:none}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:72px;resize:vertical}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.secondary-action{color:#2457d6;background:#edf4ff;border-color:#cfe0ff}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.supplier-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.add-supplier-btn{height:38px;align-self:end;white-space:nowrap}.product-search{position:relative;z-index:1;margin:14px 0}.product-search-row{display:flex;gap:10px}.product-search-row input{flex:1;min-width:0}.product-search-row button{white-space:nowrap}.search-results{position:absolute;z-index:20;top:calc(100% + 6px);left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 8px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:11px 8px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.action-cell{width:1%;text-align:right}.action-cell .row-actions{justify-content:flex-end}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}.filter-field{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.filter-group{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.ghost-action{color:#475569;background:#f8fafc;border-color:#dfe6ef}.toolbar > .primary{margin-left:auto;white-space:nowrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.due{color:#b42318;font-weight:800}.badge.pay{background:#fff4e5;color:#b54708}.badge.pay.paid{background:#eaf8f1;color:#168757}.badge.pay.partial{background:#edf2ff;color:#2457d6}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.is-loading tr:not(.loading-row){opacity:.38}.loading-row td{padding:14px 10px}.skeleton-line{display:block;width:100%;height:12px;border-radius:999px;background:linear-gradient(90deg,#eef3fb 25%,#f8fbff 38%,#eef3fb 63%);background-size:240% 100%;animation:shimmer 1.05s ease-in-out infinite}.skeleton-line.w-1{width:46%}.skeleton-line.w-2{width:64%}.skeleton-line.w-3{width:78%}.skeleton-line.w-4{width:92%}@keyframes shimmer{0%{background-position:120% 0}100%{background-position:-120% 0}}.drawer-backdrop{position:fixed;z-index:950;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.38)}.drawer-panel{width:min(1120px,calc(100vw - 28px));height:100vh;overflow:auto;padding:18px;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-24px 0 70px rgba(15,23,42,.2)}.drawer-heading{position:sticky;z-index:30;top:0;margin:-18px -18px 16px;padding:16px 18px;background:#fff;border-bottom:1px solid #edf1f5}.drawer-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.modal-panel{width:min(920px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.modal-heading{margin-bottom:14px}.modal-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.supplier-form-grid .wide{grid-column:span 2}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.product-search-row,.modal-heading,.drawer-heading{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}.filter-group{width:100%;align-items:stretch}.toolbar > .primary{width:100%;margin-left:0}.supplier-picker{grid-template-columns:1fr}.supplier-form-grid .wide{grid-column:auto}.drawer-panel{width:100vw}}
+.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions,.modal-heading,.drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span,.modal-heading span,.drawer-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){width:220px;min-width:0}.toolbar :deep(.search-select-hint){display:none}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:72px;resize:vertical}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.secondary-action{color:#2457d6;background:#edf4ff;border-color:#cfe0ff}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.supplier-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.add-supplier-btn{height:38px;align-self:end;white-space:nowrap}.product-search{position:relative;z-index:1;margin:14px 0}.product-search-row{display:flex;gap:10px}.product-search-row input{flex:1;min-width:0}.product-search-row button{white-space:nowrap}.search-results{position:absolute;z-index:20;top:calc(100% + 6px);left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 8px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:11px 8px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.action-cell{width:1%;text-align:right}.action-cell .row-actions{justify-content:flex-end}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}.edit-note{margin:0 0 12px;padding:10px 12px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px}.filter-field{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.filter-group{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.ghost-action{color:#475569;background:#f8fafc;border-color:#dfe6ef}.toolbar > .primary{margin-left:auto;white-space:nowrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.due{color:#b42318;font-weight:800}.badge.pay{background:#fff4e5;color:#b54708}.badge.pay.paid{background:#eaf8f1;color:#168757}.badge.pay.partial{background:#edf2ff;color:#2457d6}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.is-loading tr:not(.loading-row){opacity:.38}.loading-row td{padding:14px 10px}.skeleton-line{display:block;width:100%;height:12px;border-radius:999px;background:linear-gradient(90deg,#eef3fb 25%,#f8fbff 38%,#eef3fb 63%);background-size:240% 100%;animation:shimmer 1.05s ease-in-out infinite}.skeleton-line.w-1{width:46%}.skeleton-line.w-2{width:64%}.skeleton-line.w-3{width:78%}.skeleton-line.w-4{width:92%}@keyframes shimmer{0%{background-position:120% 0}100%{background-position:-120% 0}}.drawer-backdrop{position:fixed;z-index:950;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.38)}.drawer-panel{width:min(1120px,calc(100vw - 28px));height:100vh;overflow:auto;padding:18px;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-24px 0 70px rgba(15,23,42,.2)}.drawer-heading{position:sticky;z-index:30;top:0;margin:-18px -18px 16px;padding:16px 18px;background:#fff;border-bottom:1px solid #edf1f5}.drawer-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.modal-panel{width:min(920px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.modal-heading{margin-bottom:14px}.modal-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.supplier-form-grid .wide{grid-column:span 2}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.product-search-row,.modal-heading,.drawer-heading{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}.filter-group{width:100%;align-items:stretch}.toolbar > .primary{width:100%;margin-left:0}.supplier-picker{grid-template-columns:1fr}.supplier-form-grid .wide{grid-column:auto}.drawer-panel{width:100vw}}
 /* Keep sticky purchase cells inside the table's own stacking context. */
 .drawer-panel .table-wrapper{isolation:isolate;z-index:0}
 

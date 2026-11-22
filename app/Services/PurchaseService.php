@@ -45,6 +45,7 @@ class PurchaseService
             ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(!empty($filters['purchase_type']), fn (Builder $q) => $q->where('purchase_type', $filters['purchase_type']))
             ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']))
+            ->when(($filters['status'] ?? '') !== 'reversed', fn (Builder $q) => $q->where('voucher_number', 'not like', '%-R_%'))
             ->when(!empty($filters['q']), function (Builder $q) use ($filters) {
                 $term = '%' . trim($filters['q']) . '%';
                 $q->where(fn (Builder $w) => $w->where('voucher_number', 'like', $term)->orWhere('supplier_invoice_number', 'like', $term));
@@ -53,9 +54,9 @@ class PurchaseService
             ->paginate($perPage);
     }
 
-    public function create(array $data): PurchaseVoucher
+    public function create(array $data, ?string $voucherNumber = null): PurchaseVoucher
     {
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($data, $voucherNumber) {
             $businessId = AppController::businessId();
             $this->validateOwnership($businessId, $data);
             $totals = $this->calculator->calculateVoucherTotals($data);
@@ -63,7 +64,7 @@ class PurchaseService
             $status = $data['status'];
 
             $voucher = PurchaseVoucher::query()->create($this->voucherAttributes($businessId, $data, $totals, [
-                'voucher_number' => $this->nextVoucherNumber($businessId),
+                'voucher_number' => $voucherNumber ?? $this->nextVoucherNumber($businessId),
                 'status' => 'draft',
                 'created_by' => Auth::id(),
             ]));
@@ -110,6 +111,47 @@ class PurchaseService
             }
 
             return $this->fresh($voucher);
+        });
+    }
+
+    /**
+     * Edit a posted purchase in one step (Tally-style). Atomically: the old posting (stock + accounts) is reversed,
+     * the old row is archived as "<no>-R<n>", and the corrected voucher is posted again under the SAME voucher number.
+     * Any failure rolls everything back, so the original purchase is never left half-edited.
+     */
+    public function updatePosted(PurchaseVoucher $voucher, array $data): PurchaseVoucher
+    {
+        return DB::transaction(function () use ($voucher, $data) {
+            $this->assertBusiness($voucher);
+            $voucher = PurchaseVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
+
+            if (!in_array($voucher->status, ['confirmed', 'approved'], true)) {
+                throw ValidationException::withMessages(['status' => 'Only draft or posted purchases can be edited.']);
+            }
+            if ((float) $voucher->paid_amount > 0) {
+                throw ValidationException::withMessages(['status' => 'A payment is already recorded against this bill. Reverse that payment first (Accounting > Vouchers), then edit the bill.']);
+            }
+
+            $businessId = (int) $voucher->business_id;
+            $this->validateOwnership($businessId, $data);
+            $this->calculator->validatePurchaseTotals($this->calculator->calculateVoucherTotals($data));
+
+            $number = $voucher->voucher_number;
+            $createdBy = $voucher->created_by;
+            $revisions = PurchaseVoucher::query()->where('business_id', $businessId)->where('voucher_number', 'like', $number . '-R%')->count();
+
+            $this->reverse($voucher, 'Edited: ' . $number);
+            $voucher->update(['voucher_number' => $number . '-R' . ($revisions + 1)]);
+
+            $new = $this->create(array_merge($data, ['status' => $voucher->getOriginal('status') === 'confirmed' ? 'confirmed' : 'approved']), $number);
+            $new->update(['created_by' => $createdBy]);
+
+            AuditLogger::record([
+                'module_name' => 'Purchase', 'record_id' => $new->id, 'action_type' => 'Update', 'business_id' => $businessId,
+                'summary' => "Posted purchase {$number} edited (previous version archived as {$voucher->voucher_number})",
+            ]);
+
+            return $this->fresh($new);
         });
     }
 

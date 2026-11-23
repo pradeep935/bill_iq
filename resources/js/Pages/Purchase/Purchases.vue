@@ -61,6 +61,8 @@ const form = reactive({
     tax_type: 'intrastate',
     discount_type: '',
     discount_value: 0,
+    other_charges: 0,
+    other_charges_gst_rate: 0,
     paid_amount: 0,
     remarks: '',
     items: [],
@@ -101,7 +103,7 @@ const reset = () => {
     Object.assign(form, {
         id: null, branch_id: '', warehouse_id: '', supplier_id: '', supplier_invoice_number: '',
         purchase_date: today, supplier_invoice_date: '', due_date: '', purchase_type: 'credit',
-        tax_type: 'intrastate', discount_type: '', discount_value: 0, paid_amount: 0, remarks: '', items: [],
+        tax_type: 'intrastate', discount_type: '', discount_value: 0, other_charges: 0, other_charges_gst_rate: 0, paid_amount: 0, remarks: '', items: [],
     });
     errors.value = {};
 };
@@ -296,6 +298,8 @@ const addProduct = (product) => {
         mrp: product.mrp || '',
         discount_type: '',
         discount_value: 0,
+        other_charges: 0,
+        other_charges_gst_rate: 0,
         gst_rate: product.gst_rate || 0,
         cess_rate: product.cess_rate || 0,
         batch_number: '',
@@ -316,7 +320,7 @@ const totalsError = ref('');
 let totalsTimer;
 let totalsVersion = 0;
 const calculationInput = computed(() => ({
-    tax_type: form.tax_type, discount_type: form.discount_type || null, discount_value: form.discount_value || 0, paid_amount: form.paid_amount || 0,
+    tax_type: form.tax_type, discount_type: form.discount_type || null, discount_value: form.discount_value || 0, other_charges: form.other_charges || 0, other_charges_gst_rate: form.other_charges_gst_rate || 0, paid_amount: form.paid_amount || 0,
     items: form.items.map(item => ({ quantity: item.quantity || 0, purchase_rate: item.purchase_rate || 0, discount_type: item.discount_type || null, discount_value: item.discount_value || 0, gst_rate: item.gst_rate || 0, cess_rate: item.cess_rate || 0 })),
 }));
 watch(calculationInput, (data) => {
@@ -343,6 +347,7 @@ const summaryEntries = computed(() => {
         { key: 'subtotal', label: 'Subtotal', value: t.subtotal },
         { key: 'item_discount', label: 'Item discount', value: t.items?.reduce((sum, item) => sum + Number(item.discount_amount), 0) },
         { key: 'discount_amount', label: 'Voucher discount', value: t.discount_amount },
+        { key: 'other_charges', label: 'Transport / other charges', value: t.other_charges },
         { key: 'taxable_amount', label: 'Taxable amount', value: t.taxable_amount },
         { key: 'gst', label: 'GST', value: Number(t.cgst_amount || 0) + Number(t.sgst_amount || 0) + Number(t.igst_amount || 0) },
         { key: 'cess_amount', label: 'Cess', value: t.cess_amount },
@@ -394,6 +399,8 @@ const editPurchase = (purchase) => {
         tax_type: purchase.tax_type,
         discount_type: purchase.discount_type || '',
         discount_value: purchase.discount_value || 0,
+        other_charges: purchase.other_charges || 0,
+        other_charges_gst_rate: purchase.other_charges_gst_rate || 0,
         paid_amount: purchase.paid_amount || 0,
         remarks: purchase.remarks || '',
         items: (purchase.items || []).map((item) => ({ ...item, product_name: item.product, variants: [] })),
@@ -476,6 +483,8 @@ onMounted(async () => {
                         <SearchSelect v-model="form.tax_type" label="Tax Type" :options="taxTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Tax Type" required />
                         <SearchSelect v-model="form.discount_type" label="Discount Type" :options="discountTypes" option-value-key="value" option-label-key="label" select-placeholder="No Discount" />
                         <label>Voucher Discount<input v-model="form.discount_value" type="number" min="0" step="0.01" placeholder="Voucher Discount" /></label>
+                        <label>Transport / Other Charges<input v-model="form.other_charges" type="number" min="0" step="0.01" placeholder="e.g. freight, cartage" /></label>
+                        <label>Charges GST %<input v-model="form.other_charges_gst_rate" type="number" min="0" max="100" step="0.01" placeholder="0" /></label>
                         <label>Paid Amount<input v-model="form.paid_amount" type="number" min="0" step="0.01" placeholder="Paid Amount" /></label>
                         <label>Remarks<input v-model="form.remarks" placeholder="Remarks" /></label>
                     </div>

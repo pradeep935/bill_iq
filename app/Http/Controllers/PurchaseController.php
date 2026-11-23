@@ -270,7 +270,7 @@ class PurchaseController extends Controller
         abort_unless(AppController::canOpen('purchases'), 403);
         // Only calculation inputs are accepted; preview never reads or writes vouchers.
         $rules = (new \App\Http\Requests\PurchaseVoucherRequest())->rules();
-        $fields = ['tax_type', 'discount_type', 'discount_value', 'paid_amount', 'items',
+        $fields = ['tax_type', 'discount_type', 'discount_value', 'paid_amount', 'other_charges', 'other_charges_gst_rate', 'items',
             'items.*.quantity', 'items.*.purchase_rate', 'items.*.discount_type',
             'items.*.discount_value', 'items.*.gst_rate', 'items.*.cess_rate'];
         $rules = array_intersect_key($rules, array_flip($fields));

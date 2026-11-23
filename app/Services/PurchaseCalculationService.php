@@ -87,6 +87,17 @@ class PurchaseCalculationService
 
         $voucherDiscount = $this->calculateDiscount($taxable, $data['discount_type'] ?? null, (float) ($data['discount_value'] ?? 0));
         $taxableAfterVoucherDiscount = max(0, round($taxable - $voucherDiscount, 2));
+        // Transport / freight / other charges: added on top of the goods, with optional GST on the charge.
+        $charge = round(max(0, (float) ($data['other_charges'] ?? 0)), 2);
+        $chargeGst = $taxType === 'exempt' ? 0.0 : round($charge * max(0, min(100, (float) ($data['other_charges_gst_rate'] ?? 0))) / 100, 2);
+        if ($taxType === 'interstate') {
+            $igst += $chargeGst;
+        } elseif ($chargeGst > 0) {
+            $half = round($chargeGst / 2, 2);
+            $cgst += $half;
+            $sgst += round($chargeGst - $half, 2);
+        }
+        $taxableAfterVoucherDiscount = round($taxableAfterVoucherDiscount + $charge, 2);
         $grossTotal = round($taxableAfterVoucherDiscount + $cgst + $sgst + $igst + $cess, 2);
         $roundedTotal = round($grossTotal);
         $roundOff = round($roundedTotal - $grossTotal, 2);
@@ -97,6 +108,8 @@ class PurchaseCalculationService
             'items' => $items,
             'subtotal' => round($subtotal, 2),
             'discount_amount' => $voucherDiscount,
+            'other_charges' => $charge,
+            'other_charges_tax' => $chargeGst,
             'taxable_amount' => $taxableAfterVoucherDiscount,
             'cgst_amount' => round($cgst, 2),
             'sgst_amount' => round($sgst, 2),

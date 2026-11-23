@@ -29,6 +29,8 @@ class PurchaseVoucherRequest extends FormRequest
             'discount_type' => ['nullable', Rule::in(['percentage', 'amount'])],
             'discount_value' => ['nullable', 'numeric', 'min:0'],
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
+            'other_charges' => ['nullable', 'numeric', 'min:0'],
+            'other_charges_gst_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'status' => ['required', Rule::in(['draft', 'confirmed', 'approved'])],
             'remarks' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],

@@ -42,6 +42,7 @@ const showSupplierModal = ref(false);
 const savingSupplier = ref(false);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 const editingPosted = ref(false);
+const paymentMode = ref('unpaid');
 const filters = reactive({ status: '', payment_status: '', purchase_type: '', tax_type: '', supplier_id: '', date_from: '', date_to: '', q: '' });
 const purchaseTypes = [{ value: 'cash', label: 'Cash' }, { value: 'credit', label: 'Credit' }];
 const taxTypes = [{ value: 'intrastate', label: 'Intrastate' }, { value: 'interstate', label: 'Interstate' }, { value: 'exempt', label: 'Exempt' }];
@@ -106,6 +107,7 @@ const reset = () => {
         tax_type: 'intrastate', discount_type: '', discount_value: 0, other_charges: 0, other_charges_gst_rate: 0, paid_amount: 0, remarks: '', items: [],
     });
     errors.value = {};
+    paymentMode.value = 'unpaid';
 };
 
 const openPurchaseCreate = () => {
@@ -349,13 +351,24 @@ const summaryEntries = computed(() => {
         { key: 'discount_amount', label: 'Voucher discount', value: t.discount_amount },
         { key: 'other_charges', label: 'Transport / other charges', value: t.other_charges },
         { key: 'taxable_amount', label: 'Taxable amount', value: t.taxable_amount },
-        { key: 'gst', label: 'GST', value: Number(t.cgst_amount || 0) + Number(t.sgst_amount || 0) + Number(t.igst_amount || 0) },
+        ...(form.tax_type === 'interstate'
+            ? [{ key: 'igst', label: 'IGST', value: t.igst_amount }]
+            : form.tax_type === 'exempt' ? [] : [{ key: 'cgst', label: 'CGST', value: t.cgst_amount }, { key: 'sgst', label: 'SGST', value: t.sgst_amount }]),
         { key: 'cess_amount', label: 'Cess', value: t.cess_amount },
         { key: 'round_off', label: 'Round off', value: t.round_off },
         { key: 'grand_total', label: 'Grand total', value: t.grand_total },
         { key: 'paid_amount', label: 'Paid amount', value: t.paid_amount },
         { key: 'balance_amount', label: 'Balance', value: t.balance_amount },
     ];
+});
+
+watch(paymentMode, (mode) => {
+    if (mode === 'unpaid') form.paid_amount = 0;
+    else if (mode === 'paid' && totals.value) form.paid_amount = Number(totals.value.grand_total || 0);
+});
+// "Paid in full" follows the grand total as items change; the preview's own total does not depend on paid amount.
+watch(() => totals.value?.grand_total, (grand) => {
+    if (paymentMode.value === 'paid' && grand != null) form.paid_amount = Number(grand);
 });
 
 const removeItem = (index) => form.items.splice(index, 1);
@@ -405,6 +418,7 @@ const editPurchase = (purchase) => {
         remarks: purchase.remarks || '',
         items: (purchase.items || []).map((item) => ({ ...item, product_name: item.product, variants: [] })),
     });
+    paymentMode.value = Number(purchase.paid_amount) <= 0 ? 'unpaid' : (purchase.payment_status === 'paid' ? 'paid' : 'partial');
     showPurchaseDrawer.value = true;
 };
 
@@ -485,7 +499,8 @@ onMounted(async () => {
                         <label>Voucher Discount<input v-model="form.discount_value" type="number" min="0" step="0.01" placeholder="Voucher Discount" /></label>
                         <label>Transport / Other Charges<input v-model="form.other_charges" type="number" min="0" step="0.01" placeholder="e.g. freight, cartage" /></label>
                         <label>Charges GST %<input v-model="form.other_charges_gst_rate" type="number" min="0" max="100" step="0.01" placeholder="0" /></label>
-                        <label>Paid Amount<input v-model="form.paid_amount" type="number" min="0" step="0.01" placeholder="Paid Amount" /></label>
+                        <label>Payment<select v-model="paymentMode"><option value="unpaid">Unpaid (pay later)</option><option value="paid">Paid in full</option><option value="partial">Partly paid</option></select></label>
+                        <label v-if="paymentMode === 'partial'">Paid Amount<input v-model="form.paid_amount" type="number" min="0" step="0.01" placeholder="Amount paid now" /></label>
                         <label>Remarks<input v-model="form.remarks" placeholder="Remarks" /></label>
                     </div>
 

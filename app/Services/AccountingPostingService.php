@@ -235,7 +235,11 @@ class AccountingPostingService
             $this->addDebitEntry($entries, $s->input_igst_account_id, (float) $purchase->igst_amount);
             $this->addDebitEntry($entries, $s->input_cess_account_id, (float) $purchase->cess_amount);
             $this->roundForDebitSide($entries, $s->round_off_account_id, (float) $purchase->round_off);
-            $this->addCreditEntry($entries, $purchase->purchase_type === 'cash' ? $s->cash_account_id : $s->accounts_payable_id, (float) $purchase->grand_total, ['supplier_id' => $purchase->supplier_id]);
+            // Amount settled at entry time (cash purchase, or "paid"/"partly paid" credit purchase) credits cash; the rest stays payable.
+            $grand = (float) $purchase->grand_total;
+            $paidNow = $purchase->purchase_type === 'cash' ? $grand : min(max(0.0, (float) $purchase->paid_amount), $grand);
+            $this->addCreditEntry($entries, $s->cash_account_id, $paidNow, ['supplier_id' => $purchase->supplier_id]);
+            $this->addCreditEntry($entries, $s->accounts_payable_id, round($grand - $paidNow, 2), ['supplier_id' => $purchase->supplier_id]);
             return $this->sourceVoucher('purchase', $purchase, $purchase->purchase_date, $purchase->voucher_number, $entries);
         });
     }

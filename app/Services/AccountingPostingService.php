@@ -226,7 +226,10 @@ class AccountingPostingService
             if ($this->alreadyPosted(PurchaseVoucher::class, $purchase->id)) return null;
             $s = $this->settings($purchase->business_id);
             $entries = [];
-            $this->addDebitEntry($entries, $s->purchase_account_id, (float) $purchase->taxable_amount);
+            // Transport / freight goes to its own expense ledger; goods go to the Purchases account.
+            $freight = min((float) $purchase->other_charges, (float) $purchase->taxable_amount);
+            $this->addDebitEntry($entries, $s->purchase_account_id, round((float) $purchase->taxable_amount - $freight, 2));
+            $this->addDebitEntry($entries, $this->freightAccountId($purchase->business_id, $s), $freight);
             $this->addDebitEntry($entries, $s->input_cgst_account_id, (float) $purchase->cgst_amount);
             $this->addDebitEntry($entries, $s->input_sgst_account_id, (float) $purchase->sgst_amount);
             $this->addDebitEntry($entries, $s->input_igst_account_id, (float) $purchase->igst_amount);
@@ -235,6 +238,15 @@ class AccountingPostingService
             $this->addCreditEntry($entries, $purchase->purchase_type === 'cash' ? $s->cash_account_id : $s->accounts_payable_id, (float) $purchase->grand_total, ['supplier_id' => $purchase->supplier_id]);
             return $this->sourceVoucher('purchase', $purchase, $purchase->purchase_date, $purchase->voucher_number, $entries);
         });
+    }
+
+    /** Ledger for purchase transport charges: an expense ledger named "Freight…", else Shipping Expense, else Purchases. */
+    private function freightAccountId(int $businessId, BusinessAccountSetting $s): ?int
+    {
+        $id = Account::query()->where('business_id', $businessId)->where('account_type', 'expense')->where('status', 'active')
+            ->where('account_name', 'like', 'freight%')->orderBy('id')->value('id');
+
+        return $id ? (int) $id : ($s->shipping_expense_account_id ?: $s->purchase_account_id);
     }
 
     public function postSalesReturn(SalesReturnVoucher $return): ?JournalVoucher

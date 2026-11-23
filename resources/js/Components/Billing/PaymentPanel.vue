@@ -19,6 +19,11 @@
         {{ mode.label }}
       </button>
     </div>
+    <p class="bill-payment-hint">
+      <template v-if="paymentMode === 'credit'">Unpaid: full amount is added to the customer's outstanding.</template>
+      <template v-else-if="paymentMode === 'partial'">Part paid: enter the amount received now; the balance stays outstanding.</template>
+      <template v-else>Paid in full.</template>
+    </p>
     <div v-if="paymentMode !== 'credit'" class="bill-payment-lines">
       <div v-for="(payment, index) in payments" :key="index" class="bill-payment-line">
         <select v-model="payment.payment_method_id" title="Payment method">
@@ -53,7 +58,12 @@ const modes = [
   { value: 'cash', label: 'Cash' },
   { value: 'upi', label: 'UPI' },
   { value: 'card', label: 'Card' },
-  { value: 'credit', label: 'Credit' },
   { value: 'split', label: 'Split Payment' },
+  { value: 'partial', label: 'Part Paid' },
+  { value: 'credit', label: 'Unpaid' },
 ];
 </script>
+
+<style scoped>
+.bill-payment-hint{margin:8px 0 4px;color:#667085;font-size:12px}
+</style>

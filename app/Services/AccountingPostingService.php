@@ -208,7 +208,11 @@ class AccountingPostingService
             if ($this->alreadyPosted(SalesVoucher::class, $sale->id)) return null;
             $s = $this->settings($sale->business_id);
             $entries = [];
-            $this->addDebitEntry($entries, $sale->sale_type === 'cash' ? $s->cash_account_id : $s->accounts_receivable_id, (float) $sale->grand_total, ['customer_id' => $sale->customer_id]);
+            // Cash sale: all received in cash. Credit sale: any amount received at billing time (part payment) debits cash, the rest stays receivable.
+            $grand = (float) $sale->grand_total;
+            $receivedNow = $sale->sale_type === 'cash' ? $grand : min(max(0.0, (float) $sale->paid_amount), $grand);
+            $this->addDebitEntry($entries, $s->cash_account_id, $receivedNow, ['customer_id' => $sale->customer_id]);
+            $this->addDebitEntry($entries, $s->accounts_receivable_id, round($grand - $receivedNow, 2), ['customer_id' => $sale->customer_id]);
             $this->addCreditEntry($entries, $s->sales_account_id, (float) $sale->taxable_amount);
             $this->addCreditEntry($entries, $s->output_cgst_account_id, (float) $sale->cgst_amount);
             $this->addCreditEntry($entries, $s->output_sgst_account_id, (float) $sale->sgst_amount);

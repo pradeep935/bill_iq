@@ -192,7 +192,7 @@ const summaryRows = computed(() => [
 const hasCartItems = computed(() => form.items.length > 0);
 const footerState = computed(() => {
     if (!hasCartItems.value) return 'Scan a product to start billing';
-    if (paymentMode.value === 'credit') return 'Credit sale';
+    if (paymentMode.value === 'credit') return 'Unpaid sale';
     if (totals.value.balance > 0) return `Balance ${formatMoney(totals.value.balance)}`;
     if (totals.value.change > 0) return `Change ${formatMoney(totals.value.change)}`;
     return 'Ready to complete';
@@ -298,6 +298,11 @@ const validatePaymentBeforeSave = (status) => {
     }
     const grand = Number(totals.value.grand.toFixed(2));
     if (paymentMode.value === 'credit') return true;
+    if (paymentMode.value === 'partial' && (paid <= 0 || paid >= grand)) {
+        showToast('Part paid: enter an amount greater than 0 and less than the invoice total.', 'error');
+        return false;
+    }
+    if (paymentMode.value === 'partial') return true;
     if (paymentMode.value === 'split' && paid !== grand) {
         showToast('Split payment total must exactly match invoice total.', 'error');
         return false;
@@ -579,7 +584,7 @@ const paymentPayload = (method, amount) => ({
 
 const setPaymentMode = (mode) => {
     paymentMode.value = mode;
-    form.sale_type = mode === 'credit' ? 'credit' : 'cash';
+    form.sale_type = ['credit', 'partial'].includes(mode) ? 'credit' : 'cash';
     if (mode === 'credit') {
         form.payments = [];
         return;
@@ -591,13 +596,18 @@ const setPaymentMode = (mode) => {
         form.payments = [paymentPayload(cash, first), paymentPayload(upi, Math.max(0, totals.value.grand - first))];
         return;
     }
+    if (mode === 'partial') {
+        const cash = methodByType('cash') || paymentMethods.value[0];
+        form.payments = cash ? [paymentPayload(cash, Math.floor(totals.value.grand / 2))] : [];
+        return;
+    }
     const method = methodByType(mode) || paymentMethods.value[0];
     form.payments = method ? [paymentPayload(method, totals.value.grand)] : [];
 };
 
 const syncPaymentAmount = () => {
     if (paymentMode.value === 'credit') return;
-    if (paymentMode.value !== 'split' && form.payments[0]) {
+    if (!['split', 'partial'].includes(paymentMode.value) && form.payments[0]) {
         form.payments[0].amount = totals.value.grand;
     }
 };

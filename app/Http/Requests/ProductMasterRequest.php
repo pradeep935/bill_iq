@@ -146,6 +146,7 @@ class ProductMasterRequest extends FormRequest
             'height' => ['nullable', 'numeric', 'min:0'],
             'expiry_required' => ['nullable', 'boolean'],
             'batch_required' => ['nullable', 'boolean'],
+            'is_sample' => ['nullable', 'boolean'],
             'serial_required' => ['nullable', 'boolean'],
             'status' => ['required', Rule::in(['active', 'inactive', 'discontinued'])],
 

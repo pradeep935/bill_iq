@@ -61,6 +61,7 @@ const brandFilter = ref('');
 const unitFilter = ref('');
 const gstRateFilter = ref('');
 const priceFilter = ref('');
+const sampleFilter = ref('');
 const perPage = ref(15);
 
 const showForm = ref(false);
@@ -296,7 +297,8 @@ const hasFilters = computed(() => {
         brandFilter.value ||
         unitFilter.value ||
         gstRateFilter.value ||
-        priceFilter.value
+        priceFilter.value ||
+        sampleFilter.value
     );
 });
 
@@ -313,6 +315,7 @@ const requestParams = (page = 1) => {
         unit: unitFilter.value || undefined,
         gst_rate: gstRateFilter.value || undefined,
         price_missing: priceFilter.value === 'missing' ? 1 : undefined,
+        is_sample: sampleFilter.value === 'sample' ? 1 : undefined,
     };
 };
 
@@ -590,6 +593,7 @@ const clearFilters = () => {
     unitFilter.value = '';
     gstRateFilter.value = '';
     priceFilter.value = '';
+    sampleFilter.value = '';
 };
 
 const toggleSelectAll = () => {
@@ -777,6 +781,7 @@ watch(
         unitFilter,
         gstRateFilter,
         priceFilter,
+        sampleFilter,
         perPage,
     ],
     () => {
@@ -955,6 +960,11 @@ onMounted(() => {
                             <option value="missing">Price missing (needs rate)</option>
                         </select>
 
+                        <select v-model="sampleFilter" aria-label="Filter sample products">
+                            <option value="">All Products</option>
+                            <option value="sample">Sample products only</option>
+                        </select>
+
                         <button
                             v-if="hasFilters"
                             type="button"
@@ -1082,7 +1092,7 @@ onMounted(() => {
 
                     <template #cell-name="{ row: product }">
                         <div class="product-information">
-                            <strong>{{ product.name }}</strong>
+                            <strong>{{ product.name }} <em v-if="product.is_sample" class="sample-tag">Sample</em></strong>
                             <span>{{ product.product_type === 'service' ? 'Service' : 'Goods' }}</span>
                         </div>
                     </template>
@@ -1289,6 +1299,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.sample-tag{margin-left:6px;padding:2px 7px;color:#b54708;background:#fff4e5;border-radius:6px;font-size:10px;font-style:normal;font-weight:800}
 .product-page {
     padding: 0 0 28px;
 }

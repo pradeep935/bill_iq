@@ -94,6 +94,7 @@ const initialForm = () => ({
     width: '',
     height: '',
     batch_required: false,
+    is_sample: false,
     expiry_required: false,
     serial_required: false,
     status: 'active',
@@ -717,6 +718,7 @@ const fillForm = (product = {}) => {
         width: product?.width ?? '',
         height: product?.height ?? '',
         batch_required: Boolean(product?.batch_required),
+        is_sample: Boolean(product?.is_sample),
         expiry_required: Boolean(product?.expiry_required),
         serial_required: Boolean(product?.serial_required),
         status: product?.status || 'active',
@@ -1381,6 +1383,7 @@ const saveProduct = () => {
                 : 'none',
         tax_inclusive: Boolean(form.tax_inclusive),
         batch_required: Boolean(form.batch_required),
+        is_sample: Boolean(form.is_sample),
         expiry_required: Boolean(form.expiry_required),
         serial_required: Boolean(form.serial_required),
         images: imageRows,
@@ -1671,6 +1674,12 @@ const saveProduct = () => {
                                         hint="Use this for size, color, storage or pack details."
                                         cls="product-field field-span-2"
                                     />
+
+                                    <label class="toggle-field field-span-2">
+                                        <input v-model="form.is_sample" type="checkbox" />
+                                        <span>Purchased as sample</span>
+                                        <small class="toggle-hint">Mark products bought only as a sample or for trial. They get a "Sample" tag and can be filtered in Product Master.</small>
+                                    </label>
 
                                     <FormText
                                         v-model="form.description"

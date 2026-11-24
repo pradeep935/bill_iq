@@ -132,6 +132,7 @@ class ProductMasterService
             ->when(!empty($filters['product_type']) && Schema::hasColumn('products', 'product_type'), fn (Builder $query) => $query->where('product_type', $filters['product_type']))
             ->when(!empty($filters['item_type']) && Schema::hasColumn('products', 'item_type'), fn (Builder $query) => $query->where('item_type', $filters['item_type']))
             ->when(isset($filters['gst_rate']) && $filters['gst_rate'] !== '', fn (Builder $query) => $query->where('gst_rate', $filters['gst_rate']))
+            ->when(!empty($filters['is_sample']) && Schema::hasColumn('products', 'is_sample'), fn (Builder $query) => $query->where('is_sample', true))
             ->when(!empty($filters['price_missing']), fn (Builder $query) => $query->where(fn (Builder $inner) => $inner->where(fn (Builder $a) => $a->whereNull('selling_price')->orWhere('selling_price', '<=', 0))->where(fn (Builder $b) => $b->whereNull('sale_price')->orWhere('sale_price', '<=', 0))))
             ->when(!empty($filters['status']), function (Builder $query) use ($filters) {
                 if ($filters['status'] === 'deleted') {
@@ -314,6 +315,7 @@ class ProductMasterService
             'expiry_required' => (bool) $product->expiry_required,
             'batch_required' => (bool) $product->batch_required,
             'serial_required' => (bool) $product->serial_required,
+            'is_sample' => (bool) ($product->is_sample ?? false),
             'status' => $product->status ?: 'active',
             'deleted_at' => optional($product->deleted_at)->toDateTimeString(),
             'barcodes' => $this->relationValues($product, 'barcodes')->map(fn (ProductBarcode $barcode) => [
@@ -498,6 +500,7 @@ class ProductMasterService
         $this->setProductColumn($product, 'expiry_required', !$isService && (bool) ($data['expiry_required'] ?? false));
         $this->setProductColumn($product, 'batch_required', !$isService && (bool) ($data['batch_required'] ?? false));
         $this->setProductColumn($product, 'serial_required', !$isService && (bool) ($data['serial_required'] ?? false));
+        $this->setProductColumn($product, 'is_sample', (bool) ($data['is_sample'] ?? false));
         $this->setProductColumn($product, 'status', $data['status']);
         $this->setProductColumn($product, 'updated_by', Auth::id());
     }

@@ -1,4 +1,17 @@
 <script setup>
+import { computed, ref } from 'vue';
+import { code128DataUri } from '@/Pages/Inventory/Shared/barcodeRenderer';
+
+// Scannable Code128 barcode. Uses the product barcode; falls back to the SKU when no barcode is set.
+const codeFor = (p) => {
+    const code = String(p?.primary_barcode || p?.barcode || '').trim();
+    return code && code !== '-' ? code : String(p?.sku || '').trim();
+};
+const barUri = (p) => {
+    try { return code128DataUri(codeFor(p), { height: 50, moduleWidth: 2 }); } catch (e) { return ''; }
+};
+const copies = ref(1);
+const copyCount = computed(() => Math.min(Math.max(parseInt(copies.value, 10) || 1, 1), 200));
 const props = defineProps({
     modelValue: Boolean,
     product: {
@@ -50,11 +63,10 @@ const printBarcode = () => {
             <main class="modal-body">
                 <div class="barcode-card">
                     <strong>{{ product.name || '-' }}</strong>
-                    <small>{{ product.primary_barcode || product.barcode || '-' }}</small>
+                    <small>{{ codeFor(product) || '-' }}</small>
 
-                    <div class="barcode-lines">
-                        ||||| ||||| |||||
-                    </div>
+                    <img v-if="barUri(product)" :src="barUri(product)" class="barcode-img" alt="Barcode" />
+                        <div v-else class="no-code">No barcode or SKU</div>
                 </div>
             </main>
 
@@ -239,4 +251,6 @@ const printBarcode = () => {
         background: #ffffff;
     }
 }
+.barcode-img { width: 100%; max-width: 260px; height: 60px; margin: 10px 0 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.no-code { margin: 10px 0; color: #b42318; font-size: 11px; }
 </style>

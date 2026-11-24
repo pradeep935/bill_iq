@@ -1,4 +1,17 @@
 <script setup>
+import { computed, ref } from 'vue';
+import { code128DataUri } from '@/Pages/Inventory/Shared/barcodeRenderer';
+
+// Scannable Code128 barcode. Uses the product barcode; falls back to the SKU when no barcode is set.
+const codeFor = (p) => {
+    const code = String(p?.primary_barcode || p?.barcode || '').trim();
+    return code && code !== '-' ? code : String(p?.sku || '').trim();
+};
+const barUri = (p) => {
+    try { return code128DataUri(codeFor(p), { height: 50, moduleWidth: 2 }); } catch (e) { return ''; }
+};
+const copies = ref(1);
+const copyCount = computed(() => Math.min(Math.max(parseInt(copies.value, 10) || 1, 1), 200));
 const props = defineProps({
     modelValue: Boolean,
     products: {
@@ -10,6 +23,8 @@ const props = defineProps({
 const emit = defineEmits([
     'update:modelValue',
 ]);
+
+const labels = computed(() => props.products.flatMap((p) => Array.from({ length: copyCount.value }, () => p)));
 
 const close = () => {
     emit('update:modelValue', false);
@@ -34,7 +49,7 @@ const printLabels = () => {
                 <div>
                     <span>BARCODE LABELS</span>
                     <h3>Print Barcode Labels</h3>
-                    <p>{{ products.length }} label{{ products.length === 1 ? '' : 's' }} ready for printing.</p>
+                    <p>{{ labels.length }} label{{ labels.length === 1 ? '' : 's' }} ready for printing.</p>
                 </div>
 
                 <button
@@ -50,19 +65,18 @@ const printLabels = () => {
             <main class="modal-body">
                 <div class="label-grid">
                     <article
-                        v-for="product in products"
-                        :key="product.id"
+                        v-for="(product, index) in labels"
+                        :key="`${product.id}-${index}`"
                         class="label-card"
                     >
                         <strong>{{ product.name }}</strong>
                         <small>SKU: {{ product.sku || '-' }}</small>
 
-                        <div class="barcode-lines">
-                            ||||| ||||| |||||
-                        </div>
+                        <img v-if="barUri(product)" :src="barUri(product)" class="barcode-img" alt="Barcode" />
+                        <div v-else class="no-code">No barcode or SKU</div>
 
                         <div class="barcode-number">
-                            {{ product.primary_barcode || product.barcode || '-' }}
+                            {{ codeFor(product) || '-' }}
                         </div>
 
                         <strong class="label-price">
@@ -73,6 +87,8 @@ const printLabels = () => {
             </main>
 
             <footer class="modal-footer">
+                <label class="copies-field">Copies <input v-model="copies" type="number" min="1" max="200" /></label>
+
                 <button
                     type="button"
                     class="secondary-button"
@@ -277,4 +293,9 @@ const printLabels = () => {
         background: #ffffff;
     }
 }
+
+.barcode-img { width: 100%; max-width: 220px; height: 52px; margin: 8px 0 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.no-code { margin: 10px 0; color: #b42318; font-size: 11px; }
+.copies-field { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; color: #475569; font-size: 12px; font-weight: 700; }
+.copies-field input { width: 64px; min-height: 34px; padding: 4px 8px; border: 1px solid #d8e0eb; border-radius: 8px; }
 </style>

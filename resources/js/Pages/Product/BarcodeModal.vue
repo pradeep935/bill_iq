@@ -15,15 +15,19 @@ const close = () => {
     emit('update:modelValue', false);
 };
 
+// Print only this modal: while printing, the rest of the app (menu, filters, tables) is hidden by a global print rule in app.css.
 const printBarcode = () => {
+    document.body.classList.add('printing-labels');
+    window.addEventListener('afterprint', () => document.body.classList.remove('printing-labels'), { once: true });
     window.print();
 };
 </script>
 
 <template>
+    <Teleport to="body">
     <div
         v-if="modelValue"
-        class="modal-backdrop"
+        class="modal-backdrop label-print-root"
     >
         <section class="modal-box">
             <header class="modal-header">
@@ -73,6 +77,7 @@ const printBarcode = () => {
             </footer>
         </section>
     </div>
+    </Teleport>
 </template>
 
 <style scoped>

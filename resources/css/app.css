@@ -1720,3 +1720,9 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
 
 /* Keep the last rows of any page clear of the floating assistant button */
 .bill-main::after { content: ''; display: block; height: 76px; }
+
+/* Barcode / label modals: when printing, show only the modal (it is teleported to <body>) and hide the whole app. */
+@media print {
+    body.printing-labels > *:not(.label-print-root) { display: none !important; }
+    body.printing-labels .label-print-root { position: static !important; display: block !important; background: #fff !important; padding: 0 !important; }
+}

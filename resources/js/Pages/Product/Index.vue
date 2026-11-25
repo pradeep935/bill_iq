@@ -793,7 +793,7 @@ watch(
 onMounted(() => {
     if (new URLSearchParams(window.location.search).get('price') === 'missing') priceFilter.value = 'missing';
     productPrefillFromQuery();
-    loadReferences();
+    loadReferences().then(() => { if (new URLSearchParams(window.location.search).get('action') === 'create') addProduct(); });
     loadProducts();
 });
 </script>

@@ -197,7 +197,7 @@ const onEscape = (event) => {
     else if (detail.value) closeDetail();
 };
 
-onMounted(async () => { window.addEventListener('keydown', onEscape); await loadReferences(); await loadCustomers(); });
+onMounted(async () => { window.addEventListener('keydown', onEscape); await loadReferences(); await loadCustomers(); if (new URLSearchParams(window.location.search).get('action') === 'create') newCustomer(); });
 onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
 </script>
 

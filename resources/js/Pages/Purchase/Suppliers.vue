@@ -165,7 +165,7 @@ watch(() => form.state_id, () => {
     }
 });
 
-onMounted(async () => { await loadReferences(); await loadSuppliers(); });
+onMounted(async () => { await loadReferences(); await loadSuppliers(); if (new URLSearchParams(window.location.search).get('action') === 'create') openSupplierCreate(); });
 </script>
 
 <template>

@@ -467,6 +467,7 @@ onMounted(async () => {
     restoreDraftAfterProductCreate();
     await loadReferences();
     await addReturnedProduct();
+    if (new URLSearchParams(window.location.search).get('action') === 'create' && !form.items.length) openPurchaseCreate();
     // Opened from the dashboard with a filter in the link.
     const query = new URLSearchParams(window.location.search);
     ['status', 'payment_status'].forEach((key) => { if (query.get(key)) filters[key] = query.get(key); });

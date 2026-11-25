@@ -106,8 +106,9 @@ const money = (v) => Number(v || 0).toLocaleString('en-IN', { minimumFractionDig
 // Deep link from Purchases > Record Payment: /app/accounting/vouchers?tab=payment&supplier_id=..&purchase_id=..
 const applyDeepLink = async () => {
     const q = new URLSearchParams(window.location.search);
+    // Dashboard shortcuts open a tab directly (?tab=receipt|payment|contra|journal).
+    if (['receipt', 'payment', 'contra', 'journal'].includes(q.get('tab'))) tab.value = q.get('tab');
     if (q.get('tab') !== 'payment' || !q.get('supplier_id')) return;
-    tab.value = 'payment';
     payment.supplier_id = Number(q.get('supplier_id'));
     const purchaseId = Number(q.get('purchase_id') || 0);
     if (!purchaseId) return;

@@ -186,7 +186,12 @@ const printSale = (sale, format = 'a4') => {
 };
 const exportRows = () => { window.location.href = SalesApi.exportUrl(currentParams()); };
 const formatMoney = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-onMounted(async () => { syncUrl(true); window.addEventListener('popstate', fromUrl); window.addEventListener('keydown', handlePreviewKeydown); await loadReferences(); await loadSales(); await loadReports(); });
+// Opened from the dashboard with ?sale=<id>: show that invoice. Read before syncUrl() rewrites the address.
+const openSaleFromLink = async (id) => {
+    if (!id) return;
+    try { viewSale(await SalesApi.getSale(id)); } catch (error) { /* invoice not found or not allowed: stay on the list */ }
+};
+onMounted(async () => { const linkedSale = query().get('sale'); syncUrl(true); window.addEventListener('popstate', fromUrl); window.addEventListener('keydown', handlePreviewKeydown); await loadReferences(); await loadSales(); await openSaleFromLink(linkedSale); await loadReports(); });
 onUnmounted(() => { window.removeEventListener('popstate', fromUrl); window.removeEventListener('keydown', handlePreviewKeydown); document.body.classList.remove('invoice-preview-open'); });
 </script>
 
@@ -219,7 +224,8 @@ onUnmounted(() => { window.removeEventListener('popstate', fromUrl); window.remo
             <div v-if="viewingSale" class="invoice-modal-backdrop" @click.self="closeView">
                 <button type="button" class="invoice-floating-close" title="Close invoice preview" @click="closeView">Close</button>
                 <section class="invoice-modal invoice-modal-full" role="dialog" aria-modal="true" :aria-label="`Invoice ${viewingSale.invoice_number}`">
-                    <header class="invoice-modal-head">
+                    <!-- Not a <header>: app.css hides plain header elements inside the app shell. -->
+                    <div class="invoice-modal-head">
                         <div class="invoice-modal-title">
                             <span>INVOICE PREVIEW</span>
                             <h2>{{ viewingSale.invoice_number }}</h2>
@@ -230,7 +236,7 @@ onUnmounted(() => { window.removeEventListener('popstate', fromUrl); window.remo
                             <button type="button" @click="printSale(viewingSale, 'thermal')">Print 80mm</button>
                             <button type="button" class="invoice-close" title="Close invoice preview" @click="closeView">Close</button>
                         </div>
-                    </header>
+                    </div>
                     <div class="invoice-modal-summary invoice-modal-summary-compact">
                         <div class="summary-main">
                             <span>Customer</span>

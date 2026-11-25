@@ -32,120 +32,88 @@ class BusinessDashboardService
         $accounts = $this->accountBalances($businessId);
 
         return [
-            'summary' => $this->summary($businessId, $today, $stock),
-            'modules' => $this->modules($businessId, $today, $stock, $accounts, $routes, $permissions),
-            'recentSales' => $this->recentSales($businessId, $routes, $permissions),
+            'home' => $this->home($businessId, $today, $stock, $accounts, $routes, $permissions),
             'quickActions' => $this->quickActions($routes, $permissions),
             'pendingActions' => $this->pendingActions($businessId, $routes, $permissions),
-            'charts' => $this->charts($businessId),
-            'inventoryAlerts' => $this->inventoryAlerts($businessId, $stock, $routes),
-            'metrics' => $this->metrics($businessId, $today, $stock, $accounts),
-            'notifications' => $this->notifications($businessId, $stock, $routes),
+            'recentSales' => $permissions['sales.view'] ? $this->recentSales($businessId, $routes, $permissions) : [],
+            'chart' => $this->monthlyChart($businessId, $permissions),
+            'inventoryAlerts' => $permissions['inventory.view'] ? $this->inventoryAlerts($businessId, $stock, $routes) : null,
             'permissions' => $permissions,
             'routes' => $routes,
         ];
     }
 
-    private function summary(int $businessId, string $today, array $stock): array
+    /** Headline numbers. A block is null when the role cannot open that area, so nothing leaks to the browser. */
+    private function home(int $businessId, string $today, array $stock, array $accounts, array $routes, array $permissions): array
     {
-        $sales = $this->salesQuery($businessId)->whereDate('invoice_date', $today);
-        $purchases = $this->purchaseQuery($businessId)->whereDate('purchase_date', $today);
-        $outputGst = $this->salesQuery($businessId)->sum(DB::raw($this->taxExpression()));
-        $inputGst = $this->purchaseQuery($businessId)->sum(DB::raw($this->taxExpression()));
+        $party = function (bool $allowed, QueryBuilder $query, float $amount, ?string $url) {
+            return $allowed ? [
+                'amount' => $amount,
+                'count' => (clone $query)->where('balance_amount', '>', 0)->count(),
+                'href' => $url ? $url . '?payment_status=due' : null,
+            ] : null;
+        };
+        $day = function (bool $allowed, QueryBuilder $query, string $column, ?string $url) use ($today) {
+            if (!$allowed) {
+                return null;
+            }
+            $query->whereDate($column, $today);
+
+            return [
+                'amount' => round((float) (clone $query)->sum('grand_total'), 2),
+                'count' => (clone $query)->count(),
+                'href' => $url ? $url . '?date=today&status=posted' : null,
+            ];
+        };
+        $outputGst = (float) $this->salesQuery($businessId)->sum(DB::raw($this->taxExpression()));
+        $inputGst = (float) $this->purchaseQuery($businessId)->sum(DB::raw($this->taxExpression()));
+        $link = fn (bool $allowed, string $table, ?string $url) => $allowed ? ['count' => $this->countTable($table, $businessId), 'href' => $url] : null;
 
         return [
-            [
-                'key' => 'today_sales',
-                'label' => 'Today Sales',
-                'value' => round((float) (clone $sales)->sum('grand_total'), 2),
-                'count' => (int) (clone $sales)->count(),
-                'format' => 'currency',
-                'hint' => (clone $sales)->count() . ' invoices today',
-                'href' => $this->url('app.sales.invoices', ['date' => 'today', 'status' => 'posted']),
-            ],
-            [
-                'key' => 'today_purchase',
-                'label' => 'Today Purchase',
-                'value' => round((float) (clone $purchases)->sum('grand_total'), 2),
-                'count' => (int) (clone $purchases)->count(),
-                'format' => 'currency',
-                'hint' => (clone $purchases)->count() . ' purchase bills today',
-                'href' => $this->url('app.purchase.bills', ['date' => 'today', 'status' => 'posted']),
-            ],
-            [
-                'key' => 'gst_payable',
-                'label' => 'GST Payable',
-                'value' => max(0, round((float) $outputGst - (float) $inputGst, 2)),
-                'count' => null,
-                'format' => 'currency',
-                'hint' => 'Output GST minus input GST',
-                'href' => $this->url('app.accounting.gst'),
-            ],
-            [
-                'key' => 'stock_value',
-                'label' => 'Stock Value',
-                'value' => round((float) $stock['value'], 2),
-                'count' => (int) $stock['items'],
-                'format' => 'currency',
-                'hint' => $stock['items'] . ' stock items from ledger',
-                'href' => $this->url('app.inventory.current-stock'),
+            'toCollect' => $party($permissions['sales.view'], $this->salesQuery($businessId), $accounts['receivables'], $routes['sales.index']['url']),
+            'toPay' => $party($permissions['purchases.view'], $this->purchaseQuery($businessId), $accounts['payables'], $routes['purchases.index']['url']),
+            'todaySales' => $day($permissions['sales.view'], $this->salesQuery($businessId), 'invoice_date', $routes['sales.index']['url']),
+            'todayPurchases' => $day($permissions['purchases.view'], $this->purchaseQuery($businessId), 'purchase_date', $routes['purchases.index']['url']),
+            'money' => $permissions['accounting.view'] ? [
+                'cash' => $accounts['cash'],
+                'bank' => $accounts['bank'],
+                'profit' => $this->todayProfit($businessId, $today),
+                // Negative means input credit is more than output tax.
+                'gst' => round($outputGst - $inputGst, 2),
+                'ledgerHref' => $this->url('app.accounting.ledgers'),
+                'gstHref' => $routes['reports.gst-summary']['url'],
+            ] : null,
+            'stock' => $permissions['inventory.view'] ? [
+                'value' => $stock['value'],
+                'inStock' => $stock['items'],
+                'out' => $stock['out'],
+                'low' => $stock['low'],
+                'href' => $routes['inventory.stock-summary']['url'],
+            ] : null,
+            'counts' => [
+                'products' => $link($permissions['products.view'], 'products', $routes['products.index']['url']),
+                'customers' => $link($permissions['sales.view'], 'customers', $this->url('app.sales.customers')),
+                'suppliers' => $link($permissions['purchases.view'], 'suppliers', $this->url('app.purchase.suppliers')),
             ],
         ];
     }
 
-    private function modules(int $businessId, string $today, array $stock, array $accounts, array $routes, array $permissions): array
+    /** Sales value without GST (after discounts) minus the cost of the goods sold. GST is not income. */
+    private function todayProfit(int $businessId, string $today): float
     {
-        $todaySales = $this->salesQuery($businessId)->whereDate('invoice_date', $today);
+        if (!Schema::hasTable('sales_items') || !Schema::hasTable('sales_vouchers')) {
+            return 0.0;
+        }
+        $revenue = (float) $this->salesQuery($businessId)->whereDate('invoice_date', $today)->sum('taxable_amount');
+        $cost = (float) DB::table('sales_items')
+            ->join('sales_vouchers', 'sales_vouchers.id', '=', 'sales_items.sales_voucher_id')
+            ->where('sales_vouchers.business_id', $businessId)
+            ->whereDate('sales_vouchers.invoice_date', $today)
+            ->whereIn('sales_vouchers.status', self::POSTED_STATUSES)
+            ->selectRaw('COALESCE(SUM(COALESCE(sales_items.cost_rate, 0) * (COALESCE(sales_items.quantity, 0) + COALESCE(sales_items.free_quantity, 0))), 0) as cost')
+            ->value('cost');
 
-        return [
-            [
-                'key' => 'catalog',
-                'label' => 'Catalog',
-                'href' => $routes['products.index']['url'],
-                'enabled' => $permissions['products.view'],
-                'stats' => [
-                    ['label' => 'Products', 'value' => $this->countTable('products', $businessId)],
-                    ['label' => 'Categories', 'value' => $this->countTable('product_categories', $businessId, true)],
-                    ['label' => 'Brands', 'value' => $this->countTable('brands', $businessId, true)],
-                    ['label' => 'HSN in use', 'value' => $this->hsnInUse($businessId)],
-                ],
-            ],
-            [
-                'key' => 'billing',
-                'label' => 'Billing',
-                'href' => $routes['sales.index']['url'],
-                'enabled' => $permissions['sales.view'],
-                'stats' => [
-                    ['label' => 'Today Invoices', 'value' => (int) (clone $todaySales)->count()],
-                    ['label' => 'Today Amount', 'value' => round((float) (clone $todaySales)->sum('grand_total'), 2), 'format' => 'currency'],
-                    ['label' => 'Pending', 'value' => $this->salesQuery($businessId)->where('balance_amount', '>', 0)->count()],
-                ],
-            ],
-            [
-                'key' => 'inventory',
-                'label' => 'Inventory',
-                'href' => $routes['inventory.dashboard']['url'],
-                'enabled' => $permissions['inventory.view'],
-                'stats' => [
-                    ['label' => 'Stock Items', 'value' => $stock['items']],
-                    ['label' => 'Low Stock', 'value' => $stock['low']],
-                    ['label' => 'Out of Stock', 'value' => $stock['out']],
-                    ['label' => 'Stock Value', 'value' => $stock['value'], 'format' => 'currency'],
-                ],
-            ],
-            [
-                'key' => 'accounts',
-                'label' => 'Accounts',
-                'href' => $routes['accounting.dashboard']['url'],
-                'enabled' => $permissions['accounting.view'],
-                'stats' => [
-                    ['label' => 'Receivables', 'value' => $accounts['receivables'], 'format' => 'currency'],
-                    ['label' => 'Payables', 'value' => $accounts['payables'], 'format' => 'currency'],
-                    ['label' => 'Cash', 'value' => $accounts['cash'], 'format' => 'currency'],
-                    ['label' => 'Bank', 'value' => $accounts['bank'], 'format' => 'currency'],
-                ],
-            ],
-        ];
+        return round($revenue - $cost, 2);
     }
 
     private function recentSales(int $businessId, array $routes, array $permissions): array
@@ -170,11 +138,9 @@ class BusinessDashboardService
                 'total' => (float) $sale->grand_total,
                 'payment_status' => $this->label($sale->payment_status ?: 'unpaid'),
                 'invoice_status' => $this->label($sale->status ?: 'draft'),
-                'can_edit' => $permissions['sales.edit'] && in_array($sale->status, ['draft', 'hold'], true),
                 'links' => [
                     'view' => $this->url('app.sales.invoices', ['sale' => $sale->id]),
-                    'edit' => $this->url('app.sales.invoices', ['sale' => $sale->id, 'mode' => 'edit']),
-                    'print' => $this->url('app.sales.invoices', ['sale' => $sale->id, 'print' => 1]),
+                    'print' => $this->url('app.sales.invoices.print', ['sale' => $sale->id]),
                 ],
             ])
             ->values()
@@ -183,19 +149,20 @@ class BusinessDashboardService
 
     private function quickActions(array $routes, array $permissions): array
     {
+        $add = fn (?string $url) => $url ? $url . '?action=create' : null;
+        $voucher = fn (string $tab) => $routes['accounting.vouchers.index']['url'] . '?tab=' . $tab;
         $items = [
-            ['label' => 'New Sale', 'route' => 'sales.create', 'href' => $routes['sales.create']['url'], 'enabled' => $permissions['sales.create']],
-            ['label' => 'New Purchase', 'route' => 'purchases.create', 'href' => $routes['purchases.create']['url'], 'enabled' => $permissions['purchases.create']],
-            ['label' => 'Receipt Voucher', 'route' => 'accounting.vouchers.create', 'href' => $routes['accounting.vouchers.create']['url'] . '?type=receipt', 'enabled' => $permissions['accounting.create']],
-            ['label' => 'Payment Voucher', 'route' => 'accounting.vouchers.create', 'href' => $routes['accounting.vouchers.create']['url'] . '?type=payment', 'enabled' => $permissions['accounting.create']],
-            ['label' => 'Expense Voucher', 'route' => 'accounting.vouchers.create', 'href' => $routes['accounting.vouchers.create']['url'] . '?type=expense', 'enabled' => $permissions['accounting.create']],
-            ['label' => 'Journal Voucher', 'route' => 'accounting.vouchers.create', 'href' => $routes['accounting.vouchers.create']['url'] . '?type=journal', 'enabled' => $permissions['accounting.create']],
-            ['label' => 'Add Product', 'route' => 'products.create', 'href' => $routes['products.create']['url'], 'enabled' => $permissions['products.create']],
-            ['label' => 'Add Customer', 'route' => 'customers.create', 'href' => $routes['customers.create']['url'], 'enabled' => $permissions['customers.create']],
-            ['label' => 'Add Supplier', 'route' => 'suppliers.create', 'href' => $routes['suppliers.create']['url'], 'enabled' => $permissions['suppliers.create']],
+            ['label' => 'New Sale', 'icon' => 'sale', 'href' => $routes['sales.create']['url'], 'enabled' => $permissions['sales.create']],
+            ['label' => 'New Purchase', 'icon' => 'purchase', 'href' => $add($routes['purchases.index']['url']), 'enabled' => $permissions['purchases.create']],
+            ['label' => 'Money In', 'icon' => 'in', 'href' => $voucher('receipt'), 'enabled' => $permissions['accounting.create']],
+            ['label' => 'Money Out', 'icon' => 'out', 'href' => $voucher('payment'), 'enabled' => $permissions['accounting.create']],
+            ['label' => 'Add Expense', 'icon' => 'expense', 'href' => $this->url('app.accounting.expenses'), 'enabled' => $permissions['accounting.create']],
+            ['label' => 'Add Product', 'icon' => 'product', 'href' => $add($routes['products.index']['url']), 'enabled' => $permissions['products.create']],
+            ['label' => 'Add Customer', 'icon' => 'customer', 'href' => $add($this->url('app.sales.customers')), 'enabled' => $permissions['customers.create']],
+            ['label' => 'Add Supplier', 'icon' => 'supplier', 'href' => $add($this->url('app.purchase.suppliers')), 'enabled' => $permissions['suppliers.create']],
         ];
 
-        return array_values(array_filter($items, fn ($item) => $item['enabled']));
+        return array_values(array_filter($items, fn ($item) => $item['enabled'] && $item['href']));
     }
 
     /** Things that need attention today. Each row opens the matching filtered list. */
@@ -238,38 +205,19 @@ class BusinessDashboardService
         ];
     }
 
-    /** HSN/SAC codes actually used by this business's products (not the shared reference list). */
-    private function hsnInUse(int $businessId): int
+    /** Posted sales and purchases for the last six calendar months. */
+    private function monthlyChart(int $businessId, array $permissions): array
     {
-        if (!Schema::hasTable('products') || !Schema::hasColumn('products', 'hsn_code')) {
-            return 0;
-        }
-        $query = DB::table('products')->where($this->businessColumn('products') ?: 'business_id', $businessId)
-            ->whereNotNull('hsn_code')->where('hsn_code', '!=', '');
-        if (Schema::hasColumn('products', 'deleted_at')) {
-            $query->whereNull('deleted_at');
-        }
-
-        return (int) $query->distinct()->count('hsn_code');
-    }
-
-    private function charts(int $businessId): array
-    {
-        $start = CarbonImmutable::now(config('app.timezone'))->subDays(6)->startOfDay();
-        $labels = collect(range(0, 6))->map(fn ($i) => $start->addDays($i)->format('Y-m-d'))->values();
-        $sales = $this->dateSeries($this->salesQuery($businessId, false), 'invoice_date', 'grand_total', $labels);
-        $purchases = $this->dateSeries($this->purchaseQuery($businessId, false), 'purchase_date', 'grand_total', $labels);
+        $start = CarbonImmutable::now(config('app.timezone'))->startOfMonth()->subMonths(5);
+        $months = collect(range(0, 5))->map(fn ($i) => $start->addMonths($i));
+        $series = fn (bool $allowed, callable $query, string $column) => $allowed
+            ? $months->map(fn ($m) => round((float) $query()->whereDate($column, '>=', $m->toDateString())->whereDate($column, '<=', $m->endOfMonth()->toDateString())->sum('grand_total'), 2))->values()->all()
+            : [];
 
         return [
-            'salesLast7Days' => ['labels' => $labels, 'values' => $sales],
-            'purchasesLast7Days' => ['labels' => $labels, 'values' => $purchases],
-            'salesVsPurchasesMonth' => [
-                'labels' => ['Sales', 'Purchases'],
-                'values' => [
-                    (float) $this->salesQuery($businessId)->whereMonth('invoice_date', now()->month)->whereYear('invoice_date', now()->year)->sum('grand_total'),
-                    (float) $this->purchaseQuery($businessId)->whereMonth('purchase_date', now()->month)->whereYear('purchase_date', now()->year)->sum('grand_total'),
-                ],
-            ],
+            'labels' => $months->map(fn ($m) => $m->format('M Y'))->values()->all(),
+            'sales' => $series($permissions['sales.view'], fn () => $this->salesQuery($businessId), 'invoice_date'),
+            'purchases' => $series($permissions['purchases.view'], fn () => $this->purchaseQuery($businessId), 'purchase_date'),
         ];
     }
 
@@ -308,57 +256,10 @@ class BusinessDashboardService
 
         return [
             'lowStock' => $products->filter(fn ($row) => $row['quantity'] > 0 && $row['reorder_level'] > 0 && $row['quantity'] <= $row['reorder_level'])->take(5)->values()->all(),
-            'outOfStock' => $products->filter(fn ($row) => $row['quantity'] <= 0)->take(5)->values()->all(),
+            'outOfStock' => $products->filter(fn ($row) => $row['quantity'] <= 0)->sortBy('quantity')->take(5)->values()->all(),
             'expiringBatches' => $expiring,
-            'viewAll' => $routes['inventory.stock-summary']['url'],
+            'viewAll' => $routes['inventory.stock-summary']['url'] . '?stock_status=unavailable',
         ];
-    }
-
-    private function metrics(int $businessId, string $today, array $stock, array $accounts): array
-    {
-        $todayProfit = 0.0;
-        if (Schema::hasTable('sales_items') && Schema::hasTable('sales_vouchers')) {
-            // Profit = sales value without GST (after discounts) minus cost of the goods sold. GST is not income.
-            $revenue = (float) $this->salesQuery($businessId)->whereDate('invoice_date', $today)->sum('taxable_amount');
-            $cost = (float) DB::table('sales_items')
-                ->join('sales_vouchers', 'sales_vouchers.id', '=', 'sales_items.sales_voucher_id')
-                ->where('sales_vouchers.business_id', $businessId)
-                ->whereDate('sales_vouchers.invoice_date', $today)
-                ->whereIn('sales_vouchers.status', self::POSTED_STATUSES)
-                ->selectRaw('COALESCE(SUM(COALESCE(sales_items.cost_rate, 0) * (COALESCE(sales_items.quantity, 0) + COALESCE(sales_items.free_quantity, 0))), 0) as cost')
-                ->value('cost');
-            $todayProfit = $revenue - $cost;
-        }
-
-        return [
-            ['label' => "Today's Profit", 'value' => round($todayProfit, 2), 'format' => 'currency'],
-            ['label' => 'Cash in Hand', 'value' => $accounts['cash'], 'format' => 'currency'],
-            ['label' => 'Bank Balance', 'value' => $accounts['bank'], 'format' => 'currency'],
-            ['label' => 'Receivables', 'value' => $accounts['receivables'], 'format' => 'currency'],
-            ['label' => 'Payables', 'value' => $accounts['payables'], 'format' => 'currency'],
-            ['label' => 'Low Stock', 'value' => $stock['low']],
-            ['label' => 'Out of Stock', 'value' => $stock['out']],
-            ['label' => 'Customers', 'value' => $this->countTable('customers', $businessId)],
-            ['label' => 'Suppliers', 'value' => $this->countTable('suppliers', $businessId)],
-            ['label' => 'Products', 'value' => $this->countTable('products', $businessId)],
-        ];
-    }
-
-    private function notifications(int $businessId, array $stock, array $routes): array
-    {
-        $items = [];
-        if ($stock['low'] > 0) {
-            $items[] = ['type' => 'warning', 'label' => $stock['low'] . ' low-stock products', 'href' => $routes['inventory.stock-summary']['url'] . '?stock_status=low'];
-        }
-        if ($stock['out'] > 0) {
-            $items[] = ['type' => 'danger', 'label' => $stock['out'] . ' out-of-stock products', 'href' => $routes['inventory.stock-summary']['url'] . '?stock_status=unavailable'];
-        }
-        $pendingPayments = $this->salesQuery($businessId)->where('balance_amount', '>', 0)->count();
-        if ($pendingPayments > 0) {
-            $items[] = ['type' => 'info', 'label' => $pendingPayments . ' invoices awaiting payment', 'href' => $routes['sales.index']['url'] . '?payment_status=due'];
-        }
-
-        return $items;
     }
 
     private function stockSnapshot(int $businessId): array
@@ -437,22 +338,6 @@ class BusinessDashboardService
     {
         $query = DB::table('purchase_vouchers')->where('business_id', $businessId);
         return $postedOnly ? $query->whereIn('status', self::POSTED_STATUSES) : $query;
-    }
-
-    private function postedJournals(int $businessId): QueryBuilder
-    {
-        return DB::table('journal_vouchers')->where('business_id', $businessId)->whereIn('status', self::POSTED_STATUSES);
-    }
-
-    private function dateSeries(QueryBuilder $query, string $dateColumn, string $amountColumn, $labels): array
-    {
-        $rows = $query
-            ->whereDate($dateColumn, '>=', $labels->first())
-            ->selectRaw("DATE($dateColumn) as day, COALESCE(SUM($amountColumn), 0) as total")
-            ->groupBy(DB::raw("DATE($dateColumn)"))
-            ->pluck('total', 'day');
-
-        return $labels->map(fn ($label) => round((float) ($rows[$label] ?? 0), 2))->values()->all();
     }
 
     private function countTable(string $table, int $businessId, bool $globalAllowed = false): int

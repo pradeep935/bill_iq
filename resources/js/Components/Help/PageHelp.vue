@@ -17,8 +17,8 @@ defineExpose({ show });
     <div v-if="help" class="ph-bar">
         <button type="button" class="ph-toggle" @click="open = true">
             <span class="ph-mark">?</span>
-            <strong>{{ title }}: yeh page kaise use karein</strong>
-            <em>Kholein</em>
+            <strong>How to use: {{ title }}</strong>
+            <em>Open guide</em>
         </button>
     </div>
 
@@ -30,21 +30,21 @@ defineExpose({ show });
                     <button type="button" @click="open = false">Close</button>
                 </div>
 
-                <h3>Yeh page kya karta hai</h3>
+                <h3>What this page does</h3>
                 <p>{{ help.what }}</p>
 
                 <template v-if="help.tabs.length">
-                    <h3>Tabs ka kaam</h3>
+                    <h3>Tabs on this page</h3>
                     <dl><template v-for="tab in help.tabs" :key="tab[0]"><dt>{{ tab[0] }}</dt><dd>{{ tab[1] }}</dd></template></dl>
                 </template>
 
                 <template v-if="help.steps.length">
-                    <h3>Kaise karein</h3>
+                    <h3>How to use it</h3>
                     <ol><li v-for="step in help.steps" :key="step">{{ step }}</li></ol>
                 </template>
 
                 <template v-if="help.notes.length">
-                    <h3>Dhyan rakhein</h3>
+                    <h3>Please note</h3>
                     <ul><li v-for="note in help.notes" :key="note">{{ note }}</li></ul>
                 </template>
             </aside>

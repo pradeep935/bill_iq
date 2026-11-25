@@ -4,140 +4,140 @@
 const h = (what, { tabs = [], steps = [], notes = [] } = {}) => ({ what, tabs, steps, notes });
 
 export const pageHelp = {
-    dashboard: h('Poore business ka ek nazar me hisaab: sales, purchase, stock aur baaki payment.', {
-        steps: ['Cards me aaj aur is mahine ke aankde dekhein.', 'Kisi card ya module par click karke uski detail kholein.'],
+    dashboard: h('A quick overview of your business: sales, purchases, stock and pending payments.', {
+        steps: ['Check the cards for today’s and this month’s figures.', 'Click a card or module to open its details.'],
     }),
-    'admin-workspace': h('Admin ke roz ke kaam aur shortcuts ek jagah.', { steps: ['Jo kaam karna ho uske card par click karein.'] }),
-    'staff-workspace': h('Staff ke liye billing aur roz ke kaam ke shortcuts.', { steps: ['Jo kaam karna ho uske card par click karein.'] }),
-    onboarding: h('Nayi company ka setup poora karne ki checklist.', { steps: ['List me jo step baaki hai use kholkar poora karein.'] }),
-    'company-onboarding': h('Company ki shuruaati jankari bharne ka page.', { steps: ['Company ki detail bharein aur save karein.'] }),
-    profile: h('Aapki apni login profile.', { steps: ['Apni detail ya password badlein aur save karein.'] }),
+    'admin-workspace': h('Daily admin tasks and shortcuts in one place.', { steps: ['Click the card for the task you want to do.'] }),
+    'staff-workspace': h('Shortcuts for billing and other daily staff work.', { steps: ['Click the card for the task you want to do.'] }),
+    onboarding: h('A checklist for completing the setup of a new company.', { steps: ['Open each pending step in the list and complete it.'] }),
+    'company-onboarding': h('Enter the starting details of your company.', { steps: ['Fill in the company details and save.'] }),
+    profile: h('Your own login profile.', { steps: ['Update your details or password and save.'] }),
 
-    crm: h('Naye grahak (leads) se lekar order tak ka follow-up.', {
-        tabs: [['Dashboard', 'Leads ka summary'], ['Leads', 'Poochhtaach karne wale log'], ['Opportunities', 'Jin deals ke banne ki ummeed hai'], ['Kanban', 'Stage ke hisaab se board'], ['Activities', 'Call, meeting aur follow-up'], ['Calendar', 'Tareekh ke hisaab se kaam'], ['Reports', 'CRM reports'], ['Masters', 'Source, campaign jaisi list']],
-        steps: ['Leads tab me naya lead jodein.', 'Har baat-cheet ko Activity me likhein.', 'Deal pakki hone par Won, warna Lost karein.'],
-    }),
-
-    pos: h('Counter par bill banane ka page (New Bill).', {
-        steps: ['Customer chunein.', 'Product ka naam type karein ya barcode scan karein, quantity check karein.', 'Payment chunein: Cash, UPI, Card ya Split (poora paid), Part Paid, ya Unpaid.', 'Sale complete karke bill print karein.'],
-        notes: ['Part Paid aur Unpaid ke liye registered customer chahiye, walk-in nahi.'],
-    }),
-    sales: h('Ban chuke sales invoices ki list.', {
-        steps: ['Upar filters se date, customer ya payment status chunein.', 'Actions se invoice dekhein, print (A4 / 80mm) karein, copy karein ya reverse karein.'],
-        notes: ['Naya bill “New Bill” (POS) se banta hai.'],
-    }),
-    'sales|Sales Orders': h('Quotation, sales order aur delivery challan (bina bill maal bhejna).', {
-        tabs: [['Dashboard', 'Summary'], ['Quotations', 'Grahak ko rate bhejna; baad me order me badlein'], ['Sales Orders', 'Order lena; approve karne par stock reserve hota hai'], ['Challans', 'Bina bill maal bhejna: sample, gift, self use'], ['Reports', 'Order reports']],
-        steps: ['Challan: party, date, warehouse, reason, item aur quantity bharein.', '“Save & Reduce Stock” dabayein.'],
-        notes: ['Save Draft se stock kam nahi hota.'],
-    }),
-    'sales-returns': h('Grahak ka wapas kiya hua maal darj karna aur credit note banana.', {
-        steps: ['Naya return banayein aur asli invoice chunein.', 'Wapas aaya item aur quantity bharein.', 'Approve karein; zaroorat ho to refund process karein aur credit note print karein.'],
-    }),
-    'payment-reminders': h('Jin grahakon ka payment baaki hai unki list aur yaad dilana.', { steps: ['Baaki bill dekhein.', 'Grahak ko reminder bhejein.', 'Payment aane par Receipt voucher banayein.'] }),
-    customers: h('Grahakon ki list, unka baaki (outstanding) aur history.', {
-        steps: ['“+ New Customer” se grahak jodein.', 'Kisi grahak par click karke invoices, ledger aur outstanding dekhein.', 'Payment aaya ho to “Receive Payment” use karein.'],
-    }),
-    'inventory-outward': h('Maal bahar bhejne ka hisaab: bill wala dispatch aur bina bill wali entry.', {
-        tabs: [['Sale Dispatch', 'Bill ban chuke maal ki packing aur delivery; stock dobara nahi katta'], ['Manual Outward', 'Bina bill bheja gaya maal'], ['History', 'Stock ki purani entries']],
-        steps: ['Bina bill maal bhejne ke liye “+ New Outward Entry” dabayein.', 'Party, date, warehouse, reason (Free sample / Gift / Self use) chunein.', 'Item aur quantity bharkar “Save & Reduce Stock” dabayein.'],
-        notes: ['Jiska bill ban chuka hai use yahan dobara entry na karein.', 'Self use ke liye “Self Use” naam ka customer bana lein.'],
-    }),
-    'inventory-reserved': h('Order ke liye roka gaya (reserved) stock.', {
-        tabs: [['Active', 'Abhi roka hua stock'], ['Expiring', 'Jiski reservation khatam hone wali hai'], ['Consumed', 'Jo bik/bhej diya gaya'], ['Released', 'Jo chhod diya gaya'], ['Ledger', 'Poori history']],
-        steps: ['Sales order approve karne par stock yahan apne aap reserve hota hai.', 'Zaroorat na ho to Release karein, ya date badhane ke liye Extend karein.'],
+    crm: h('Follow customers from the first enquiry (lead) through to an order.', {
+        tabs: [['Dashboard', 'Summary of leads'], ['Leads', 'People who have enquired'], ['Opportunities', 'Deals you expect to win'], ['Kanban', 'Board view by stage'], ['Activities', 'Calls, meetings and follow-ups'], ['Calendar', 'Work arranged by date'], ['Reports', 'CRM reports'], ['Masters', 'Lists such as sources and campaigns']],
+        steps: ['Add a new lead in the Leads tab.', 'Record every conversation as an activity.', 'Mark the deal Won when confirmed, otherwise Lost.'],
     }),
 
-    purchases: h('Supplier se kharide maal ke bill.', {
-        steps: ['“New Purchase” dabayein, supplier chunein, item jodein, “Confirm & Post” karein.', 'Bhada ho to “Transport / Other Charges” aur uska GST % bharein.', 'Payment chunein: Unpaid, Paid in full ya Partly paid. Baad me us bill par “Pay” dabayein.', 'Galti sudharne ke liye Actions > Edit, phir “Save Changes”. Voucher number wahi rehta hai.'],
-        notes: ['Same state me CGST aur SGST, dusre state me IGST lagta hai.', 'Jis bill par payment ho chuka hai, use edit karne se pehle payment reverse karein.'],
+    pos: h('The billing counter screen (New Bill).', {
+        steps: ['Select the customer.', 'Type a product name or scan its barcode, then check the quantity.', 'Choose the payment: Cash, UPI, Card or Split (fully paid), Part Paid, or Unpaid.', 'Complete the sale and print the bill.'],
+        notes: ['Part Paid and Unpaid need a registered customer, not a walk-in customer.'],
     }),
-    'purchase-returns': h('Supplier ko maal wapas karna.', { steps: ['“New Return” dabayein aur purchase bill chunein.', 'Wapas jane wala item aur quantity bharein.', '“Post” karein; stock aur supplier ka hisaab theek ho jata hai.'] }),
-    suppliers: h('Jinse aap maal kharidte hain unki list.', { steps: ['“New Supplier” se naam, mobile, GSTIN aur address bharein.', 'Supplier ko Edit, Delete ya Restore kar sakte hain.'] }),
-    'inventory-inward': h('Maal mangwane se lekar godown me aane tak ka kaam (GRN).', {
-        tabs: [['Overview', 'Summary'], ['Requisitions', 'Andar se maal ki maang'], ['Purchase Orders', 'Supplier ko order'], ['Goods Receipts', 'Maal aane ki entry'], ['Reports', 'Reports']],
-        steps: ['Purchase Order banakar confirm karein.', 'Maal aane par “Receive Goods / GRN” se quantity bharein.', 'Zaroorat ho to usi se purchase bill banayein.'],
+    sales: h('The list of sales invoices already created.', {
+        steps: ['Use the filters at the top to narrow by date, customer or payment status.', 'Use Actions to view, print (A4 / 80mm), copy or reverse an invoice.'],
+        notes: ['Create a new bill from “New Bill” (POS).'],
     }),
-    'inventory-reorder': h('Kam stock wale products ki list, jinhe dobara mangwana hai.', { steps: ['List me products chunein.', 'Unka Purchase Order ya Requisition banayein.'] }),
-    'inventory-orders': h('Inventory ke liye purchase orders.', { steps: ['“+ Create Inventory Order” se supplier aur items bharein.', 'Submit / Approve karein, phir “Mark Ordered”.', 'Maal aane par “Receive Goods” karein.'] }),
-
-    inventory: h('Stock ki movement, adjustment aur transfer ka control panel.', {
-        tabs: [['Overview', 'Summary'], ['Movement History', 'Har stock entry'], ['Adjustments', 'Stock ghatana-badhana'], ['Transfers', 'Ek godown se dusre me'], ['Stock Counts', 'Ginti aur milan'], ['Locations', 'Rakhne ki jagah'], ['Reasons', 'Adjustment ke karan'], ['Reports', 'Stock reports']],
-        steps: ['“+ New Stock Operation” se kaam chunein.', 'Items bharkar Save Draft ya Approve & Post karein.'],
+    'sales|Sales Orders': h('Quotations, sales orders and delivery challans (goods sent without a bill).', {
+        tabs: [['Dashboard', 'Summary'], ['Quotations', 'Send rates to a customer and convert to an order later'], ['Sales Orders', 'Take an order; approving it reserves stock'], ['Challans', 'Send goods without a bill: sample, gift, self use'], ['Reports', 'Order reports']],
+        steps: ['For a challan, fill in the party, date, warehouse, reason, items and quantities.', 'Click “Save & Reduce Stock”.'],
+        notes: ['“Save Draft” does not reduce stock.'],
     }),
-    products: h('Saare products, unke rate, GST aur barcode.', {
-        steps: ['“Add Product” se naya product banayein.', 'Rate bharne ke liye Edit > Pricing me Cost, Selling Price aur MRP daalein.', 'Sample ke taur par kharide product me Edit > Basic > “Purchased as sample” tick karein.', 'Label ke liye products tick karke “Print Labels” dabayein.'],
-        notes: ['Filter “Price missing” se bina rate wale products milte hain.'],
+    'sales-returns': h('Record goods returned by a customer and issue a credit note.', {
+        steps: ['Create a new return and select the original invoice.', 'Enter the returned items and quantities.', 'Approve the return. Process a refund if needed and print the credit note.'],
     }),
-    'business-hsn-master': h('HSN/SAC code aur unke GST rate.', { steps: ['“+ Add HSN/SAC” se reference list me se chunein ya manual banayein.', 'GST rate check karke save karein.'], notes: ['Rate ko apne CA se confirm karein.'] }),
-    'opening-stock': h('App shuru karte waqt godown me pehle se rakha stock darj karna.', { steps: ['“New Voucher” banayein, branch aur godown chunein.', 'Products, quantity aur cost bharein.', 'Check karke “Post” karein.'], notes: ['Draft se stock nahi badhta, Post karna zaroori hai.'] }),
-    'inventory-current-stock': h('Abhi kis product ka kitna stock hai.', { steps: ['Search ya filter se product dhoondhein.', 'Row ke Actions se Stock Ledger, batch ya serial detail dekhein.', 'CSV / Excel / PDF se list nikaalein.'] }),
-    'inventory-vouchers': h('Stock se jude vouchers: adjustment, transfer, ginti.', { steps: ['“+ New Stock Operation” se voucher ka type chunein.', 'Items bharein aur Post karein.'] }),
-    'inventory-batches': h('Batch number aur expiry date wale maal ka hisaab.', {
-        tabs: [['Overview', 'Summary'], ['Batches', 'Sab batch'], ['Batch Movements', 'Batch ki entry history'], ['Expiry', 'Jaldi expire hone wala maal'], ['Quarantine', 'Roka gaya maal'], ['Reports', 'Reports']],
-        steps: ['“+ New Batch Operation” se batch ka kaam karein.', 'Expiry tab roz check karein.'],
+    'payment-reminders': h('Customers with pending payments, and reminders to them.', { steps: ['Review the pending bills.', 'Send the customer a reminder.', 'When payment arrives, record it with a Receipt voucher.'] }),
+    customers: h('Your customers, their outstanding balances and history.', {
+        steps: ['Add a customer with “+ New Customer”.', 'Click a customer to see invoices, ledger and outstanding amount.', 'Use “Receive Payment” when money is received.'],
     }),
-    'inventory-serials': h('Har piece ka alag serial / IMEI number.', { steps: ['“Add Serial” ya “Bulk Add” se number daalein.', 'Actions se transfer, block, repair ya damaged mark karein.'] }),
-    'inventory-barcode-center': h('Barcode banana, assign karna aur label print karna.', {
-        steps: ['“Assign Barcode” se product chunkar barcode daalein ya Generate karein.', '“Print Labels” se copies aur size chunkar print karein.'],
-        notes: ['Barcode set na ho to Product Master ke label me SKU barcode ban jata hai.'],
+    'inventory-outward': h('Goods going out: dispatch of billed goods and entries without a bill.', {
+        tabs: [['Sale Dispatch', 'Packing and delivery of billed goods; stock is not reduced again'], ['Manual Outward', 'Goods sent without a bill'], ['History', 'Past stock entries']],
+        steps: ['To send goods without a bill, click “+ New Outward Entry”.', 'Select the party, date, warehouse and reason (Free sample / Gift / Self use).', 'Add the items and quantities, then click “Save & Reduce Stock”.'],
+        notes: ['Do not enter goods here if a sales bill already exists for them.', 'For self use, create a customer named “Self Use”.'],
     }),
-    'inventory-manufacturing': h('Kit / combo banana (jaise Dental Kit): items ka stock ghatta hai, kit ka badhta hai.', {
-        tabs: [['BOM', 'Kit ki recipe: kit me kya-kya jata hai'], ['Production Orders', 'Banane ke order aur unka status'], ['Material Requirements', 'Order ke liye maal ki zaroorat'], ['Production History', 'Ban chuki entries'], ['Wastage/Scrap', 'Barbaad hua maal']],
-        steps: ['Pehle kit ko Product Master me product ke roop me banayein.', '“New Kit / BOM” me kit product, andar ke items aur quantity bharkar “Save Kit” karein.', '“Make Kit” me kit aur kitni banani hai likhkar “Make Kit Now” dabayein.'],
-        notes: ['Stock kam ho to order save rehta hai; stock aane par Production Orders > Actions > Complete/Post.', 'Kit badalne ke liye Actions > Edit.', 'Wastage % = banate waqt barbaad hone wala extra maal; na ho to 0.'],
+    'inventory-reserved': h('Stock held back for orders.', {
+        tabs: [['Active', 'Stock currently reserved'], ['Expiring', 'Reservations about to expire'], ['Consumed', 'Reserved stock that has been used'], ['Released', 'Reservations that were cancelled'], ['Ledger', 'Full history']],
+        steps: ['Stock is reserved automatically when a sales order is approved.', 'Use Release if it is no longer needed, or Extend to move the expiry date.'],
     }),
 
-    'inventory-warehouses': h('Godown (warehouse) ki list.', { steps: ['Naya godown banayein aur uski branch chunein.'] }),
-    'inventory-bins': h('Godown ke andar rack / bin.', { steps: ['Bin aur rack ki list dekhein; Export CSV se nikaalein.'] }),
-    'inventory-godown-balance': h('Har godown me kitna stock hai.', { steps: ['List dekhein; Export CSV se nikaalein.'] }),
-    'inventory-transfer': h('Ek godown se dusre godown me maal bhejna.', { steps: ['“New Transfer” banayein: kahan se, kahan ko, items.', 'Dispatch karein, aur maal pahunchne par Receive karein.'] }),
-    'inventory-transfer-requests': h('Godown transfer ki maang (requests).', { steps: ['Requests ki list aur status dekhein.'] }),
-    'inventory-adjustment': h('Stock ko ghatana ya badhana (damage, loss, sample, ginti ka farak).', { steps: ['“+ New Stock Operation” se adjustment chunein.', 'Product, quantity aur karan bharein.', 'Post karein.'], notes: ['Post karne ke baad stock badal jata hai.'] }),
-    'inventory-audit': h('Godown ke maal ki ginti aur system se milan.', { steps: ['“New Stock Count” banayein.', 'Gini hui quantity bharein.', 'Farak check karke approve karein.'] }),
-    'inventory-allocation': h('Batch / serial ka allocation dekhna.', { steps: ['List me allocation aur status dekhein.'] }),
+    purchases: h('Bills for goods bought from suppliers.', {
+        steps: ['Click “New Purchase”, select the supplier, add items and click “Confirm & Post”.', 'For freight, fill in “Transport / Other Charges” and its GST %, if any.', 'Choose the payment: Unpaid, Paid in full or Partly paid. To pay later, click “Pay” on the bill.', 'To correct a bill, use Actions > Edit, then “Save Changes”. The voucher number stays the same.'],
+        notes: ['Bills within your state carry CGST and SGST; bills from another state carry IGST.', 'A bill with a payment cannot be edited until that payment is reversed.'],
+    }),
+    'purchase-returns': h('Return goods to a supplier.', { steps: ['Click “New Return” and select the purchase bill.', 'Enter the items and quantities being returned.', 'Click “Post”. Stock and the supplier balance are updated.'] }),
+    suppliers: h('The suppliers you buy from.', { steps: ['Click “New Supplier” and enter the name, mobile number, GSTIN and address.', 'You can edit, delete or restore a supplier.'] }),
+    'inventory-inward': h('From requesting goods to receiving them in the warehouse (GRN).', {
+        tabs: [['Overview', 'Summary'], ['Requisitions', 'Internal requests for goods'], ['Purchase Orders', 'Orders placed with suppliers'], ['Goods Receipts', 'Record goods that arrive'], ['Reports', 'Reports']],
+        steps: ['Create a purchase order and confirm it.', 'When goods arrive, enter the quantities under “Receive Goods / GRN”.', 'Create the purchase bill from it if required.'],
+    }),
+    'inventory-reorder': h('Products that are low on stock and need to be ordered again.', { steps: ['Select products from the list.', 'Create a purchase order or requisition for them.'] }),
+    'inventory-orders': h('Purchase orders for inventory.', { steps: ['Click “+ Create Inventory Order” and add the supplier and items.', 'Submit / approve it, then “Mark Ordered”.', 'When goods arrive, click “Receive Goods”.'] }),
 
-    accounts: h('Accounting ke khaate (ledger accounts) aur default khaate.', { steps: ['“New Account” se khaata banayein.', 'Default accounts check karke save karein.'], notes: ['Default khaate badalne se pehle accountant se poochein.'] }),
-    vouchers: h('Paise ki entry: Receipt, Payment, Contra aur Journal.', {
-        tabs: [['Receipt', 'Grahak se paisa aaya'], ['Payment', 'Supplier ko paisa diya'], ['Contra', 'Cash se bank ya bank se cash'], ['Journal', 'Baaki adjustment entry']],
-        steps: ['Type chunein.', 'Party, bill, amount aur bank/cash bharein.', 'Post karein.'],
-        notes: ['Galat entry ko delete nahi, Reverse karte hain.'],
+    inventory: h('Control panel for stock movements, adjustments and transfers.', {
+        tabs: [['Overview', 'Summary'], ['Movement History', 'Every stock entry'], ['Adjustments', 'Increase or decrease stock'], ['Transfers', 'Move stock between warehouses'], ['Stock Counts', 'Count stock and compare'], ['Locations', 'Storage locations'], ['Reasons', 'Reasons for adjustments'], ['Reports', 'Stock reports']],
+        steps: ['Click “+ New Stock Operation” and choose the task.', 'Add the items, then Save Draft or Approve & Post.'],
     }),
-    ledgers: h('Kisi bhi khaate, grahak ya supplier ka pura lena-dena.', { tabs: [['Account Ledger', 'Ek khaate ki entries'], ['Customer / Supplier Ledger', 'Party ka hisaab'], ['Cash / Bank Book', 'Cash aur bank ki entries'], ['Outstanding', 'Kiska kitna baaki']], steps: ['Type aur naam chunein, date lagakar Apply karein.'] }),
-    expenses: h('Kharche aur doosri income.', {
-        tabs: [['Expenses', 'Kharche'], ['Income', 'Aamdani'], ['Categories', 'Kharche ke prakar'], ['Recurring', 'Har mahine wale kharche'], ['Petty Cash', 'Chhota nakad'], ['Bank Import', 'Bank statement daalna'], ['Reconciliation', 'Bank se milan'], ['Reports', 'Reports']],
-        steps: ['Category chunkar amount aur payment ka tareeka bharein.', 'Draft save karein ya approve karke post karein.'],
+    products: h('All products with their prices, GST and barcodes.', {
+        steps: ['Click “Add Product” to create a product.', 'To set rates, use Edit > Pricing and enter Cost Price, Selling Price and MRP.', 'For products bought as samples, tick Edit > Basic > “Purchased as sample”.', 'To print labels, tick the products and click “Print Labels”.'],
+        notes: ['The “Price missing” filter shows products without a selling price.'],
     }),
-    gst: h('GST ka summary aur returns ke aankde.', { tabs: [['Summary', 'Sales/Purchase GST'], ['Returns', 'GSTR data']], steps: ['Mahina chunein, Refresh karein, aankde jaanchein.'], notes: ['File karne se pehle CA se milan karayein.'] }),
-    'inventory-gst-returns': h('GST returns ke liye data.', { steps: ['Mahina chunein aur data jaanch kar export karein.'], notes: ['File karne se pehle CA se milan karayein.'] }),
-    'gst-imports': h('GST ki purani files import karna aur jaanchna.', { steps: ['File upload karein.', 'Data check karke approve aur commit karein.'] }),
-    'tally-integration': h('Tally se data lana aur milan karna.', { steps: ['Importer jodkar pairing code se connect karein.', 'Records review karein, phir approved data import karein.'], notes: ['Import se pehle backup lein.'] }),
-    'fixed-assets': h('Company ki sampatti (machine, computer, furniture) aur depreciation.', {
-        tabs: [['Register', 'Sab assets'], ['Acquisition', 'Nayi kharid'], ['Depreciation', 'Ghisaai ka hisaab'], ['Assignment / Transfer', 'Kiske paas hai'], ['Maintenance / Warranty', 'Repair aur warranty'], ['Verification', 'Jaanch'], ['Reports', 'Reports']],
-        steps: ['“Add Asset” se asset jodein.', 'Capitalize karein, phir samay par Depreciation chalayein.'],
+    'business-hsn-master': h('HSN/SAC codes and their GST rates.', { steps: ['Click “+ Add HSN/SAC” and pick from the reference list or create one manually.', 'Check the GST rate and save.'], notes: ['Confirm tax rates with your accountant (CA).'] }),
+    'opening-stock': h('Record the stock you already had when you started using the app.', { steps: ['Create a “New Voucher” and select the branch and warehouse.', 'Enter products, quantities and cost.', 'Check the details and click “Post”.'], notes: ['A draft does not add stock. You must post it.'] }),
+    'inventory-current-stock': h('Current stock of every product.', { steps: ['Find a product using search or filters.', 'Use the row actions for the stock ledger, batch or serial details.', 'Export the list as CSV, Excel or PDF.'] }),
+    'inventory-vouchers': h('Stock vouchers: adjustments, transfers and counts.', { steps: ['Click “+ New Stock Operation” and choose the voucher type.', 'Add the items and post.'] }),
+    'inventory-batches': h('Goods tracked by batch number and expiry date.', {
+        tabs: [['Overview', 'Summary'], ['Batches', 'All batches'], ['Batch Movements', 'Entry history of batches'], ['Expiry', 'Goods expiring soon'], ['Quarantine', 'Goods put on hold'], ['Reports', 'Reports']],
+        steps: ['Use “+ New Batch Operation” to work with a batch.', 'Check the Expiry tab regularly.'],
+    }),
+    'inventory-serials': h('Individual serial / IMEI numbers for each piece.', { steps: ['Add numbers with “Add Serial” or “Bulk Add”.', 'Use Actions to transfer, block, send for repair or mark as damaged.'] }),
+    'inventory-barcode-center': h('Create, assign and print barcodes.', {
+        steps: ['Click “Assign Barcode”, select a product and enter or generate a barcode.', 'Click “Print Labels” and choose the number of copies and label size.'],
+        notes: ['If a product has no barcode, labels printed from Product Master use its SKU as the barcode.'],
+    }),
+    'inventory-manufacturing': h('Make kits or combos (for example a Dental Kit). Stock of the inside items goes down and stock of the kit goes up.', {
+        tabs: [['BOM', 'The kit recipe: what goes inside a kit'], ['Production Orders', 'Orders to make kits and their status'], ['Material Requirements', 'Materials needed for orders'], ['Production History', 'Completed entries'], ['Wastage/Scrap', 'Material that was wasted']],
+        steps: ['First create the kit itself as a product in Product Master.', 'Click “New Kit / BOM”, choose the kit product, add the inside items with quantities and click “Save Kit”.', 'Click “Make Kit”, choose the kit, enter how many to make and click “Make Kit Now”.'],
+        notes: ['If stock is short, the order is saved. Add stock, then use Production Orders > Actions > Complete/Post.', 'To change a kit, use Actions > Edit.', 'Wastage % is extra material lost while making the kit. Keep it 0 if nothing is lost.'],
+    }),
+
+    'inventory-warehouses': h('Your warehouses.', { steps: ['Create a warehouse and select its branch.'] }),
+    'inventory-bins': h('Racks and bins inside a warehouse.', { steps: ['Review the list of bins and racks. Use Export CSV to download it.'] }),
+    'inventory-godown-balance': h('Stock held in each warehouse.', { steps: ['Review the list. Use Export CSV to download it.'] }),
+    'inventory-transfer': h('Move goods from one warehouse to another.', { steps: ['Create a “New Transfer”: from, to and items.', 'Dispatch it, then Receive it when the goods arrive.'] }),
+    'inventory-transfer-requests': h('Requests for warehouse transfers.', { steps: ['Review the requests and their status.'] }),
+    'inventory-adjustment': h('Increase or decrease stock (damage, loss, sample or count difference).', { steps: ['Click “+ New Stock Operation” and choose an adjustment.', 'Enter the product, quantity and reason.', 'Post it.'], notes: ['Stock changes once the adjustment is posted.'] }),
+    'inventory-audit': h('Physically count warehouse stock and compare it with the system.', { steps: ['Create a “New Stock Count”.', 'Enter the counted quantities.', 'Check the differences and approve.'] }),
+    'inventory-allocation': h('View batch and serial number allocation.', { steps: ['Review the allocations and their status.'] }),
+
+    accounts: h('Ledger accounts and default accounts used for posting.', { steps: ['Create an account with “New Account”.', 'Check the default accounts and save.'], notes: ['Ask your accountant before changing default accounts.'] }),
+    vouchers: h('Money entries: Receipt, Payment, Contra and Journal.', {
+        tabs: [['Receipt', 'Money received from a customer'], ['Payment', 'Money paid to a supplier'], ['Contra', 'Cash to bank or bank to cash'], ['Journal', 'Other adjustment entries']],
+        steps: ['Choose the voucher type.', 'Enter the party, bill, amount and bank or cash account.', 'Post the voucher.'],
+        notes: ['Wrong entries are reversed, not deleted.'],
+    }),
+    ledgers: h('All transactions of an account, customer or supplier.', { tabs: [['Account Ledger', 'Entries of one account'], ['Customer / Supplier Ledger', 'A party’s transactions'], ['Cash / Bank Book', 'Cash and bank entries'], ['Outstanding', 'Pending amounts by party']], steps: ['Choose the type and name, set the dates and click Apply.'] }),
+    expenses: h('Expenses and other income.', {
+        tabs: [['Expenses', 'Expense entries'], ['Income', 'Income entries'], ['Categories', 'Types of expense and income'], ['Recurring', 'Repeating expenses'], ['Petty Cash', 'Small cash spending'], ['Bank Import', 'Import a bank statement'], ['Reconciliation', 'Match with the bank'], ['Reports', 'Reports']],
+        steps: ['Choose a category, then enter the amount and payment method.', 'Save as draft, or approve and post.'],
+    }),
+    gst: h('GST summary and return figures.', { tabs: [['Summary', 'GST on sales and purchases'], ['Returns', 'GSTR data']], steps: ['Select the month, click Refresh and check the figures.'], notes: ['Have your accountant (CA) verify the figures before filing.'] }),
+    'inventory-gst-returns': h('Data for GST returns.', { steps: ['Select the month, check the data and export it.'], notes: ['Have your accountant (CA) verify the figures before filing.'] }),
+    'gst-imports': h('Import and check existing GST files.', { steps: ['Upload the file.', 'Review the data, then approve and commit it.'] }),
+    'tally-integration': h('Bring data from Tally and reconcile it.', { steps: ['Add an importer and connect it with a pairing code.', 'Review the records, then import the approved data.'], notes: ['Take a backup before importing.'] }),
+    'fixed-assets': h('Company assets (machines, computers, furniture) and depreciation.', {
+        tabs: [['Register', 'All assets'], ['Acquisition', 'New purchases'], ['Depreciation', 'Depreciation entries'], ['Assignment / Transfer', 'Who holds each asset'], ['Maintenance / Warranty', 'Repairs and warranty'], ['Verification', 'Physical checks'], ['Reports', 'Reports']],
+        steps: ['Add an asset with “Add Asset”.', 'Capitalize it, then run depreciation periodically.'],
     }),
 
     reports: h('Accounting reports.', {
-        tabs: [['Day Book', 'Din ki sab entries'], ['Trial Balance', 'Sab khaaton ka balance'], ['Profit and Loss', 'Munafa / nuksaan'], ['Balance Sheet', 'Sampatti aur dena'], ['Cash Flow', 'Paisa aana-jaana'], ['Receivables / Payables', 'Lena aur dena']],
-        steps: ['Report ka tab chunein, date lagakar Apply karein.'],
+        tabs: [['Day Book', 'All entries of a day'], ['Trial Balance', 'Balance of every account'], ['Profit and Loss', 'Profit or loss'], ['Balance Sheet', 'Assets and liabilities'], ['Cash Flow', 'Money in and out'], ['Receivables / Payables', 'Amounts to collect and to pay']],
+        steps: ['Select a report tab, set the dates and click Apply.'],
     }),
-    'inventory-reports': h('Stock se judi reports.', { steps: ['Report ka tab chunein, filter lagayein, CSV / Excel / PDF nikaalein.'] }),
-    'stock-ledger': h('Har product ki stock entry: kab aaya, kab gaya.', { steps: ['Product aur date chunein, Refresh karein.'] }),
-    'inventory-valuation': h('Stock ki keemat.', { steps: ['Filter lagayein, Refresh karein aur export karein.'] }),
-    'inventory-audit-trail': h('Voucher me kisne kya badlav kiya.', { steps: ['Filter lagakar entries dekhein.'] }),
-    acceptance: h('Features ki jaanch (acceptance) list.', { steps: ['Har feature ka status dekhein.'] }),
-    'setup-acceptance': h('Setup ki jaanch list.', { steps: ['Har setup item ka status dekhein.'] }),
+    'inventory-reports': h('Stock reports.', { steps: ['Select a report tab, apply filters and export as CSV, Excel or PDF.'] }),
+    'stock-ledger': h('Every stock entry of a product: when it came in and went out.', { steps: ['Choose the product and dates, then click Refresh.'] }),
+    'inventory-valuation': h('The value of your stock.', { steps: ['Apply filters, click Refresh and export.'] }),
+    'inventory-audit-trail': h('Who changed what in vouchers.', { steps: ['Apply filters and review the entries.'] }),
+    acceptance: h('A checklist of features.', { steps: ['Check the status of each feature.'] }),
+    'setup-acceptance': h('A checklist of setup items.', { steps: ['Check the status of each setup item.'] }),
 
-    masters: h('Product ke liye basic lists.', { tabs: [['Categories', 'Product ke group'], ['Sub Categories', 'Group ke andar group'], ['Brands', 'Company/brand'], ['Units', 'NOS, KG, LTR jaisi ikai'], ['HSN/SAC', 'Tax code aur GST rate']], steps: ['Tab chunein, naya record jodein aur save karein.'] }),
-    branches: h('Business ki branches.', { steps: ['Nayi branch banayein; yahi bills aur stock me use hoti hai.'] }),
-    employees: h('Karmchariyon ki list.', { steps: ['Employee jodkar detail save karein.'] }),
-    payroll: h('Attendance aur salary.', {
-        tabs: [['Employees', 'Karmchari'], ['Attendance', 'Haazri'], ['Salary', 'Salary structure'], ['Payroll', 'Mahine ki salary banana'], ['Payslips', 'Salary parchi'], ['Loans', 'Advance aur loan'], ['Reports', 'Reports']],
-        steps: ['Haazri bharein.', 'Payroll calculate karke approve karein.', 'Post karke payment process karein.'],
+    masters: h('Basic lists used by products.', { tabs: [['Categories', 'Product groups'], ['Sub Categories', 'Groups within a category'], ['Brands', 'Product brands'], ['Units', 'Units such as NOS, KG and LTR'], ['HSN/SAC', 'Tax codes and GST rates']], steps: ['Select a tab, add a new record and save.'] }),
+    branches: h('Your business branches.', { steps: ['Create a new branch. Branches are used in bills and stock.'] }),
+    employees: h('Your employees.', { steps: ['Add an employee and save the details.'] }),
+    payroll: h('Attendance and salary.', {
+        tabs: [['Employees', 'Employee list'], ['Attendance', 'Attendance entries'], ['Salary', 'Salary structures'], ['Payroll', 'Monthly salary processing'], ['Payslips', 'Salary slips'], ['Loans', 'Advances and loans'], ['Reports', 'Reports']],
+        steps: ['Enter attendance.', 'Calculate payroll and approve it.', 'Post it and process the payment.'],
     }),
-    users: h('App use karne wale log aur unka access.', { steps: ['“+ Add User” se naam, email aur role chunein.'], notes: ['Har user ko zaroorat jitna hi access dein.'] }),
-    saas: h('Plan aur subscription ki jankari.', { steps: ['Apna plan aur status dekhein.'] }),
-    settings: h('Company ki settings, logo aur bill ki jankari.', { steps: ['Detail badlein aur save karein.'] }),
+    users: h('People who use the app and their access.', { steps: ['Click “+ Add User” and enter the name, email and role.'], notes: ['Give each user only the access they need.'] }),
+    saas: h('Your plan and subscription details.', { steps: ['View your plan and its status.'] }),
+    settings: h('Company settings, logo and bill details.', { steps: ['Change the details and save.'] }),
 };
 
 export const helpFor = (page, title) => pageHelp[`${page}|${title}`] || pageHelp[page] || null;

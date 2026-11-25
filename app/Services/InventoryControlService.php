@@ -52,7 +52,7 @@ class InventoryControlService
             'statuses' => InventoryStockStatus::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(),
             'products' => Product::query()->where(function (Builder $q) use ($businessId) {
                 $q->where('business_id', $businessId)->orWhere('company_id', $businessId);
-            })->where('status', 'active')->orderBy('name')->limit(200)->get($this->productReferenceColumns()),
+            })->where('status', 'active')->orderBy('name')->limit(5000)->get($this->productReferenceColumns()),
             'batches' => ProductBatch::query()->where('business_id', $businessId)->orderBy('expiry_date')->get(['id','product_id','batch_no','status','expiry_date']),
             'settings' => BusinessInventorySetting::query()->where('business_id', $businessId)->first(),
         ]);

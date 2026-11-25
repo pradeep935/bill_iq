@@ -44,8 +44,8 @@ class ExpenseIncomeService
                 $account->masked_account_number = $account->maskAccountNumber();
                 return $account;
             })->values(),
-            'suppliers' => DB::table('suppliers')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->limit(200)->get(['id', 'name']),
-            'customers' => DB::table('customers')->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(200)->get(['id', 'customer_name']),
+            'suppliers' => DB::table('suppliers')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->limit(5000)->get(['id', 'name']),
+            'customers' => DB::table('customers')->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(5000)->get(['id', 'customer_name']),
             'branches' => DB::table('branches')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
         ];
     }

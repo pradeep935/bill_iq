@@ -38,8 +38,8 @@ class AccountingService
             'cash_bank_accounts' => Account::query()->where('business_id', $businessId)->whereIn('account_type', ['cash', 'bank'])->where('status', 'active')->orderBy('account_name')->get(),
             'groups' => AccountGroup::query()->where('business_id', $businessId)->orderBy('group_name')->get(),
             'branches' => Branch::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
-            'customers' => Customer::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(200)->get(),
-            'suppliers' => Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('supplier_name')->limit(200)->get(),
+            'customers' => Customer::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(5000)->get(),
+            'suppliers' => Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('supplier_name')->limit(5000)->get(),
             'settings' => BusinessAccountSetting::query()->where('business_id', $businessId)->first(),
         ];
     }

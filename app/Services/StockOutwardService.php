@@ -118,7 +118,7 @@ class StockOutwardService
             'delivery_statuses' => ['pending', 'in_transit', 'delivered', 'cancelled'],
             'reference_types' => ['sales_invoice', 'sales_order', 'delivery_challan', 'manual_outward'],
             'customers' => Schema::hasTable('customers')
-                ? DB::table('customers')->where('business_id', $businessId)->orderBy('customer_name')->limit(500)->get(['id', 'customer_name', 'customer_code', 'mobile'])
+                ? DB::table('customers')->where('business_id', $businessId)->orderBy('customer_name')->limit(5000)->get(['id', 'customer_name', 'customer_code', 'mobile'])
                 : collect(),
             'transporters' => Schema::hasTable('delivery_challans')
                 ? DB::table('delivery_challans')->where('business_id', $businessId)->whereNotNull('transporter_name')->distinct()->orderBy('transporter_name')->pluck('transporter_name')

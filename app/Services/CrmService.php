@@ -56,8 +56,8 @@ class CrmService
             'stages' => $pipeline ? $pipeline->stages()->get() : collect(),
             'users' => User::query()->where('status', 'active')->where('is_active', 1)->orderBy('name')->get(array_values(array_filter(['id', 'name', 'email', 'phone', 'branch_id', 'role_id'], fn ($column) => \Illuminate\Support\Facades\Schema::hasColumn('users', $column)))),
             'branches' => DB::table('branches')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
-            'customers' => Customer::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(300)->get(['id', 'customer_code', 'customer_name', 'mobile', 'email', 'gstin', 'billing_address', 'shipping_address']),
-            'products' => Product::query()->where(function (Builder $q) use ($businessId) { $q->where('business_id', $businessId)->orWhere('company_id', $businessId); })->where('status', 'active')->orderBy('name')->limit(300)->get(['id', 'name', 'sku', 'selling_price', 'gst_rate']),
+            'customers' => Customer::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(5000)->get(['id', 'customer_code', 'customer_name', 'mobile', 'email', 'gstin', 'billing_address', 'shipping_address']),
+            'products' => Product::query()->where(function (Builder $q) use ($businessId) { $q->where('business_id', $businessId)->orWhere('company_id', $businessId); })->where('status', 'active')->orderBy('name')->limit(5000)->get(['id', 'name', 'sku', 'selling_price', 'gst_rate']),
         ];
     }
 

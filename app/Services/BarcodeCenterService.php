@@ -20,7 +20,7 @@ class BarcodeCenterService
     {
         $businessId = AppController::businessId();
         return app(MasterDataService::class)->references(['categories', 'brands']) + [
-            'products' => Product::query()->where(fn (Builder $q) => $this->scopeProduct($q, $businessId))->orderBy('name')->limit(300)->get($this->columns('products', ['id', 'name', 'sku', 'primary_barcode', 'barcode', 'selling_price', 'mrp'])),
+            'products' => Product::query()->where(fn (Builder $q) => $this->scopeProduct($q, $businessId))->orderBy('name')->limit(5000)->get($this->columns('products', ['id', 'name', 'sku', 'primary_barcode', 'barcode', 'selling_price', 'mrp'])),
             'formats' => ['CODE128', 'EAN-13', 'EAN-8', 'UPC-A', 'QR'],
             'types' => ['internal', 'manufacturer', 'supplier', 'variant', 'unit', 'batch', 'serial'],
             'templates' => ['50x25', '50x30', '100x50', '58x40', '75x50', 'a4', 'custom'],

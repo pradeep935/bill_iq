@@ -385,7 +385,7 @@ class SalesService
         $this->customers->defaultWalkIn();
 
         return [
-            'customers' => Customer::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(100)->get(),
+            'customers' => Customer::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('customer_name')->limit(5000)->get(),
             'branches' => Branch::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
             'warehouses' => Warehouse::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'branch_id', 'name', 'code']),
             'payment_methods' => PaymentMethod::query()->where(function (Builder $q) use ($businessId) {

@@ -49,7 +49,7 @@ class FixedAssetService
             'accounts' => Account::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('account_name')->get(),
             'branches' => DB::table('branches')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
             'warehouses' => DB::table('warehouses')->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'branch_id', 'name', 'code']),
-            'suppliers' => Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->limit(300)->get(['id', 'name', 'phone', 'gstin']),
+            'suppliers' => Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->limit(5000)->get(['id', 'name', 'phone', 'gstin']),
             'categories' => AssetCategory::query()->where('business_id', $businessId)->where('status', 'active')->with(['assetAccount', 'accumulatedDepreciationAccount', 'depreciationExpenseAccount'])->orderBy('category_name')->get(),
             'locations' => AssetLocation::query()->where('business_id', $businessId)->where('status', 'active')->with(['branch', 'warehouse'])->orderBy('location_name')->get(),
             'assets' => FixedAsset::query()->where('business_id', $businessId)->with(['category', 'location'])->orderBy('asset_name')->limit(500)->get(),

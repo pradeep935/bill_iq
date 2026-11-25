@@ -31,7 +31,7 @@ class BatchManagementService
     public function references(): array
     {
         return array_merge(app(MasterDataService::class)->references(['branches', 'warehouses']), [
-            'products' => Product::query()->where('business_id', AppController::businessId())->where('status', 'active')->orderBy('name')->limit(300)->get(['id', 'name', 'sku']),
+            'products' => Product::query()->where('business_id', AppController::businessId())->where('status', 'active')->orderBy('name')->limit(5000)->get(['id', 'name', 'sku']),
             'permissions' => $this->permissions(),
             'conditions' => ['saleable', 'damaged', 'expired', 'defective', 'quarantined'],
             'statuses' => ['active', 'expire_today', 'near_expiry', 'expired', 'blocked', 'quarantined', 'damaged', 'defective', 'empty'],

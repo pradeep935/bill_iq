@@ -105,7 +105,7 @@ class ReservedStockService
             'source_types' => ['sales_order', 'manual_reservation', 'transfer_request'],
             'expiry_statuses' => ['expires_today', 'expiring_soon', 'expired'],
             'customers' => Schema::hasTable('customers')
-                ? DB::table('customers')->where('business_id', $businessId)->orderBy('customer_name')->limit(500)->get(['id', 'customer_name', 'customer_code', 'mobile'])
+                ? DB::table('customers')->where('business_id', $businessId)->orderBy('customer_name')->limit(5000)->get(['id', 'customer_name', 'customer_code', 'mobile'])
                 : collect(),
             'branches' => Schema::hasTable('branches')
                 ? DB::table('branches')->where('business_id', $businessId)->when($branches, fn ($q) => $q->whereIn('id', $branches))->orderBy('name')->get(['id', 'name', 'code'])

@@ -558,13 +558,13 @@ class InventoryController extends Controller
     public function bomStore(BomRequest $request, ManufacturingService $manufacturing)
     {
         $this->authorizeInventoryPermission('manufacturing.create_bom');
-        return response()->json(['message' => 'BOM saved.', 'bom' => $manufacturing->saveBom($request->validated())], 201);
+        return response()->json(['message' => 'BOM saved.', 'bom' => $manufacturing->saveBom($this->bomData($request->validated()))], 201);
     }
 
     public function bomUpdate(BomRequest $request, ManufacturingService $manufacturing, int $bom)
     {
         $this->authorizeInventoryPermission('manufacturing.update_bom');
-        return response()->json(['message' => 'BOM updated.', 'bom' => $manufacturing->saveBom($request->validated(), $bom)]);
+        return response()->json(['message' => 'BOM updated.', 'bom' => $manufacturing->saveBom($this->bomData($request->validated()), $bom)]);
     }
 
     public function bomDuplicate(ManufacturingService $manufacturing, int $bom)
@@ -649,6 +649,29 @@ class InventoryController extends Controller
             ->exists();
 
         abort_unless($allowed, 403, 'You do not have permission for this batch action.');
+    }
+
+    /** Only users allowed to approve BOMs can save one as active; others save a draft. */
+    private function bomData(array $data): array
+    {
+        if (($data['status'] ?? null) === 'active' && !$this->hasInventoryPermission('manufacturing.approve_bom')) {
+            $data['status'] = 'draft';
+        }
+
+        return $data;
+    }
+
+    private function hasInventoryPermission(string $permission): bool
+    {
+        if ((int) AppController::roleId() === 1) {
+            return true;
+        }
+
+        return Schema::hasTable('permissions') && Schema::hasTable('role_permissions') && DB::table('role_permissions')
+            ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
+            ->where('role_permissions.role_id', AppController::roleId())
+            ->where('permissions.name', $permission)
+            ->exists();
     }
 
     private function authorizeInventoryPermission(string $permission): void

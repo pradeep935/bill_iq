@@ -128,8 +128,13 @@ class PurchaseService
             if (!in_array($voucher->status, ['confirmed', 'approved'], true)) {
                 throw ValidationException::withMessages(['status' => 'Only draft or posted purchases can be edited.']);
             }
-            if ((float) $voucher->paid_amount > 0) {
-                throw ValidationException::withMessages(['status' => 'A payment is already recorded against this bill. Reverse that payment first (Accounting > Vouchers), then edit the bill.']);
+            // Money entered on the bill itself is re-posted with the edit. Separate payment vouchers and returns point
+            // at this exact row, so those must be reversed first.
+            if (Schema::hasTable('ledger_allocations') && round((float) DB::table('ledger_allocations')->where('business_id', $voucher->business_id)->where('reference_type', PurchaseVoucher::class)->where('reference_id', $voucher->id)->sum('allocated_amount'), 2) > 0) {
+                throw ValidationException::withMessages(['status' => 'A payment voucher is recorded against this bill. Reverse that payment first (Accounting > Vouchers), then edit the bill.']);
+            }
+            if (Schema::hasTable('purchase_return_vouchers') && DB::table('purchase_return_vouchers')->where('business_id', $voucher->business_id)->where('purchase_voucher_id', $voucher->id)->whereNotIn('status', ['cancelled', 'reversed'])->exists()) {
+                throw ValidationException::withMessages(['status' => 'A purchase return exists for this bill. Cancel or reverse that return first, then edit the bill.']);
             }
 
             $businessId = (int) $voucher->business_id;
@@ -439,6 +444,13 @@ class PurchaseService
 
     private function voucherAttributes(int $businessId, array $data, array $totals, array $extra = []): array
     {
+        // A cash purchase is settled in full at entry time.
+        if (($data['purchase_type'] ?? '') === 'cash') {
+            $totals['paid_amount'] = $totals['grand_total'];
+            $totals['balance_amount'] = 0;
+            $totals['payment_status'] = 'paid';
+        }
+
         return array_merge([
             'business_id' => $businessId,
             'branch_id' => $data['branch_id'] ?? null,
@@ -621,8 +633,11 @@ class PurchaseService
         $last = PurchaseVoucher::query()
             ->where('business_id', $businessId)
             ->where('voucher_number', 'like', $prefix . '%')
+            ->where('voucher_number', 'not like', $prefix . '%-R%') // archived edit revisions
             ->lockForUpdate()
-            ->orderByDesc('id')
+            // Highest number, not newest row: editing an old bill re-creates it under its old number.
+            ->orderByRaw('LENGTH(voucher_number) DESC')
+            ->orderByDesc('voucher_number')
             ->value('voucher_number');
         $next = $last ? ((int) substr($last, strlen($prefix)) + 1) : 1;
 

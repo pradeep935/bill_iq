@@ -1663,8 +1663,9 @@ onUnmounted(() => {
 
 :deep(.bill-payment-methods) {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: #dfe7f1;
     overflow: hidden;
     border: 1px solid #dfe7f1;
     border-radius: 8px;
@@ -1672,15 +1673,11 @@ onUnmounted(() => {
 
 :deep(.bill-payment-methods button) {
     border: 0;
-    border-right: 1px solid #dfe7f1;
     border-radius: 0;
+    background: #fff;
     min-height: 38px;
     padding: 6px 4px;
     font-size: 11px;
-}
-
-:deep(.bill-payment-methods button:last-child) {
-    border-right: 0;
 }
 
 :deep(.bill-payment-methods button.active) {

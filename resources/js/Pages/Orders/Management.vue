@@ -2,12 +2,13 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import Layout from '../Layout.vue';
 import OrderApi from './OrderApi';
+import SearchSelect from '../../Components/Common/SearchSelect.vue';
 
 const props = defineProps({ page: { type: String, default: 'sales' }, title: { type: String, default: 'Order Management' }, initial_tab: { type: String, default: 'sales-orders' } });
 
 const scope = computed(() => ['inventory-orders', 'inventory-inward'].includes(props.page) ? 'purchase' : 'sales');
 const today = new Date().toISOString().slice(0, 10);
-const tab = ref(props.initial_tab);
+const tab = ref(new URLSearchParams(window.location.search).get('tab') || props.initial_tab);
 const loading = ref(false);
 const saving = ref(false);
 const errors = ref({});
@@ -66,6 +67,7 @@ const load = async () => {
     loading.value = true;
     try {
         refs.value = await OrderApi.references(scope.value);
+        if (!challan.warehouse_id && refs.value.warehouses?.length) { challan.warehouse_id = refs.value.warehouses[0].id; syncChallanBranch(); }
         dashboard.value = await OrderApi.dashboard(scope.value);
         reports.value = await OrderApi.reports(scope.value);
         await loadLists();
@@ -111,7 +113,16 @@ const shareQuotationWhatsApp = (row) => run(async () => {
 });
 const saveSalesOrder = (status) => run(() => OrderApi.saveSalesOrder({ ...salesOrder, order_status: status, items: salesOrder.items.map((i) => ({ ...i })) }));
 const approveSalesOrder = (row) => run(() => OrderApi.approveSalesOrder(row.id));
-const saveChallan = (status) => run(() => OrderApi.saveDeliveryChallan({ ...challan, status, items: challan.items.map((i) => ({ ...i })) }));
+const challanNote = ref('');
+const emptyChallanItem = () => ({ product_id: '', dispatch_quantity: 1, ordered_quantity: 0, unit_cost: 0, warehouse_location: '' });
+const syncChallanBranch = () => { challan.branch_id = refs.value.warehouses.find((w) => Number(w.id) === Number(challan.warehouse_id))?.branch_id || ''; };
+const saveChallan = (status) => run(async () => {
+    challanNote.value = '';
+    await OrderApi.saveDeliveryChallan({ ...challan, status, items: challan.items.map((i) => ({ ...i })) });
+    // Clear the form so the same goods are not sent twice by mistake.
+    Object.assign(challan, { customer_id: '', remarks: '', vehicle_number: '', transporter_name: '', tracking_number: '', items: [emptyChallanItem()] });
+    challanNote.value = status === 'draft' ? 'Draft saved.' : 'Saved. Stock has been reduced.';
+});
 const dispatchChallan = (row) => run(() => OrderApi.dispatchChallan(row.id));
 const saveRequisition = (status) => run(() => OrderApi.saveRequisition({ ...requisition, status, items: requisition.items.map((i) => ({ ...i, approved_quantity: i.approved_quantity || i.quantity })) }));
 const savePurchaseOrder = (status) => run(() => OrderApi.savePurchaseOrder({ ...purchaseOrder, status, items: purchaseOrder.items.map((i) => ({ ...i })) }));
@@ -169,10 +180,24 @@ onMounted(load);
             </section>
 
             <section v-if="tab === 'challans'" class="panel">
-                <div class="form-grid"><select v-model="challan.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="challan.warehouse_id"><option value="">Warehouse</option><option v-for="w in filteredWarehouses(challan.branch_id)" :key="w.id" :value="w.id">{{ w.name }}</option></select><select v-model="challan.customer_id"><option value="">Customer</option><option v-for="c in refs.customers" :key="c.id" :value="c.id">{{ c.customer_name }}</option></select><input v-model="challan.challan_date" type="date" /><input v-model="challan.vehicle_number" placeholder="Vehicle" /><input v-model="challan.transporter_name" placeholder="Transporter" /><input v-model="challan.tracking_number" placeholder="Tracking" /><textarea v-model="challan.remarks" placeholder="Remarks"></textarea></div>
-                <div v-for="(item, i) in challan.items" :key="i" class="line-grid"><select v-model="item.product_id"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select><input v-model.number="item.dispatch_quantity" type="number" step="0.001" /><input v-model.number="item.unit_cost" type="number" step="0.01" /><input v-model="item.warehouse_location" placeholder="Location" /><button @click="challan.items.splice(i,1)" :disabled="challan.items.length === 1">Remove</button></div>
-                <div class="actions"><button @click="addRow(challan.items, { product_id: '', dispatch_quantity: 1, ordered_quantity: 0, unit_cost: 0, warehouse_location: '' })">Add Item</button><button :disabled="saving" @click="saveChallan('draft')">Save Draft</button><button :disabled="saving" @click="saveChallan('dispatched')">Dispatch</button></div>
-                <div class="table-wrapper"><table><thead><tr><th>No.</th><th>Customer</th><th>Warehouse</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody><tr v-for="d in challans" :key="d.id"><td>{{ d.challan_number }}</td><td>{{ d.customer?.customer_name }}</td><td>{{ d.warehouse?.name }}</td><td>{{ d.challan_date }}</td><td>{{ d.status }}</td><td><button @click="dispatchChallan(d)">Dispatch</button><button @click="printDoc('Delivery Challan', d.challan_number)">Print</button></td></tr></tbody></table></div>
+                <p class="dc-help">Send goods out <strong>without a bill</strong> (sample, gift, self use). Choose the party and items, then click <strong>Save &amp; Reduce Stock</strong>.</p>
+                <div class="dc-top">
+                    <div class="dc-field"><span>1. Party / Customer *</span><SearchSelect v-model="challan.customer_id" class="dc-search" label="Customer" :options="refs.customers" option-value-key="id" option-label-key="customer_name" select-placeholder="Type party name" /></div>
+                    <label class="dc-field"><span>Date *</span><input v-model="challan.challan_date" type="date" /></label>
+                    <label class="dc-field"><span>Warehouse *</span><select v-model="challan.warehouse_id" @change="syncChallanBranch"><option value="">Select warehouse</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
+                    <label class="dc-field"><span>Reason / Remarks</span><input v-model="challan.remarks" list="dc-reasons" placeholder="e.g. Free sample, Gift, Self use" /><datalist id="dc-reasons"><option value="Free sample" /><option value="Gift" /><option value="Self use" /></datalist></label>
+                </div>
+                <div class="dc-line dc-head"><span>2. Item *</span><span>Quantity *</span><span></span></div>
+                <div v-for="(item, i) in challan.items" :key="i" class="dc-line">
+                    <SearchSelect v-model="item.product_id" class="dc-search" label="Item" :options="refs.products" option-value-key="id" option-label-key="name" select-placeholder="Type item name" />
+                    <input v-model.number="item.dispatch_quantity" type="number" min="0.001" step="any" aria-label="Quantity" />
+                    <button type="button" :disabled="challan.items.length === 1" @click="challan.items.splice(i,1)">Remove</button>
+                </div>
+                <button type="button" class="dc-add" @click="addRow(challan.items, emptyChallanItem())">+ Add another item</button>
+                <details class="dc-more"><summary>Transport details (not required)</summary><div class="form-grid"><input v-model="challan.vehicle_number" placeholder="Vehicle number" /><input v-model="challan.transporter_name" placeholder="Transporter" /><input v-model="challan.tracking_number" placeholder="Tracking number" /></div></details>
+                <div v-if="challanNote" class="dc-note">{{ challanNote }}</div>
+                <div class="actions"><button :disabled="saving" @click="saveChallan('draft')">Save Draft</button><button class="dc-primary" :disabled="saving" @click="saveChallan('dispatched')">{{ saving ? 'Saving...' : 'Save & Reduce Stock' }}</button></div>
+                <div class="table-wrapper"><table><thead><tr><th>No.</th><th>Customer</th><th>Warehouse</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody><tr v-for="d in challans" :key="d.id"><td>{{ d.challan_number }}</td><td>{{ d.customer?.customer_name }}</td><td>{{ d.warehouse?.name }}</td><td>{{ String(d.challan_date || '').slice(0, 10) }}</td><td>{{ d.status }}</td><td><button v-if="d.status === 'draft'" @click="dispatchChallan(d)">Reduce Stock</button><button @click="printDoc('Delivery Challan', d.challan_number)">Print</button></td></tr></tbody></table></div>
             </section>
 
             <section v-if="tab === 'requisitions'" class="panel">
@@ -206,5 +231,6 @@ onMounted(load);
 </template>
 
 <style scoped>
+.dc-help{margin:0 0 14px;padding:10px 12px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px}.dc-top{display:grid;grid-template-columns:2fr 1fr 1fr 1.4fr;gap:12px;margin-bottom:14px}.dc-field{display:grid;gap:6px;align-content:start}.dc-field>span,.dc-head span{color:#344159;font-size:12px;font-weight:800}.dc-search :deep(.search-select-label){display:none}.dc-line{display:grid;grid-template-columns:minmax(0,1fr) 140px 90px;gap:10px;align-items:center;margin-bottom:8px}.dc-add{margin-bottom:10px}.dc-more{margin:8px 0}.dc-more summary{cursor:pointer;color:#2457d6;font-size:12px;font-weight:800;margin-bottom:8px}.dc-note{margin:8px 0;padding:10px;color:#166534;background:#f0fdf4;border-radius:8px;font-size:12px}.dc-primary{color:#fff!important;background:#2457d6!important;border-color:#2457d6!important}@media(max-width:900px){.dc-top{grid-template-columns:1fr}.dc-line{grid-template-columns:minmax(0,1fr) 80px 80px}}
 .orders-page{padding:4px 0 28px}.page-heading,.tabs,.actions{display:flex;align-items:center;gap:12px}.page-heading{justify-content:space-between;margin-bottom:18px}.page-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.tabs button{text-transform:capitalize}.tabs{flex-wrap:wrap;margin-bottom:14px}.tabs button.active{background:#173b77;color:#fff;border-color:#173b77}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.cards div{padding:14px;border:1px solid #edf1f5;border-radius:8px}.cards span{display:block;color:#69758a;font-size:11px}.cards strong{display:block;margin-top:6px;color:#142139;font-size:18px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.line-grid{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,.8fr)) auto;gap:8px;align-items:center;margin-bottom:8px}.actions{justify-content:flex-end;flex-wrap:wrap;margin:12px 0}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:38px}button{font-weight:750;cursor:pointer}.alert{padding:10px 12px;margin-bottom:12px;border-radius:8px;background:#fff4f4;color:#b42318;border:1px solid #ffd5d5;font-size:12px}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{padding:11px 10px;border-bottom:1px solid #edf1f5;text-align:left;white-space:nowrap;font-size:12px}th{color:#69758a;background:#f8fafc;font-size:10px;text-transform:uppercase}@media(max-width:1000px){.cards,.form-grid,.line-grid{grid-template-columns:1fr}.page-heading{align-items:stretch;flex-direction:column}}
 </style>

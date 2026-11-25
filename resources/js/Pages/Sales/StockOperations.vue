@@ -245,7 +245,8 @@ const openDrawer = async (row) => {
     drawerLoading.value = false;
   }
 };
-const createOutward = () => { message.value = 'Manual outward is created from sales order or delivery challan workflows. Posted sales invoices stay in Sale Dispatch and are never deducted again here.'; };
+// Manual outward (sample, gift, goods sent without a bill) is entered as a Delivery Challan.
+const createOutward = () => { window.location.href = '/app/sales/orders?tab=challans'; };
 const createReservation = () => { message.value = 'Reservations are created by approving sales orders, so available-to-sell is held without changing physical inventory.'; };
 const scanBarcode = () => {
   if (!barcodeScan.value.trim()) return;
@@ -270,7 +271,7 @@ watch(() => [filterForm.per_page, filterForm.date_from, filterForm.date_to, filt
     <div class="dispatch-page">
       <ActionToolbar>
         <button v-if="reservedMode" type="button" title="Create reservations through sales order approval" @click="createReservation">New Reservation</button>
-        <button v-else type="button" title="Create manual outward through order or challan workflows" @click="createOutward">Manual Outward</button>
+        <button v-else type="button" title="Send goods without a bill (sample, gift, self use) using a Delivery Challan" @click="createOutward">+ New Outward Entry</button>
         <button type="button" :title="reservedMode ? 'Print reserved stock report' : 'Print selected dispatch report'" @click="printDocument(reservedMode ? 'reservation' : 'dispatch')">Print</button>
         <button type="button" :title="reservedMode ? 'Export reservation data' : 'Export dispatch data'" :disabled="!permissions.export" @click="exportCsv">Export</button>
         <button type="button" :title="reservedMode ? 'Refresh reservations' : 'Refresh dispatch queue'" :disabled="loading" @click="refresh">{{ loading ? 'Refreshing...' : 'Refresh' }}</button>

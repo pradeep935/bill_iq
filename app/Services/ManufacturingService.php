@@ -77,11 +77,15 @@ class ManufacturingService
         return DB::transaction(function () use ($data, $id) {
             $businessId = AppController::businessId();
             $bom = $id ? Bom::query()->where('business_id', $businessId)->with('items')->findOrFail($id) : new Bom(['business_id' => $businessId, 'created_by' => Auth::id()]);
-            if ($bom->exists && $bom->status === 'active') {
-                throw ValidationException::withMessages(['status' => 'Active BOMs must be duplicated as a new version before editing.']);
-            }
             $this->assertProduct((int) $data['finished_product_id']);
             $this->validateBomItems((int) $data['finished_product_id'], $data['items'] ?? [], $id);
+            // A kit that already has production orders keeps its history: the edit is saved as a new version and the old one is switched off.
+            if ($bom->exists && $bom->status === 'active' && ProductionOrder::query()->where('business_id', $businessId)->where('bom_id', $bom->id)->exists()) {
+                $bom->update(['status' => 'inactive']);
+                $bom = new Bom(['business_id' => $businessId, 'created_by' => Auth::id(), 'version' => (int) $bom->version + 1]);
+                $data['bom_code'] = null;
+                $data['version'] = null;
+            }
             $bom->fill([
                 'finished_product_id' => $data['finished_product_id'],
                 'finished_product_variant_id' => $data['finished_product_variant_id'] ?? null,
@@ -172,6 +176,10 @@ class ManufacturingService
             $bom = Bom::query()->where('business_id', $businessId)->with('items')->findOrFail($data['bom_id']);
             if ($bom->status !== 'active') {
                 throw ValidationException::withMessages(['bom_id' => 'Only active BOMs can be used for production.']);
+            }
+            // Stock is kept per branch + warehouse, so take the branch from the warehouse when none is chosen.
+            if (empty($data['branch_id'])) {
+                $data['branch_id'] = Warehouse::query()->where('business_id', $businessId)->where('id', $data['source_warehouse_id'])->value('branch_id');
             }
             $this->assertLocation($businessId, $data);
             $planned = (float) $data['planned_quantity'];

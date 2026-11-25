@@ -198,7 +198,7 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); if (new U
                         <label>Credit Limit<input v-model="form.credit_limit" type="number" min="0" step="0.01" placeholder="Credit Limit" /></label>
                         <label>Credit Days<input v-model="form.credit_days" type="number" min="0" placeholder="Credit Days" /></label>
                         <SearchSelect v-model="form.status" label="Status" :options="[{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }]" option-value-key="value" option-label-key="label" select-placeholder="Select Status" required />
-                        <label class="wide"><span>Billing Address <span class="required-mark">*</span></span><textarea v-model="form.billing_address" placeholder="Billing Address"></textarea></label>
+                        <label class="wide"><span>Billing Address</span><textarea v-model="form.billing_address" placeholder="Billing Address"></textarea></label>
                         <label class="wide">Shipping Address<textarea v-model="form.shipping_address" placeholder="Shipping Address"></textarea></label>
                     </div>
                     <div v-if="Object.keys(errors).length" class="error-box">

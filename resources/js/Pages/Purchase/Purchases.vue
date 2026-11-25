@@ -590,7 +590,7 @@ onMounted(async () => {
                         <SearchSelect v-model="supplierForm.city" label="City" :options="filteredSupplierCities" option-value-key="name" option-label-key="name" select-placeholder="Search City" required allow-custom />
                         <label>Pincode<input v-model="supplierForm.pincode" maxlength="12" placeholder="Pincode" /></label>
                         <label>Credit Days<input v-model="supplierForm.credit_days" type="number" min="0" placeholder="Credit Days" /></label>
-                        <label class="wide"><span>Billing Address <span class="required-mark">*</span></span><textarea v-model="supplierForm.billing_address" placeholder="Billing Address"></textarea></label>
+                        <label class="wide"><span>Billing Address</span><textarea v-model="supplierForm.billing_address" placeholder="Billing Address"></textarea></label>
                         <label class="wide">Shipping Address<textarea v-model="supplierForm.shipping_address" placeholder="Shipping Address"></textarea></label>
                     </div>
                     <div v-if="Object.keys(supplierErrors).length" class="error-box"><span v-for="(messages, field) in supplierErrors" :key="field">{{ messages[0] }}</span></div>

@@ -27,7 +27,7 @@ class SupplierRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255'],
             'gstin' => ['nullable', 'string', 'size:15', 'regex:/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/'],
             'pan' => ['nullable', 'string', 'size:10', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]$/'],
-            'billing_address' => ['required', 'string', 'max:2000'],
+            'billing_address' => ['nullable', 'string', 'max:2000'],
             'shipping_address' => ['nullable', 'string', 'max:2000'],
             'state_id' => ['nullable', 'integer'],
             'city' => ['required', 'string', 'max:120'],

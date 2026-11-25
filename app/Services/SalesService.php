@@ -60,7 +60,8 @@ class SalesService
             ->when(!empty($filters['invoice_type']), fn (Builder $q) => $q->where('invoice_type', $filters['invoice_type']))
             ->when(($filters['payment_status'] ?? '') === 'due', fn (Builder $q) => $q->whereIn('status', ['approved', 'confirmed', 'posted', 'completed'])->where('balance_amount', '>', 0))
             ->when(!empty($filters['payment_status']) && $filters['payment_status'] !== 'due', fn (Builder $q) => str_contains((string) $filters['payment_status'], ',') ? $q->whereIn('payment_status', explode(',', (string) $filters['payment_status'])) : $q->where('payment_status', $filters['payment_status']))
-            ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
+            ->when(($filters['status'] ?? '') === 'posted', fn (Builder $q) => $q->whereIn('status', ['approved', 'confirmed', 'posted', 'completed']))
+            ->when(!empty($filters['status']) && $filters['status'] !== 'posted', fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']));
 
         AppController::applyTenantScope($query, 'sales_vouchers');

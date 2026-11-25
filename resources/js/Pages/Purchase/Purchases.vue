@@ -47,7 +47,7 @@ const filters = reactive({ status: '', payment_status: '', purchase_type: '', ta
 const purchaseTypes = [{ value: 'cash', label: 'Cash' }, { value: 'credit', label: 'Credit' }];
 const taxTypes = [{ value: 'intrastate', label: 'Intrastate' }, { value: 'interstate', label: 'Interstate' }, { value: 'exempt', label: 'Exempt' }];
 const discountTypes = [{ value: '', label: 'No Discount' }, { value: 'percentage', label: '%' }, { value: 'amount', label: 'Amount' }];
-const statusFilters = [{ value: '', label: 'All Status' }, { value: 'draft', label: 'Draft' }, { value: 'approved', label: 'Approved' }, { value: 'cancelled', label: 'Cancelled' }, { value: 'reversed', label: 'Reversed' }];
+const statusFilters = [{ value: '', label: 'All Status' }, { value: 'draft', label: 'Draft' }, { value: 'posted', label: 'All posted' }, { value: 'approved', label: 'Approved' }, { value: 'cancelled', label: 'Cancelled' }, { value: 'reversed', label: 'Reversed' }];
 const paymentFilters = [{ value: '', label: 'All Payment' }, { value: 'unpaid', label: 'Unpaid' }, { value: 'partial', label: 'Partial' }, { value: 'paid', label: 'Paid' }, { value: 'due', label: 'To pay (pending)' }];
 const form = reactive({
     id: null,
@@ -470,6 +470,7 @@ onMounted(async () => {
     // Opened from the dashboard with a filter in the link.
     const query = new URLSearchParams(window.location.search);
     ['status', 'payment_status'].forEach((key) => { if (query.get(key)) filters[key] = query.get(key); });
+    if (query.get('date') === 'today') filters.date_from = filters.date_to = new Date().toLocaleDateString('en-CA');
     if (form.items.length || form.id) {
         showPurchaseDrawer.value = true;
     }

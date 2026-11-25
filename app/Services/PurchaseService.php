@@ -44,7 +44,9 @@ class PurchaseService
             // "due" = posted bills that still have a balance (same rule as the dashboard's pending list).
             ->when(($filters['payment_status'] ?? '') === 'due', fn (Builder $q) => $q->whereIn('status', ['approved', 'confirmed', 'posted', 'completed'])->where('balance_amount', '>', 0))
             ->when(!empty($filters['payment_status']) && $filters['payment_status'] !== 'due', fn (Builder $q) => $q->where('payment_status', $filters['payment_status']))
-            ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
+            ->when(($filters['date'] ?? null) === 'today', fn (Builder $q) => $q->whereDate('purchase_date', now()->toDateString()))
+            ->when(($filters['status'] ?? '') === 'posted', fn (Builder $q) => $q->whereIn('status', ['approved', 'confirmed', 'posted', 'completed']))
+            ->when(!empty($filters['status']) && $filters['status'] !== 'posted', fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(!empty($filters['purchase_type']), fn (Builder $q) => $q->where('purchase_type', $filters['purchase_type']))
             ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']))
             ->when(($filters['status'] ?? '') !== 'reversed', fn (Builder $q) => $q->where('voucher_number', 'not like', '%-R_%'))

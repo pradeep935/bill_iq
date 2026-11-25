@@ -446,6 +446,11 @@ class StockService
             ? $this->summaryModeQuery($detailed)
             : $detailed;
 
+        // "Out of stock or minus" is judged on the shown row: the product total in summary view.
+        if (($filters['stock_status'] ?? '') === 'unavailable') {
+            $resultQuery = DB::query()->fromSub($resultQuery, 'unavailable_stock')->where('quantity_on_hand', '<=', 0);
+        }
+
         $paginator = $resultQuery->orderBy($sort, $direction)->paginate($perPage);
 
         $paginator->getCollection()->transform(function ($row) {

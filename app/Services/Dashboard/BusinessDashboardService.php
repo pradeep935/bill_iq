@@ -24,6 +24,9 @@ class BusinessDashboardService
         $roleId = AppController::roleId();
         $today = CarbonImmutable::now(config('app.timezone'))->toDateString();
         $stock = $this->stockSnapshot($businessId);
+        if (Schema::hasTable('stock_ledgers')) {
+            $stock['out'] = app(StockService::class)->summary(['stock_status' => 'unavailable', 'per_page' => 1])->total();
+        }
         $routes = $this->routes();
         $permissions = $this->permissions($roleId);
         $accounts = $this->accountBalances($businessId);
@@ -58,7 +61,7 @@ class BusinessDashboardService
                 'count' => (int) (clone $sales)->count(),
                 'format' => 'currency',
                 'hint' => (clone $sales)->count() . ' invoices today',
-                'href' => $this->url('app.sales.invoices', ['date' => 'today']),
+                'href' => $this->url('app.sales.invoices', ['date' => 'today', 'status' => 'posted']),
             ],
             [
                 'key' => 'today_purchase',
@@ -67,7 +70,7 @@ class BusinessDashboardService
                 'count' => (int) (clone $purchases)->count(),
                 'format' => 'currency',
                 'hint' => (clone $purchases)->count() . ' purchase bills today',
-                'href' => $this->url('app.purchase.bills', ['date' => 'today']),
+                'href' => $this->url('app.purchase.bills', ['date' => 'today', 'status' => 'posted']),
             ],
             [
                 'key' => 'gst_payable',
@@ -115,7 +118,7 @@ class BusinessDashboardService
                 'stats' => [
                     ['label' => 'Today Invoices', 'value' => (int) (clone $todaySales)->count()],
                     ['label' => 'Today Amount', 'value' => round((float) (clone $todaySales)->sum('grand_total'), 2), 'format' => 'currency'],
-                    ['label' => 'Pending', 'value' => $this->salesQuery($businessId, false)->whereNotIn('status', self::EXCLUDED_STATUSES)->where('balance_amount', '>', 0)->count()],
+                    ['label' => 'Pending', 'value' => $this->salesQuery($businessId)->where('balance_amount', '>', 0)->count()],
                 ],
             ],
             [
@@ -315,13 +318,16 @@ class BusinessDashboardService
     {
         $todayProfit = 0.0;
         if (Schema::hasTable('sales_items') && Schema::hasTable('sales_vouchers')) {
-            $todayProfit = (float) DB::table('sales_items')
+            // Profit = sales value without GST (after discounts) minus cost of the goods sold. GST is not income.
+            $revenue = (float) $this->salesQuery($businessId)->whereDate('invoice_date', $today)->sum('taxable_amount');
+            $cost = (float) DB::table('sales_items')
                 ->join('sales_vouchers', 'sales_vouchers.id', '=', 'sales_items.sales_voucher_id')
                 ->where('sales_vouchers.business_id', $businessId)
                 ->whereDate('sales_vouchers.invoice_date', $today)
                 ->whereIn('sales_vouchers.status', self::POSTED_STATUSES)
-                ->selectRaw('COALESCE(SUM(sales_items.line_total - ((COALESCE(sales_items.cost_rate, 0)) * (COALESCE(sales_items.quantity, 0) + COALESCE(sales_items.free_quantity, 0)))), 0) as profit')
-                ->value('profit');
+                ->selectRaw('COALESCE(SUM(COALESCE(sales_items.cost_rate, 0) * (COALESCE(sales_items.quantity, 0) + COALESCE(sales_items.free_quantity, 0))), 0) as cost')
+                ->value('cost');
+            $todayProfit = $revenue - $cost;
         }
 
         return [
@@ -345,11 +351,11 @@ class BusinessDashboardService
             $items[] = ['type' => 'warning', 'label' => $stock['low'] . ' low-stock products', 'href' => $routes['inventory.stock-summary']['url'] . '?stock_status=low'];
         }
         if ($stock['out'] > 0) {
-            $items[] = ['type' => 'danger', 'label' => $stock['out'] . ' out-of-stock products', 'href' => $routes['inventory.stock-summary']['url'] . '?stock_status=out'];
+            $items[] = ['type' => 'danger', 'label' => $stock['out'] . ' out-of-stock products', 'href' => $routes['inventory.stock-summary']['url'] . '?stock_status=unavailable'];
         }
-        $pendingPayments = $this->salesQuery($businessId, false)->whereNotIn('status', self::EXCLUDED_STATUSES)->where('balance_amount', '>', 0)->count();
+        $pendingPayments = $this->salesQuery($businessId)->where('balance_amount', '>', 0)->count();
         if ($pendingPayments > 0) {
-            $items[] = ['type' => 'info', 'label' => $pendingPayments . ' invoices awaiting payment', 'href' => $routes['sales.index']['url'] . '?payment_status=pending'];
+            $items[] = ['type' => 'info', 'label' => $pendingPayments . ' invoices awaiting payment', 'href' => $routes['sales.index']['url'] . '?payment_status=due'];
         }
 
         return $items;

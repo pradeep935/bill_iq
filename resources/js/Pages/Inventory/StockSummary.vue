@@ -444,6 +444,7 @@ onMounted(async () => {
                             <option value="low">Low Stock</option>
                             <option value="out">Out of Stock</option>
                             <option value="negative">Minus Stock</option>
+                            <option value="unavailable">Out of Stock + Minus</option>
                         </select>
                         <select v-model="filters.per_page">
                             <option :value="15">15 / page</option>

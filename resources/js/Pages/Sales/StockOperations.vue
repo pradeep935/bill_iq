@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import axios from 'axios';
 import Layout from '../Layout.vue';
+import HowToGuide from '../../Components/Common/HowToGuide.vue';
 import ActionToolbar from '../../Components/Dispatch/ActionToolbar.vue';
 import DispatchDrawer from '../../Components/Dispatch/DispatchDrawer.vue';
 import DispatchTable from '../../Components/Dispatch/DispatchTable.vue';
@@ -269,6 +270,9 @@ watch(() => [filterForm.per_page, filterForm.date_from, filterForm.date_to, filt
     </template>
 
     <div class="dispatch-page">
+      <HowToGuide v-if="!reservedMode" id="outward" title="How to send goods without a bill (sample, gift, self use)"
+        :steps="['Click “+ New Outward Entry”.', 'Choose the party, check date and warehouse, and write the reason (Free sample, Gift or Self use).', 'Add the items and quantity, then click “Save & Reduce Stock”.']"
+        :notes="['Do not enter goods that already have a sales bill: their stock is already reduced by the bill.', 'For self use, create a customer named “Self Use” and choose it.']" />
       <ActionToolbar>
         <button v-if="reservedMode" type="button" title="Create reservations through sales order approval" @click="createReservation">New Reservation</button>
         <button v-else type="button" title="Send goods without a bill (sample, gift, self use) using a Delivery Challan" @click="createOutward">+ New Outward Entry</button>

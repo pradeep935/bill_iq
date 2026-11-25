@@ -5,6 +5,7 @@ import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 import SearchSelect from '../../Components/Common/SearchSelect.vue';
+import HowToGuide from '../../Components/Common/HowToGuide.vue';
 
 defineProps({ page: { type: String, default: 'purchases' }, title: { type: String, default: 'Purchases' } });
 
@@ -474,6 +475,9 @@ onMounted(async () => {
             <div class="bill-page-title"><span>PURCHASE MANAGEMENT</span><h1>Purchase Vouchers</h1><p>Draft purchases and post confirmed stock into the stock ledger.</p></div>
         </template>
         <div class="purchase-page">
+            <HowToGuide id="purchases" title="How to enter, edit and pay a purchase bill"
+                :steps="['New bill: click “New Purchase”, choose the supplier, search and add items, then click “Confirm & Post”.', 'Transport or freight: fill “Transport / Other Charges” (and its GST %, if any).', 'Payment: choose Unpaid, Paid in full or Partly paid. To pay later, click “Pay” on that bill.', 'Correct a bill: Actions > Edit, change it and click “Save Changes”. The voucher number stays the same.']"
+                :notes="['A bill that already has a payment cannot be edited until that payment is reversed.']" />
             <div v-if="showPurchaseDrawer" class="drawer-backdrop" @click.self="closePurchaseDrawer">
                 <aside class="drawer-panel">
                     <div class="drawer-heading">

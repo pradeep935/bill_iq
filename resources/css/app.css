@@ -707,6 +707,13 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
     margin-right: auto;
 }
 
+/* Full-screen drawers/popups sit directly inside .bill-main: they must cover the whole window, not the 1540px content column. */
+.bill-main > [class*="backdrop"],
+.bill-main > [class*="overlay"] {
+    max-width: none;
+    margin: 0;
+}
+
 .bill-topbar {
     display: flex;
     flex-wrap: wrap;

@@ -32,7 +32,7 @@ class ManufacturingService
     {
         $businessId = AppController::businessId();
         return app(MasterDataService::class)->references(['branches', 'warehouses', 'units', 'categories', 'brands']) + [
-            'products' => Product::query()->where(fn (Builder $q) => $this->scopeProduct($q, $businessId))->where('status', 'active')->orderBy('name')->limit(500)->get($this->columns('products', ['id', 'name', 'sku', 'unit_id', 'batch_required', 'serial_required', 'tracking_type', 'default_selling_price', 'selling_price'])),
+            'products' => Product::query()->where(fn (Builder $q) => $this->scopeProduct($q, $businessId))->where('status', 'active')->orderBy('name')->limit(5000)->get($this->columns('products', ['id', 'name', 'sku', 'unit_id', 'batch_required', 'serial_required', 'tracking_type', 'default_selling_price', 'selling_price'])),
             'boms' => Bom::query()->with('finishedProduct')->where('business_id', $businessId)->where('status', 'active')->latest('id')->limit(200)->get(),
             'statuses' => ['draft', 'active', 'inactive', 'planned', 'material_reserved', 'in_progress', 'completed', 'cancelled'],
         ];

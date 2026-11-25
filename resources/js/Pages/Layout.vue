@@ -123,7 +123,7 @@
           <button type="button" class="icon-only" title="Notifications" aria-label="Notifications" @click="showNotice('No unread notifications.')">
             <span class="bill-nav-icon" v-html="iconSvg('bell')"></span>
           </button>
-          <button type="button" class="icon-only" title="Help center" aria-label="Help" @click="showNotice('BillIQ help is available from Settings > Support.')">
+          <button type="button" class="icon-only" title="Help center" aria-label="Help" @click="pageHelpRef?.show() || showNotice('BillIQ help is available from Settings > Support.')">
             <span class="bill-nav-icon" v-html="iconSvg('circle-help')"></span>
           </button>
         </div>
@@ -136,6 +136,7 @@
           </div>
         </a>
       </header>
+      <PageHelp ref="pageHelpRef" :key="page + title" :page="page" :title="title" />
       <slot />
     </main>
     <AssistantChat :page="page" />
@@ -146,12 +147,14 @@
 import { computed, ref, watchEffect } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AssistantChat from '../Components/Assistant/AssistantChat.vue';
+import PageHelp from '../Components/Help/PageHelp.vue';
 
 const props = defineProps({
   page: { type: String, required: true },
   title: { type: String, required: true },
 });
 
+const pageHelpRef = ref(null);
 const menuOpen = ref(false);
 const moduleOpen = ref(false);
 const selectedSectionKey = ref('');

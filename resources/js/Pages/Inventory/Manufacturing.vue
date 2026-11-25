@@ -8,7 +8,6 @@ import InventoryModuleScaffold from './Shared/InventoryModuleScaffold.vue';
 import InventoryTable from './Shared/InventoryTable.vue';
 import InventoryModal from './Shared/InventoryModal.vue';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
-import HowToGuide from '../../Components/Common/HowToGuide.vue';
 import SearchSelect from '../../Components/Common/SearchSelect.vue';
 
 defineProps({ page: { type: String, default: 'inventory-manufacturing' }, title: { type: String, default: 'Manufacturing / BOM' } });
@@ -165,9 +164,6 @@ onMounted(async () => { await loadRefs(); await load(); });
     <Layout :page="page" :title="title">
         <template #topbar-title><div class="bill-page-title"><span>INVENTORY CONTROL</span><h1>Manufacturing / BOM</h1><p>Manage BOM versions, production orders, material requirements, wastage and ledger-backed finished goods posting.</p></div></template>
         <AppToast v-if="toast" show :title="toast.title" :message="toast.message" :type="toast.type" />
-        <HowToGuide id="bom" title="How to make a kit (e.g. Dental Kit)"
-            :steps="['First add the kit itself as a product in Inventory > Product Master (if it is not there yet).', 'Click “New Kit / BOM”. Choose the kit product, add each item that goes inside with its quantity, then click “Save Kit”.', 'Click “Make Kit”. Choose the kit, enter how many you are making, then click “Make Kit Now”.', 'Done: stock of the inside items goes down and stock of the kit goes up. Now sell the kit like any other product.']"
-            :notes="['Not enough stock? The order is saved. Add stock, then use Actions > Complete/Post in Production Orders.', 'To change a kit: Actions > Edit. Wastage % is extra material lost while packing; keep it 0 if nothing is lost.']" />
         <TableLoadingState v-if="loading && !initialLoaded" title="Loading Manufacturing..." description="Preparing BOMs, production orders and material status." />
         <InventoryModuleScaffold v-else :title="tab === 'bom' ? 'BOM Register' : tab === 'orders' ? 'Production Orders' : 'Manufacturing Reports'" subtitle="Optional manufacturing workflow controlled by inventory permissions." :cards="cards" :loading="loading" :initial-loaded="initialLoaded" :pagination="currentPagination" @page="load">
             <template #toolbar><button @click="tab='bom'">BOM</button><button @click="tab='orders'">Production Orders</button><button @click="tab='materials'">Material Requirements</button><button @click="tab='history'">Production History</button><button @click="tab='wastage'">Wastage/Scrap</button><button @click="openBom()">New Kit / BOM</button><button @click="openOrder()">Make Kit</button><button @click="exportRows('csv')">CSV</button><button @click="exportRows('excel')">Excel</button><button @click="exportRows('pdf')">PDF</button></template>

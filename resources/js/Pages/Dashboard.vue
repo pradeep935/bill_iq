@@ -67,26 +67,20 @@
           <a :href="routeUrl('sales.index')">View all</a>
         </div>
         <div v-if="recentSales.length" class="bill-table-scroll">
-          <table class="bill-table">
+          <table class="bill-table recent-sales">
             <thead>
               <tr>
                 <th>Invoice</th>
-                <th>Date</th>
                 <th>Customer</th>
-                <th>Total</th>
-                <th>Payment</th>
-                <th>Status</th>
+                <th>Amount</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="sale in recentSales" :key="sale.id">
-                <td>{{ sale.invoice_number }}</td>
-                <td>{{ sale.date }}</td>
+                <td><strong class="recent-nowrap">{{ sale.invoice_number }}</strong><small class="recent-sub">{{ sale.date }}</small></td>
                 <td>{{ sale.customer }}</td>
-                <td>{{ money(sale.total) }}</td>
-                <td><span class="bill-badge">{{ sale.payment_status }}</span></td>
-                <td><span class="bill-badge" :class="{ danger: !postedStatuses.includes(sale.invoice_status.toLowerCase()) }">{{ sale.invoice_status }}</span></td>
+                <td><strong class="recent-nowrap">{{ money(sale.total) }}</strong><span class="recent-badges"><span class="bill-badge">{{ sale.payment_status }}</span><span class="bill-badge" :class="{ danger: !postedStatuses.includes(sale.invoice_status.toLowerCase()) }">{{ sale.invoice_status }}</span></span></td>
                 <td class="bill-row-actions">
                   <RowActionMenu :open="openActionMenuId === sale.id" :show-view="false" more-label="Actions" more-title="Sale actions" @toggle="toggleActionMenu(sale)" @close="closeActionMenu">
                     <a :href="sale.links.view" @click="closeActionMenu">View</a>
@@ -106,22 +100,22 @@
 
       <article class="bill-card">
         <div class="bill-card-head">
-          <h3>Accounting Checklist</h3>
-          <small>{{ accountingChecklist.completed }} of {{ accountingChecklist.total }} completed</small>
+          <h3>Pending Actions</h3>
+          <small>{{ pendingActions.open ? `${pendingActions.open} need attention` : 'All clear' }}</small>
         </div>
-        <div class="bill-progress"><span :style="{ width: `${accountingChecklist.percentage}%` }"></span></div>
-        <div class="bill-tasks">
+        <div class="pending-list">
           <component
-            :is="item.enabled && item.href ? 'a' : 'span'"
-            v-for="item in accountingChecklist.items"
-            :key="item.label"
-            :href="item.enabled ? item.href : null"
-            :class="['bill-task', item.status, { disabled: !item.enabled }]"
+            :is="item.href ? 'a' : 'span'"
+            v-for="item in pendingActions.items"
+            :key="item.key"
+            :href="item.href"
+            :class="['pending-row', { done: !item.count }]"
           >
-            <b>{{ item.status }}</b>
-            {{ item.label }}
-            <em v-if="item.comingSoon">Coming Soon</em>
+            <b>{{ item.count.toLocaleString('en-IN') }}</b>
+            <span><strong>{{ item.label }}</strong><small>{{ item.count ? item.hint : 'Nothing pending' }}</small></span>
+            <em v-if="item.amount !== null && item.count">{{ money(item.amount) }}</em>
           </component>
+          <p v-if="!pendingActions.items.length" class="pending-empty">Nothing to show for your role.</p>
         </div>
       </article>
     </section>
@@ -214,7 +208,7 @@ const props = defineProps({
   modules: { type: Array, default: () => [] },
   recentSales: { type: Array, default: () => [] },
   quickActions: { type: Array, default: () => [] },
-  accountingChecklist: { type: Object, default: () => ({ items: [], completed: 0, total: 0, percentage: 0 }) },
+  pendingActions: { type: Object, default: () => ({ items: [], open: 0 }) },
   charts: { type: Object, default: () => ({}) },
   inventoryAlerts: { type: Object, default: () => ({ lowStock: [], outOfStock: [], expiringBatches: [], viewAll: '#' }) },
   metrics: { type: Array, default: () => [] },
@@ -262,3 +256,22 @@ const lineChart = (series = { labels: [], values: [] }, label) => ({
   ],
 });
 </script>
+
+<style scoped>
+.recent-sales td,.recent-sales th{padding-left:8px;padding-right:8px;font-size:12px}
+.recent-sales th:first-child,.recent-sales td:first-child{min-width:0}
+.recent-sub{display:block;color:#758197;font-size:11px}
+.recent-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.recent-badges .bill-badge{min-width:0}
+.recent-nowrap{white-space:nowrap}
+.pending-list{display:grid;gap:8px}
+.pending-row{display:grid;grid-template-columns:64px minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 12px;color:#17233b;border:1px solid #e5ebf3;border-radius:8px;text-decoration:none}
+a.pending-row:hover{border-color:#2457d6;background:#f5f8ff}
+.pending-row b{color:#b54708;font-size:18px;font-weight:800;text-align:center}
+.pending-row span{display:grid}
+.pending-row strong{font-size:13px}
+.pending-row small{color:#758197;font-size:11px}
+.pending-row em{font-size:13px;font-style:normal;font-weight:800;white-space:nowrap}
+.pending-row.done b{color:#168757}
+.pending-empty{color:#758197;font-size:13px}
+</style>

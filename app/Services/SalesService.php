@@ -58,7 +58,8 @@ class SalesService
             ->when(!empty($filters['salesperson_id']), fn (Builder $q) => $q->where('salesperson_id', $filters['salesperson_id']))
             ->when(!empty($filters['sale_type']), fn (Builder $q) => $q->where('sale_type', $filters['sale_type']))
             ->when(!empty($filters['invoice_type']), fn (Builder $q) => $q->where('invoice_type', $filters['invoice_type']))
-            ->when(!empty($filters['payment_status']), fn (Builder $q) => str_contains((string) $filters['payment_status'], ',') ? $q->whereIn('payment_status', explode(',', (string) $filters['payment_status'])) : $q->where('payment_status', $filters['payment_status']))
+            ->when(($filters['payment_status'] ?? '') === 'due', fn (Builder $q) => $q->whereIn('status', ['approved', 'confirmed', 'posted', 'completed'])->where('balance_amount', '>', 0))
+            ->when(!empty($filters['payment_status']) && $filters['payment_status'] !== 'due', fn (Builder $q) => str_contains((string) $filters['payment_status'], ',') ? $q->whereIn('payment_status', explode(',', (string) $filters['payment_status'])) : $q->where('payment_status', $filters['payment_status']))
             ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']));
 

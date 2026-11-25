@@ -48,7 +48,7 @@ const purchaseTypes = [{ value: 'cash', label: 'Cash' }, { value: 'credit', labe
 const taxTypes = [{ value: 'intrastate', label: 'Intrastate' }, { value: 'interstate', label: 'Interstate' }, { value: 'exempt', label: 'Exempt' }];
 const discountTypes = [{ value: '', label: 'No Discount' }, { value: 'percentage', label: '%' }, { value: 'amount', label: 'Amount' }];
 const statusFilters = [{ value: '', label: 'All Status' }, { value: 'draft', label: 'Draft' }, { value: 'approved', label: 'Approved' }, { value: 'cancelled', label: 'Cancelled' }, { value: 'reversed', label: 'Reversed' }];
-const paymentFilters = [{ value: '', label: 'All Payment' }, { value: 'unpaid', label: 'Unpaid' }, { value: 'partial', label: 'Partial' }, { value: 'paid', label: 'Paid' }];
+const paymentFilters = [{ value: '', label: 'All Payment' }, { value: 'unpaid', label: 'Unpaid' }, { value: 'partial', label: 'Partial' }, { value: 'paid', label: 'Paid' }, { value: 'due', label: 'To pay (pending)' }];
 const form = reactive({
     id: null,
     branch_id: '',
@@ -467,6 +467,9 @@ onMounted(async () => {
     restoreDraftAfterProductCreate();
     await loadReferences();
     await addReturnedProduct();
+    // Opened from the dashboard with a filter in the link.
+    const query = new URLSearchParams(window.location.search);
+    ['status', 'payment_status'].forEach((key) => { if (query.get(key)) filters[key] = query.get(key); });
     if (form.items.length || form.id) {
         showPurchaseDrawer.value = true;
     }

@@ -380,6 +380,8 @@ watch(() => filters.value.branch_id, () => {
 });
 
 onMounted(async () => {
+    const stockStatusFromLink = new URLSearchParams(window.location.search).get('stock_status');
+    if (stockStatusFromLink) filters.value.stock_status = stockStatusFromLink;
     await loadReferences();
     await loadSummary();
 });
@@ -441,6 +443,7 @@ onMounted(async () => {
                             <option value="lost">Lost</option>
                             <option value="low">Low Stock</option>
                             <option value="out">Out of Stock</option>
+                            <option value="negative">Minus Stock</option>
                         </select>
                         <select v-model="filters.per_page">
                             <option :value="15">15 / page</option>

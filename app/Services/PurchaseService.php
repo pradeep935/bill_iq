@@ -41,7 +41,9 @@ class PurchaseService
             ->when(!empty($filters['supplier_id']), fn (Builder $q) => $q->where('supplier_id', $filters['supplier_id']))
             ->when(!empty($filters['branch_id']), fn (Builder $q) => $q->where('branch_id', $filters['branch_id']))
             ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
-            ->when(!empty($filters['payment_status']), fn (Builder $q) => $q->where('payment_status', $filters['payment_status']))
+            // "due" = posted bills that still have a balance (same rule as the dashboard's pending list).
+            ->when(($filters['payment_status'] ?? '') === 'due', fn (Builder $q) => $q->whereIn('status', ['approved', 'confirmed', 'posted', 'completed'])->where('balance_amount', '>', 0))
+            ->when(!empty($filters['payment_status']) && $filters['payment_status'] !== 'due', fn (Builder $q) => $q->where('payment_status', $filters['payment_status']))
             ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
             ->when(!empty($filters['purchase_type']), fn (Builder $q) => $q->where('purchase_type', $filters['purchase_type']))
             ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']))

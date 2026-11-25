@@ -2,6 +2,8 @@
 
 namespace App\Services\Dashboard;
 
+use App\Services\ProductMasterService;
+use App\Services\StockService;
 use App\Http\Controllers\AppController;
 use App\Models\ProductBatch;
 use App\Models\SalesVoucher;
@@ -31,7 +33,7 @@ class BusinessDashboardService
             'modules' => $this->modules($businessId, $today, $stock, $accounts, $routes, $permissions),
             'recentSales' => $this->recentSales($businessId, $routes, $permissions),
             'quickActions' => $this->quickActions($routes, $permissions),
-            'accountingChecklist' => $this->accountingChecklist($businessId, $today, $routes, $permissions),
+            'pendingActions' => $this->pendingActions($businessId, $routes, $permissions),
             'charts' => $this->charts($businessId),
             'inventoryAlerts' => $this->inventoryAlerts($businessId, $stock, $routes),
             'metrics' => $this->metrics($businessId, $today, $stock, $accounts),
@@ -102,7 +104,7 @@ class BusinessDashboardService
                     ['label' => 'Products', 'value' => $this->countTable('products', $businessId)],
                     ['label' => 'Categories', 'value' => $this->countTable('product_categories', $businessId, true)],
                     ['label' => 'Brands', 'value' => $this->countTable('brands', $businessId, true)],
-                    ['label' => 'HSN', 'value' => $this->countTable('hsn_masters', $businessId, true)],
+                    ['label' => 'HSN in use', 'value' => $this->hsnInUse($businessId)],
                 ],
             ],
             [
@@ -193,56 +195,59 @@ class BusinessDashboardService
         return array_values(array_filter($items, fn ($item) => $item['enabled']));
     }
 
-    private function accountingChecklist(int $businessId, string $today, array $routes, array $permissions): array
+    /** Things that need attention today. Each row opens the matching filtered list. */
+    private function pendingActions(int $businessId, array $routes, array $permissions): array
     {
-        $items = [
-            [
-                'label' => 'Sales invoices posted to receivables and output GST',
-                'status' => $this->checkStatus(Schema::hasTable('sales_vouchers'), $this->salesQuery($businessId)->exists()),
-                'href' => $routes['sales.index']['url'],
-                'enabled' => $permissions['sales.view'],
-            ],
-            [
-                'label' => 'Purchase bills posted to payables and input GST',
-                'status' => $this->checkStatus(Schema::hasTable('purchase_vouchers'), $this->purchaseQuery($businessId)->exists()),
-                'href' => $routes['purchases.index']['url'],
-                'enabled' => $permissions['purchases.view'],
-            ],
-            [
-                'label' => 'Stock ledger updated through stock transactions',
-                'status' => $this->checkStatus(Schema::hasTable('stock_ledgers'), DB::table('stock_ledgers')->where('business_id', $businessId)->exists()),
-                'href' => $routes['inventory.stock-ledger']['url'],
-                'enabled' => $permissions['inventory.view'],
-            ],
-            [
-                'label' => 'Cash and bank vouchers posted',
-                'status' => $this->checkStatus(Schema::hasTable('journal_vouchers'), $this->postedJournals($businessId)->whereDate('voucher_date', $today)->exists()),
-                'href' => $routes['accounting.vouchers.index']['url'],
-                'enabled' => $permissions['accounting.view'],
-            ],
-            [
-                'label' => 'Bank reconciliation completed',
-                'status' => $this->bankReconciliationStatus($businessId, $today),
-                'href' => $routes['accounting.bank-reconciliation']['url'],
-                'enabled' => false,
-                'comingSoon' => true,
-            ],
-            [
-                'label' => 'Daily cash closing completed',
-                'status' => Schema::hasTable('cash_closings') ? $this->checkStatus(true, DB::table('cash_closings')->where('business_id', $businessId)->whereDate('closing_date', $today)->exists()) : 'warning',
-                'href' => null,
-                'enabled' => false,
-                'comingSoon' => true,
-            ],
-        ];
-        $completed = collect($items)->where('status', 'completed')->count();
+        $items = [];
+        $add = function (string $key, string $label, int $count, ?float $amount, ?string $url, array $query, string $hint) use (&$items) {
+            $items[] = [
+                'key' => $key, 'label' => $label, 'count' => $count, 'amount' => $amount, 'hint' => $hint,
+                'href' => $url ? $url . '?' . http_build_query($query) : null,
+            ];
+        };
+
+        if ($permissions['purchases.view']) {
+            $due = $this->purchaseQuery($businessId)->where('balance_amount', '>', 0);
+            $add('supplier_due', 'Supplier payments pending', (clone $due)->count(), round((float) (clone $due)->sum('balance_amount'), 2), $routes['purchases.index']['url'], ['payment_status' => 'due'], 'Bills you still have to pay');
+        }
+        if ($permissions['sales.view']) {
+            $due = $this->salesQuery($businessId)->where('balance_amount', '>', 0);
+            $add('customer_due', 'Customer payments to collect', (clone $due)->count(), round((float) (clone $due)->sum('balance_amount'), 2), $routes['sales.index']['url'], ['payment_status' => 'due'], 'Invoices not fully paid');
+        }
+        if ($permissions['inventory.view']) {
+            $negative = app(StockService::class)->summary(['stock_status' => 'negative', 'per_page' => 1])->total();
+            $add('negative_stock', 'Products with minus stock', $negative, null, $routes['inventory.stock-summary']['url'], ['stock_status' => 'negative'], 'Check purchases or correct the stock');
+        }
+        if ($permissions['purchases.view']) {
+            $add('draft_purchases', 'Draft purchases not posted', $this->purchaseQuery($businessId, false)->where('status', 'draft')->count(), null, $routes['purchases.index']['url'], ['status' => 'draft'], 'Stock is not added until posted');
+        }
+        if ($permissions['sales.view']) {
+            $add('draft_sales', 'Draft sales invoices', $this->salesQuery($businessId, false)->where('status', 'draft')->count(), null, $routes['sales.index']['url'], ['status' => 'draft'], 'Not yet billed');
+        }
+        if ($permissions['products.view']) {
+            $unpriced = app(ProductMasterService::class)->list(['price_missing' => 1, 'per_page' => 1])->total();
+            $add('price_missing', 'Products without selling price', $unpriced, null, $routes['products.index']['url'], ['price' => 'missing'], 'Set the rate before billing');
+        }
 
         return [
             'items' => $items,
-            'completed' => $completed,
-            'total' => count($items),
-            'percentage' => count($items) ? round(($completed / count($items)) * 100) : 0,
+            'open' => collect($items)->where('count', '>', 0)->count(),
         ];
+    }
+
+    /** HSN/SAC codes actually used by this business's products (not the shared reference list). */
+    private function hsnInUse(int $businessId): int
+    {
+        if (!Schema::hasTable('products') || !Schema::hasColumn('products', 'hsn_code')) {
+            return 0;
+        }
+        $query = DB::table('products')->where($this->businessColumn('products') ?: 'business_id', $businessId)
+            ->whereNotNull('hsn_code')->where('hsn_code', '!=', '');
+        if (Schema::hasColumn('products', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        return (int) $query->distinct()->count('hsn_code');
     }
 
     private function charts(int $businessId): array
@@ -538,40 +543,6 @@ class BusinessDashboardService
     private function taxExpression(): string
     {
         return 'COALESCE(cgst_amount, 0) + COALESCE(sgst_amount, 0) + COALESCE(igst_amount, 0) + COALESCE(cess_amount, 0)';
-    }
-
-    private function bankReconciliationStatus(int $businessId, string $today): string
-    {
-        if (!Schema::hasTable('bank_reconciliations')) {
-            return 'warning';
-        }
-
-        $query = DB::table('bank_reconciliations')->where('business_id', $businessId);
-
-        if (Schema::hasColumn('bank_reconciliations', 'statement_start_date') && Schema::hasColumn('bank_reconciliations', 'statement_end_date')) {
-            $query->where(function (QueryBuilder $range) use ($today) {
-                $range->where(function (QueryBuilder $bounded) use ($today) {
-                    $bounded
-                        ->whereDate('statement_start_date', '<=', $today)
-                        ->whereDate('statement_end_date', '>=', $today);
-                })->orWhereDate('created_at', $today);
-            });
-        } elseif (Schema::hasColumn('bank_reconciliations', 'reconciliation_date')) {
-            $query->whereDate('reconciliation_date', $today);
-        } else {
-            $query->whereDate('created_at', $today);
-        }
-
-        return $this->checkStatus(true, $query->exists());
-    }
-
-    private function checkStatus(bool $available, bool $completed): string
-    {
-        if (!$available) {
-            return 'warning';
-        }
-
-        return $completed ? 'completed' : 'pending';
     }
 
     private function label(?string $value): string

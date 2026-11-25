@@ -5,7 +5,7 @@ const h = (what, { tabs = [], steps = [], notes = [] } = {}) => ({ what, tabs, s
 
 export const pageHelp = {
     dashboard: h('A quick overview of your business: sales, purchases, stock and pending payments.', {
-        steps: ['Check the cards for today’s and this month’s figures.', 'Click a card or module to open its details.'],
+        steps: ['Check the cards for today’s and this month’s figures.', 'Look at “Pending Actions” and click a line to open that list.', 'Click a card or module to open its details.'],
     }),
     'admin-workspace': h('Daily admin tasks and shortcuts in one place.', { steps: ['Click the card for the task you want to do.'] }),
     'staff-workspace': h('Shortcuts for billing and other daily staff work.', { steps: ['Click the card for the task you want to do.'] }),

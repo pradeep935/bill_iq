@@ -136,7 +136,8 @@ class PurchaseReturnService
                     'reference_type' => PurchaseReturnVoucher::class,
                     'reference_id' => $voucher->id,
                     'quantity' => $item->quantity,
-                    'unit_cost' => $item->purchase_rate,
+                    // A bill entered with tax-inclusive rates keeps stock cost without tax.
+                    'unit_cost' => ($item->purchase_item_id ? optional(\App\Models\PurchaseItem::query()->find($item->purchase_item_id))->netRate() : null) ?? $item->purchase_rate,
                     'transaction_date' => $voucher->return_date,
                     'remarks' => 'Purchase return ' . $voucher->voucher_number,
                 ]);

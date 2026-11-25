@@ -29,9 +29,21 @@ class PurchaseItem extends Model
         'cess_rate' => 'decimal:2',
         'cess_amount' => 'decimal:2',
         'line_total' => 'decimal:2',
+        'tax_inclusive' => 'boolean',
         'manufacturing_date' => 'date',
         'expiry_date' => 'date',
     ];
+
+    /** Cost of one unit without tax: used for stock value, whichever way the rate was typed on the bill. */
+    public function netRate(): float
+    {
+        $rate = (float) $this->purchase_rate;
+        if (!$this->tax_inclusive) {
+            return $rate;
+        }
+
+        return round($rate * 100 / (100 + (float) $this->gst_rate + (float) $this->cess_rate), 2);
+    }
 
     public function voucher()
     {

@@ -272,7 +272,7 @@ class PurchaseController extends Controller
         $rules = (new \App\Http\Requests\PurchaseVoucherRequest())->rules();
         $fields = ['tax_type', 'discount_type', 'discount_value', 'paid_amount', 'other_charges', 'other_charges_gst_rate', 'items',
             'items.*.quantity', 'items.*.purchase_rate', 'items.*.discount_type',
-            'items.*.discount_value', 'items.*.gst_rate', 'items.*.cess_rate'];
+            'items.*.discount_value', 'items.*.gst_rate', 'items.*.cess_rate', 'items.*.tax_inclusive'];
         $rules = array_intersect_key($rules, array_flip($fields));
         $rules['items'] = ['present', 'array', 'max:500'];
         $rules['items.*.quantity'] = ['required', 'numeric', 'min:0'];

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Company;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Tally's Excel exports carry no item rates, so imported products have no price. This fills the product
@@ -29,7 +30,11 @@ class FillProductPrices extends Command
 
         $sale = $this->latest("select i.product_id pid, i.selling_rate r from sales_items i join sales_vouchers v on v.id=i.sales_voucher_id
             where v.business_id=? and v.status in ('approved','confirmed') and i.selling_rate>0 order by v.invoice_date desc, i.id desc", $bid);
-        $purchase = $this->latest("select i.product_id pid, i.purchase_rate r from purchase_items i join purchase_vouchers v on v.id=i.purchase_voucher_id
+        // Product cost is kept without tax, also for bills typed with tax-inclusive rates.
+        $netRate = Schema::hasColumn('purchase_items', 'tax_inclusive')
+            ? 'case when i.tax_inclusive=1 then round(i.purchase_rate*100/(100+i.gst_rate+i.cess_rate),2) else i.purchase_rate end'
+            : 'i.purchase_rate';
+        $purchase = $this->latest("select i.product_id pid, $netRate r from purchase_items i join purchase_vouchers v on v.id=i.purchase_voucher_id
             where v.business_id=? and v.status in ('approved','confirmed') and i.purchase_rate>0 order by v.purchase_date desc, i.id desc", $bid);
         $opening = $this->latest("select product_id pid, unit_cost r from opening_stock_items where business_id=? and unit_cost>0 order by id desc", $bid);
 

@@ -5,6 +5,7 @@ import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 import SearchSelect from '../../Components/Common/SearchSelect.vue';
+import PurchaseItemsGrid from './PurchaseItemsGrid.vue';
 import { gstTypes, gstTypeForGstin } from '../../Components/Form/gstTypes';
 
 defineProps({ page: { type: String, default: 'purchases' }, title: { type: String, default: 'Purchases' } });
@@ -44,6 +45,8 @@ const savingSupplier = ref(false);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 const editingPosted = ref(false);
 const paymentMode = ref('unpaid');
+// One switch for the whole bill: are the typed rates inclusive of GST?
+const ratesIncludeTax = ref(false);
 const filters = reactive({ status: '', payment_status: '', purchase_type: '', tax_type: '', supplier_id: '', date_from: '', date_to: '', q: '' });
 const purchaseTypes = [{ value: 'cash', label: 'Cash' }, { value: 'credit', label: 'Credit' }];
 const taxTypes = [{ value: 'intrastate', label: 'Intrastate' }, { value: 'interstate', label: 'Interstate' }, { value: 'exempt', label: 'Exempt' }];
@@ -110,12 +113,15 @@ const reset = () => {
     });
     errors.value = {};
     paymentMode.value = 'unpaid';
+    ratesIncludeTax.value = false;
 };
 
 const openPurchaseCreate = () => {
     viewOnly.value = false;
     editingPosted.value = false;
     reset();
+    const warehouse = references.value.warehouses?.[0];
+    if (warehouse) Object.assign(form, { warehouse_id: warehouse.id, branch_id: warehouse.branch_id || '' });
     showPurchaseDrawer.value = true;
 };
 
@@ -182,6 +188,7 @@ const restoreDraftAfterProductCreate = () => {
             ...(draft.form || {}),
             items: draft.form?.items || [],
         });
+        ratesIncludeTax.value = Boolean(form.items[0]?.tax_inclusive);
         productSearch.value = draft.productSearch || '';
         showPurchaseDrawer.value = true;
     } catch (error) {
@@ -247,6 +254,7 @@ const saveSupplierFromPurchase = async () => {
         const response = await PurchaseApi.saveSupplier({ ...supplierForm });
         await loadReferences();
         form.supplier_id = response.supplier?.id || '';
+        supplierPicked();
         closeSupplierCreate();
         alert(response.message || 'Supplier saved.');
     } catch (error) {
@@ -284,7 +292,11 @@ const suggestedPurchaseQty = (product) => {
     return qty > 0 ? qty : 1;
 };
 
+// The product's cost is stored without tax, so it is raised by the tax when the bill's rates include tax.
+const rateFor = (cost, item, inclusive) => (inclusive ? Math.round(Number(cost) * (100 + Number(item.gst_rate || 0) + Number(item.cess_rate || 0))) / 100 : Number(cost));
+
 const addProduct = (product) => {
+    const cost = Number(product.purchase_rate || 0);
     form.items.push({
         product_id: product.id,
         product_name: product.name,
@@ -296,9 +308,12 @@ const addProduct = (product) => {
         product_variant_id: '',
         batch_id: '',
         quantity: suggestedPurchaseQty(product),
+        unit: product.unit || '',
+        tax_inclusive: ratesIncludeTax.value,
         free_quantity: 0,
         unit_id: product.unit_id || '',
-        purchase_rate: product.purchase_rate || 0,
+        suggested_cost: cost,
+        purchase_rate: rateFor(cost, product, ratesIncludeTax.value),
         selling_price: product.selling_price || 0,
         mrp: product.mrp || '',
         discount_type: '',
@@ -317,8 +332,6 @@ const addProduct = (product) => {
     clearProductSearch();
 };
 
-const needsInventoryDetails = (item) => Boolean(item.variants?.length || item.product_variant_id || item.batch_required || item.expiry_required || ['batch', 'batch_expiry', 'batch_serial'].includes(item.tracking_type) || item.batch_number || item.expiry_date || item.manufacturing_date || item.warehouse_location);
-const selectedVariant = (item) => item.variants?.find(v => Number(v.id) === Number(item.product_variant_id))?.sku || '';
 const totals = ref(null);
 const totalsLoading = ref(false);
 const totalsError = ref('');
@@ -326,7 +339,7 @@ let totalsTimer;
 let totalsVersion = 0;
 const calculationInput = computed(() => ({
     tax_type: form.tax_type, discount_type: form.discount_type || null, discount_value: form.discount_value || 0, other_charges: form.other_charges || 0, other_charges_gst_rate: form.other_charges_gst_rate || 0, paid_amount: form.paid_amount || 0,
-    items: form.items.map(item => ({ quantity: item.quantity || 0, purchase_rate: item.purchase_rate || 0, discount_type: item.discount_type || null, discount_value: item.discount_value || 0, gst_rate: item.gst_rate || 0, cess_rate: item.cess_rate || 0 })),
+    items: form.items.map(item => ({ quantity: item.quantity || 0, purchase_rate: item.purchase_rate || 0, discount_type: item.discount_type || null, discount_value: item.discount_value || 0, gst_rate: item.gst_rate || 0, cess_rate: item.cess_rate || 0, tax_inclusive: Boolean(item.tax_inclusive) })),
 }));
 watch(calculationInput, (data) => {
     clearTimeout(totalsTimer);
@@ -348,8 +361,9 @@ watch(calculationInput, (data) => {
 onBeforeUnmount(() => { clearTimeout(totalsTimer); totalsVersion++; });
 const summaryEntries = computed(() => {
     const t = totals.value || {};
+    const always = ['subtotal', 'cgst', 'sgst', 'igst', 'grand_total', 'balance_amount'];
     return [
-        { key: 'subtotal', label: 'Subtotal', value: t.subtotal },
+        { key: 'subtotal', label: ratesIncludeTax.value ? 'Subtotal (with tax)' : 'Subtotal', value: t.subtotal },
         { key: 'item_discount', label: 'Item discount', value: t.items?.reduce((sum, item) => sum + Number(item.discount_amount), 0) },
         { key: 'discount_amount', label: 'Voucher discount', value: t.discount_amount },
         { key: 'other_charges', label: 'Transport / other charges', value: t.other_charges },
@@ -362,7 +376,7 @@ const summaryEntries = computed(() => {
         { key: 'grand_total', label: 'Grand total', value: t.grand_total },
         { key: 'paid_amount', label: 'Paid amount', value: t.paid_amount },
         { key: 'balance_amount', label: 'Balance', value: t.balance_amount },
-    ];
+    ].filter((entry) => always.includes(entry.key) || Number(entry.value || 0) !== 0);
 });
 
 watch(() => form.purchase_type, (type) => { if (type === 'cash') paymentMode.value = 'paid'; });
@@ -375,7 +389,27 @@ watch(() => totals.value?.grand_total, (grand) => {
     if (paymentMode.value === 'paid' && grand != null) form.paid_amount = Number(grand);
 });
 
-const removeItem = (index) => form.items.splice(index, 1);
+watch(ratesIncludeTax, (included) => form.items.forEach((item) => {
+    if (Boolean(item.tax_inclusive) === included) return;
+    // A rate still as filled in automatically follows the switch; a typed rate is left as typed.
+    if (item.suggested_cost != null && Number(item.purchase_rate) === rateFor(item.suggested_cost, item, !included)) {
+        item.purchase_rate = rateFor(item.suggested_cost, item, included);
+    }
+    item.tax_inclusive = included;
+}));
+const selectedSupplier = computed(() => (references.value.suppliers || []).find((s) => Number(s.id) === Number(form.supplier_id)) || null);
+// Picking a supplier sets the tax type from the two states; it can still be changed under "Tax type".
+const supplierPicked = () => {
+    const supplier = selectedSupplier.value;
+    const home = references.value.business_state_id;
+    if (!supplier?.state_id || !home || form.tax_type === 'exempt') return;
+    form.tax_type = Number(supplier.state_id) === Number(home) ? 'intrastate' : 'interstate';
+};
+const warehousePicked = () => { form.branch_id = (references.value.warehouses || []).find((w) => Number(w.id) === Number(form.warehouse_id))?.branch_id || form.branch_id; };
+const errorList = computed(() => Object.entries(errors.value).map(([field, messages]) => {
+    const row = field.match(/^items\.(\d+)\./);
+    return `${row ? `Item ${Number(row[1]) + 1}: ` : ''}${messages[0]}`;
+}));
 
 const payload = (status) => { const { voucher_number, ...rest } = form; return { ...rest, status, branch_id: form.branch_id || null, warehouse_id: form.warehouse_id || null }; };
 
@@ -425,9 +459,10 @@ const editPurchase = (purchase) => {
         other_charges_gst_rate: purchase.other_charges_gst_rate || 0,
         paid_amount: purchase.paid_amount || 0,
         remarks: purchase.remarks || '',
-        items: (purchase.items || []).map((item) => ({ ...item, product_name: item.product, variants: [] })),
+        items: (purchase.items || []).map((item) => ({ ...item, product_name: item.product, discount_type: item.discount_type || '', variants: [] })),
     });
     paymentMode.value = Number(purchase.paid_amount) <= 0 ? 'unpaid' : (purchase.payment_status === 'paid' ? 'paid' : 'partial');
+    ratesIncludeTax.value = Boolean(purchase.items?.[0]?.tax_inclusive);
     showPurchaseDrawer.value = true;
 };
 
@@ -497,80 +532,57 @@ onMounted(async () => {
                     </div>
 
                     <p v-if="editingPosted && !viewOnly" class="edit-note">This purchase is already posted. Change anything you need and click <strong>Save Changes</strong> &mdash; stock and accounts are corrected automatically and the voucher number stays the same.</p>
-                    <div class="form-grid" :inert="viewOnly">
-                        <SearchSelect v-model="form.branch_id" label="Branch" :options="references.branches" option-value-key="id" option-label-key="name" select-placeholder="Select Branch" />
-                        <SearchSelect v-model="form.warehouse_id" label="Warehouse" :options="filteredWarehouses" option-value-key="id" option-label-key="name" select-placeholder="Select Warehouse" />
-                        <div class="supplier-picker">
-                            <SearchSelect v-model="form.supplier_id" label="Supplier" :options="references.suppliers" option-value-key="id" option-label-key="supplier_name" select-placeholder="Select Supplier" required />
-                            <button type="button" class="secondary-action add-supplier-btn" @click="openSupplierCreate">Add Supplier</button>
+                    <div class="bill-head" :inert="viewOnly">
+                        <div class="head-supplier">
+                            <div class="supplier-picker">
+                                <SearchSelect v-model="form.supplier_id" label="Supplier" :options="references.suppliers" option-value-key="id" option-label-key="supplier_name" option-subtext-key="picker_note" select-placeholder="Type supplier name" required @selected="supplierPicked" />
+                                <button type="button" class="secondary-action add-supplier-btn" @click="openSupplierCreate">Add Supplier</button>
+                            </div>
+                            <p v-if="selectedSupplier" class="supplier-note">
+                                <span :class="['chip', { due: Number(selectedSupplier.due) > 0 }]">{{ Number(selectedSupplier.due) > 0 ? `To pay Rs. ${formatMoney(selectedSupplier.due)}` : 'Nothing pending' }}</span>
+                                <span v-if="selectedSupplier.mobile">{{ selectedSupplier.mobile }}</span>
+                                <span v-if="selectedSupplier.gstin">GSTIN {{ selectedSupplier.gstin }}</span>
+                            </p>
                         </div>
-                        <label>Supplier Invoice No<input v-model="form.supplier_invoice_number" placeholder="Supplier Invoice No" /></label>
+                        <label>Supplier Invoice No<input v-model="form.supplier_invoice_number" placeholder="Bill number on supplier's invoice" /></label>
                         <label><span>Purchase Date <span class="required-mark">*</span></span><input v-model="form.purchase_date" type="date" /></label>
-                        <label>Supplier Invoice Date<input v-model="form.supplier_invoice_date" type="date" /></label>
-                        <label>Due Date<input v-model="form.due_date" type="date" /></label>
-                        <SearchSelect v-model="form.purchase_type" label="Purchase Type" :options="purchaseTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Type" required />
-                        <SearchSelect v-model="form.tax_type" label="Tax Type" :options="taxTypes" option-value-key="value" option-label-key="label" select-placeholder="Select Tax Type" required />
-                        <SearchSelect v-model="form.discount_type" label="Discount Type" :options="discountTypes" option-value-key="value" option-label-key="label" select-placeholder="No Discount" />
-                        <label>Voucher Discount<input v-model="form.discount_value" type="number" min="0" step="0.01" placeholder="Voucher Discount" /></label>
-                        <label>Transport / Other Charges<input v-model="form.other_charges" type="number" min="0" step="0.01" placeholder="e.g. freight, cartage" /></label>
-                        <label>Charges GST %<input v-model="form.other_charges_gst_rate" type="number" min="0" max="100" step="0.01" placeholder="0" /></label>
-                        <label>Payment<select v-model="paymentMode"><option value="unpaid">Unpaid (pay later)</option><option value="paid">Paid in full</option><option value="partial">Partly paid</option></select></label>
-                        <label v-if="paymentMode === 'partial'">Paid Amount<input v-model="form.paid_amount" type="number" min="0" step="0.01" placeholder="Amount paid now" /></label>
-                        <label>Remarks<input v-model="form.remarks" placeholder="Remarks" /></label>
+                        <label>Warehouse<select v-model="form.warehouse_id" @change="warehousePicked"><option value="">Select warehouse</option><option v-for="w in filteredWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
+                        <label>Tax Type<select v-model="form.tax_type"><option v-for="t in taxTypes" :key="t.value" :value="t.value">{{ t.value === 'intrastate' ? 'Same state (CGST + SGST)' : t.value === 'interstate' ? 'Other state (IGST)' : 'No tax (exempt)' }}</option></select></label>
                     </div>
 
-                    <div v-if="!viewOnly" class="product-search">
-                        <div class="product-search-row">
-                            <input v-model="productSearch" placeholder="Search product by name, SKU or barcode" aria-label="Search purchase products" autocomplete="off" @input="searchProducts" />
-                            <button type="button" class="secondary-action" @click="openProductMasterCreate">Add Product</button>
-                        </div>
-                        <div v-if="searchingProducts || productSearchError || productSearchComplete" class="search-results" aria-live="polite">
-                            <p v-if="searchingProducts">Searching products…</p>
-                            <p v-else-if="productSearchError" role="alert">{{ productSearchError }}</p>
-                            <p v-else-if="!products.length">No matching active stock products. Try another search or use Add Product.</p>
-                            <button v-for="product in products" :key="product.id" type="button" @click="addProduct(product)">
-                                <strong>{{ product.name }}</strong><span>SKU: {{ product.sku || '—' }} | Barcode: {{ product.barcode || '—' }} | Stock: {{ product.current_stock }}</span><span v-if="product.variants?.length">Variants: {{ product.variants.map(v => v.sku || v.barcode).join(', ') }}</span>
-                            </button>
-                        </div>
-                    </div>
+                    <PurchaseItemsGrid :inert="viewOnly" :items="form.items" :totals="totals" v-model:search="productSearch" v-model:tax-inclusive="ratesIncludeTax" :results="products" :searching="searchingProducts" :search-error="productSearchError" :search-complete="productSearchComplete" :readonly="viewOnly" @search="searchProducts" @pick="addProduct" @new-product="openProductMasterCreate" />
 
-                    <section class="purchase-items" aria-label="Purchase items" :inert="viewOnly">
-                        <div class="items-heading"><h3>Purchase items</h3><span>{{ form.items.length }} {{ form.items.length === 1 ? 'item' : 'items' }}</span></div>
-                        <p v-if="!form.items.length" class="empty">Search and add purchase items.</p>
-                        <article v-for="(item, index) in form.items" :key="`${item.product_id}-${index}`" class="purchase-item">
-                            <div class="item-heading">
-                                <div class="item-identity"><strong>{{ item.product_name }}</strong><span>SKU: {{ item.sku || '—' }}<template v-if="selectedVariant(item)"> · {{ selectedVariant(item) }}</template></span></div>
-                                <div class="line-amount"><span>Line total</span><strong>{{ totals?.items?.[index] ? formatMoney(totals.items[index].line_total) : '—' }}</strong></div>
-                                <button type="button" class="danger" :aria-label="`Remove ${item.product_name}`" @click="removeItem(index)">Remove</button>
+                    <div class="bill-bottom">
+                        <div class="bill-extra" :inert="viewOnly">
+                            <div class="pair">
+                                <label>Transport / Other Charges<input v-model="form.other_charges" type="number" min="0" step="any" placeholder="Freight, cartage" /></label>
+                                <label>Charges GST %<input v-model="form.other_charges_gst_rate" type="number" min="0" max="100" step="any" /></label>
                             </div>
-                            <div class="item-fields">
-                                <label>Qty *<input v-model="item.quantity" type="number" min="0" step="0.001" /></label>
-                                <label>Free Qty<input v-model="item.free_quantity" type="number" min="0" step="0.001" /></label>
-                                <label>Purchase Rate *<input v-model="item.purchase_rate" type="number" min="0" step="0.01" /></label>
-                                <label class="item-discount">Discount<div class="discount-input"><select v-model="item.discount_type" aria-label="Item discount type"><option value="">None</option><option value="percentage">%</option><option value="amount">Amount</option></select><input v-model="item.discount_value" aria-label="Item discount value" type="number" min="0" step="0.01" /></div></label>
-                                <label>GST %<input v-model="item.gst_rate" type="number" min="0" max="100" step="0.01" /></label>
-                                <label>Sell Price<input v-model="item.selling_price" type="number" min="0" step="0.01" /></label>
-                                <label>MRP<input v-model="item.mrp" type="number" min="0" step="0.01" /></label>
+                            <div class="pair">
+                                <label>Payment<select v-model="paymentMode"><option value="unpaid">Unpaid (pay later)</option><option value="paid">Paid in full</option><option value="partial">Partly paid</option></select></label>
+                                <label v-if="paymentMode === 'partial'">Paid Amount<input v-model="form.paid_amount" type="number" min="0" step="any" placeholder="Amount paid now" /></label>
                             </div>
-                            <details class="inventory-details" :open="needsInventoryDetails(item)">
-                                <summary>Inventory details <span>Variant, batch, dates &amp; location</span></summary>
-                                <div class="inventory-fields">
-                                    <label v-if="item.variants?.length || item.product_variant_id">Variant<select v-model="item.product_variant_id"><option value="">Default</option><option v-if="item.product_variant_id && !item.variants?.length" :value="item.product_variant_id">{{ item.variant || 'Selected variant' }}</option><option v-for="v in item.variants" :key="v.id" :value="v.id">{{ v.sku || v.barcode }}</option></select></label>
-                                    <label>Batch {{ item.batch_required ? '*' : '(optional)' }}<input v-model="item.batch_number" /></label>
-                                    <label>MFG Date<input v-model="item.manufacturing_date" type="date" /></label>
-                                    <label>Expiry Date {{ item.expiry_required ? '*' : '' }}<input v-model="item.expiry_date" type="date" /></label>
-                                    <label>Location (optional)<input v-model="item.warehouse_location" /></label>
+                            <label>Remarks<input v-model="form.remarks" placeholder="Any note for this bill" /></label>
+                            <details class="more">
+                                <summary>More details (not required)</summary>
+                                <div class="pair">
+                                    <label>Supplier Invoice Date<input v-model="form.supplier_invoice_date" type="date" /></label>
+                                    <label>Due Date<input v-model="form.due_date" type="date" /></label>
+                                    <label>Bill Discount Type<select v-model="form.discount_type"><option v-for="d in discountTypes" :key="d.value" :value="d.value">{{ d.label }}</option></select></label>
+                                    <label>Bill Discount<input v-model="form.discount_value" type="number" min="0" step="any" /></label>
+                                    <label>Purchase Type<select v-model="form.purchase_type"><option v-for="t in purchaseTypes" :key="t.value" :value="t.value">{{ t.label }}</option></select></label>
+                                    <label>Branch<select v-model="form.branch_id"><option value="">Select branch</option><option v-for="b in references.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label>
                                 </div>
                             </details>
-                        </article>
-                    </section>
-                    <section class="purchase-summary" aria-label="Purchase totals" aria-live="polite">
-                        <div><h3>Purchase summary</h3><p>{{ totalsLoading ? 'Updating totals…' : totalsError || 'Preview based on current purchase entries.' }}</p></div>
-                        <dl>
-                            <template v-for="entry in summaryEntries" :key="entry.key"><dt :class="{ 'summary-total': entry.key === 'grand_total' }">{{ entry.label }}</dt><dd :class="{ 'summary-total': entry.key === 'grand_total' }">{{ totals ? formatMoney(entry.value) : '—' }}</dd></template>
-                        </dl>
-                    </section>
-                    <div v-if="Object.keys(errors).length" class="error-box"><span v-for="(messages, field) in errors" :key="field">{{ messages[0] }}</span></div>
+                        </div>
+                        <section class="bill-total" aria-label="Purchase totals" aria-live="polite">
+                            <p v-if="totalsLoading || totalsError">{{ totalsLoading ? 'Updating totals…' : totalsError }}</p>
+                            <dl>
+                                <template v-for="entry in summaryEntries" :key="entry.key"><dt :class="{ 'summary-total': entry.key === 'grand_total' }">{{ entry.label }}</dt><dd :class="{ 'summary-total': entry.key === 'grand_total' }">{{ totals ? formatMoney(entry.value) : '—' }}</dd></template>
+                            </dl>
+                        </section>
+                    </div>
+                    <div v-if="errorList.length" class="error-box" role="alert"><span v-for="message in errorList" :key="message">{{ message }}</span></div>
                     <div class="actions purchase-footer"><button type="button" @click="closePurchaseDrawer">{{ viewOnly ? 'Close' : 'Cancel' }}</button><template v-if="!viewOnly"><button v-if="!editingPosted" :disabled="saving" @click="savePurchase('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="savePurchase('approved')">{{ saving ? 'Saving...' : (editingPosted ? 'Save Changes' : 'Confirm & Post') }}</button></template></div>
                 </aside>
             </div>
@@ -642,7 +654,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions,.modal-heading,.drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span,.modal-heading span,.drawer-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){width:220px;min-width:0}.toolbar :deep(.search-select-hint){display:none}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:72px;resize:vertical}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.secondary-action{color:#2457d6;background:#edf4ff;border-color:#cfe0ff}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.supplier-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.add-supplier-btn{height:38px;align-self:end;white-space:nowrap}.product-search{position:relative;z-index:1;margin:14px 0}.product-search-row{display:flex;gap:10px}.product-search-row input{flex:1;min-width:0}.product-search-row button{white-space:nowrap}.search-results{position:absolute;z-index:20;top:calc(100% + 6px);left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 8px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:11px 8px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.action-cell{width:1%;text-align:right}.action-cell .row-actions{justify-content:flex-end}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}.edit-note{margin:0 0 12px;padding:10px 12px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px}.pay-now{display:block;min-height:26px;margin-top:6px;padding:3px 12px;font-size:11px}.filter-field{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.filter-group{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.ghost-action{color:#475569;background:#f8fafc;border-color:#dfe6ef}.toolbar > .primary{margin-left:auto;white-space:nowrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.due{color:#b42318;font-weight:800}.badge.pay{background:#fff4e5;color:#b54708}.badge.pay.paid{background:#eaf8f1;color:#168757}.badge.pay.partial{background:#edf2ff;color:#2457d6}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.is-loading tr:not(.loading-row){opacity:.38}.loading-row td{padding:14px 10px}.skeleton-line{display:block;width:100%;height:12px;border-radius:999px;background:linear-gradient(90deg,#eef3fb 25%,#f8fbff 38%,#eef3fb 63%);background-size:240% 100%;animation:shimmer 1.05s ease-in-out infinite}.skeleton-line.w-1{width:46%}.skeleton-line.w-2{width:64%}.skeleton-line.w-3{width:78%}.skeleton-line.w-4{width:92%}@keyframes shimmer{0%{background-position:120% 0}100%{background-position:-120% 0}}.drawer-backdrop{position:fixed;z-index:950;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.38)}.drawer-panel{width:min(1120px,calc(100vw - 28px));height:100vh;overflow:auto;padding:18px;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-24px 0 70px rgba(15,23,42,.2)}.drawer-heading{position:sticky;z-index:30;top:0;margin:-18px -18px 16px;padding:16px 18px;background:#fff;border-bottom:1px solid #edf1f5}.drawer-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.modal-panel{width:min(920px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.modal-heading{margin-bottom:14px}.modal-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.supplier-form-grid .wide{grid-column:span 2}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.product-search-row,.modal-heading,.drawer-heading{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}.filter-group{width:100%;align-items:stretch}.toolbar > .primary{width:100%;margin-left:0}.supplier-picker{grid-template-columns:1fr}.supplier-form-grid .wide{grid-column:auto}.drawer-panel{width:100vw}}
+.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions,.modal-heading,.drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span,.modal-heading span,.drawer-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){width:220px;min-width:0}.toolbar :deep(.search-select-hint){display:none}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:72px;resize:vertical}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.secondary-action{color:#2457d6;background:#edf4ff;border-color:#cfe0ff}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.supplier-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.add-supplier-btn{height:38px;align-self:end;white-space:nowrap}.product-search{position:relative;z-index:1;margin:14px 0}.product-search-row{display:flex;gap:10px}.product-search-row input{flex:1;min-width:0}.product-search-row button{white-space:nowrap}.search-results{position:absolute;z-index:20;top:calc(100% + 6px);left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 8px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:11px 8px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.action-cell{width:1%;text-align:right}.action-cell .row-actions{justify-content:flex-end}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}.drawer-panel{width:min(1320px,calc(100vw - 24px))!important}.bill-head{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr));gap:12px;align-items:start}.bill-head label,.bill-extra label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.bill-head input,.bill-head select,.bill-extra input,.bill-extra select{width:100%;min-width:0}.head-supplier :deep(.search-select){display:block}.head-supplier :deep(.search-select-hint){display:none}.supplier-note{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 0;color:#758197;font-size:11px}.chip{padding:3px 9px;color:#168757;background:#eaf8f1;border-radius:999px;font-weight:800}.chip.due{color:#b02a34;background:#fdecee}.bill-bottom{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:18px;align-items:start}.bill-extra{display:grid;gap:10px}.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.more summary{cursor:pointer;color:#2457d6;font-size:12px;font-weight:800;margin:4px 0 10px}.bill-total{padding:14px 16px;background:#f8fafc;border:1px solid #e3e9f2;border-radius:10px}.bill-total p{margin:0 0 8px;color:#758197;font-size:12px}.bill-total dl{display:grid;grid-template-columns:1fr auto;gap:7px 16px;margin:0;font-size:13px}.bill-total dt{color:#475569}.bill-total dd{margin:0;text-align:right;font-weight:700}.bill-total .summary-total{padding-top:8px;border-top:1px solid #dfe6ef;color:#142139;font-size:18px;font-weight:800}@media(max-width:1100px){.bill-head{grid-template-columns:repeat(2,minmax(0,1fr))}.head-supplier{grid-column:1/-1}.bill-bottom{grid-template-columns:minmax(0,1fr)}}@media(max-width:600px){.bill-head,.pair{grid-template-columns:minmax(0,1fr)}}.edit-note{margin:0 0 12px;padding:10px 12px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px}.pay-now{display:block;min-height:26px;margin-top:6px;padding:3px 12px;font-size:11px}.filter-field{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.filter-group{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.ghost-action{color:#475569;background:#f8fafc;border-color:#dfe6ef}.toolbar > .primary{margin-left:auto;white-space:nowrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.due{color:#b42318;font-weight:800}.badge.pay{background:#fff4e5;color:#b54708}.badge.pay.paid{background:#eaf8f1;color:#168757}.badge.pay.partial{background:#edf2ff;color:#2457d6}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.is-loading tr:not(.loading-row){opacity:.38}.loading-row td{padding:14px 10px}.skeleton-line{display:block;width:100%;height:12px;border-radius:999px;background:linear-gradient(90deg,#eef3fb 25%,#f8fbff 38%,#eef3fb 63%);background-size:240% 100%;animation:shimmer 1.05s ease-in-out infinite}.skeleton-line.w-1{width:46%}.skeleton-line.w-2{width:64%}.skeleton-line.w-3{width:78%}.skeleton-line.w-4{width:92%}@keyframes shimmer{0%{background-position:120% 0}100%{background-position:-120% 0}}.drawer-backdrop{position:fixed;z-index:950;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.38)}.drawer-panel{width:min(1120px,calc(100vw - 28px));height:100vh;overflow:auto;padding:18px;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-24px 0 70px rgba(15,23,42,.2)}.drawer-heading{position:sticky;z-index:30;top:0;margin:-18px -18px 16px;padding:16px 18px;background:#fff;border-bottom:1px solid #edf1f5}.drawer-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.modal-panel{width:min(920px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.modal-heading{margin-bottom:14px}.modal-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.supplier-form-grid .wide{grid-column:span 2}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.product-search-row,.modal-heading,.drawer-heading{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}.filter-group{width:100%;align-items:stretch}.toolbar > .primary{width:100%;margin-left:0}.supplier-picker{grid-template-columns:1fr}.supplier-form-grid .wide{grid-column:auto}.drawer-panel{width:100vw}}
 /* Keep sticky purchase cells inside the table's own stacking context. */
 .drawer-panel .table-wrapper{isolation:isolate;z-index:0}
 

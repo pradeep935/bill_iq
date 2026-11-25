@@ -47,6 +47,7 @@ class PurchaseVoucherRequest extends FormRequest
             'items.*.discount_value' => ['nullable', 'numeric', 'min:0'],
             'items.*.gst_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'items.*.cess_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.tax_inclusive' => ['nullable', 'boolean'],
             'items.*.batch_number' => ['nullable', 'string', 'max:100'],
             'items.*.manufacturing_date' => ['nullable', 'date'],
             'items.*.expiry_date' => ['nullable', 'date'],

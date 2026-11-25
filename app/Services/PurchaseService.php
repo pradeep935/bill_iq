@@ -215,7 +215,7 @@ class PurchaseService
                     'reference_type' => PurchaseVoucher::class,
                     'reference_id' => $voucher->id,
                     'quantity' => $stockQuantity,
-                    'unit_cost' => $item->purchase_rate,
+                    'unit_cost' => $item->netRate(),
                     'transaction_date' => $voucher->purchase_date,
                     'remarks' => 'Purchase ' . $voucher->voucher_number,
                 ]);
@@ -227,7 +227,7 @@ class PurchaseService
                     'purchase_id' => $voucher->id,
                     'purchase_item_id' => $item->id,
                     'batch_id' => $batchId,
-                    'unit_cost' => $item->purchase_rate,
+                    'unit_cost' => $item->netRate(),
                     'tax_amount' => (float) $item->cgst_amount + (float) $item->sgst_amount + (float) $item->igst_amount + (float) $item->cess_amount,
                     'landed_cost' => $item->line_total / max((float) $item->quantity, 1),
                     'quantity' => $stockQuantity,
@@ -297,12 +297,41 @@ class PurchaseService
         $businessId = AppController::businessId();
 
         return [
-            'suppliers' => Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('supplier_name')->get(['id', 'supplier_code', 'supplier_name', 'name', 'state_id', 'credit_days']),
+            'suppliers' => $this->suppliersWithDue($businessId),
+            'business_state_id' => $this->businessStateId($businessId),
             'branches' => Branch::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code']),
             'warehouses' => Warehouse::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('name')->get(['id', 'branch_id', 'name', 'code']),
             'states' => $this->states(),
             'cities' => $this->cities(),
         ];
+    }
+
+    /** Active suppliers with what is still to be paid on their posted bills (shown while picking the supplier). */
+    private function suppliersWithDue(int $businessId)
+    {
+        $due = PurchaseVoucher::query()->where('business_id', $businessId)->whereIn('status', ['approved', 'confirmed', 'posted', 'completed'])
+            ->where('balance_amount', '>', 0)->groupBy('supplier_id')->selectRaw('supplier_id, SUM(balance_amount) as due')->pluck('due', 'supplier_id');
+
+        return Supplier::query()->where('business_id', $businessId)->where('status', 'active')->orderBy('supplier_name')
+            ->get(['id', 'supplier_code', 'supplier_name', 'name', 'state_id', 'credit_days', 'mobile', 'gstin'])
+            ->map(function (Supplier $supplier) use ($due) {
+                $amount = round((float) ($due[$supplier->id] ?? 0), 2);
+                $supplier->setAttribute('due', $amount);
+                $supplier->setAttribute('picker_note', trim(($supplier->mobile ?: '') . ($amount > 0 ? '  •  To pay Rs. ' . number_format($amount, 2) : '')));
+
+                return $supplier;
+            });
+    }
+
+    private function businessStateId(int $businessId): ?int
+    {
+        if (!Schema::hasTable('companies') || !Schema::hasTable('states') || !Schema::hasColumn('companies', 'state')) {
+            return null;
+        }
+        $state = DB::table('companies')->where('id', $businessId)->value('state');
+        $id = $state ? DB::table('states')->where('name', $state)->value('id') : null;
+
+        return $id ? (int) $id : null;
     }
 
     public function searchProducts(string $search)
@@ -429,6 +458,12 @@ class PurchaseService
                 'free_quantity' => (float) $item->free_quantity,
                 'unit_id' => $item->unit_id,
                 'purchase_rate' => (float) $item->purchase_rate,
+                'tax_inclusive' => (bool) $item->tax_inclusive,
+                'sku' => optional($item->product)->sku,
+                'unit' => optional($item->product)->getRawOriginal('unit'),
+                'batch_required' => (bool) optional($item->product)->batch_required,
+                'expiry_required' => (bool) optional($item->product)->expiry_required,
+                'tracking_type' => optional($item->product)->tracking_type ?: 'none',
                 'selling_price' => $item->selling_price !== null ? (float) $item->selling_price : null,
                 'mrp' => $item->mrp !== null ? (float) $item->mrp : null,
                 'discount_type' => $item->discount_type,
@@ -530,7 +565,7 @@ class PurchaseService
                 'expiry_date' => $item['expiry_date'] ?? null,
                 'warehouse_location' => $item['warehouse_location'] ?? null,
                 'remarks' => $item['remarks'] ?? null,
-            ]);
+            ] + (Schema::hasColumn('purchase_items', 'tax_inclusive') ? ['tax_inclusive' => !empty($item['tax_inclusive'])] : []));
         }
     }
 
@@ -540,7 +575,7 @@ class PurchaseService
         $batch = app(BatchIdentityService::class)->resolve($voucher->business_id, $item->product_id, [
             'batch_id' => $item->batch_id, 'batch_number' => $item->batch_number,
             'manufacturing_date' => $item->manufacturing_date, 'expiry_date' => $item->expiry_date,
-            'unit_cost' => $item->purchase_rate,
+            'unit_cost' => $item->netRate(),
         ]);
 
         $item->update(['batch_id' => $batch->id]);

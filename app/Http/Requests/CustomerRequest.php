@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\GstType;
 use App\Http\Controllers\AppController;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +35,7 @@ class CustomerRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'gstin' => ['nullable', 'regex:/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/', Rule::unique('customers')->where('business_id', $businessId)->ignore($customerId)],
+            'gst_type' => ['nullable', Rule::in(GstType::ALL)],
             'pan' => ['nullable', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]$/'],
             'billing_address' => ['nullable', 'string', 'max:2000'],
             'shipping_address' => ['nullable', 'string', 'max:2000'],
@@ -77,6 +79,9 @@ class CustomerRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator) {
+            if ($this->input('gst_type') === GstType::UNREGISTERED && trim((string) $this->input('gstin')) !== '') {
+                $validator->errors()->add('gst_type', 'This party has a GSTIN. Choose a Registered GST type, or remove the GSTIN.');
+            }
             $gstin = (string) $this->input('gstin');
             $pan = (string) $this->input('pan');
 

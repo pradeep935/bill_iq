@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\GstType;
 use App\Http\Controllers\AppController;
 use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,6 +45,7 @@ class SupplierService
             $data['name'] = $data['supplier_name'];
             $data['phone'] = $data['phone'] ?? $data['mobile'];
             $data['supplier_code'] = $data['supplier_code'] ?: $this->nextSupplierCode($businessId);
+            $data = $this->withGstType($data);
 
             return Supplier::query()->create($data)->fresh();
         });
@@ -55,7 +57,7 @@ class SupplierService
             $this->assertBusiness($supplier);
             $data['name'] = $data['supplier_name'];
             $data['phone'] = $data['phone'] ?? $data['mobile'];
-            $supplier->update($data);
+            $supplier->update($this->withGstType($data, $supplier));
 
             return $supplier->fresh();
         });
@@ -78,6 +80,20 @@ class SupplierService
         return $supplier->fresh();
     }
 
+    /** Keeps working before the gst_type migration has been run. An update that does not send a type keeps the saved one. */
+    private function withGstType(array $data, ?Supplier $existing = null): array
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('suppliers', 'gst_type')) {
+            unset($data['gst_type']);
+
+            return $data;
+        }
+        $saved = $existing?->gst_type === GstType::UNREGISTERED && !empty($data['gstin']) ? null : $existing?->gst_type;
+        $data['gst_type'] = GstType::resolve($data['gst_type'] ?? $saved, $data['gstin'] ?? null);
+
+        return $data;
+    }
+
     public function present(Supplier $supplier): array
     {
         return [
@@ -89,6 +105,7 @@ class SupplierService
             'phone' => $supplier->phone,
             'email' => $supplier->email,
             'gstin' => $supplier->gstin,
+            'gst_type' => GstType::resolve($supplier->gst_type, $supplier->gstin),
             'pan' => $supplier->pan,
             'billing_address' => $supplier->billing_address,
             'shipping_address' => $supplier->shipping_address,

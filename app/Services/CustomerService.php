@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\GstType;
 use App\Http\Controllers\AppController;
 use App\Models\Account;
 use App\Models\BusinessAccountSetting;
@@ -50,6 +51,10 @@ class CustomerService
 
             if (Schema::hasColumn('customers', 'name')) {
                 $customerPayload['name'] = $data['customer_name'];
+            }
+
+            if (Schema::hasColumn('customers', 'gst_type')) {
+                $customerPayload['gst_type'] = GstType::resolve($data['gst_type'] ?? null, $data['gstin'] ?? null);
             }
 
             $customer = Customer::query()->create($customerPayload);
@@ -456,6 +461,11 @@ class CustomerService
             'status' => $data['status'],
         ];
 
+        // Only written when sent, so an update (or an import) without a type keeps the saved one.
+        if (Schema::hasColumn('customers', 'gst_type') && !empty($data['gst_type'])) {
+            $attributes['gst_type'] = $data['gst_type'];
+        }
+
         if (Schema::hasColumn('customers', 'blocked_reason')) {
             $attributes['blocked_reason'] = $data['status'] === 'blocked' ? ($data['blocked_reason'] ?? null) : null;
         }
@@ -684,6 +694,7 @@ class CustomerService
             'phone' => $customer->phone,
             'email' => $customer->email,
             'gstin' => $customer->gstin,
+            'gst_type' => GstType::resolve($customer->gst_type, $customer->gstin),
             'pan' => $customer->pan,
             'billing_address' => $customer->billing_address,
             'shipping_address' => $customer->shipping_address,

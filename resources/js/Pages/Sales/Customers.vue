@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import Layout from '../Layout.vue';
 import SalesApi from './SalesApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
+import { gstTypes, gstTypeForGstin } from '../../Components/Form/gstTypes';
 import SearchSelect from '../../Components/Common/SearchSelect.vue';
 
 defineProps({ page: { type: String, default: 'customers' }, title: { type: String, default: 'Customers' } });
@@ -33,7 +34,7 @@ let timer = null;
 
 const form = reactive({
     id: null, customer_code: '', customer_name: '', customer_type: 'retail', contact_person: '',
-    mobile: '', whatsapp_number: '', whatsapp_same_as_mobile: true, phone: '', email: '', gstin: '', pan: '', billing_address: '', shipping_address: '',
+    mobile: '', whatsapp_number: '', whatsapp_same_as_mobile: true, phone: '', email: '', gstin: '', gst_type: 'unregistered', pan: '', billing_address: '', shipping_address: '',
     state_id: '', city: '', pincode: '', opening_balance: 0, opening_balance_type: 'debit',
     credit_limit: '', credit_days: '', price_type: 'retail', status: 'active', blocked_reason: '',
 });
@@ -51,7 +52,7 @@ const filteredCities = computed(() => {
 const reset = () => {
     Object.assign(form, {
         id: null, customer_code: '', customer_name: '', customer_type: 'retail', contact_person: '',
-        mobile: '', whatsapp_number: '', whatsapp_same_as_mobile: true, phone: '', email: '', gstin: '', pan: '', billing_address: '', shipping_address: '',
+        mobile: '', whatsapp_number: '', whatsapp_same_as_mobile: true, phone: '', email: '', gstin: '', gst_type: 'unregistered', pan: '', billing_address: '', shipping_address: '',
         state_id: '', city: '', pincode: '', opening_balance: 0, opening_balance_type: 'debit',
         credit_limit: '', credit_days: '', price_type: 'retail', status: 'active', blocked_reason: '',
     });
@@ -76,6 +77,7 @@ const uppercaseGstin = () => {
 
 const newCustomer = () => { reset(); showForm.value = true; };
 const cancelForm = () => { reset(); showForm.value = false; };
+watch(() => form.gstin, (gstin) => { form.gst_type = gstTypeForGstin(form.gst_type, gstin); });
 const editCustomer = (customer) => {
     Object.assign(form, customer);
     sameAsBilling.value = !!customer.billing_address && customer.billing_address === customer.shipping_address;
@@ -237,6 +239,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
                 </div>
                 <h3 class="group-title">Tax and address</h3>
                 <div class="form-grid">
+                    <label><span>GST Type</span><select v-model="form.gst_type"><option v-for="type in gstTypes" :key="type.value" :value="type.value">{{ type.label }}</option></select></label>
                     <label><span>GSTIN</span><input v-model="form.gstin" maxlength="15" placeholder="15-character GSTIN (if registered)" @input="uppercaseGstin" /></label>
                     <label><span>PAN</span><input v-model="form.pan" maxlength="10" placeholder="PAN" /></label>
                     <SearchSelect v-model="form.state_id" label="State" :options="references.states" option-value-key="id" option-label-key="name" select-placeholder="Select State" />

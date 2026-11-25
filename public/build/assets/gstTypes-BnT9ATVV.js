@@ -1,0 +1,1 @@
+const r=[{value:"unregistered",label:"Unregistered / Consumer"},{value:"regular",label:"Registered Business - Regular"},{value:"composition",label:"Registered Business - Composition"}],i=(e,s)=>String(s||"").trim().length===15&&(!e||e==="unregistered")?"regular":e;export{r as a,i as g};

@@ -5,6 +5,7 @@ import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 import SearchSelect from '../../Components/Common/SearchSelect.vue';
+import { gstTypes, gstTypeForGstin } from '../../Components/Form/gstTypes';
 
 defineProps({ page: { type: String, default: 'purchases' }, title: { type: String, default: 'Purchases' } });
 
@@ -76,6 +77,7 @@ const supplierForm = reactive({
     phone: '',
     email: '',
     gstin: '',
+    gst_type: 'unregistered',
     pan: '',
     billing_address: '',
     shipping_address: '',
@@ -211,6 +213,7 @@ const resetSupplierForm = () => {
         phone: '',
         email: '',
         gstin: '',
+        gst_type: 'unregistered',
         pan: '',
         billing_address: '',
         shipping_address: '',
@@ -457,6 +460,7 @@ const closeActionMenu = () => { openActionMenuId.value = null; };
 
 const formatMoney = (value) => Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+watch(() => supplierForm.gstin, (gstin) => { supplierForm.gst_type = gstTypeForGstin(supplierForm.gst_type, gstin); });
 watch(() => supplierForm.state_id, () => {
     if (supplierForm.city && !filteredSupplierCities.value.some((city) => city.name === supplierForm.city)) {
         supplierForm.city = '';
@@ -584,6 +588,7 @@ onMounted(async () => {
                         <label><span>Mobile <span class="required-mark">*</span></span><input v-model="supplierForm.mobile" placeholder="9876543210" /></label>
                         <label>Phone<input v-model="supplierForm.phone" placeholder="Phone" /></label>
                         <label>Email<input v-model="supplierForm.email" placeholder="Email" /></label>
+                        <label>GST Type<select v-model="supplierForm.gst_type"><option v-for="type in gstTypes" :key="type.value" :value="type.value">{{ type.label }}</option></select></label>
                         <label>GSTIN<input v-model="supplierForm.gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
                         <label>PAN<input v-model="supplierForm.pan" maxlength="10" placeholder="PAN" /></label>
                         <SearchSelect v-model="supplierForm.state_id" label="State" :options="references.states" option-value-key="id" option-label-key="name" select-placeholder="Select State" />

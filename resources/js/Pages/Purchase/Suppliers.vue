@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
+import { gstTypes, gstTypeForGstin } from '../../Components/Form/gstTypes';
 import SearchSelect from '../../Components/Common/SearchSelect.vue';
 
 defineProps({
@@ -32,6 +33,7 @@ const form = reactive({
     phone: '',
     email: '',
     gstin: '',
+    gst_type: 'unregistered',
     pan: '',
     billing_address: '',
     shipping_address: '',
@@ -55,6 +57,7 @@ const reset = () => {
         phone: '',
         email: '',
         gstin: '',
+        gst_type: 'unregistered',
         pan: '',
         billing_address: '',
         shipping_address: '',
@@ -112,6 +115,8 @@ const clearFilters = async () => {
     status.value = '';
     await loadSuppliers(1);
 };
+
+watch(() => form.gstin, (gstin) => { form.gst_type = gstTypeForGstin(form.gst_type, gstin); });
 
 const editSupplier = (supplier) => {
     Object.assign(form, supplier);
@@ -188,6 +193,7 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); if (new U
                         <label><span>Mobile <span class="required-mark">*</span></span><input v-model="form.mobile" placeholder="9876543210" /></label>
                         <label>Phone<input v-model="form.phone" placeholder="Phone" /></label>
                         <label>Email<input v-model="form.email" placeholder="Email" /></label>
+                        <label>GST Type<select v-model="form.gst_type"><option v-for="type in gstTypes" :key="type.value" :value="type.value">{{ type.label }}</option></select></label>
                         <label>GSTIN<input v-model="form.gstin" maxlength="15" placeholder="15-character GSTIN" /></label>
                         <label>PAN<input v-model="form.pan" maxlength="10" placeholder="PAN" /></label>
                         <SearchSelect v-model="form.state_id" label="State" :options="references.states" option-value-key="id" option-label-key="name" select-placeholder="Select State" />

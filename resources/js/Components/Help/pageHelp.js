@@ -1,11 +1,91 @@
 // Simple in-app help for every screen. Shown by PageHelp.vue (rendered once in Layout.vue).
 // Key = the Inertia "page" value. Where two screens share a page value, "page|Title" is used.
-// h(what the page does, tabs [[name, use]], steps, notes, faq [[question, answer]])
-const h = (what, { tabs = [], steps = [], notes = [], faq = [] } = {}) => ({ what, tabs, steps, notes, faq });
+// h(what the page does, tabs [[name, use]], steps, notes, faq [[question, answer]],
+//   buttons [[group, [[name, what it does, when to use it]]]])
+const h = (what, { tabs = [], steps = [], notes = [], faq = [], buttons = [] } = {}) => ({ what, tabs, steps, notes, faq, buttons });
 
 export const pageHelp = {
-    dashboard: h('A quick overview of your business: sales, purchases, stock and pending payments.', {
-        steps: ['The top cards show money to collect, money to pay, and today’s sales and purchases. Click a card to see its list.', 'Use the large buttons for daily work: New Sale, New Purchase, Money In, Money Out and more.', 'Check “Pending Actions” every day and click a line to finish it.'],
+    dashboard: h('The first screen of your business: money to collect and pay, today’s work, pending jobs, money and stock. Every card and line can be clicked.', {
+        steps: ['In the morning, look at the four top cards.', 'Open each line under “Pending Actions” and finish it.', 'During the day, use the buttons under “What do you want to do?”.', 'In the evening, check “Today’s Sales”, “Recent Sales” and the cash balance.'],
+        buttons: [
+            ['Top cards', [
+                ['To Collect', 'Total amount customers still have to pay on posted invoices, with the number of unpaid invoices. Click to see those invoices.', 'To decide whom to remind for payment.'],
+                ['To Pay', 'Total amount you still have to pay on posted purchase bills. Click to see those bills.', 'To plan supplier payments.'],
+                ['Today’s Sales', 'Total and number of invoices dated today. Click to see them.', 'To check today’s billing.'],
+                ['Today’s Purchases', 'Total and number of purchase bills dated today. Click to see them.', 'To check what was bought today.'],
+            ]],
+            ['What do you want to do?', [
+                ['New Sale', 'Opens the billing screen (POS).', 'Whenever you sell goods: add items, take payment, click “Complete Sale” and print.'],
+                ['New Purchase', 'Opens a blank purchase form.', 'When goods arrive from a supplier. “Confirm & Post” adds the stock and the amount payable.'],
+                ['Money In', 'Opens a Receipt voucher.', 'When a customer pays an old or credit bill. Choose the customer, the bill, amount and cash or bank.'],
+                ['Money Out', 'Opens a Payment voucher.', 'When you pay a supplier for an old or credit bill.'],
+                ['Add Expense', 'Opens Expenses.', 'For rent, electricity, salary, tea, transport and other spending that is not goods for sale.'],
+                ['Add Product', 'Opens a blank product form.', 'Before billing a new item. Fill name, unit, GST %, purchase and selling rate.'],
+                ['Add Customer', 'Opens a blank customer form.', 'For credit sales, GST bills and sending bills on WhatsApp.'],
+                ['Add Supplier', 'Opens a blank supplier form.', 'Before entering the first purchase from a new supplier.'],
+            ]],
+            ['Pending Actions (click a line to open its list)', [
+                ['Supplier payments pending', 'Number and amount of purchase bills not fully paid.', 'Pay them with “Pay” on the bill or with Money Out.'],
+                ['Customer payments to collect', 'Number and amount of invoices not fully paid.', 'Send a reminder, and record the money with Money In when it comes.'],
+                ['Products with minus stock', 'Products sold in more quantity than was entered.', 'Enter the missing purchase or opening stock, or correct it with Stock Adjustment.'],
+                ['Draft purchases not posted', 'Purchase bills saved but not posted.', 'Open and post them. A draft does not add stock.'],
+                ['Draft sales invoices', 'Invoices saved but not completed.', 'Use Actions > Edit or Post, or cancel the ones not needed.'],
+                ['Products without selling price', 'Products whose selling rate is blank.', 'Set the rate so that billing fills it automatically.'],
+            ]],
+            ['Recent Sales', [
+                ['Customer name', 'Shows that invoice.', 'To check what was sold in it.'],
+                ['Print', 'Opens the invoice for printing.', 'To give or re-print a bill.'],
+                ['View all', 'Opens all sales invoices.', 'To search, filter, edit or export invoices.'],
+            ]],
+            ['Sales and Purchases chart', [
+                ['Blue and orange bars', 'Sales (blue) and purchases (orange) of each of the last six months. Move the mouse on a bar to see the amount.', 'To see whether business is rising or falling. It is not a profit report.'],
+            ]],
+            ['Money', [
+                ['Cash in hand', 'Cash balance as per your entries. Click to open Ledgers.', 'Match it with the cash in the drawer. A difference usually means a missing entry.'],
+                ['Bank balance', 'Bank balance as per your entries. Click to open Ledgers.', 'Match it with the bank statement.'],
+                ['Today’s profit', 'Today’s sales without GST minus the cost of the goods sold. Expenses are not subtracted.', 'A quick estimate only. Use Business Reports for real profit.'],
+                ['GST to pay / GST credit', 'GST on all your sales minus GST on all your purchases till date. Returns and GST already deposited are not subtracted. Click to open GST.', 'For a rough idea only. Confirm the figure with your accountant (CA) before paying or filing.'],
+            ]],
+            ['Stock', [
+                ['Open stock', 'Opens Current Stock.', 'To see the quantity of every product.'],
+                ['Stock value', 'Quantity in hand multiplied by its average cost.', 'To know how much money is held in goods. Minus stock lowers this figure.'],
+                ['Products in stock', 'Products whose quantity is more than zero.', 'To see what you can sell now.'],
+                ['Out of stock / minus', 'Products with zero or minus quantity. Click to see the list.', 'To order again or correct wrong stock.'],
+                ['Low stock', 'Products at or below their reorder level.', 'To order before they finish. Set the reorder level in the product.'],
+                ['Product names in the lists', 'Opens that product.', 'To check or correct its details.'],
+                ['Expiring in 30 days', 'Batches that will expire soon (shown only when there are any).', 'To sell or return them first.'],
+            ]],
+            ['Your business', [
+                ['Products', 'Number of products. Click to open Product Master.', 'To add or correct items.'],
+                ['Customers', 'Number of customers. Click to open Customers.', 'To see their bills and balances.'],
+                ['Suppliers', 'Number of suppliers. Click to open Suppliers.', 'To add or correct suppliers.'],
+            ]],
+            ['Top bar (on most screens)', [
+                ['Search box', 'Finds invoices, customers and products as you type.', 'To open something quickly without going through menus.'],
+                ['New Bill', 'Opens the billing screen.', 'To start a sale from any screen.'],
+                ['Voucher', 'Opens Receipt, Payment, Contra and Journal entries.', 'For money entries.'],
+                ['Reports', 'Opens Business Reports.', 'For profit and loss, balance sheet, day book and more.'],
+                ['Bell', 'Notifications.', 'There are no notifications yet.'],
+                ['? (question mark)', 'Opens the guide of the current screen.', 'Whenever you are not sure what to do. “All guides” lists every screen.'],
+                ['Your name', 'Opens your profile.', 'To see your login details.'],
+            ]],
+            ['Left menu', [
+                ['Box with HOME, SALES… (below the business name)', 'Changes the menu section.', 'Choose Sales, Purchase, Inventory, Accounting, Reports or Setup.'],
+                ['Business Dashboard', 'This screen.', 'For the daily overview.'],
+                ['Admin Workspace', 'Business setup, staff, users and settings.', 'For setup work.'],
+                ['Staff Workspace', 'Daily work screen with shortcuts and pending tasks.', 'For billing staff.'],
+                ['Onboarding', 'The first-time setup checklist.', 'Until every required step is complete.'],
+                ['Logout', 'Signs you out.', 'Always log out on a shared computer.'],
+            ]],
+            ['Bottom corner', [
+                ['Ask BillIQ', 'A chat assistant that answers questions about using BillIQ.', 'When you want to ask in your own words.'],
+            ]],
+        ],
+        faq: [
+            ['Why is a number different from what I expect?', 'Only posted (completed) bills are counted. Drafts, cancelled and reversed bills are left out.'],
+            ['Why do I not see all these cards?', 'Each login sees only what its role allows.'],
+            ['Why is stock minus?', 'More was sold than was entered. Add the purchase or opening stock.'],
+        ],
     }),
     'admin-workspace': h('Business setup in one place: what is ready, what is pending and shortcuts to every admin task.', {
         tabs: [['Overview', 'Branches, warehouses, products and masters'], ['Staff', 'Employee records and who is missing a login, branch or role'], ['Setup Steps', 'The checklist for starting daily billing'], ['Users', 'Add logins, choose Admin or Staff, activate or deactivate'], ['Settings', 'Business profile, logo, bank details and bill printing']],

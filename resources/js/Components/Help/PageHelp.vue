@@ -69,6 +69,18 @@ defineExpose({ show });
                         <ol><li v-for="step in help.steps" :key="step">{{ step }}</li></ol>
                     </template>
 
+                    <template v-if="help.buttons.length">
+                        <h3>Every button on this screen</h3>
+                        <section v-for="[group, list] in help.buttons" :key="group" class="ph-group">
+                            <h4>{{ group }}</h4>
+                            <div v-for="[name, does, use] in list" :key="name" class="ph-button">
+                                <strong>{{ name }}</strong>
+                                <p>{{ does }}</p>
+                                <p class="ph-use"><b>Use:</b> {{ use }}</p>
+                            </div>
+                        </section>
+                    </template>
+
                     <template v-if="help.notes.length">
                         <h3>Please note</h3>
                         <ul><li v-for="note in help.notes" :key="note">{{ note }}</li></ul>
@@ -100,6 +112,11 @@ div.ph-head-actions{display:flex;gap:8px}
 .ph-topics{display:grid;margin-top:12px}
 .ph-topics button{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:8px 4px;color:#142139;background:#fff;border:0;border-bottom:1px solid #eef2f7;cursor:pointer;text-align:left;font-size:14px;font-weight:700}
 .ph-topics span{color:#2457d6}
+h4{margin:14px 0 6px;color:#2457d6;font-size:13px;font-weight:800}
+.ph-button{margin-bottom:8px;padding:10px 12px;border:1px solid #e3e9f2;border-radius:8px;line-height:1.5}
+.ph-button strong{color:#142139;font-size:13px}
+.ph-button p{margin:3px 0 0;color:#475569;font-size:13px}
+.ph-button .ph-use{color:#1f6f43}
 details{margin-bottom:8px;padding:10px 12px;border:1px solid #e3e9f2;border-radius:8px}
 summary{color:#142139;cursor:pointer;font-weight:700}
 details p{margin-top:6px;color:#475569;font-size:13px}

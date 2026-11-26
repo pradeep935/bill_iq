@@ -39,7 +39,7 @@ class ProductController extends Controller
         return response()->json(
             $this->products->presentPaginator(
                 $this->products->list($request->all())
-            )
+            ) + ['cards' => $this->products->cards()]
         );
     }
 

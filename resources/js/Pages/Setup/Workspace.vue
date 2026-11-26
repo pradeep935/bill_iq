@@ -328,7 +328,7 @@ const removeLogo = () => {
                     <h2>Business Profile & Invoice Print</h2>
                     <p>These details appear on your printed bills and reports. Click Save Settings after changing them.</p>
                 </div>
-                <button type="button" :disabled="savingProfile" @click="saveBusinessProfile">{{ savingProfile ? 'Saving...' : 'Save Settings' }}</button>
+                <button class="bq-primary" type="button" :disabled="savingProfile" @click="saveBusinessProfile">{{ savingProfile ? 'Saving...' : 'Save Settings' }}</button>
             </div>
 
             <div class="settings-grid">

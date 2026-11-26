@@ -1,6 +1,6 @@
 <template>
   <Layout>
-    <template #topbar-title><div class="top-title"><span>ACCOUNTING</span><strong>Tally Integration Center</strong></div></template>
+    <template #topbar-title><div class="bill-page-title"><span>ACCOUNTING</span><h1>Tally Integration Center</h1></div></template>
     <div class="tally-page">
       <header class="hero"><div><span class="eyebrow">SAFE MIGRATION WORKSPACE</span><h1>Move Tally data into {{ company.name }}</h1><p>Use the BillIQ Tally Importer on the Windows computer that runs TallyPrime. Data is staged, reconciled, and never posted automatically.</p></div><button v-if="canManageMigrations" class="primary" @click="showConnect = true">Authorize importer</button></header>
       <div class="notice"><strong>BillIQ keeps Tally read-only.</strong> The Importer communicates only with local Tally XML and BillIQ HTTPS. A Super Admin must authorize a migration, review mappings and reconciliation, and explicitly post any approved records.</div>

@@ -5,7 +5,6 @@ import InventoryApi from './InventoryApi';
 import CrudTable from '../../Components/Common/CrudTable.vue';
 import CrudDrawer from '../../Components/Common/CrudDrawer.vue';
 import ListingCard from '../../Components/Common/ListingCard.vue';
-import ListingSummaryCards from '../../Components/Common/ListingSummaryCards.vue';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 import TableLoadingState from '../../Components/Common/TableLoadingState.vue';
 import { formatInventoryDateTime, formatInventoryQty } from './Shared/formatters';
@@ -57,13 +56,13 @@ const detailedColumns = [
     { key: 'branch', label: 'Branch' },
     { key: 'warehouse', label: 'Warehouse' },
     { key: 'batch', label: 'Batch' },
-    { key: 'quantity_on_hand', label: 'Saleable Qty' },
-    { key: 'non_saleable_quantity', label: 'Non-Saleable Qty' },
+    { key: 'quantity_on_hand', label: 'Qty for sale' },
+    { key: 'non_saleable_quantity', label: 'Not for sale' },
     { key: 'reserved_quantity', label: 'Reserved Qty' },
     { key: 'quantity_available', label: 'Available Qty' },
     { key: 'unit', label: 'Unit' },
     { key: 'average_cost', label: 'Average Cost' },
-    { key: 'stock_value', label: 'Saleable Value' },
+    { key: 'stock_value', label: 'Stock value' },
     { key: 'last_updated', label: 'Last Updated' },
     { key: 'status', label: 'Status' },
 ];
@@ -75,10 +74,10 @@ const summaryColumns = [
     { key: 'sku', label: 'SKU' },
     { key: 'barcode', label: 'Barcode' },
     { key: 'brand', label: 'Brand' },
-    { key: 'quantity_on_hand', label: 'Saleable Qty' },
+    { key: 'quantity_on_hand', label: 'Qty for sale' },
     { key: 'unit', label: 'Unit' },
     { key: 'average_cost', label: 'Average Cost' },
-    { key: 'stock_value', label: 'Saleable Value' },
+    { key: 'stock_value', label: 'Stock value' },
     { key: 'branch_count', label: 'Branches' },
     { key: 'status', label: 'Status' },
 ];
@@ -90,6 +89,7 @@ const columns = computed(() => {
     if (!list.length) return summaryColumns;
     const allEmpty = (key) => list.every((row) => !row[key] || row[key] === '-');
     return summaryColumns.filter((column) => {
+        if (column.key === 'image') return list.some((row) => stockImage(row));
         if (column.key === 'barcode' || column.key === 'brand') return !allEmpty(column.key);
         if (column.key === 'branch_count') return list.some((row) => Number(row.branch_count || 0) > 1);
         return true;
@@ -106,15 +106,16 @@ const filteredWarehouses = computed(() => {
     );
 });
 
-const summaryCards = computed(() => [
-    { label: 'Total Products', value: dashboard.value.total_products },
-    { label: 'Physical Quantity', value: formatQty(dashboard.value.total_quantity) },
-    { label: 'Saleable Quantity', value: formatQty(dashboard.value.saleable_quantity) },
-    { label: 'Non-Saleable Quantity', value: formatQty(dashboard.value.non_saleable_quantity), filter: 'non_saleable' },
-    { label: 'Saleable Value', value: `Rs. ${formatMoney(dashboard.value.inventory_value)}` },
-    { label: 'Low Stock Products', value: dashboard.value.low_stock_products },
-    { label: 'Out of Stock Products', value: dashboard.value.out_of_stock_products },
-]);
+const showFilters = ref(false);
+const chips = [
+    { key: '', label: 'All stock' },
+    { key: 'low', label: 'Low stock' },
+    { key: 'out', label: 'Out of stock' },
+    { key: 'negative', label: 'Minus stock' },
+    { key: 'non_saleable', label: 'Damaged / expired' },
+];
+const quickFilter = (key) => { filters.value.stock_status = key; };
+const moreFilters = computed(() => ['branch_id', 'warehouse_id', 'category', 'brand', 'batch'].filter((key) => filters.value[key]).length);
 
 const loadReferences = async () => {
     references.value = await InventoryApi.stockReferences();
@@ -149,11 +150,6 @@ const clearFilters = () => {
         direction: 'asc',
         per_page: 15,
     };
-};
-
-const setStockFilter = (card) => {
-    if (!card?.filter) return;
-    filters.value.stock_status = card.filter;
 };
 
 const valueFor = (row, column) => {
@@ -382,6 +378,8 @@ watch(() => filters.value.branch_id, () => {
 onMounted(async () => {
     const stockStatusFromLink = new URLSearchParams(window.location.search).get('stock_status');
     if (stockStatusFromLink) filters.value.stock_status = stockStatusFromLink;
+    // A linked filter without its own chip is shown in the filter panel, so it is never hidden.
+    showFilters.value = Boolean(stockStatusFromLink) && !chips.some((chip) => chip.key === stockStatusFromLink);
     await loadReferences();
     await loadSummary();
 });
@@ -394,73 +392,68 @@ onMounted(async () => {
         </template>
 
         <div class="stock-page">
-            <div class="page-actions">
-                <button type="button" title="Export CSV" @click="exportRows('csv')">CSV</button>
-                <button type="button" title="Export Excel" @click="exportRows('excel')">Excel</button>
-                <button type="button" title="Export PDF" @click="exportRows('pdf')">PDF</button>
+            <div class="bq-cards">
+                <button type="button" class="bq-card" @click="quickFilter('')"><span>Stock value</span><strong>Rs. {{ formatMoney(dashboard.inventory_value) }}</strong><small>{{ dashboard.total_products || 0 }} products, {{ formatQty(dashboard.saleable_quantity) }} qty for sale</small></button>
+                <button type="button" class="bq-card draft" @click="quickFilter('low')"><span>Low stock</span><strong>{{ dashboard.low_stock_products || 0 }}</strong><small>Time to order again</small></button>
+                <button type="button" class="bq-card due" @click="quickFilter('out')"><span>Out of stock</span><strong>{{ dashboard.out_of_stock_products || 0 }}</strong><small>Nothing left to sell</small></button>
             </div>
 
-            <ListingSummaryCards :cards="summaryCards" @select="setStockFilter" />
-
             <ListingCard>
-                <div class="listing-toolbar">
-                    <div class="view-switch">
-                        <button type="button" :class="{ active: filters.view_mode === 'summary' }" @click="filters.view_mode = 'summary'">Summary View</button>
-                        <button type="button" :class="{ active: filters.view_mode === 'detailed' }" @click="filters.view_mode = 'detailed'">Detailed View</button>
-                    </div>
-
-                    <div class="search-box">
-                        <span></span>
-                        <input v-model="filters.search" type="text" placeholder="Search product, SKU, barcode, HSN, brand" />
-                    </div>
-
-                    <div class="filter-group">
-                        <select v-model="filters.branch_id">
-                            <option value="">All Branches</option>
-                            <option v-for="branch in references.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
-                        </select>
-                        <select v-model="filters.warehouse_id">
-                            <option value="">All Warehouses</option>
-                            <option v-for="warehouse in filteredWarehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option>
-                        </select>
-                        <select v-model="filters.category">
-                            <option value="">All Categories</option>
-                            <option v-for="category in references.categories" :key="category.id" :value="category.id">{{ category.name }}</option>
-                        </select>
-                        <select v-model="filters.brand">
-                            <option value="">All Brands</option>
-                            <option v-for="brand in references.brands" :key="brand.id" :value="brand.id">{{ brand.name }}</option>
-                        </select>
-                        <input v-model="filters.batch" type="text" placeholder="Batch" />
-                        <select v-model="filters.stock_status">
-                            <option value="">All Stock</option>
-                            <option value="saleable">Saleable</option>
-                            <option value="non_saleable">Non-Saleable</option>
-                            <option value="damaged">Damaged</option>
-                            <option value="expired">Expired</option>
-                            <option value="defective">Defective</option>
-                            <option value="quarantined">Quarantined</option>
-                            <option value="lost">Lost</option>
-                            <option value="low">Low Stock</option>
-                            <option value="out">Out of Stock</option>
-                            <option value="negative">Minus Stock</option>
-                            <option value="unavailable">Out of Stock + Minus</option>
-                        </select>
-                        <select v-model="filters.per_page">
-                            <option :value="15">15 / page</option>
-                            <option :value="25">25 / page</option>
-                            <option :value="50">50 / page</option>
-                        </select>
-                        <button type="button" @click="clearFilters">Clear</button>
-                    </div>
+                <form class="bq-search" role="search" @submit.prevent="loadSummary(1)">
+                    <input v-model="filters.search" type="search" aria-label="Search stock" placeholder="Search product, SKU, barcode, HSN or brand" />
+                    <button type="button" :aria-expanded="showFilters" @click="showFilters = !showFilters">Filters<b v-if="moreFilters">{{ moreFilters }}</b></button>
+                </form>
+                <div v-if="showFilters" class="bq-filters">
+                    <label><span>Show</span><select v-model="filters.view_mode"><option value="summary">One row per product</option><option value="detailed">Branch, warehouse and batch wise</option></select></label>
+                    <label><span>Branch</span><select v-model="filters.branch_id">
+                        <option value="">All</option>
+                        <option v-for="branch in references.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
+                    </select></label>
+                    <label><span>Warehouse</span><select v-model="filters.warehouse_id">
+                        <option value="">All</option>
+                        <option v-for="warehouse in filteredWarehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option>
+                    </select></label>
+                    <label><span>Category</span><select v-model="filters.category">
+                        <option value="">All</option>
+                        <option v-for="category in references.categories" :key="category.id" :value="category.id">{{ category.name }}</option>
+                    </select></label>
+                    <label><span>Brand</span><select v-model="filters.brand">
+                        <option value="">All</option>
+                        <option v-for="brand in references.brands" :key="brand.id" :value="brand.id">{{ brand.name }}</option>
+                    </select></label>
+                    <label><span>Batch number</span><input v-model="filters.batch" type="text" placeholder="Batch" /></label>
+                    <label><span>Stock condition</span><select v-model="filters.stock_status">
+                        <option value="">All</option>
+                        <option value="saleable">Can be sold</option>
+                        <option value="non_saleable">Cannot be sold</option>
+                        <option value="damaged">Damaged</option>
+                        <option value="expired">Expired</option>
+                        <option value="defective">Defective</option>
+                        <option value="quarantined">Held for checking</option>
+                        <option value="lost">Lost</option>
+                        <option value="low">Low stock</option>
+                        <option value="out">Out of stock</option>
+                        <option value="negative">Minus stock</option>
+                        <option value="unavailable">Out of stock + minus</option>
+                    </select></label>
+                    <label><span>Rows per page</span><select v-model="filters.per_page">
+                        <option :value="15">15</option>
+                        <option :value="25">25</option>
+                        <option :value="50">50</option>
+                    </select></label>
+                    <div class="bq-filter-actions"><button type="button" @click="clearFilters">Clear</button></div>
+                </div>
+                <div class="bq-chips">
+                    <button v-for="chip in chips" :key="chip.key" type="button" :class="{ active: filters.stock_status === chip.key }" :aria-pressed="filters.stock_status === chip.key" @click="quickFilter(chip.key)">{{ chip.label }}</button>
                 </div>
 
                 <CrudTable
+                    mobile-cards
                     :columns="columns"
                     :rows="rows"
                     :loading="loading"
                     :value-for="valueFor"
-                    :wrap-class="filters.view_mode === 'detailed' ? 'stock-table-wrap detailed-stock-table-wrap' : 'stock-table-wrap summary-stock-table-wrap'"
+                    :wrap-class="[filters.view_mode === 'detailed' ? 'stock-table-wrap detailed-stock-table-wrap' : 'stock-table-wrap summary-stock-table-wrap', { 'no-image': !columns.some((column) => column.key === 'image') }]"
                     :table-class="filters.view_mode === 'detailed' ? 'detailed-stock-table' : 'summary-stock-table'"
                     :show-status="false"
                     loading-text="Loading current stock..."
@@ -553,6 +546,13 @@ onMounted(async () => {
                     <button type="button" :disabled="pagination.current_page <= 1 || loading" @click="loadSummary(pagination.current_page - 1)">Previous</button>
                     <span>{{ loading ? 'Loading…' : `${pagination.from || 0}-${pagination.to || 0} of ${pagination.total || 0}` }}</span>
                     <button type="button" :disabled="pagination.current_page >= pagination.last_page || loading" @click="loadSummary(pagination.current_page + 1)">Next</button>
+                </div>
+
+                <div class="file-tools">
+                    <span>Download this list:</span>
+                    <button type="button" @click="exportRows('csv')">CSV</button>
+                    <button type="button" @click="exportRows('excel')">Excel</button>
+                    <button type="button" @click="exportRows('pdf')">PDF</button>
                 </div>
             </ListingCard>
         </div>
@@ -695,18 +695,7 @@ onMounted(async () => {
 
 <style scoped>
 .stock-page { padding: 4px 0 28px; }
-.page-actions { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 18px; }
-.page-actions button, .pagination button, .filter-group button { background: #fff; border: 1px solid #d8e0eb; border-radius: 8px; color: #35435b; cursor: pointer; font-size: 11px; font-weight: 750; min-height: 38px; padding: 8px 14px; }
-.listing-toolbar { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin-bottom: 14px; position: relative; }
-.view-switch { background: #f8fafc; border: 1px solid #d8e0eb; border-radius: 9px; display: inline-flex; gap: 4px; padding: 4px; }
-.view-switch button { background: transparent; border: 0; border-radius: 7px; color: #536179; cursor: pointer; font-size: 11px; font-weight: 800; min-height: 32px; padding: 0 11px; }
-.view-switch button.active { background: #2457d6; color: #fff; }
-.search-box { align-items: center; border: 1px solid #d8e0eb; border-radius: 9px; display: flex; gap: 10px; min-height: 42px; padding: 0 12px; width: min(360px, 100%); }
-.search-box span { border: 2px solid #8b98ac; border-radius: 50%; height: 13px; position: relative; width: 13px; }
-.search-box span::after { background: #8b98ac; content: ''; height: 6px; position: absolute; right: -5px; top: 9px; transform: rotate(45deg); width: 2px; }
-.search-box input { border: 0; color: #22304a; flex: 1; font-size: 12px; font-weight: 650; min-width: 0; outline: none; }
-.filter-group { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; }
-.filter-group input, .filter-group select { background: #fff; border: 1px solid #d8e0eb; border-radius: 8px; color: #344159; font-size: 12px; font-weight: 650; min-height: 38px; min-width: 132px; padding: 8px 10px; }
+.file-tools button, .pagination button { background: #fff; border: 1px solid #d8e0eb; border-radius: 8px; color: #35435b; cursor: pointer; font-size: 11px; font-weight: 750; min-height: 38px; padding: 8px 14px; }
 .product-image { align-items: center; background: #edf2ff; border-radius: 9px; display: inline-flex; height: 42px; justify-content: center; overflow: hidden; width: 42px; }
 .product-image img { display: block; height: 100%; object-fit: cover; width: 100%; }
 .product-image span { color: #2457d6; font-weight: 850; }
@@ -724,6 +713,7 @@ onMounted(async () => {
 :deep(.stock-col-image) { background: #fff; left: 44px; min-width: 62px !important; width: 62px !important; max-width: 62px !important; position: sticky; z-index: 5; }
 :deep(.stock-col-product) { background: #fff; left: 106px; min-width: 210px; position: sticky; z-index: 5; }
 :deep(.stock-col-image-first) { left: 0; }
+:deep(.no-image .stock-col-product) { left: 44px; }
 :deep(.stock-col-product-first) { left: 62px; }
 :deep(th.stock-col-expand),
 :deep(th.stock-col-image),
@@ -819,4 +809,5 @@ onMounted(async () => {
 .ledger-table .numeric { text-align: right; white-space: nowrap; }
 @media (max-width: 1100px) { .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .listing-toolbar { flex-direction: column; } }
 @media (max-width: 720px) { .summary-grid, .detail-cards, .detail-grid { grid-template-columns: 1fr; } .filter-group > * { width: 100%; } .mini-row, .stock-breakdown-row { align-items: flex-start; flex-direction: column; } .metric-chip-row { justify-content: flex-start; } }
+.file-tools { align-items: center; border-top: 1px solid #edf1f5; color: #758197; display: flex; flex-wrap: wrap; font-size: 12px; gap: 8px; justify-content: flex-end; margin-top: 14px; padding-top: 12px; }
 </style>

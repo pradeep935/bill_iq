@@ -29,4 +29,11 @@ class JournalEntry extends Model
     {
         return $this->hasMany(BankReconciliationItem::class);
     }
+
+    // What a customer or supplier owes is every line in their name except the cash and bank ones:
+    // money paid or received at billing also carries the party, but it is not a due.
+    public static function withoutMoneyLines($query, int $businessId)
+    {
+        return $query->whereNotIn('journal_entries.account_id', Account::query()->where('business_id', $businessId)->whereIn('account_type', ['cash', 'bank'])->select('id'));
+    }
 }

@@ -1,6 +1,10 @@
 import axios from 'axios';
 
 const PurchaseApi = {
+    async reportCards() {
+        const response = await axios.get('/app/purchase/bills/reports');
+        return response.data.cards || {};
+    },
     async previewTotals(payload) {
         const response = await axios.post('/app/purchase/bills/preview-totals', payload);
         return response.data;

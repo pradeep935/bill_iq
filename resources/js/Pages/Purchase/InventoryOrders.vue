@@ -228,16 +228,16 @@ onMounted(async () => {
             </section>
 
             <section class="toolbar">
-                <input v-model="filters.search" placeholder="Search Order # / Supplier" @keyup.enter="load(1)" />
-                <input v-model="filters.product" placeholder="Search Product / SKU" @keyup.enter="load(1)" />
-                <select v-model="filters.branch_id" @change="load(1)"><option value="">Branch</option><option v-for="branch in refs.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option></select>
-                <select v-model="filters.warehouse_id" @change="load(1)"><option value="">Warehouse</option><option v-for="warehouse in refs.warehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option></select>
-                <select v-model="filters.supplier_id" @change="load(1)"><option value="">Supplier</option><option v-for="supplier in refs.suppliers" :key="supplier.id" :value="supplier.id">{{ supplierName(supplier) }}</option></select>
-                <select v-model="filters.source_type" @change="load(1)"><option v-for="source in sourceOptions" :key="source" :value="source">{{ source ? labelize(source) : 'Source' }}</option></select>
-                <select v-model="filters.status" @change="load(1)"><option v-for="status in statusOptions" :key="status" :value="status">{{ status ? labelize(status) : 'Status' }}</option></select>
-                <input v-model="filters.date_from" type="date" @change="load(1)" />
-                <input v-model="filters.expected_date" type="date" title="Expected Delivery Date" @change="load(1)" />
-                <select v-model="filters.per_page" @change="load(1)"><option v-for="option in perPageOptions" :key="option" :value="option">{{ option }} rows</option></select>
+                <input aria-label="Search" v-model="filters.search" placeholder="Search Order # / Supplier" @keyup.enter="load(1)" />
+                <input aria-label="Product" v-model="filters.product" placeholder="Search Product / SKU" @keyup.enter="load(1)" />
+                <select aria-label="Branch" v-model="filters.branch_id" @change="load(1)"><option value="">Branch</option><option v-for="branch in refs.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option></select>
+                <select aria-label="Warehouse" v-model="filters.warehouse_id" @change="load(1)"><option value="">Warehouse</option><option v-for="warehouse in refs.warehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option></select>
+                <select aria-label="Supplier" v-model="filters.supplier_id" @change="load(1)"><option value="">Supplier</option><option v-for="supplier in refs.suppliers" :key="supplier.id" :value="supplier.id">{{ supplierName(supplier) }}</option></select>
+                <select aria-label="Source type" v-model="filters.source_type" @change="load(1)"><option v-for="source in sourceOptions" :key="source" :value="source">{{ source ? labelize(source) : 'Source' }}</option></select>
+                <select aria-label="Status" v-model="filters.status" @change="load(1)"><option v-for="status in statusOptions" :key="status" :value="status">{{ status ? labelize(status) : 'Status' }}</option></select>
+                <label class="bq-field"><span>From date</span><input v-model="filters.date_from" type="date" @change="load(1)" /></label>
+                <label class="bq-field"><span>Expected date</span><input v-model="filters.expected_date" type="date" title="Expected Delivery Date" @change="load(1)" /></label>
+                <select aria-label="Rows per page" v-model="filters.per_page" @change="load(1)"><option v-for="option in perPageOptions" :key="option" :value="option">{{ option }} rows</option></select>
                 <button @click="clearFilters">Clear Filters</button>
             </section>
 
@@ -287,7 +287,7 @@ onMounted(async () => {
                         <label>Payment Terms<input v-model="form.payment_terms" /></label>
                         <label class="wide">Remarks<textarea v-model="form.remarks"></textarea></label>
                     </div>
-                    <div class="product-search"><input v-model="productSearch" placeholder="Search Product Name, SKU or Barcode" @input="searchProducts" /><div v-if="products.length" class="search-menu"><button v-for="product in products" :key="product.id" @click="addProduct(product)"><strong>{{ product.name }}</strong><span>SKU: {{ product.sku || '-' }} · Available: {{ qty(product.current_stock) }} {{ productUnit(product) }} · Last Purchase: Rs. {{ money(product.purchase_rate) }}</span></button></div></div>
+                    <div class="product-search"><input aria-label="Search product" v-model="productSearch" placeholder="Search Product Name, SKU or Barcode" @input="searchProducts" /><div v-if="products.length" class="search-menu"><button v-for="product in products" :key="product.id" @click="addProduct(product)"><strong>{{ product.name }}</strong><span>SKU: {{ product.sku || '-' }} · Available: {{ qty(product.current_stock) }} {{ productUnit(product) }} · Last Purchase: Rs. {{ money(product.purchase_rate) }}</span></button></div></div>
                     <div class="table-scroll">
                         <table class="line-table"><thead><tr><th>Product</th><th>SKU</th><th>Current Stock</th><th>Incoming Qty</th><th>Required Qty</th><th>Order Qty</th><th>UOM</th><th>Purchase Rate</th><th>Discount</th><th>Tax %</th><th>Line Total</th><th>Remarks</th><th>Action</th></tr></thead><tbody><tr v-for="(item, index) in form.items" :key="index"><td data-label="Product">{{ item.product?.name || item.product_name || '-' }}</td><td data-label="SKU">{{ item.sku || item.product?.sku || '-' }}</td><td data-label="Current Stock">{{ qty(item.current_stock) }}</td><td data-label="Incoming Qty">{{ qty(item.incoming_quantity) }}</td><td data-label="Required Qty"><input v-model.number="item.required_quantity" type="number" step="0.001" /></td><td data-label="Order Qty"><input v-model.number="item.ordered_quantity" type="number" step="0.001" /></td><td data-label="UOM">{{ productUnit(item.product) }}</td><td data-label="Purchase Rate"><input v-model.number="item.purchase_rate" type="number" step="0.01" /></td><td data-label="Discount"><input v-model.number="item.discount_amount" type="number" step="0.01" /></td><td data-label="Tax %"><input v-model.number="item.gst_rate" type="number" step="0.01" /></td><td data-label="Line Total">Rs. {{ money(lineTotal(item)) }}</td><td data-label="Remarks"><input v-model="item.remarks" /></td><td data-label="Action"><button class="danger" @click="form.items.splice(index,1)">Remove</button></td></tr><tr v-if="!form.items.length"><td colspan="13" class="empty">Search and add products for this inventory order.</td></tr></tbody></table>
                     </div>

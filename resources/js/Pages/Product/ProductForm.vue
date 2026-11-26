@@ -1756,14 +1756,14 @@ const saveProduct = () => {
                                             <span>Primary</span>
                                         </label>
 
-                                        <input
+                                        <label class="bq-field"><span>Barcode</span><input
                                             v-model="barcode.barcode"
                                             type="text"
                                             class="form-control"
                                             placeholder="Scan or enter barcode"
-                                        />
+                                        /></label>
 
-                                        <select
+                                        <label class="bq-field"><span>Barcode type</span><select
                                             v-model="barcode.barcode_type"
                                             class="form-control"
                                         >
@@ -1782,7 +1782,7 @@ const saveProduct = () => {
                                             <option value="internal">
                                                 Internal
                                             </option>
-                                        </select>
+                                        </select></label>
 
                                         <button
                                             type="button"
@@ -1861,7 +1861,7 @@ const saveProduct = () => {
                                         </label>
 
                                         <div class="hsn-input-row">
-                                            <input
+                                            <input aria-label="Search HSN/SAC"
                                             v-model="hsnSearch"
                                             type="text"
                                             :class="['form-control', { 'is-invalid': fieldError('hsn_code') }]"

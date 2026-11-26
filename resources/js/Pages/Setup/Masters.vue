@@ -23,38 +23,38 @@
         <div class="master-filters">
           <input v-model="filters.search" type="search" placeholder="Search records" @keyup.enter="loadRecords" />
           <template v-if="activeTab === 'hsn'">
-            <select v-model="filters.code_type" @change="loadRecords">
+            <select aria-label="Code type" v-model="filters.code_type" @change="loadRecords">
               <option value="">HSN + SAC</option>
               <option value="HSN">HSN Goods</option>
               <option value="SAC">SAC Services</option>
             </select>
-            <select v-model="filters.taxability" @change="loadRecords">
+            <select aria-label="Taxability" v-model="filters.taxability" @change="loadRecords">
               <option value="">All Taxability</option>
               <option value="taxable">Taxable</option>
               <option value="exempt">Exempt</option>
               <option value="nil_rated">Nil Rated</option>
               <option value="non_gst">Non-GST</option>
             </select>
-            <select v-model="filters.verification_status" @change="loadRecords">
+            <select aria-label="Verification" v-model="filters.verification_status" @change="loadRecords">
               <option value="">All Verification</option>
               <option value="verified">Classification Verified</option>
               <option value="rate_suggested">Rate Suggested</option>
               <option value="rate_verified">Rate Verified</option>
               <option value="unverified">Unverified</option>
             </select>
-            <select v-model="filters.source" @change="loadRecords">
+            <select aria-label="Sources" v-model="filters.source" @change="loadRecords">
               <option value="">All Sources</option>
               <option value="official">Official</option>
               <option value="custom">Business Custom</option>
             </select>
             <input v-model="filters.chapter_code" class="compact-filter" type="search" placeholder="Chapter" @keyup.enter="loadRecords" />
-            <select v-model="filters.per_page" @change="loadRecords">
+            <select aria-label="Rows per page" v-model="filters.per_page" @change="loadRecords">
               <option value="25">25</option>
               <option value="50">50</option>
               <option value="100">100</option>
             </select>
           </template>
-          <select v-model="filters.status" @change="loadRecords">
+          <select aria-label="Status" v-model="filters.status" @change="loadRecords">
             <option value="">All Status</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
@@ -73,7 +73,7 @@
       </div>
 
       <div class="master-layout">
-        <CrudTable
+        <CrudTable mobile-cards
           :columns="current.columns"
           :rows="records"
           :loading="loading"

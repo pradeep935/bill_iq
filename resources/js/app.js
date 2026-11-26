@@ -5,6 +5,7 @@ import axios from 'axios';
 import { normalizeAxiosError } from './Support/errorMessages';
 import { installAlertToast } from './Support/toast';
 import { installGoodsConfirm } from './Support/confirmGoods';
+import watchTables from './Support/mobileTables';
 
 import Header from '@/Components/Common/Header.vue';
 import Portlet from '@/Components/Common/Portlet.vue';
@@ -40,6 +41,7 @@ import VideoUpload from '@/Components/Common/VideoUpload.vue';
 import MediaDisplay from '@/Components/Common/MediaDisplay.vue';
 
 installAlertToast();
+watchTables();
 
 const appBasePath = window.location.pathname.split('/app')[0] || '';
 axios.defaults.baseURL = `${window.location.origin}${appBasePath}`;
@@ -52,6 +54,8 @@ router.on('navigate', (event) => {
   csrfToken = event.detail.page.props?.csrf_token || csrfToken;
 });
 axios.interceptors.request.use((config) => {
+  // Addresses made by the server already contain the app's folder, which baseURL adds again.
+  if (appBasePath && config.url?.startsWith(`${appBasePath}/`)) config.url = config.url.slice(appBasePath.length);
   if (csrfToken) config.headers['X-CSRF-TOKEN'] = csrfToken;
   return config;
 });

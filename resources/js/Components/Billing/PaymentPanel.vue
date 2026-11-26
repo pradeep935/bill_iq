@@ -26,10 +26,10 @@
     </p>
     <div v-if="paymentMode !== 'credit'" class="bill-payment-lines">
       <div v-for="(payment, index) in payments" :key="index" class="bill-payment-line">
-        <select v-model="payment.payment_method_id" title="Payment method">
+        <select v-model="payment.payment_method_id" title="Payment method" aria-label="Payment method">
           <option v-for="method in methods" :key="method.id" :value="method.id">{{ method.name }}</option>
         </select>
-        <input v-model.number="payment.amount" type="number" min="0" placeholder="Received amount" title="Received amount" />
+        <input v-model.number="payment.amount" type="number" min="0" placeholder="Received amount" title="Received amount" aria-label="Received amount" />
       </div>
     </div>
     <div class="bill-payment-balance">

@@ -162,16 +162,16 @@ onMounted(async () => { await loadRefs(); await load(); });
             <template #toolbar><button @click="openAdd">Add Serial</button><button @click="openBulk">Bulk Add</button><a class="button-link" href="/app/inventory/serials/import-sample">Sample</a><button @click="exportRows('csv')">CSV</button><button @click="exportRows('excel')">Excel</button><button @click="exportRows('pdf')">PDF</button></template>
             <template #filters>
                 <BarcodeScannerInput v-model="filters.search" placeholder="Scan or search serial, IMEI, product, SKU" @scan="scanSerial" />
-                <input v-model="filters.search" placeholder="Search serial, IMEI, product, SKU" />
-                <select v-model="filters.product_id"><option value="">All Products</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select>
-                <select v-model="filters.branch_id"><option value="">All Branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
-                <select v-model="filters.warehouse_id"><option value="">All Warehouses</option><option v-for="w in filteredWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
-                <select v-model="filters.batch_id"><option value="">All Batches</option><option v-for="b in refs.batches" :key="b.id" :value="b.id">{{ b.batch_no || b.batch_number }}</option></select>
-                <select v-model="filters.status"><option value="">All Status</option><option v-for="s in refs.statuses" :key="s" :value="s">{{ statusLabel(s) }}</option></select>
-                <select v-model="filters.condition"><option value="">All Condition</option><option v-for="c in refs.conditions" :key="c" :value="c">{{ c }}</option></select>
-                <select v-model="filters.warranty_filter"><option value="">Warranty</option><option value="expiring">Expiring</option><option value="expired">Expired</option></select>
-                <input v-model="filters.date_from" type="date" /><input v-model="filters.date_to" type="date" />
-                <select v-model="filters.per_page"><option :value="15">15 / page</option><option :value="25">25 / page</option><option :value="50">50 / page</option></select>
+                <input aria-label="Search" v-model="filters.search" placeholder="Search serial, IMEI, product, SKU" />
+                <select aria-label="Product" v-model="filters.product_id"><option value="">All Products</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select>
+                <select aria-label="Branches" v-model="filters.branch_id"><option value="">All Branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
+                <select aria-label="Warehouses" v-model="filters.warehouse_id"><option value="">All Warehouses</option><option v-for="w in filteredWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
+                <select aria-label="Batch" v-model="filters.batch_id"><option value="">All Batches</option><option v-for="b in refs.batches" :key="b.id" :value="b.id">{{ b.batch_no || b.batch_number }}</option></select>
+                <select aria-label="Status" v-model="filters.status"><option value="">All Status</option><option v-for="s in refs.statuses" :key="s" :value="s">{{ statusLabel(s) }}</option></select>
+                <select aria-label="Condition" v-model="filters.condition"><option value="">All Condition</option><option v-for="c in refs.conditions" :key="c" :value="c">{{ c }}</option></select>
+                <select aria-label="Warranty filter" v-model="filters.warranty_filter"><option value="">Warranty</option><option value="expiring">Expiring</option><option value="expired">Expired</option></select>
+                <label class="bq-field"><span>From date</span><input v-model="filters.date_from" type="date" /></label><label class="bq-field"><span>To date</span><input v-model="filters.date_to" type="date" /></label>
+                <select aria-label="Rows per page" v-model="filters.per_page"><option :value="15">15 / page</option><option :value="25">25 / page</option><option :value="50">50 / page</option></select>
                 <button @click="clearFilters">Clear</button>
             </template>
             <InventoryTable :columns="columns" :rows="rows" empty-text="No serial numbers found.">
@@ -184,20 +184,20 @@ onMounted(async () => { await loadRefs(); await load(); });
 
         <InventoryModal v-if="['add','edit','bulk','transfer'].includes(modal)" :title="modal === 'bulk' ? 'Bulk Add Serials' : modal === 'transfer' ? 'Transfer Serial' : 'Serial Number'" :errors="errors" @close="closeModal">
             <div class="form-grid" v-if="modal !== 'transfer'">
-                <select v-model="form.product_id"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select>
-                <select v-model="form.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
-                <select v-model="form.warehouse_id"><option value="">Warehouse</option><option v-for="w in filteredFormWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
-                <select v-model="form.batch_id"><option value="">Batch</option><option v-for="b in filteredBatches" :key="b.id" :value="b.id">{{ b.batch_no || b.batch_number }}</option></select>
-                <input v-if="modal !== 'bulk'" v-model="form.serial_number" placeholder="Serial number" />
-                <input v-if="modal !== 'bulk'" v-model="form.imei_1" placeholder="IMEI 1" />
-                <input v-if="modal !== 'bulk'" v-model="form.imei_2" placeholder="IMEI 2" />
-                <select v-model="form.condition"><option v-for="c in refs.conditions" :key="c">{{ c }}</option></select>
-                <input v-model="form.purchase_reference" placeholder="Purchase reference" />
-                <input v-model="form.warranty_expiry_date" type="date" />
-                <textarea v-if="modal === 'bulk'" v-model="bulkText" rows="8" placeholder="One serial per line"></textarea>
-                <textarea v-model="form.remarks" placeholder="Remarks"></textarea>
+                <label class="bq-field"><span>Product</span><select v-model="form.product_id"><option value="">Product</option><option v-for="p in refs.products" :key="p.id" :value="p.id">{{ p.name }}</option></select></label>
+                <label class="bq-field"><span>Branch</span><select v-model="form.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label>
+                <label class="bq-field"><span>Warehouse</span><select v-model="form.warehouse_id"><option value="">Warehouse</option><option v-for="w in filteredFormWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
+                <label class="bq-field"><span>Batch</span><select v-model="form.batch_id"><option value="">Batch</option><option v-for="b in filteredBatches" :key="b.id" :value="b.id">{{ b.batch_no || b.batch_number }}</option></select></label>
+                <label v-if="modal !== 'bulk'" class="bq-field"><span>Serial number</span><input v-model="form.serial_number" placeholder="Serial number" /></label>
+                <label v-if="modal !== 'bulk'" class="bq-field"><span>IMEI 1</span><input v-model="form.imei_1" placeholder="IMEI 1" /></label>
+                <label v-if="modal !== 'bulk'" class="bq-field"><span>IMEI 2</span><input v-model="form.imei_2" placeholder="IMEI 2" /></label>
+                <label class="bq-field"><span>Condition</span><select v-model="form.condition"><option v-for="c in refs.conditions" :key="c">{{ c }}</option></select></label>
+                <label class="bq-field"><span>Purchase reference</span><input v-model="form.purchase_reference" placeholder="Purchase reference" /></label>
+                <label class="bq-field"><span>Warranty expiry date</span><input v-model="form.warranty_expiry_date" type="date" /></label>
+                <label v-if="modal === 'bulk'" class="bq-field"><span>One serial per line</span><textarea v-model="bulkText" rows="8" placeholder="One serial per line"></textarea></label>
+                <label class="bq-field"><span>Remarks</span><textarea v-model="form.remarks" placeholder="Remarks"></textarea></label>
             </div>
-            <div class="form-grid" v-else><select v-model="form.destination_branch_id"><option value="">Destination Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select><select v-model="form.destination_warehouse_id"><option value="">Destination Warehouse</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select><textarea v-model="form.remarks" placeholder="Transfer remarks"></textarea></div>
+            <div class="form-grid" v-else><label class="bq-field"><span>Destination branch</span><select v-model="form.destination_branch_id"><option value="">Destination Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label><label class="bq-field"><span>Destination warehouse</span><select v-model="form.destination_warehouse_id"><option value="">Destination Warehouse</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label><label class="bq-field"><span>Transfer remarks</span><textarea v-model="form.remarks" placeholder="Transfer remarks"></textarea></label></div>
             <div v-if="Object.keys(errors).length" class="alert">{{ Object.values(errors).flat().join(' ') }}</div>
             <footer class="modal-actions"><button @click="closeModal">Cancel</button><button class="primary" :disabled="saving" @click="modal === 'bulk' ? bulkSave() : modal === 'transfer' ? transferSerial() : saveSerial()">{{ saving ? 'Saving...' : 'Save' }}</button></footer>
         </InventoryModal>

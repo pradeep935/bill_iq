@@ -1,5 +1,5 @@
 <template>
-  <div class="crud-table-wrap" :class="[wrapClass, { 'has-selection': selectable, 'has-actions': showActions, 'is-refreshing': loading && rows.length }]" :aria-busy="loading ? 'true' : 'false'">
+  <div class="crud-table-wrap" :class="[wrapClass, { 'crud-cards': mobileCards, 'has-selection': selectable, 'has-actions': showActions, 'is-refreshing': loading && rows.length }]" :aria-busy="loading ? 'true' : 'false'">
     <div v-if="loading && rows.length" class="crud-refresh" role="status">
       <span class="crud-refresh-bar"></span>
       <span class="crud-refresh-pill"><i class="crud-refresh-spinner"></i>{{ loadingText }}</span>
@@ -43,12 +43,12 @@
           <td v-if="selectable" class="crud-select-column">
             <input type="checkbox" :checked="selectedIds.includes(keyFor(row, index))" @change="$emit('toggle-row', keyFor(row, index))" />
           </td>
-          <td v-for="column in columns" :key="column.key" :class="column.class">
+          <td v-for="column in columns" :key="column.key" :class="column.class" :data-col="column.key" :data-label="column.label">
             <slot :name="`cell-${column.key}`" :row="row" :column="column">
               {{ valueFor(row, column) }}
             </slot>
           </td>
-          <td v-if="showStatus">
+          <td v-if="showStatus" data-col="status" data-label="Status">
             <span class="crud-status" :class="row.status || 'active'">
               <span></span>
               {{ statusLabel(row.status || 'active') }}
@@ -86,6 +86,8 @@ const props = defineProps({
   loadingText: { type: String, default: 'Loading records...' },
   loadingDescription: { type: String, default: 'Please wait while data is loaded.' },
   emptyText: { type: String, default: 'No records found.' },
+  // Phones: show each row as a card with labelled values instead of a sideways-scrolling table.
+  mobileCards: { type: Boolean, default: false },
   wrapClass: { type: [String, Array, Object], default: '' },
   tableClass: { type: [String, Array, Object], default: '' },
 });
@@ -395,5 +397,20 @@ thead .crud-action-column {
     position: static;
     box-shadow: none;
   }
+}
+
+@media (max-width: 760px) {
+  .crud-cards.crud-table-wrap { overflow-x: visible; }
+  .crud-cards .crud-table, .crud-cards .crud-table tbody { display: block; min-width: 0; width: 100%; }
+  .crud-cards .crud-table thead { display: none; }
+  .crud-cards .crud-table tbody tr { border: 1px solid #e3e9f2; border-radius: 10px; display: grid; gap: 6px 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 10px; padding: 12px; }
+  .crud-cards .crud-table tbody tr td { border: 0; display: block; min-width: 0 !important; overflow-wrap: anywhere; padding: 0; white-space: normal; width: auto !important; }
+  .crud-cards .crud-table td[data-label]::before { color: #8490a2; content: attr(data-label); display: block; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+  .crud-cards .crud-table td[data-col="image"], .crud-cards .crud-table td[data-col="expand"] { display: none; }
+  .crud-cards .crud-table td[data-col="name"], .crud-cards .crud-table td[data-col="product_name"] { grid-column: 1 / -1; order: -1; }
+  .crud-cards .crud-table td[data-col="name"]::before, .crud-cards .crud-table td[data-col="product_name"]::before { display: none; }
+  .crud-cards .crud-table td.crud-select-column { display: none; }
+  .crud-cards .crud-table td.crud-action-column, .crud-cards .crud-table td.crud-state { grid-column: 1 / -1; text-align: left !important; }
+  .crud-cards .crud-row-actions { justify-content: flex-start; padding-top: 4px; }
 }
 </style>

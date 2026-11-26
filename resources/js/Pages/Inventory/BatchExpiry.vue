@@ -199,7 +199,7 @@ const visiblePages = computed(() => {
             <div class="register-caption"><strong>{{ tab==='Reports' ? reports[report] : tab }}</strong><span>Showing {{ page.from || 0 }} to {{ page.to || 0 }} of {{ page.total || 0 }} records</span></div>
             <TableLoadingState v-if="loading" title="Loading batch records…" />
             <div v-else-if="!rows.length" class="empty-state"><h2>{{ page.total ? 'No matching batches' : 'No batch inventory yet' }}</h2><p>Batch stock will appear when you record opening stock, purchase/inward stock, or another batch stock operation.</p><p v-if="Object.values(filters).some(v=>v && v!==15)">Try clearing the filters to see other inventory.</p><div><button v-if="allowed('opening')" class="primary" @click="openOperation('opening')">Add Opening Batch</button><a :href="localLink('/app/purchases')" class="button">Create Purchase Voucher</a></div></div>
-            <CrudTable v-if="!loading && rows.length && isMovement" :columns="movementColumns" :rows="rows" :show-status="false" :show-actions="false" row-key="id">
+            <CrudTable mobile-cards v-if="!loading && rows.length && isMovement" :columns="movementColumns" :rows="rows" :show-status="false" :show-actions="false" row-key="id">
                     <template #cell-col0="{ row: r }"><span>{{ r.date }}</span></template>
                     <template #cell-col1="{ row: r }"><span>{{ r.document_date }}</span></template>
                     <template #cell-col2="{ row: r }"><span>{{ r.movement_label }}</span></template>
@@ -220,7 +220,7 @@ const visiblePages = computed(() => {
                     <template #cell-col17="{ row: r }"><span>{{ r.user }}</span></template>
                     <template #cell-col18="{ row: r }"><span>{{ r.remarks }}</span></template>
             </CrudTable>
-            <CrudTable v-if="!loading && rows.length && !isMovement" :columns="batchColumns" :rows="rows" :show-status="false" :show-actions="true" :row-key="key">
+            <CrudTable mobile-cards v-if="!loading && rows.length && !isMovement" :columns="batchColumns" :rows="rows" :show-status="false" :show-actions="true" :row-key="key">
                     <template #cell-col0="{ row: r }"><span><button class="text-button" @click="view(r)">{{ r.batch_number }}</button></span></template>
                     <template #cell-col1="{ row: r }"><span>{{ r.product_name }}</span></template>
                     <template #cell-col2="{ row: r }"><span>{{ r.sku || '—' }}</span></template>

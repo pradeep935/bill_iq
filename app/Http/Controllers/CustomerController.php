@@ -46,6 +46,7 @@ class CustomerController extends Controller
 
         return response()->json([
             'customers' => $paginator->getCollection()->values(),
+            'cards' => $this->customers->cards(),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),

@@ -19,9 +19,9 @@ const rows = computed(() => [
     { id: 2, section: 'Purchase GST', taxable: purchases.value.taxable_purchases || purchases.value.subtotal || 0, cgst: purchases.value.cgst || 0, sgst: purchases.value.sgst || 0, igst: purchases.value.igst || 0, total: purchases.value.tax || 0 },
 ]);
 const cards = computed(() => [
-    { label: 'Output GST', value: Number(rows.value[0].total || 0).toLocaleString('en-IN'), tone: 'money' },
-    { label: 'Input GST', value: Number(rows.value[1].total || 0).toLocaleString('en-IN'), tone: 'info' },
-    { label: 'Net Payable', value: Number((rows.value[0].total || 0) - (rows.value[1].total || 0)).toLocaleString('en-IN'), tone: 'warn' },
+    { label: 'Output GST', value: Number(rows.value[0].total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), tone: 'money' },
+    { label: 'Input GST', value: Number(rows.value[1].total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), tone: 'info' },
+    { label: 'Net Payable', value: Number((rows.value[0].total || 0) - (rows.value[1].total || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), tone: 'warn' },
 ]);
 
 const load = async () => {
@@ -48,7 +48,7 @@ onMounted(load);
         <InventoryModuleScaffold :title="title" :cards="tab === 'returns' ? [] : cards" :loading="loading" :initial-loaded="loaded" :pagination="{ current_page: 1, last_page: 1, total: rows.length, from: rows.length ? 1 : 0, to: rows.length }">
             <template #toolbar><button @click="load">Refresh</button><button @click="window.print()">PDF / Print</button></template>
             <template #section-actions><div class="tabs"><button :class="{ active: tab === 'summary' }" @click="tab = 'summary'">summary</button><button :class="{ active: tab === 'returns' }" @click="tab = 'returns'">returns</button></div></template>
-            <template v-if="tab === 'summary'" #filters><input v-model="filters.from_date" type="date" @change="load" /><input v-model="filters.to_date" type="date" @change="load" /><button @click="filters.from_date = ''; filters.to_date = ''; load()">Clear</button></template>
+            <template v-if="tab === 'summary'" #filters><label class="bq-field"><span>From date</span><input v-model="filters.from_date" type="date" @change="load" /></label><label class="bq-field"><span>To date</span><input v-model="filters.to_date" type="date" @change="load" /></label><button @click="filters.from_date = ''; filters.to_date = ''; load()">Clear</button></template>
             <GstReturnsPanel v-if="tab === 'returns'" />
             <InventoryTable v-else :columns="[{key:'section',label:'Section'},{key:'taxable',label:'Taxable'},{key:'cgst',label:'CGST'},{key:'sgst',label:'SGST'},{key:'igst',label:'IGST'},{key:'total',label:'GST Total'}]" :rows="rows" />
         </InventoryModuleScaffold>

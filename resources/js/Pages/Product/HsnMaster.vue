@@ -36,13 +36,13 @@
               <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8" />
               <path d="m20 20-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
             </svg>
-            <input v-model="filters.search" type="text" placeholder="Search by HSN/SAC code or description..." @input="loadRecords" />
+            <input aria-label="Search" v-model="filters.search" type="text" placeholder="Search by HSN/SAC code or description..." @input="loadRecords" />
           </div>
 
           <div class="filter-group">
-            <select v-model="filters.code_type" @change="loadRecords"><option value="">HSN + SAC</option><option value="HSN">HSN</option><option value="SAC">SAC</option></select>
-            <select v-model="filters.reference_status" @change="loadRecords"><option value="">All Reference</option><option value="matched">Matched with BillIQ</option><option value="modified">Modified from BillIQ</option><option value="manual">Manual / Not Matched</option></select>
-            <select v-model="filters.status" @change="loadRecords"><option value="">All Status</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+            <select aria-label="Code type" v-model="filters.code_type" @change="loadRecords"><option value="">HSN + SAC</option><option value="HSN">HSN</option><option value="SAC">SAC</option></select>
+            <select aria-label="Reference" v-model="filters.reference_status" @change="loadRecords"><option value="">All Reference</option><option value="matched">Matched with BillIQ</option><option value="modified">Modified from BillIQ</option><option value="manual">Manual / Not Matched</option></select>
+            <select aria-label="Status" v-model="filters.status" @change="loadRecords"><option value="">All Status</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
             <button v-if="hasFilters" type="button" class="clear-filter" @click="clearFilters">Clear</button>
           </div>
         </div>
@@ -50,7 +50,7 @@
         <div class="bulk-bar">
           <div><strong>{{ selectedIds.length }}</strong> selected</div>
           <div class="bulk-actions">
-            <select v-model="filters.per_page" @change="loadRecords">
+            <select aria-label="Rows per page" v-model="filters.per_page" @change="loadRecords">
               <option :value="10">10 / page</option>
               <option :value="15">15 / page</option>
               <option :value="25">25 / page</option>
@@ -66,7 +66,7 @@
           </div>
         </div>
 
-        <CrudTable
+        <CrudTable mobile-cards
           :columns="hsnColumns"
           :rows="records"
           :loading="loading"
@@ -200,13 +200,13 @@
 
                   <div class="product-field">
                     <label>HSN/SAC Code <span class="required-mark">*</span></label>
-                    <input v-model="form.hsn_code" class="form-control" required maxlength="12" inputmode="numeric" pattern="[0-9]+" placeholder="Example: 04090000" @input="digitsOnly" />
+                    <label class="bq-field"><span>HSN/SAC code</span><input v-model="form.hsn_code" class="form-control" required maxlength="12" inputmode="numeric" pattern="[0-9]+" placeholder="Example: 04090000" @input="digitsOnly" /></label>
                     <span class="field-hint">Only numeric HSN/SAC code is saved and later searched inside Product Master.</span>
                   </div>
 
                   <div class="product-field field-span-2">
                     <label>Description <span class="required-mark">*</span></label>
-                    <textarea v-model="form.description" class="form-control" required rows="4" placeholder="Classification description"></textarea>
+                    <label class="bq-field"><span>Description</span><textarea v-model="form.description" class="form-control" required rows="4" placeholder="Classification description"></textarea></label>
                     <span class="field-hint">This description appears in product tax selection and business reports.</span>
                   </div>
 
@@ -558,4 +558,6 @@ const referenceTone = (value) => String(value || '').startsWith('Matched') ? 'ma
   .page-actions, .footer-actions { flex-direction: column; }
   .span-2 { grid-column: auto; }
 }
+/* Wide tables scroll inside their card instead of widening the page. */
+.business-hsn-page{grid-template-columns:minmax(0,1fr)}.business-hsn-page>*{min-width:0}
 </style>

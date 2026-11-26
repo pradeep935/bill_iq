@@ -255,7 +255,7 @@ class TallyIntegrationService
             return ($type === 'customer' && ($party->opening_balance_type ?? 'debit') === 'credit') || ($type === 'supplier' && ($party->opening_balance_type ?? 'credit') === 'debit') ? -$opening : $opening;
         });
         $partyColumn = $type === 'customer' ? 'customer_id' : 'supplier_id';
-        $journalMovement = DB::table('journal_entries')->join('journal_vouchers', 'journal_vouchers.id', '=', 'journal_entries.journal_voucher_id')->where('journal_entries.business_id', $batch->business_id)->whereIn("journal_entries.$partyColumn", $ids)->whereIn('journal_vouchers.status', ['approved', 'posted'])->selectRaw('COALESCE(SUM(journal_entries.debit_amount), 0) - COALESCE(SUM(journal_entries.credit_amount), 0) as movement')->value('movement');
+        $journalMovement = DB::table('journal_entries')->join('journal_vouchers', 'journal_vouchers.id', '=', 'journal_entries.journal_voucher_id')->where('journal_entries.business_id', $batch->business_id)->whereIn("journal_entries.$partyColumn", $ids)->whereIn('journal_vouchers.status', \App\Models\JournalVoucher::LEDGER_STATUSES)->tap(fn ($q) => \App\Models\JournalEntry::withoutMoneyLines($q, $batch->business_id))->selectRaw('COALESCE(SUM(journal_entries.debit_amount), 0) - COALESCE(SUM(journal_entries.credit_amount), 0) as movement')->value('movement');
         $balance += (float) $journalMovement;
         return round($balance, 2);
     }

@@ -111,10 +111,10 @@ onMounted(load);
             <template #toolbar><button @click="load">Refresh</button><button @click="exportCsv(activeRows, `${tab}.csv`)">Export CSV</button><button @click="window.print()">Print</button></template>
             <template #section-actions><div class="tabs"><button v-for="t in ['bins','balances','requests','allocation']" :key="t" :class="{ active: tab === t }" @click="tab = t">{{ t }}</button></div></template>
             <template #filters>
-                <input v-model="filters.search" placeholder="Search product, batch, serial or transfer" @keyup.enter="load" />
-                <select v-model="filters.branch_id" @change="load"><option value="">All branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
-                <select v-model="filters.warehouse_id" @change="load"><option value="">All warehouses</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
-                <select v-model="filters.per_page" @change="load"><option>10</option><option>25</option><option>50</option><option>100</option></select>
+                <input aria-label="Search" v-model="filters.search" placeholder="Search product, batch, serial or transfer" @keyup.enter="load" />
+                <select aria-label="Branch" v-model="filters.branch_id" @change="load"><option value="">All branches</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
+                <select aria-label="Warehouse" v-model="filters.warehouse_id" @change="load"><option value="">All warehouses</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
+                <select aria-label="Rows per page" v-model="filters.per_page" @change="load"><option>10</option><option>25</option><option>50</option><option>100</option></select>
                 <button @click="clearFilters">Clear</button>
             </template>
 
@@ -122,15 +122,15 @@ onMounted(load);
 
             <section v-if="tab === 'bins'" class="mini-panel">
                 <div class="form-grid">
-                    <select v-model="locationForm.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
-                    <select v-model="locationForm.warehouse_id"><option value="">Warehouse</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
-                    <input v-model="locationForm.zone" placeholder="Zone" />
-                    <input v-model="locationForm.aisle" placeholder="Aisle" />
-                    <input v-model="locationForm.rack" placeholder="Rack" />
-                    <input v-model="locationForm.shelf" placeholder="Shelf" />
-                    <input v-model="locationForm.bin" placeholder="Bin" />
-                    <select v-model="locationForm.status"><option>active</option><option>inactive</option><option>blocked</option></select>
-                    <button :disabled="loading" @click="saveLocation">{{ editingLocationId ? 'Update Location' : 'Save Location' }}</button>
+                    <label class="bq-field"><span>Branch</span><select v-model="locationForm.branch_id"><option value="">Branch</option><option v-for="b in refs.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label>
+                    <label class="bq-field"><span>Warehouse</span><select v-model="locationForm.warehouse_id"><option value="">Warehouse</option><option v-for="w in refs.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
+                    <label class="bq-field"><span>Zone</span><input v-model="locationForm.zone" placeholder="Zone" /></label>
+                    <label class="bq-field"><span>Aisle</span><input v-model="locationForm.aisle" placeholder="Aisle" /></label>
+                    <label class="bq-field"><span>Rack</span><input v-model="locationForm.rack" placeholder="Rack" /></label>
+                    <label class="bq-field"><span>Shelf</span><input v-model="locationForm.shelf" placeholder="Shelf" /></label>
+                    <label class="bq-field"><span>Bin</span><input v-model="locationForm.bin" placeholder="Bin" /></label>
+                    <label class="bq-field"><span>Status</span><select v-model="locationForm.status"><option value="active">Active</option><option value="inactive">Inactive</option><option value="blocked">Blocked</option></select></label>
+                    <button class="bq-primary" :disabled="loading" @click="saveLocation">{{ editingLocationId ? 'Update Location' : 'Save Location' }}</button>
                 </div>
                 <InventoryTable :columns="[{key:'zone',label:'Zone'},{key:'aisle',label:'Aisle'},{key:'rack',label:'Rack'},{key:'shelf',label:'Shelf'},{key:'bin',label:'Bin'},{key:'status',label:'Status'}]" :rows="locations">
                     <template #actions="{ row }"><button @click="editLocation(row)">Edit</button></template>

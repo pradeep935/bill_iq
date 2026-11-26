@@ -218,39 +218,37 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); if (new U
             </div>
 
             <section class="panel">
-                <div class="toolbar">
-                    <div class="filter-group">
-                        <input v-model="search" placeholder="Search name, code, GSTIN, phone" />
-                        <SearchSelect v-model="status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" />
-                        <button type="button" class="primary" @click="loadSuppliers(1)">Search</button>
-                        <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
-                    </div>
+                <form class="bq-search" role="search" @submit.prevent="loadSuppliers(1)">
+                    <input v-model="search" type="search" aria-label="Search suppliers" placeholder="Search name, code, GSTIN or phone" />
+                    <button type="submit">Search</button>
                     <button type="button" class="primary" @click="openSupplierCreate">New Supplier</button>
+                </form>
+                <div class="bq-chips">
+                    <button v-for="option in statusFilters" :key="option.value" type="button" :class="{ active: status === option.value }" :aria-pressed="status === option.value" @click="status = option.value">{{ option.value ? option.label : 'All suppliers' }}</button>
                 </div>
                 <div class="table-wrapper" :class="{ 'is-refreshing': loading }">
-                    <table>
+                    <table class="bq-table">
                         <thead>
-                            <tr>
-                                <th>Code</th><th>Name</th><th>GSTIN</th><th>Mobile</th><th>City</th><th>Opening</th><th>Status</th><th>Actions</th>
-                            </tr>
+                            <tr><th>Supplier</th><th>Mobile</th><th>GSTIN</th><th>City</th><th class="num">Opening balance</th><th>Status</th><th></th></tr>
                         </thead>
                         <tbody :class="{ 'is-loading': loading }">
                             <template v-if="loading">
                                 <tr v-for="index in 4" :key="`supplier-loading-${index}`" class="loading-row">
-                                    <td v-for="cell in 8" :key="cell"><span class="skeleton-line" :class="`w-${(cell % 4) + 1}`"></span></td>
+                                    <td v-for="cell in 7" :key="cell"><span class="skeleton-line" :class="`w-${(cell % 4) + 1}`"></span></td>
                                 </tr>
                             </template>
                             <tr v-for="supplier in suppliers" :key="supplier.id">
-                                <td>{{ supplier.supplier_code || '-' }}</td>
-                                <td>{{ supplier.supplier_name }}</td>
-                                <td>{{ supplier.gstin || '-' }}</td>
-                                <td>{{ supplier.mobile || '-' }}</td>
-                                <td>{{ supplier.city || '-' }}</td>
-                                <td>{{ supplier.opening_balance }} {{ supplier.opening_balance_type }}</td>
-                                <td><span class="badge" :class="supplier.status">{{ supplier.deleted_at ? 'deleted' : supplier.status }}</span></td>
-                                <td>
+                                <td data-label="Supplier" class="bq-name"><button v-if="!supplier.deleted_at" type="button" class="bq-link" @click="editSupplier(supplier)">{{ supplier.supplier_name }}</button><template v-else>{{ supplier.supplier_name }}</template><small>{{ supplier.supplier_code }}</small></td>
+                                <td data-label="Mobile">{{ supplier.mobile || '—' }}</td>
+                                <td data-label="GSTIN">{{ supplier.gstin || '—' }}</td>
+                                <td data-label="City">{{ supplier.city || '—' }}</td>
+                                <td data-label="Opening balance" class="num">{{ Number(supplier.opening_balance) ? `Rs. ${Number(supplier.opening_balance).toLocaleString('en-IN')} ${supplier.opening_balance_type}` : '—' }}</td>
+                                <td data-label="Status"><span class="bq-badge" :class="supplier.deleted_at || supplier.status !== 'active' ? 'off' : 'ok'">{{ supplier.deleted_at ? 'Deleted' : (supplier.status === 'active' ? 'Active' : 'Inactive') }}</span></td>
+                                <td class="bq-actions">
                                     <div class="row-actions">
-                                        <RowActionMenu :open="openActionMenuId === supplier.id" :show-view="false" more-label="Actions" more-title="Supplier actions" @toggle="toggleActionMenu(supplier)" @close="closeActionMenu">
+                                        <button v-if="supplier.deleted_at" type="button" class="bq-quick" @click="restoreSupplier(supplier)">Restore</button>
+                                        <button v-else type="button" class="bq-quick" @click="editSupplier(supplier)">Edit</button>
+                                        <RowActionMenu :open="openActionMenuId === supplier.id" :show-view="false" more-label="More" more-title="Supplier actions" @toggle="toggleActionMenu(supplier)" @close="closeActionMenu">
                                             <button v-if="!supplier.deleted_at" type="button" @click="editSupplier(supplier); closeActionMenu()">Edit</button>
                                             <button v-if="!supplier.deleted_at" type="button" class="danger" @click="deleteSupplier(supplier); closeActionMenu()">Delete</button>
                                             <button v-else type="button" @click="restoreSupplier(supplier); closeActionMenu()">Restore</button>
@@ -258,7 +256,7 @@ onMounted(async () => { await loadReferences(); await loadSuppliers(); if (new U
                                     </div>
                                 </td>
                             </tr>
-                            <tr v-if="!suppliers.length && !loading"><td colspan="8" class="empty">No suppliers found.</td></tr>
+                            <tr v-if="!suppliers.length && !loading"><td colspan="7" class="empty">No suppliers found.</td></tr>
                         </tbody>
                     </table>
                 </div>

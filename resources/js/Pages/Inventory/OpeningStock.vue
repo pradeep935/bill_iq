@@ -653,7 +653,7 @@ onMounted(async () => {
                 <div v-if="!isReadOnly" class="listing-toolbar compact-toolbar">
                     <div class="search-box wide-search">
                         <span></span>
-                        <input
+                        <input aria-label="Search product"
                             v-model="productSearch"
                             type="text"
                             placeholder="Search product by name, short name, SKU, barcode or HSN/SAC"
@@ -673,7 +673,7 @@ onMounted(async () => {
                     </div>
                 </div>
 
-                <CrudTable
+                <CrudTable mobile-cards
                     :columns="itemColumns"
                     :rows="form.items"
                     row-key="row_uid"
@@ -693,45 +693,45 @@ onMounted(async () => {
                     </template>
 
                     <template #cell-variant="{ row: item }">
-                        <select v-model="item.product_variant_id" class="line-control" :disabled="isReadOnly">
+                        <label class="bq-field"><span>Product variant</span><select v-model="item.product_variant_id" class="line-control" :disabled="isReadOnly">
                             <option value="">Default</option>
                             <option v-for="variant in item.variants" :key="variant.id" :value="variant.id">{{ variant.sku }}</option>
-                        </select>
+                        </select></label>
                     </template>
 
                     <template #cell-batch="{ row: item }">
-                        <input v-model="item.batch_no" class="line-control" type="text" :disabled="isReadOnly || !item.batch_required" />
+                        <label class="bq-field"><span>Batch number</span><input v-model="item.batch_no" class="line-control" type="text" :disabled="isReadOnly || !item.batch_required" /></label>
                     </template>
 
                     <template #cell-mfg="{ row: item }">
-                        <input v-model="item.manufacturing_date" class="line-control date-control" type="date" :disabled="isReadOnly || !item.expiry_required" />
+                        <label class="bq-field"><span>Manufacturing date</span><input v-model="item.manufacturing_date" class="line-control date-control" type="date" :disabled="isReadOnly || !item.expiry_required" /></label>
                     </template>
 
                     <template #cell-expiry="{ row: item }">
-                        <input v-model="item.expiry_date" class="line-control date-control" type="date" :disabled="isReadOnly || !item.expiry_required" />
+                        <label class="bq-field"><span>Expiry date</span><input v-model="item.expiry_date" class="line-control date-control" type="date" :disabled="isReadOnly || !item.expiry_required" /></label>
                     </template>
 
                     <template #cell-quantity="{ row: item }">
                         <div class="quantity-cell">
-                            <input :ref="(el) => { const index = form.items.indexOf(item); if (el && index >= 0) quantityRefs[index] = el; }" v-model="item.quantity" class="line-control qty-control" type="number" min="0.001" step="0.001" :disabled="isReadOnly" />
+                            <label class="bq-field"><span>Quantity</span><input :ref="(el) => { const index = form.items.indexOf(item); if (el && index >= 0) quantityRefs[index] = el; }" v-model="item.quantity" class="line-control qty-control" type="number" min="0.001" step="0.001" :disabled="isReadOnly" /></label>
                             <span>{{ item.unit || 'PCS' }}</span>
                         </div>
                     </template>
 
                     <template #cell-purchase_cost="{ row: item }">
-                        <input v-model="item.purchase_cost" class="line-control money-control" type="number" min="0" step="0.01" :disabled="isReadOnly" />
+                        <label class="bq-field"><span>Purchase cost</span><input v-model="item.purchase_cost" class="line-control money-control" type="number" min="0" step="0.01" :disabled="isReadOnly" /></label>
                     </template>
 
                     <template #cell-selling_price="{ row: item }">
-                        <input v-model="item.selling_price" class="line-control money-control" type="number" min="0" step="0.01" disabled />
+                        <label class="bq-field"><span>Selling price</span><input v-model="item.selling_price" class="line-control money-control" type="number" min="0" step="0.01" disabled /></label>
                     </template>
 
                     <template #cell-mrp="{ row: item }">
-                        <input v-model="item.mrp" class="line-control money-control" type="number" min="0" step="0.01" disabled />
+                        <label class="bq-field"><span>MRP</span><input v-model="item.mrp" class="line-control money-control" type="number" min="0" step="0.01" disabled /></label>
                     </template>
 
                     <template #cell-location="{ row: item }">
-                        <input v-model="item.warehouse_location" class="line-control" type="text" :disabled="isReadOnly" />
+                        <label class="bq-field"><span>Warehouse location</span><input v-model="item.warehouse_location" class="line-control" type="text" :disabled="isReadOnly" /></label>
                     </template>
 
                     <template #actions="{ row: item }">
@@ -768,25 +768,25 @@ onMounted(async () => {
                 <div class="listing-toolbar voucher-filters">
                     <div class="search-box">
                         <span></span>
-                        <input v-model="filters.search" type="text" placeholder="Voucher number" @input="loadVouchers(1)" />
+                        <input aria-label="Voucher number" v-model="filters.search" type="text" placeholder="Voucher number" @input="loadVouchers(1)" />
                     </div>
                     <div class="filter-group">
-                        <select v-model="filters.branch_id" @change="loadVouchers(1)">
+                        <select aria-label="Branches" v-model="filters.branch_id" @change="loadVouchers(1)">
                             <option value="">All Branches</option>
                             <option v-for="branch in references.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
                         </select>
-                        <select v-model="filters.warehouse_id" @change="loadVouchers(1)">
+                        <select aria-label="Warehouses" v-model="filters.warehouse_id" @change="loadVouchers(1)">
                             <option value="">All Warehouses</option>
                             <option v-for="warehouse in filterWarehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option>
                         </select>
-                        <select v-model="filters.status" @change="loadVouchers(1)">
+                        <select aria-label="Status" v-model="filters.status" @change="loadVouchers(1)">
                             <option value="">All Status</option>
                             <option value="draft">Draft</option>
                             <option value="posted">Posted</option>
                             <option value="cancelled">Cancelled</option>
                         </select>
-                        <input v-model="filters.date_from" type="date" @change="loadVouchers(1)" />
-                        <input v-model="filters.date_to" type="date" @change="loadVouchers(1)" />
+                        <label class="bq-field"><span>From date</span><input v-model="filters.date_from" type="date" @change="loadVouchers(1)" /></label>
+                        <label class="bq-field"><span>To date</span><input v-model="filters.date_to" type="date" @change="loadVouchers(1)" /></label>
                     </div>
                 </div>
 
@@ -800,7 +800,7 @@ onMounted(async () => {
                     </div>
                 </div>
 
-                <CrudTable
+                <CrudTable mobile-cards
                     :columns="voucherColumns"
                     :rows="vouchers"
                     :loading="loading"

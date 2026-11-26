@@ -21,6 +21,10 @@ const type = ref('');
 const stateId = ref('');
 const priceType = ref('');
 const crmStatus = ref('');
+const balance = ref('');
+const createdFrom = ref('');
+const cards = ref(null);
+const showFilters = ref(false);
 const loading = ref(false);
 const saving = ref(false);
 const importing = ref(false);
@@ -43,7 +47,7 @@ const form = reactive({
 });
 
 const sameAsBilling = ref(false);
-const queryParams = computed(() => ({ page: pagination.value.current_page, search: search.value, status: status.value, type: type.value, state_id: stateId.value, price_type: priceType.value, crm_status: crmStatus.value }));
+const queryParams = computed(() => ({ page: pagination.value.current_page, search: search.value, status: status.value, type: type.value, state_id: stateId.value, price_type: priceType.value, crm_status: crmStatus.value, balance: balance.value, created_from: createdFrom.value }));
 const filteredCities = computed(() => {
     if (!form.state_id) {
         return references.value.cities || [];
@@ -69,6 +73,7 @@ const loadCustomers = async (page = 1) => {
         const response = await SalesApi.customers({ ...queryParams.value, page });
         customers.value = response.customers || [];
         pagination.value = response.pagination || pagination.value;
+        cards.value = response.cards || cards.value;
     } finally {
         loading.value = false;
     }
@@ -170,7 +175,29 @@ const importCustomers = async (event) => {
 
 const exportCustomers = () => { window.location.href = SalesApi.customerExportUrl(queryParams.value); };
 const closeDetail = () => { detail.value = null; ledger.value = []; outstanding.value = []; };
-const clearFilters = () => { search.value = ''; status.value = ''; type.value = ''; stateId.value = ''; priceType.value = ''; crmStatus.value = ''; loadCustomers(1); };
+const clearFilters = () => { search.value = ''; status.value = ''; type.value = ''; stateId.value = ''; priceType.value = ''; crmStatus.value = ''; balance.value = ''; createdFrom.value = ''; };
+const chips = [
+    { key: 'all', label: 'All customers' },
+    { key: 'due', label: 'To collect' },
+    { key: 'new', label: 'Added this month' },
+    { key: 'blocked', label: 'Blocked' },
+    { key: 'deleted', label: 'Deleted' },
+];
+const activeChip = computed(() => {
+    if (balance.value) return 'due';
+    if (createdFrom.value) return 'new';
+    return status.value === '' ? 'all' : status.value;
+});
+// A chip or card shows one ready-made view; the other filters stay as they are.
+const quickFilter = (key) => {
+    balance.value = key === 'due' ? 'due' : '';
+    createdFrom.value = key === 'new' ? (cards.value?.month_start || '') : '';
+    status.value = ['active', 'inactive', 'blocked', 'deleted'].includes(key) ? key : '';
+};
+const moreFilters = computed(() => [crmStatus.value, type.value, stateId.value, ['active', 'inactive'].includes(status.value)].filter(Boolean).length);
+const hasFilters = computed(() => Boolean(search.value || status.value || type.value || stateId.value || priceType.value || crmStatus.value || balance.value || createdFrom.value));
+const statusText = (customer) => (customer.deleted_at ? 'Deleted' : (customer.status ? customer.status.charAt(0).toUpperCase() + customer.status.slice(1) : '—'));
+const statusTone = (customer) => (customer.deleted_at ? 'off' : ({ active: 'ok', blocked: 'wait' }[customer.status] || 'off'));
 const actionMenuKey = (prefix, id) => `${prefix}-${id}`;
 const toggleActionMenu = (target) => {
     const id = typeof target === 'object' ? target.id : target;
@@ -181,7 +208,6 @@ const createInvoice = (customer) => { window.location.href = `/app/sales/pos?cus
 const createReturn = (customer) => { window.location.href = `/app/sales/returns/create?customer_id=${customer.id}`; };
 const receivePayment = (customer) => { window.location.href = `/app/accounting/vouchers?type=receipt&customer_id=${customer.id}`; };
 const openInvoicePrint = (id) => { window.open(`/app/sales/invoices/${id}/print`, '_blank', 'noopener'); };
-const initials = (name) => String(name || '?').replace(/\(.*?\)/g, '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 const formatMoney = (value) => `Rs. ${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 watch(sameAsBilling, (checked) => { if (checked) form.shipping_address = form.billing_address; });
@@ -193,7 +219,7 @@ watch(() => form.state_id, () => {
         form.city = '';
     }
 });
-watch([search, status, type, stateId, priceType, crmStatus], () => {
+watch([search, status, type, stateId, priceType, crmStatus, balance, createdFrom], () => {
     clearTimeout(timer);
     timer = setTimeout(() => loadCustomers(1), 300);
 });
@@ -216,14 +242,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
         <div class="sales-page">
             <div v-if="notice.text" class="toast" :class="notice.type" role="status">{{ notice.text }}<button type="button" aria-label="Dismiss" @click="notice.text = ''">x</button></div>
 
-            <div class="page-toolbar">
-                <button type="button" class="primary" @click="newCustomer">+ New Customer</button>
-                <div class="toolbar-actions">
-                    <span class="count-chip">{{ pagination.total || 0 }} customers</span>
-                    <a :href="SalesApi.customerImportTemplateUrl()">Import Template</a>
-                    <label class="import-button">{{ importing ? 'Importing...' : 'Import' }}<input type="file" accept=".csv,text/csv" :disabled="importing" @change="importCustomers" /></label>
-                    <button type="button" @click="exportCustomers">Export</button>
-                </div>
+            <div v-if="cards" class="bq-cards">
+                <button type="button" class="bq-card due" @click="quickFilter('due')"><span>To collect</span><strong>{{ formatMoney(cards.to_collect) }}</strong><small>{{ cards.owing_count }} customers owe you</small></button>
+                <button type="button" class="bq-card" @click="quickFilter('all')"><span>Customers</span><strong>{{ cards.total }}</strong><small>Show all</small></button>
+                <button type="button" class="bq-card draft" @click="quickFilter('new')"><span>Added this month</span><strong>{{ cards.new_this_month }}</strong><small>New customers</small></button>
             </div>
 
             <div v-if="showForm" class="drawer-backdrop form-backdrop"></div>
@@ -268,55 +290,64 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
             </aside>
 
             <section class="panel">
-                <div class="toolbar">
-                    <input v-model="search" class="search-box" placeholder="Search name, mobile, code, email or GSTIN" />
-                    <select v-model="status"><option value="">All Status</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="blocked">Blocked</option><option value="deleted">Deleted</option></select>
-                    <select v-model="crmStatus"><option value="">All CRM Status</option><option value="new">New</option><option value="repeat">Repeat</option><option value="regular">Regular</option><option value="inactive">Inactive</option></select>
-                    <select v-model="type"><option value="">All Types</option><option v-for="item in references.customer_types" :key="item.value" :value="item.value">{{ item.label }}</option></select>
-                    <select v-model="stateId"><option value="">All States</option><option v-for="item in references.states" :key="item.id" :value="item.id">{{ item.name }}</option></select>
-                    <button v-if="search || status || crmStatus || type || stateId || priceType" type="button" @click="clearFilters">Clear Filters</button>
+                <form class="bq-search" role="search" @submit.prevent="loadCustomers(1)">
+                    <input v-model="search" type="search" aria-label="Search customers" placeholder="Search name, mobile, code, email or GSTIN" />
+                    <button type="button" :aria-expanded="showFilters" @click="showFilters = !showFilters">Filters<b v-if="moreFilters">{{ moreFilters }}</b></button>
+                    <button type="button" class="primary" @click="newCustomer">New Customer</button>
+                </form>
+                <div v-if="showFilters" class="bq-filters">
+                    <label><span>Status</span><select v-model="status"><option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="blocked">Blocked</option><option value="deleted">Deleted</option></select></label>
+                    <label><span>Buying habit</span><select v-model="crmStatus"><option value="">All</option><option value="new">New</option><option value="repeat">Repeat</option><option value="regular">Regular</option><option value="inactive">Inactive</option></select></label>
+                    <label><span>Customer type</span><select v-model="type"><option value="">All</option><option v-for="item in references.customer_types" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
+                    <label><span>State</span><select v-model="stateId"><option value="">All</option><option v-for="item in references.states" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
+                    <div class="bq-filter-actions"><button type="button" @click="clearFilters">Clear</button></div>
+                </div>
+                <div class="bq-chips">
+                    <button v-for="chip in chips" :key="chip.key" type="button" :class="{ active: activeChip === chip.key }" :aria-pressed="activeChip === chip.key" @click="quickFilter(chip.key)">{{ chip.label }}</button>
                 </div>
                 <div class="table-wrapper" :class="{ 'is-refreshing': loading }">
-                    <table>
-                        <thead><tr><th>Customer</th><th>GSTIN</th><th>CRM</th><th class="num">Orders</th><th class="num">Outstanding</th><th>Last Purchase</th><th>Status</th><th class="sticky-col">Actions</th></tr></thead>
+                    <table class="bq-table bq-labeled">
+                        <thead><tr><th>Customer</th><th>Mobile</th><th>GSTIN</th><th class="num">Bills</th><th>Last purchase</th><th class="num">Balance</th><th>Status</th><th></th></tr></thead>
                         <tbody>
                             <tr v-for="customer in customers" :key="customer.id">
-                                <td class="name-cell"><button type="button" class="name-link" @click="viewCustomer(customer)"><span class="avatar">{{ initials(customer.customer_name) }}</span><span class="name-text"><b>{{ customer.customer_name }}</b><small>{{ customer.customer_code }}<template v-if="customer.mobile || customer.phone"> &middot; {{ customer.mobile || customer.phone }}</template><template v-else> &middot; no mobile</template></small></span></button></td>
-                                <td>{{ customer.gstin || '-' }}</td>
-                                <td><span class="badge crm" :class="customer.crm_summary?.customer_status">{{ customer.crm_summary?.customer_status_label || '-' }}</span></td>
-                                <td class="num">{{ customer.crm_summary?.total_orders || 0 }}</td>
-                                <td class="num" :class="{ due: Number(customer.current_outstanding) > 0, adv: Number(customer.current_outstanding) < 0 }">{{ formatMoney(customer.current_outstanding) }}</td>
-                                <td>{{ formatDate(customer.crm_summary?.last_purchase_date) }}</td>
-                                <td><span class="badge" :class="customer.deleted_at ? 'deleted' : customer.status">{{ customer.deleted_at ? 'deleted' : customer.status }}</span></td>
-                                <td class="sticky-col">
+                                <td data-label="Customer" class="bq-name"><button type="button" class="bq-link" @click="viewCustomer(customer)">{{ customer.customer_name }}</button><small>{{ customer.customer_code }}</small></td>
+                                <td data-label="Mobile">{{ customer.mobile || customer.phone || '—' }}</td>
+                                <td data-label="GSTIN">{{ customer.gstin || '—' }}</td>
+                                <td data-label="Bills" class="num">{{ customer.crm_summary?.total_orders || 0 }}</td>
+                                <td data-label="Last purchase">{{ customer.crm_summary?.last_purchase_date ? formatDate(customer.crm_summary.last_purchase_date) : '—' }}</td>
+                                <td data-label="Balance" class="num"><span :class="{ due: Number(customer.current_outstanding) > 0, adv: Number(customer.current_outstanding) < 0 }">{{ formatMoney(Math.abs(Number(customer.current_outstanding || 0))) }}</span><small v-if="Number(customer.current_outstanding)">{{ Number(customer.current_outstanding) > 0 ? 'to collect' : 'advance' }}</small></td>
+                                <td data-label="Status"><span class="bq-badge" :class="statusTone(customer)">{{ statusText(customer) }}</span></td>
+                                <td class="bq-actions">
                                     <div class="row-actions">
-                                        <RowActionMenu
-                                            v-if="!customer.deleted_at"
-                                            :open="openActionMenuId === customer.id"
-                                            view-title="View customer details"
-                                            @view="viewCustomer(customer); closeActionMenu()"
-                                            @toggle="toggleActionMenu(customer)"
-                                            @close="closeActionMenu"
-                                        >
-                                            <button type="button" @click="editCustomer(customer); closeActionMenu()">Edit</button>
-                                            <button type="button" @click="viewLedger(customer); closeActionMenu()">Ledger</button>
-                                            <button type="button" @click="viewOutstanding(customer); closeActionMenu()">Outstanding</button>
-                                            <button v-if="canReceive" type="button" @click="receivePayment(customer); closeActionMenu()">Receive</button>
-                                            <button type="button" @click="createInvoice(customer); closeActionMenu()">Invoice</button>
-                                            <button type="button" @click="createReturn(customer); closeActionMenu()">Return</button>
-                                            <button type="button" @click="toggleStatus(customer); closeActionMenu()">{{ customer.status === 'active' ? 'Deactivate' : 'Activate' }}</button>
-                                            <button v-if="customer.customer_type !== 'walk_in'" type="button" class="danger" @click="deleteCustomer(customer); closeActionMenu()">Delete</button>
-                                        </RowActionMenu>
-                                        <button v-else type="button" @click="restoreCustomer(customer)">Restore</button>
+                                        <button v-if="customer.deleted_at" type="button" class="bq-quick" @click="restoreCustomer(customer)">Restore</button>
+                                        <template v-else>
+                                            <button type="button" class="bq-quick" @click="createInvoice(customer)">New Bill</button>
+                                            <RowActionMenu :open="openActionMenuId === customer.id" :show-view="false" more-label="More" more-title="Customer actions" @toggle="toggleActionMenu(customer)" @close="closeActionMenu">
+                                                <button type="button" @click="viewCustomer(customer); closeActionMenu()">View details</button>
+                                                <button type="button" @click="editCustomer(customer); closeActionMenu()">Edit</button>
+                                                <button type="button" @click="viewLedger(customer); closeActionMenu()">Ledger</button>
+                                                <button type="button" @click="viewOutstanding(customer); closeActionMenu()">Unpaid bills</button>
+                                                <button v-if="canReceive" type="button" @click="receivePayment(customer); closeActionMenu()">Receive payment</button>
+                                                <button type="button" @click="createReturn(customer); closeActionMenu()">Sales return</button>
+                                                <button type="button" @click="toggleStatus(customer); closeActionMenu()">{{ customer.status === 'active' ? 'Deactivate' : 'Activate' }}</button>
+                                                <button v-if="customer.customer_type !== 'walk_in'" type="button" class="danger" @click="deleteCustomer(customer); closeActionMenu()">Delete</button>
+                                            </RowActionMenu>
+                                        </template>
                                     </div>
                                 </td>
                             </tr>
                             <tr v-if="loading && !customers.length"><td colspan="8" class="empty">Loading customers...</td></tr>
-                            <tr v-else-if="!customers.length"><td colspan="8" class="empty">No customers match these filters. <button type="button" class="linklike" @click="clearFilters">Clear filters</button> or <button type="button" class="linklike" @click="newCustomer">add a new customer</button>.</td></tr>
+                            <tr v-else-if="!customers.length"><td colspan="8" class="empty">No customers found.<template v-if="hasFilters"> <button type="button" class="linklike" @click="clearFilters">Clear search and filters</button></template></td></tr>
                         </tbody>
                     </table>
                 </div>
-                <div v-if="pagination.total > 0 && pagination.last_page > 1" class="pagination"><button :disabled="pagination.current_page <= 1 || loading" @click="loadCustomers(pagination.current_page - 1)">Previous</button><span>{{ loading ? 'Loading…' : `${pagination.from || 0}-${pagination.to || 0} of ${pagination.total || 0}` }}</span><button :disabled="pagination.current_page >= pagination.last_page || loading" @click="loadCustomers(pagination.current_page + 1)">Next</button></div>
+                <div v-if="pagination.total > 0" class="pagination"><button :disabled="pagination.current_page <= 1 || loading" @click="loadCustomers(pagination.current_page - 1)">Previous</button><span>{{ loading ? 'Loading…' : `${pagination.from || 0}-${pagination.to || 0} of ${pagination.total || 0}` }}</span><button :disabled="pagination.current_page >= pagination.last_page || loading" @click="loadCustomers(pagination.current_page + 1)">Next</button></div>
+                <div class="file-tools">
+                    <span>Many customers at once:</span>
+                    <a :href="SalesApi.customerImportTemplateUrl()">Import Template</a>
+                    <label class="import-button">{{ importing ? 'Importing...' : 'Import' }}<input type="file" accept=".csv,text/csv" :disabled="importing" @change="importCustomers" /></label>
+                    <button type="button" @click="exportCustomers">Export</button>
+                </div>
             </section>
 
             <div v-if="detail" class="drawer-backdrop" @click="closeDetail"></div>
@@ -339,20 +370,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
 </template>
 
 <style scoped>
-.sales-page{padding:4px 0 28px}.page-toolbar,.toolbar,.actions,.pagination,.toolbar-actions,.row-actions,.detail-head,.form-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.page-toolbar{margin-bottom:14px;flex-wrap:wrap}.toolbar-actions{flex-wrap:wrap;justify-content:flex-end}
+.sales-page{padding:4px 0 28px}.actions,.pagination,.row-actions,.detail-head,.form-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:10px}
 .form-head h2,.detail-head h2{margin:0;color:#142139;font-weight:800;font-size:18px}.detail-head span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.detail-head p{margin:6px 0 0;color:#758197;font-size:13px}
 .group-title{margin:18px 0 8px;padding-bottom:6px;color:#344159;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #edf1f5}
 .form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start}.form-grid>label{display:grid;gap:5px;color:#667085;font-size:12px;font-weight:700;align-content:start}.form-grid :deep(.search-select){display:block}
 .span2{grid-column:span 2}.span4{grid-column:span 4}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}.check{display:flex!important;align-items:center;gap:8px;grid-template-columns:none}.check input{min-height:auto;width:auto}.check.inline{margin-top:6px;font-weight:600}
-input,select,textarea,button,.toolbar-actions a,.import-button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:13px;text-decoration:none;font-family:inherit}input:focus,select:focus,textarea:focus{outline:2px solid #bfd3ff;border-color:#7ea3f5}input:disabled,textarea:disabled{background:#f4f6f9;color:#98a2b3}
+input,select,textarea,button,.file-tools a,.import-button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:13px;text-decoration:none;font-family:inherit}input:focus,select:focus,textarea:focus{outline:2px solid #bfd3ff;border-color:#7ea3f5}input:disabled,textarea:disabled{background:#f4f6f9;color:#98a2b3}
 textarea{min-height:72px;resize:vertical}button,.import-button{font-weight:750;cursor:pointer}button.primary{color:#fff;background:#2457d6;border-color:#2457d6}button.primary:disabled{opacity:.6;cursor:wait}.import-button{position:relative;overflow:hidden}.import-button input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.count-chip{padding:7px 12px;color:#344159;background:#eef2f9;border-radius:999px;font-size:12px;font-weight:800}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.actions,.pagination{justify-content:flex-end;margin-top:14px}
-.toolbar{justify-content:flex-start;margin-bottom:12px;flex-wrap:wrap}.search-box{flex:1 1 280px;min-width:240px}
+.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.actions,.pagination{justify-content:flex-end;margin-top:14px}
+.file-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid #edf1f5;color:#758197;font-size:12px}
 .table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:11px 10px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:11px;font-weight:800;text-transform:uppercase;position:sticky;top:0}td{padding:10px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:13px;vertical-align:middle}tbody tr:hover td{background:#f9fbff}
 .num{text-align:right;font-variant-numeric:tabular-nums}.due{color:#b42318;font-weight:800}.adv{color:#067647;font-weight:800}
-.sticky-col{position:sticky;right:0;background:#fff;box-shadow:-6px 0 8px -8px rgba(15,23,42,.25)}th.sticky-col{background:#f8fafc}tbody tr:hover td.sticky-col{background:#f9fbff}.row-actions{justify-content:flex-start;flex-wrap:nowrap;gap:6px}.row-actions button{min-height:30px;padding:5px 9px;white-space:nowrap}
-.name-cell{max-width:360px;white-space:normal}.name-link{display:flex;align-items:center;gap:10px;min-height:0;padding:0;border:0;background:transparent;text-align:left;font-weight:400;cursor:pointer}.avatar{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:50%;background:#e8eefc;color:#2457d6;font-size:12px;font-weight:800}.name-text{display:grid;min-width:0}.name-text b{color:#142139;font-size:13px;white-space:normal;line-height:1.25}.name-text small{color:#7b8799;font-size:11px}
+.row-actions{justify-content:flex-start;flex-wrap:nowrap;gap:6px}.row-actions button{min-height:30px;padding:5px 9px;white-space:nowrap}
 .badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.badge.active{color:#168757;background:#eaf8f1}.badge.blocked{color:#b54708;background:#fff4e5}.badge.inactive,.badge.deleted{color:#69758a;background:#f0f2f5}
 .empty{padding:28px!important;color:#8490a2;text-align:center;white-space:normal}.linklike{min-height:0;padding:0;border:0;background:none;color:#2457d6;text-decoration:underline;font-size:inherit}
 .error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:12px}
@@ -361,5 +391,5 @@ textarea{min-height:72px;resize:vertical}button,.import-button{font-weight:750;c
 .form-drawer{display:flex;flex-direction:column;width:min(720px,100vw);padding:0;overflow:hidden}.form-drawer .form-head{flex:0 0 auto;padding:16px 20px;border-bottom:1px solid #e7ecf2}.form-drawer .form-body{flex:1 1 auto;overflow-y:auto;padding:4px 20px 20px}.form-drawer .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.form-drawer .span4{grid-column:span 2}.form-drawer .group-title:first-child{margin-top:12px}.drawer-footer{flex:0 0 auto;margin:0!important;padding:12px 20px;background:#fff;border-top:1px solid #e7ecf2;box-shadow:0 -6px 12px -10px rgba(15,23,42,.25)}.form-backdrop{z-index:44}.form-drawer{z-index:50}
 .drawer-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.summary-grid span{padding:10px;background:#f8fafc;border:1px solid #e7ecf2;border-radius:8px;color:#69758a;font-size:11px}.summary-grid b{display:block;color:#142139;font-size:13px}
 @media(max-width:1000px){.form-grid,.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span4{grid-column:span 2}}
-@media(max-width:700px){.form-drawer .form-grid{grid-template-columns:1fr}.form-drawer .span2,.form-drawer .span4{grid-column:span 1}.form-drawer .form-body{padding:4px 14px 16px}.page-toolbar,.toolbar,.toolbar-actions,.detail-head{align-items:stretch;flex-direction:column}.form-grid,.summary-grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.search-box{min-width:0;width:100%}.detail-drawer{padding:14px}.actions{flex-direction:column-reverse}.actions button{width:100%}}
+@media(max-width:700px){.form-drawer .form-grid{grid-template-columns:1fr}.form-drawer .span2,.form-drawer .span4{grid-column:span 1}.form-drawer .form-body{padding:4px 14px 16px}.detail-head{align-items:stretch;flex-direction:column}.form-grid,.summary-grid{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.detail-drawer{padding:14px}.actions{flex-direction:column-reverse}.actions button{width:100%}}
 </style>

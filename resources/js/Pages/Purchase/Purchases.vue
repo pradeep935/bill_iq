@@ -20,7 +20,7 @@ const purchases = ref([]);
 // Branch / Warehouse / Created By are identical on every row for a single-branch business: hide them to give money columns room.
 const showLocation = computed(() => new Set((purchases.value || []).map((row) => `${row.branch}|${row.warehouse}`)).size > 1);
 const showCreatedBy = computed(() => new Set((purchases.value || []).map((row) => row.created_by)).size > 1);
-const columnCount = computed(() => 10 + (showLocation.value ? 2 : 0) + (showCreatedBy.value ? 1 : 0));
+const columnCount = computed(() => 7 + (showLocation.value ? 2 : 0) + (showCreatedBy.value ? 1 : 0));
 const references = ref({ suppliers: [], branches: [], warehouses: [] });
 const products = ref([]);
 const productSearch = ref('');
@@ -146,6 +146,7 @@ const closePurchaseDrawer = () => {
 
 const loadReferences = async () => { references.value = await PurchaseApi.references(); };
 const loadPurchases = async (page = 1) => {
+    loadCards(); // the figures follow every reload
     loading.value = true;
     try {
         const response = await PurchaseApi.purchases({ ...filters, page });
@@ -154,6 +155,39 @@ const loadPurchases = async (page = 1) => {
     } finally { loading.value = false; }
 };
 
+// One tap for the lists people open most.
+const localToday = () => new Date().toLocaleDateString('en-CA');
+const chips = [
+    { key: 'all', label: 'All purchases', set: () => ({}) },
+    { key: 'today', label: 'Today', set: () => ({ date_from: localToday(), date_to: localToday() }) },
+    { key: 'due', label: 'To pay', set: () => ({ payment_status: 'due' }) },
+    { key: 'draft', label: 'Draft', set: () => ({ status: 'draft' }) },
+    { key: 'reversed', label: 'Reversed', set: () => ({ status: 'reversed' }) },
+];
+const chosen = ['status', 'payment_status', 'supplier_id', 'date_from', 'date_to', 'purchase_type', 'tax_type'];
+const showFilters = ref(false);
+const activeChip = computed(() => {
+    const used = JSON.stringify(chosen.filter((key) => filters[key]).map((key) => [key, String(filters[key])]).sort());
+    return chips.find((chip) => JSON.stringify(Object.entries(chip.set()).sort()) === used)?.key || null;
+});
+const extraFilters = computed(() => (activeChip.value ? 0 : chosen.filter((key) => filters[key]).length));
+const quickFilter = async (key) => {
+    chosen.forEach((name) => { filters[name] = ''; });
+    Object.assign(filters, chips.find((chip) => chip.key === key)?.set() || {});
+    await loadPurchases(1);
+};
+const cards = ref({});
+const loadCards = async () => { cards.value = await PurchaseApi.reportCards().catch(() => ({})); };
+const isPosted = (row) => ['approved', 'confirmed'].includes(row.status);
+const dueOf = (row) => (isPosted(row) ? Number(row.balance_amount || 0) : 0);
+// One badge says where the bill stands: its payment when posted, otherwise its state.
+const stateOf = (row) => {
+    if (isPosted(row)) {
+        return { paid: { label: 'Paid', tone: 'ok' }, partial: { label: 'Part paid', tone: '' }, unpaid: { label: 'Unpaid', tone: 'wait' } }[row.payment_status] || { label: row.payment_status, tone: '' };
+    }
+    if (row.status === 'reversed') return { label: /-R\d+$/.test(row.voucher_number || '') ? 'Old version' : 'Reversed', tone: 'off' };
+    return { draft: { label: 'Draft', tone: 'draft' }, cancelled: { label: 'Cancelled', tone: 'off' } }[row.status] || { label: row.status, tone: '' };
+};
 const clearFilters = async () => {
     Object.assign(filters, { status: '', payment_status: '', purchase_type: '', tax_type: '', supplier_id: '', date_from: '', date_to: '', q: '' });
     await loadPurchases(1);
@@ -563,6 +597,7 @@ onMounted(async () => {
     const query = new URLSearchParams(window.location.search);
     ['status', 'payment_status'].forEach((key) => { if (query.get(key)) filters[key] = query.get(key); });
     if (query.get('date') === 'today') filters.date_from = filters.date_to = new Date().toLocaleDateString('en-CA');
+    showFilters.value = extraFilters.value > 0; // filters set by a link are shown
     const billId = Number(query.get('network_bill'));
     const billLink = query.get('network_link');
     if (Number(query.get('receipt'))) {
@@ -683,24 +718,33 @@ onMounted(async () => {
                 </section>
             </div>
 
+            <section class="bq-cards" aria-label="Summary">
+                <button type="button" class="bq-card" @click="quickFilter('today')"><span>Today’s Purchases</span><strong>Rs. {{ formatMoney(cards.today_total) }}</strong><small>{{ cards.today_count || 0 }} bills · tap to see</small></button>
+                <button type="button" class="bq-card due" @click="quickFilter('due')"><span>To Pay</span><strong>Rs. {{ formatMoney(cards.to_pay) }}</strong><small>{{ cards.to_pay_count || 0 }} unpaid bills</small></button>
+                <button type="button" class="bq-card draft" @click="quickFilter('draft')"><span>Draft Purchases</span><strong>{{ cards.drafts || 0 }}</strong><small>Stock is added after posting</small></button>
+            </section>
             <section class="panel">
-                <div class="toolbar">
-                    <div class="filter-group">
-                        <SearchSelect v-model="filters.status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" @selected="loadPurchases(1)" />
-                        <SearchSelect v-model="filters.payment_status" label="Payment" :options="paymentFilters" option-value-key="value" option-label-key="label" select-placeholder="All Payment" @selected="loadPurchases(1)" />
-                        <SearchSelect v-model="filters.supplier_id" label="Supplier" :options="references.suppliers" option-value-key="id" option-label-key="supplier_name" select-placeholder="All Suppliers" @selected="loadPurchases(1)" />
-                        <label class="filter-field">From<input v-model="filters.date_from" type="date" @change="loadPurchases(1)" /></label>
-                        <label class="filter-field">To<input v-model="filters.date_to" type="date" @change="loadPurchases(1)" /></label>
-                        <label class="filter-field">Voucher / Invoice<input v-model="filters.q" placeholder="Search no." @keyup.enter="loadPurchases(1)" /></label>
-                        <button type="button" class="primary" @click="loadPurchases(1)">Search</button>
-                        <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
-                    </div>
-                    <button type="button" class="primary" @click="openPurchaseCreate">New Purchase</button>
+                <form class="bq-search" role="search" @submit.prevent="loadPurchases(1)">
+                    <input v-model="filters.q" type="search" aria-label="Search purchases" placeholder="Search voucher number or supplier bill number" />
+                    <button type="submit">Search</button>
+                    <button type="button" :aria-expanded="showFilters" @click="showFilters = !showFilters">Filters<b v-if="extraFilters">{{ extraFilters }}</b></button>
                     <button type="button" class="secondary-action bill-import-btn" @click="openBillImport()">From Supplier Bill</button>
+                    <button type="button" class="primary" @click="openPurchaseCreate">New Purchase</button>
+                </form>
+                <div class="bq-chips">
+                    <button v-for="chip in chips" :key="chip.key" type="button" :class="{ active: activeChip === chip.key }" :aria-pressed="activeChip === chip.key" @click="quickFilter(chip.key)">{{ chip.label }}</button>
+                </div>
+                <div v-if="showFilters" class="bq-filters">
+                    <SearchSelect v-model="filters.supplier_id" label="Supplier" :options="references.suppliers" option-value-key="id" option-label-key="supplier_name" select-placeholder="All Suppliers" @selected="loadPurchases(1)" />
+                    <SearchSelect v-model="filters.status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" @selected="loadPurchases(1)" />
+                    <SearchSelect v-model="filters.payment_status" label="Payment" :options="paymentFilters" option-value-key="value" option-label-key="label" select-placeholder="All Payment" @selected="loadPurchases(1)" />
+                    <label class="filter-field">From<input v-model="filters.date_from" type="date" @change="loadPurchases(1)" /></label>
+                    <label class="filter-field">To<input v-model="filters.date_to" type="date" @change="loadPurchases(1)" /></label>
+                    <div class="bq-filter-actions"><button type="button" class="ghost-action" @click="clearFilters">Clear</button></div>
                 </div>
                 <div class="table-wrapper" :class="{ 'is-refreshing': loading }">
-                    <table>
-                        <thead><tr><th>Voucher</th><th>Date</th><th>Supplier</th><th v-if="showLocation">Branch</th><th v-if="showLocation">Warehouse</th><th>Invoice</th><th>Total</th><th>Paid</th><th>Balance</th><th>Payment</th><th>Status</th><th v-if="showCreatedBy">Created By</th><th>Actions</th></tr></thead>
+                    <table class="bq-table">
+                        <thead><tr><th>Voucher</th><th>Date</th><th>Supplier</th><th v-if="showLocation">Branch</th><th v-if="showLocation">Warehouse</th><th class="num">Amount</th><th class="num">Due</th><th>Status</th><th v-if="showCreatedBy">Created By</th><th></th></tr></thead>
                         <tbody :class="{ 'is-loading': loading }">
                             <template v-if="loading">
                                 <tr v-for="index in 4" :key="`purchase-loading-${index}`" class="loading-row">
@@ -708,11 +752,23 @@ onMounted(async () => {
                                 </tr>
                             </template>
                             <tr v-for="purchase in purchases" :key="purchase.id">
-                                <td>{{ purchase.voucher_number }}</td><td>{{ formatDate(purchase.purchase_date) }}</td><td>{{ purchase.supplier }}</td><td v-if="showLocation">{{ purchase.branch || '-' }}</td><td v-if="showLocation">{{ purchase.warehouse || '-' }}</td><td>{{ purchase.supplier_invoice_number || '-' }}</td>
-                                <td>Rs. {{ formatMoney(purchase.grand_total) }}</td><td>Rs. {{ formatMoney(purchase.paid_amount) }}</td><td :class="{ due: Number(purchase.balance_amount) > 0 }">Rs. {{ formatMoney(purchase.balance_amount) }}</td><td><span class="badge pay" :class="purchase.payment_status">{{ purchase.payment_status }}</span><button v-if="isAdmin && ['approved','confirmed'].includes(purchase.status) && Number(purchase.balance_amount) > 0" type="button" class="secondary-action pay-now" @click="recordPayment(purchase)">Pay</button></td><td><span class="badge" :class="purchase.status">{{ purchase.status }}</span></td><td v-if="showCreatedBy">{{ purchase.created_by || '-' }}</td>
-                                <td class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === purchase.id" :show-view="false" more-label="Actions" more-title="Purchase actions" @toggle="toggleActionMenu(purchase)" @close="closeActionMenu"><button type="button" @click="viewPurchase(purchase); closeActionMenu()">View</button><button v-if="isAdmin && ['approved','confirmed'].includes(purchase.status) && Number(purchase.balance_amount) > 0" type="button" @click="recordPayment(purchase); closeActionMenu()">Record Payment</button><button v-if="purchase.status === 'draft'" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" @click="revisePurchase(purchase); closeActionMenu()">Edit</button><button v-if="canEditClosed(purchase)" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="purchase.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(PurchaseApi.duplicatePurchase, purchase); closeActionMenu()">Copy</button><button v-if="purchase.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="isAdmin && ['approved','confirmed'].includes(purchase.status)" type="button" class="danger" @click="reversePurchase(purchase); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
+                                <td data-label="Voucher"><button type="button" class="bq-link" @click="viewPurchase(purchase)">{{ purchase.voucher_number }}</button></td>
+                                <td data-label="Date">{{ formatDate(purchase.purchase_date) }}</td>
+                                <td data-label="Supplier" class="bq-name">{{ purchase.supplier }}<small v-if="purchase.supplier_invoice_number">Bill no. {{ purchase.supplier_invoice_number }}</small></td>
+                                <td v-if="showLocation" data-label="Branch">{{ purchase.branch || '-' }}</td>
+                                <td v-if="showLocation" data-label="Warehouse">{{ purchase.warehouse || '-' }}</td>
+                                <td data-label="Amount" class="num"><b>Rs. {{ formatMoney(purchase.grand_total) }}</b></td>
+                                <td data-label="Due" class="num" :class="{ due: dueOf(purchase) > 0 }">{{ dueOf(purchase) > 0 ? `Rs. ${formatMoney(dueOf(purchase))}` : '—' }}</td>
+                                <td data-label="Status"><span class="bq-badge" :class="stateOf(purchase).tone">{{ stateOf(purchase).label }}</span></td>
+                                <td v-if="showCreatedBy" data-label="Created By">{{ purchase.created_by || '-' }}</td>
+                                <td class="bq-actions"><div class="row-actions">
+                                    <button v-if="purchase.status === 'draft'" type="button" class="primary bq-quick" @click="editPurchase(purchase)">Complete</button>
+                                    <button v-else-if="isAdmin && dueOf(purchase) > 0" type="button" class="secondary-action bq-quick pay-now" @click="recordPayment(purchase)">Pay</button>
+                                    <button v-else type="button" class="bq-quick" @click="viewPurchase(purchase)">View</button>
+                                    <RowActionMenu :open="openActionMenuId === purchase.id" :show-view="false" more-label="More" more-title="Purchase actions" @toggle="toggleActionMenu(purchase)" @close="closeActionMenu"><button type="button" @click="viewPurchase(purchase); closeActionMenu()">View</button><button v-if="isAdmin && ['approved','confirmed'].includes(purchase.status) && Number(purchase.balance_amount) > 0" type="button" @click="recordPayment(purchase); closeActionMenu()">Record Payment</button><button v-if="purchase.status === 'draft'" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" @click="revisePurchase(purchase); closeActionMenu()">Edit</button><button v-if="canEditClosed(purchase)" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="purchase.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(PurchaseApi.duplicatePurchase, purchase); closeActionMenu()">Copy</button><button v-if="purchase.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="isAdmin && ['approved','confirmed'].includes(purchase.status)" type="button" class="danger" @click="reversePurchase(purchase); closeActionMenu()">Reverse</button></RowActionMenu>
+                                </div></td>
                             </tr>
-                            <tr v-if="!purchases.length && !loading"><td :colspan="columnCount" class="empty">No purchases found.</td></tr>
+                            <tr v-if="!purchases.length && !loading"><td :colspan="columnCount" class="empty">No purchases found. <button v-if="activeChip !== 'all'" type="button" class="bq-link" @click="clearFilters">Show all purchases</button></td></tr>
                         </tbody>
                     </table>
                 </div>

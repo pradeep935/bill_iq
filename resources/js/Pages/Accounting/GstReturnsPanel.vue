@@ -98,4 +98,5 @@ onMounted(load);
 .gr-table th { background: #f8fafc; color: #69758a; font-size: 10px; text-transform: uppercase; }
 .r { text-align: right !important; } .bold td { font-weight: 800; } .total td { background: #eef4ff; }
 @media (max-width: 800px) { .gr-cards { grid-template-columns: repeat(2, 1fr); } }
+.gr{max-width:100%;overflow-x:auto}
 </style>

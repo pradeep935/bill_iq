@@ -581,7 +581,8 @@ private function returnQuery(array $filters = []): Builder
     ->when(!empty($filters['warehouse_id']), fn (Builder $q) => $q->where('warehouse_id', $filters['warehouse_id']))
     ->when(!empty($filters['return_type']), fn (Builder $q) => $q->where('return_type', $filters['return_type']))
     ->when(!empty($filters['settlement_type']), fn (Builder $q) => $q->where('settlement_type', $filters['settlement_type']))
-    ->when(!empty($filters['status']), fn (Builder $q) => $q->where('status', $filters['status']))
+    // Confirmed and approved returns are both posted and shown as “Approved”.
+    ->when(!empty($filters['status']), fn (Builder $q) => $q->whereIn('status', $filters['status'] === 'approved' ? ['approved', 'confirmed'] : [$filters['status']]))
     ->when(!empty($filters['search']), function (Builder $q) use ($filters) {
         $like = '%' . trim((string) $filters['search']) . '%';
         $q->where(function (Builder $inner) use ($like) {

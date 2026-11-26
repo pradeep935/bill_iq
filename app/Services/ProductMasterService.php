@@ -133,7 +133,7 @@ class ProductMasterService
             ->when(!empty($filters['item_type']) && Schema::hasColumn('products', 'item_type'), fn (Builder $query) => $query->where('item_type', $filters['item_type']))
             ->when(isset($filters['gst_rate']) && $filters['gst_rate'] !== '', fn (Builder $query) => $query->where('gst_rate', $filters['gst_rate']))
             ->when(!empty($filters['is_sample']) && Schema::hasColumn('products', 'is_sample'), fn (Builder $query) => $query->where('is_sample', true))
-            ->when(!empty($filters['price_missing']), fn (Builder $query) => $query->where(fn (Builder $inner) => $inner->where(fn (Builder $a) => $a->whereNull('selling_price')->orWhere('selling_price', '<=', 0))->where(fn (Builder $b) => $b->whereNull('sale_price')->orWhere('sale_price', '<=', 0))))
+            ->when(!empty($filters['price_missing']), fn (Builder $query) => $query->where(fn (Builder $inner) => $this->withoutSellingPrice($inner)))
             ->when(!empty($filters['status']), function (Builder $query) use ($filters) {
                 if ($filters['status'] === 'deleted') {
                     if (Schema::hasColumn('products', 'deleted_at')) {
@@ -365,6 +365,26 @@ class ProductMasterService
                 'status' => $serial->status,
             ])->values(),
         ];
+    }
+
+    // Business-wide counts for the cards above the product list.
+    public function cards(): array
+    {
+        $businessId = $this->businessId();
+        $total = fn () => $this->baseQuery($businessId);
+
+        return [
+            'total' => $total()->count(),
+            'active' => $total()->where('status', 'active')->count(),
+            'inactive' => $total()->where('status', 'inactive')->count(),
+            'price_missing' => $total()->where(fn (Builder $inner) => $this->withoutSellingPrice($inner))->count(),
+        ];
+    }
+
+    private function withoutSellingPrice(Builder $query): void
+    {
+        $query->where(fn (Builder $a) => $a->whereNull('selling_price')->orWhere('selling_price', '<=', 0))
+            ->where(fn (Builder $b) => $b->whereNull('sale_price')->orWhere('sale_price', '<=', 0));
     }
 
     public function presentPaginator(LengthAwarePaginator $paginator): array

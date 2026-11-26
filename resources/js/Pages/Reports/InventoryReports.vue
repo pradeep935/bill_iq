@@ -82,10 +82,10 @@ onMounted(load);
             <template #toolbar><button @click="load">Refresh</button><button @click="exportFile('csv')">CSV</button><button @click="exportFile('excel')">Excel</button><button @click="window.print()">PDF / Print</button></template>
             <template #section-actions><div class="tabs"><button v-for="t in tabs" :key="t" :class="{ active: tab === t }" @click="tab = t">{{ t }}</button></div></template>
             <template #filters>
-                <input v-model="filters.search" placeholder="Search report data" @keyup.enter="load" />
-                <input v-model="filters.from_date" type="date" @change="load" />
-                <input v-model="filters.to_date" type="date" @change="load" />
-                <select v-model="filters.per_page" @change="load"><option>25</option><option>50</option><option>100</option></select>
+                <input aria-label="Search" v-model="filters.search" placeholder="Search report data" @keyup.enter="load" />
+                <label class="bq-field"><span>From date</span><input v-model="filters.from_date" type="date" @change="load" /></label>
+                <label class="bq-field"><span>To date</span><input v-model="filters.to_date" type="date" @change="load" /></label>
+                <select aria-label="Rows per page" v-model="filters.per_page" @change="load"><option>25</option><option>50</option><option>100</option></select>
                 <button @click="filters.search = ''; filters.from_date = ''; filters.to_date = ''; load()">Clear</button>
             </template>
             <InventoryTable v-if="tab === 'inventory'" :columns="[{key:'product_name',label:'Product'},{key:'sku',label:'SKU'},{key:'branch_name',label:'Branch'},{key:'warehouse_name',label:'Warehouse'},{key:'quantity',label:'Qty'},{key:'stock_value',label:'Value'}]" :rows="stock" />

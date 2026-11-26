@@ -100,7 +100,7 @@ export const howTo = [
         intro: 'Edit the bill instead of making a second one.',
         steps: [
             'Open Sales Invoices (or Purchases) and find the bill.',
-            'In Sales Invoices click More > Edit; in Purchases click Actions > Edit.',
+            'Click More > Edit on the bill.',
             'Change what is wrong. If the screen warns that the total will change, check it.',
             'Click “Save Changes”. The bill number stays the same; stock and accounts are corrected.',
         ],
@@ -165,7 +165,7 @@ export const howTo = [
         title: 'A customer returns goods',
         pages: ['sales-returns', 'sales'],
         steps: [
-            'Open Sales Returns and start a new return.',
+            'Open Sales Returns and click “New Return”.',
             'Search and choose the original invoice.',
             'Add the returned items with quantity and condition.',
             'Choose how to settle: adjust the invoice, refund, or customer credit.',

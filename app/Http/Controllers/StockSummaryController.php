@@ -95,7 +95,8 @@ class StockSummaryController extends Controller
                 'stock_status' => $item->stock_status,
             ])->values(),
             // KPI totals only change with filters (which reset to page 1); skip the heavy recount while paging.
-            'dashboard' => (int) $request->query('page', 1) > 1 ? null : $this->stock->dashboard($request->all()),
+            // The cards describe the whole selection, so the one-tap stock filters do not change them.
+            'dashboard' => (int) $request->query('page', 1) > 1 ? null : $this->stock->dashboard($request->except('stock_status')),
             'pagination' => [
                 'current_page' => $paginator->currentPage(),
                 'last_page' => $paginator->lastPage(),

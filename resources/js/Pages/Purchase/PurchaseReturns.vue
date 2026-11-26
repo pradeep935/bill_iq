@@ -21,7 +21,8 @@ const errors = ref({});
 const showReturnDrawer = ref(false);
 const openActionMenuId = ref(null);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
-const filters = reactive({ status: '', return_type: '', settlement_type: '' });
+const filters = reactive({ search: '', status: '', return_type: '', settlement_type: '' });
+const showFilters = ref(false);
 const returnTypes = [{ value: 'against_purchase', label: 'Against Purchase' }, { value: 'direct_return', label: 'Direct Return' }];
 const returnTypeFilters = [{ value: '', label: 'All Types' }, ...returnTypes];
 const taxTypes = [{ value: 'intrastate', label: 'Intrastate' }, { value: 'interstate', label: 'Interstate' }, { value: 'exempt', label: 'Exempt' }];
@@ -34,6 +35,12 @@ const settlementTypes = [
 ];
 const settlementTypeFilters = [{ value: '', label: 'All Settlements' }, ...settlementTypes];
 const statusFilters = [{ value: '', label: 'All Status' }, { value: 'draft', label: 'Draft' }, { value: 'approved', label: 'Approved' }, { value: 'cancelled', label: 'Cancelled' }, { value: 'reversed', label: 'Reversed' }];
+const statusChips = statusFilters.map((option) => ({ ...option, label: ({ '': 'All returns', approved: 'Posted' })[option.value] || option.label }));
+const statusLabel = (status) => ({ draft: 'Draft', approved: 'Posted', confirmed: 'Posted', cancelled: 'Cancelled', reversed: 'Reversed' }[status] || status);
+const statusTone = (status) => ({ draft: 'draft', cancelled: 'off', reversed: 'off' }[status] || 'ok');
+const labelFrom = (options, value) => options.find((option) => option.value === value)?.label || value || '—';
+const moreFilters = computed(() => [filters.return_type, filters.settlement_type].filter(Boolean).length);
+const setStatus = (status) => { filters.status = status; loadReturns(1); };
 const form = reactive({
     id: null,
     return_type: 'against_purchase',
@@ -93,7 +100,7 @@ const loadReturns = async (page = 1) => {
 };
 
 const clearFilters = async () => {
-    Object.assign(filters, { status: '', return_type: '', settlement_type: '' });
+    Object.assign(filters, { search: '', status: '', return_type: '', settlement_type: '' });
     await loadReturns(1);
 };
 
@@ -245,7 +252,7 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
                     </div>
 
                     <div v-if="form.return_type === 'against_purchase'" class="search-box">
-                        <input v-model="purchaseSearch" placeholder="Search approved purchase voucher" @input="searchPurchases" />
+                        <input aria-label="Search purchase bill" v-model="purchaseSearch" placeholder="Search approved purchase voucher" @input="searchPurchases" />
                         <div v-if="purchaseResults.length" class="search-results">
                             <button v-for="purchase in purchaseResults" :key="purchase.id" type="button" @click="selectPurchase(purchase)">
                                 <strong>{{ purchase.voucher_number }}</strong><span>{{ purchase.supplier }} | {{ formatDate(purchase.purchase_date) }}</span>
@@ -255,7 +262,7 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
 
                     <div v-else class="search-box">
                         <strong class="direct-label">Direct return: not linked to original purchase</strong>
-                        <input v-model="productSearch" placeholder="Search product by name, SKU or barcode" @input="searchProducts" />
+                        <input aria-label="Search product" v-model="productSearch" placeholder="Search product by name, SKU or barcode" @input="searchProducts" />
                         <div v-if="productResults.length" class="search-results">
                             <button v-for="product in productResults" :key="product.id" type="button" @click="addProduct(product)">
                                 <strong>{{ product.name }}</strong><span>{{ product.sku }} | {{ product.barcode || 'No barcode' }}</span>
@@ -304,30 +311,48 @@ onMounted(async () => { await loadReferences(); await loadReturns(); });
             </div>
 
             <section class="panel">
-                <div class="toolbar">
-                    <div class="filter-group">
-                        <SearchSelect v-model="filters.status" label="Status" :options="statusFilters" option-value-key="value" option-label-key="label" select-placeholder="All Status" @selected="loadReturns(1)" />
-                        <SearchSelect v-model="filters.return_type" label="Type" :options="returnTypeFilters" option-value-key="value" option-label-key="label" select-placeholder="All Types" @selected="loadReturns(1)" />
-                        <SearchSelect v-model="filters.settlement_type" label="Settlement" :options="settlementTypeFilters" option-value-key="value" option-label-key="label" select-placeholder="All Settlements" @selected="loadReturns(1)" />
-                        <button type="button" class="primary" @click="loadReturns(1)">Search</button>
-                        <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
-                    </div>
+                <form class="bq-search" role="search" @submit.prevent="loadReturns(1)">
+                    <input v-model="filters.search" type="search" aria-label="Search purchase returns" placeholder="Search return, purchase, bill no. or supplier" />
+                    <button type="submit">Search</button>
+                    <button type="button" :aria-expanded="showFilters" @click="showFilters = !showFilters">Filters<b v-if="moreFilters">{{ moreFilters }}</b></button>
                     <button type="button" class="primary" @click="openReturnCreate">New Return</button>
+                </form>
+                <div v-if="showFilters" class="bq-filters">
+                    <SearchSelect v-model="filters.return_type" label="Type" :options="returnTypeFilters" option-value-key="value" option-label-key="label" select-placeholder="All Types" @selected="loadReturns(1)" />
+                    <SearchSelect v-model="filters.settlement_type" label="Settlement" :options="settlementTypeFilters" option-value-key="value" option-label-key="label" select-placeholder="All Settlements" @selected="loadReturns(1)" />
+                    <div class="bq-filter-actions"><button type="button" @click="clearFilters">Clear</button></div>
+                </div>
+                <div class="bq-chips">
+                    <button v-for="chip in statusChips" :key="chip.value" type="button" :class="{ active: filters.status === chip.value }" :aria-pressed="filters.status === chip.value" @click="setStatus(chip.value)">{{ chip.label }}</button>
                 </div>
                 <div class="table-wrapper">
-                    <table>
-                        <thead><tr><th>Return Voucher</th><th>Date</th><th>Original Purchase</th><th>Supplier</th><th>Branch</th><th>Warehouse</th><th>Type</th><th>Total</th><th>Settlement</th><th>Status</th><th>Created By</th><th>Actions</th></tr></thead>
+                    <table class="bq-table bq-labeled">
+                        <thead><tr><th>Return</th><th>Supplier</th><th>Original purchase</th><th class="num">Amount</th><th>Settlement</th><th>Status</th><th></th></tr></thead>
                         <tbody :class="{ 'is-loading': loading }">
                             <template v-if="loading">
                                 <tr v-for="index in 4" :key="`return-loading-${index}`" class="loading-row">
-                                    <td v-for="cell in 12" :key="cell"><span class="skeleton-line" :class="`w-${(cell % 4) + 1}`"></span></td>
+                                    <td v-for="cell in 7" :key="cell"><span class="skeleton-line" :class="`w-${(cell % 4) + 1}`"></span></td>
                                 </tr>
                             </template>
                             <tr v-for="row in returns" :key="row.id">
-                                <td>{{ row.voucher_number }}</td><td>{{ formatDate(row.return_date) }}</td><td>{{ row.purchase_number || '-' }}</td><td>{{ row.supplier }}</td><td>{{ row.branch || '-' }}</td><td>{{ row.warehouse || '-' }}</td><td>{{ row.return_type }}</td><td>Rs. {{ formatMoney(row.grand_total) }}</td><td>{{ row.settlement_type }}</td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td>{{ row.created_by || '-' }}</td>
-                                <td class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === row.id" :show-view="false" more-label="Actions" more-title="Purchase return actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button v-if="row.status === 'draft'" type="button" @click="editReturn(row); closeActionMenu()">Edit</button><button v-if="row.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchaseReturn, row, 'Post return?'); closeActionMenu()">Post</button><button v-if="row.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchaseReturn, row, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" class="danger" @click="reverseReturn(row); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
+                                <td data-label="Return" class="bq-name"><strong>{{ row.voucher_number }}</strong><small>{{ formatDate(row.return_date) }}<template v-if="row.created_by"> &middot; by {{ row.created_by }}</template></small></td>
+                                <td data-label="Supplier">{{ row.supplier }}<small v-if="row.warehouse">{{ row.warehouse }}</small></td>
+                                <td data-label="Original purchase">{{ row.purchase_number || 'Direct return' }}</td>
+                                <td data-label="Amount" class="num">Rs. {{ formatMoney(row.grand_total) }}</td>
+                                <td data-label="Settlement">{{ labelFrom(settlementTypes, row.settlement_type) }}</td>
+                                <td data-label="Status"><span class="bq-badge" :class="statusTone(row.status)">{{ statusLabel(row.status) }}</span></td>
+                                <td class="bq-actions">
+                                    <div class="row-actions">
+                                        <button v-if="row.status === 'draft'" type="button" class="bq-quick" @click="simpleAction(PurchaseApi.approvePurchaseReturn, row, 'Post return?')">Post</button>
+                                        <RowActionMenu v-if="['draft','approved','confirmed'].includes(row.status)" :open="openActionMenuId === row.id" :show-view="false" more-label="More" more-title="Purchase return actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu">
+                                            <button v-if="row.status === 'draft'" type="button" @click="editReturn(row); closeActionMenu()">Edit</button>
+                                            <button v-if="row.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchaseReturn, row, 'Cancel draft?'); closeActionMenu()">Cancel draft</button>
+                                            <button v-if="['approved','confirmed'].includes(row.status)" type="button" class="danger" @click="reverseReturn(row); closeActionMenu()">Reverse</button>
+                                        </RowActionMenu>
+                                    </div>
+                                </td>
                             </tr>
-                            <tr v-if="!returns.length && !loading"><td colspan="12" class="empty">No purchase returns found.</td></tr>
+                            <tr v-if="!returns.length && !loading"><td colspan="7" class="empty">No purchase returns found.</td></tr>
                         </tbody>
                     </table>
                 </div>

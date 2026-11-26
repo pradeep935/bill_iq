@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class JournalVoucher extends Model
 {
+    // Statuses that count in balances and reports. A reversed voucher stays in: its reversal voucher is
+    // counted too and the two cancel out, so leaving it out would subtract the entry twice.
+    public const LEDGER_STATUSES = ['approved', 'posted', 'reversed'];
+
     protected $table = 'journal_vouchers';
     protected $guarded = [];
 

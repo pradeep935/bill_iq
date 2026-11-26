@@ -20,5 +20,5 @@ const submit = () => {
 </script>
 
 <template>
-    <input v-model="value" :placeholder="placeholder" autocomplete="off" @keyup.enter="submit" />
+    <input aria-label="Value" v-model="value" :placeholder="placeholder" autocomplete="off" @keyup.enter="submit" />
 </template>

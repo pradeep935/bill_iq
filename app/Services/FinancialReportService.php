@@ -404,7 +404,10 @@ class FinancialReportService
     private function partySummary(string $party, array $filters): array
     {
         $column = $party . '_id';
-        $rows = $this->entries($filters)->whereNotNull('journal_entries.' . $column)->selectRaw("journal_entries.$column as party_id, COALESCE(SUM(journal_entries.debit_amount),0) as debit, COALESCE(SUM(journal_entries.credit_amount),0) as credit")->groupBy('journal_entries.' . $column)->get()->map(function ($row) use ($party) {
+        $query = $this->entries($filters)->whereNotNull('journal_entries.' . $column);
+        if (empty($filters['account_id'])) JournalEntry::withoutMoneyLines($query, AppController::businessId());
+        $rows = $query
+            ->selectRaw("journal_entries.$column as party_id, COALESCE(SUM(journal_entries.debit_amount),0) as debit, COALESCE(SUM(journal_entries.credit_amount),0) as credit")->groupBy('journal_entries.' . $column)->get()->map(function ($row) use ($party) {
             $closing = $party === 'customer' ? (float) $row->debit - (float) $row->credit : (float) $row->credit - (float) $row->debit;
             return ['party_id' => $row->party_id, 'debit' => (float) $row->debit, 'credit' => (float) $row->credit, 'closing_balance' => round($closing, 2), 'overdue_amount' => max(0, round($closing, 2)), 'advance_amount' => max(0, round(-1 * $closing, 2)), 'ageing' => ['current' => max(0, round($closing, 2)), '1_30' => 0, '31_60' => 0, '61_90' => 0, '91_180' => 0, 'above_180' => 0]];
         })->values();
@@ -433,7 +436,7 @@ class FinancialReportService
 
     private function statuses(array $filters): array
     {
-        return !empty($filters['include_draft']) ? ['draft', 'submitted', 'approved', 'posted'] : ['approved', 'posted'];
+        return !empty($filters['include_draft']) ? ['draft', 'submitted', ...JournalVoucher::LEDGER_STATUSES] : JournalVoucher::LEDGER_STATUSES;
     }
 
     private function dateFrom(array $filters): ?string

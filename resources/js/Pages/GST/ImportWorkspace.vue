@@ -167,7 +167,7 @@ const docType = (row) => row.payload?.doc_num || rowPayload(row)?.doc_num || '-'
       </section>
 
       <section class="upload-panel">
-        <select v-model="sourceType"><option v-for="type in sourceTypes" :key="type.key" :value="type.key">{{ type.label }}</option></select>
+        <label class="bq-field"><span>Source type</span><select v-model="sourceType"><option v-for="type in sourceTypes" :key="type.key" :value="type.key">{{ type.label }}</option></select></label>
         <input v-model="expectedReturnPeriod" type="text" maxlength="6" placeholder="MMYYYY" aria-label="Expected filing period" />
         <input type="file" accept=".json,.xlsx,.xls,.csv,.txt" @change="file = $event.target.files[0]" />
         <button type="button" :disabled="busy || !file" @click="upload">{{ busy ? 'Working...' : 'Upload & Preview' }}</button>

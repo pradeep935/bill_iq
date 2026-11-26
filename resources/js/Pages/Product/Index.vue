@@ -164,6 +164,7 @@ const allProductColumns = [
 // Brand / Barcode / MRP are empty for most products: hide a column when no product on this page has a value (saves width).
 const productColumns = computed(() => {
     const optional = {
+        image: (product) => productImage(product),
         barcode: (product) => { const code = primaryBarcode(product); return Boolean(code) && code !== '-'; },
         brand: (product) => product.brand,
         mrp: (product) => Number(product.mrp) > 0,
@@ -258,15 +259,22 @@ const gstRateFilterOptions = computed(() => {
     return slabs.length ? slabs : fallbackGstRateOptions;
 });
 
-const pageTotal = computed(() => pagination.value.total || products.value.length);
-
-const activeProductsCount = computed(() => {
-    return products.value.filter((product) => product.status === 'active').length;
-});
-
-const inactiveProductsCount = computed(() => {
-    return products.value.filter((product) => product.status === 'inactive').length;
-});
+const cards = ref(null);
+const showFilters = ref(false);
+const chips = [
+    { key: 'all', label: 'All products' },
+    { key: 'active', label: 'Active' },
+    { key: 'price', label: 'Price missing' },
+    { key: 'inactive', label: 'Inactive' },
+    { key: 'deleted', label: 'Deleted' },
+];
+const activeChip = computed(() => (priceFilter.value ? 'price' : statusFilter.value || 'all'));
+// A chip or card shows one ready-made view; search and the other filters stay as they are.
+const quickFilter = (key) => {
+    priceFilter.value = key === 'price' ? 'missing' : '';
+    statusFilter.value = ['active', 'inactive', 'deleted'].includes(key) ? key : '';
+};
+const moreFilters = computed(() => [productTypeFilter, itemTypeFilter, categoryFilter, brandFilter, unitFilter, gstRateFilter, sampleFilter].filter((filter) => filter.value !== '').length);
 
 const allRowsSelected = computed(() => {
     return rows.value.length > 0 &&
@@ -328,6 +336,8 @@ const loadProducts = async (page = 1) => {
         products.value = Array.isArray(response)
             ? response
             : response.products || [];
+
+        cards.value = response.cards || cards.value;
 
         pagination.value = response.pagination || {
             current_page: 1,
@@ -811,173 +821,66 @@ onMounted(() => {
             </div>
         </template>
         <div class="product-page">
-            <div class="page-actions">
-                    <a
-                        class="secondary-action"
-                        href="/app/inventory/hsn-master"
-                    >
-                        HSN/SAC Master
-                    </a>
-
-                    <button
-                        type="button"
-                        class="secondary-action"
-                        :disabled="exportProcessing"
-                        @click="exportProducts"
-                    >
-                        {{ exportProcessing ? 'Exporting...' : 'Export' }}
-                    </button>
-
-                    <button
-                        type="button"
-                        class="secondary-action"
-                        @click="openAllLabels"
-                    >
-                        Print Labels
-                    </button>
-
-                    <button
-                        type="button"
-                        class="primary-action"
-                        @click="addProduct"
-                    >
-                        <span class="plus-icon">+</span>
-                        Add Product
-                    </button>
-            </div>
-
-            <div class="summary-grid">
-                <div class="summary-card">
-                    <span>Total Products</span>
-                    <strong>{{ pageTotal }}</strong>
-                </div>
-
-                <div class="summary-card">
-                    <span>Active on Page</span>
-                    <strong>{{ activeProductsCount }}</strong>
-                </div>
-
-                <div class="summary-card">
-                    <span>Inactive on Page</span>
-                    <strong>{{ inactiveProductsCount }}</strong>
-                </div>
+            <div v-if="cards" class="bq-cards">
+                <button type="button" class="bq-card" @click="quickFilter('all')"><span>Products</span><strong>{{ cards.total }}</strong><small>{{ cards.active }} active</small></button>
+                <button type="button" class="bq-card due" @click="quickFilter('price')"><span>Price missing</span><strong>{{ cards.price_missing }}</strong><small>Set a selling price before billing</small></button>
+                <button type="button" class="bq-card draft" @click="quickFilter('inactive')"><span>Inactive</span><strong>{{ cards.inactive }}</strong><small>Not offered in billing</small></button>
             </div>
 
             <section class="listing-card">
-                <div class="listing-toolbar">
-                    <div class="search-box">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                        >
-                            <circle
-                                cx="11"
-                                cy="11"
-                                r="7"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                            />
-                            <path
-                                d="m20 20-4-4"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                                stroke-linecap="round"
-                            />
-                        </svg>
+                <div class="list-head">
+                    <form class="bq-search" role="search" @submit.prevent="loadProducts(1)">
+                        <input v-model="search" type="search" aria-label="Search products" placeholder="Search by product name, SKU, barcode or HSN" />
+                        <button type="button" :aria-expanded="showFilters" @click="showFilters = !showFilters">Filters<b v-if="moreFilters">{{ moreFilters }}</b></button>
+                        <button type="button" class="primary-action" @click="addProduct">Add Product</button>
+                    </form>
 
-                        <input
-                            v-model="search"
-                            type="text"
-                            placeholder="Search by product name, SKU, barcode, HSN..."
-                        />
-                    </div>
-
-                    <div class="filter-group">
-                        <select v-model="productTypeFilter">
-                            <option value="">All Types</option>
+                    <div v-if="showFilters" class="bq-filters">
+                        <label><span>Goods or service</span><select v-model="productTypeFilter">
+                            <option value="">All</option>
                             <option value="goods">Goods</option>
                             <option value="service">Service</option>
-                        </select>
-
-                        <select v-model="itemTypeFilter">
-                            <option value="">All Items</option>
+                        </select></label>
+                        <label><span>Stock tracking</span><select v-model="itemTypeFilter">
+                            <option value="">All</option>
                             <option value="stock">Stock Item</option>
                             <option value="non_stock">Non-stock</option>
-                        </select>
-
-                        <select v-model="statusFilter">
-                            <option value="">All Status</option>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="deleted">Deleted</option>
-                        </select>
-
-                        <select v-model="categoryFilter">
-                            <option value="">All Categories</option>
-                            <option
-                                v-for="option in categoryFilterOptions"
-                                :key="`category-${option.value}`"
-                                :value="option.value"
-                            >
-                                {{ option.label }}
-                            </option>
-                        </select>
-
-                        <select v-model="brandFilter">
-                            <option value="">All Brands</option>
-                            <option
-                                v-for="option in brandFilterOptions"
-                                :key="`brand-${option.value}`"
-                                :value="option.value"
-                            >
-                                {{ option.label }}
-                            </option>
-                        </select>
-
-                        <select v-model="unitFilter">
-                            <option value="">All Units</option>
-                            <option
-                                v-for="option in unitFilterOptions"
-                                :key="`unit-${option.value}`"
-                                :value="option.value"
-                            >
-                                {{ option.label }}
-                            </option>
-                        </select>
-
-                        <select v-model="gstRateFilter">
-                            <option value="">All GST</option>
-                            <option
-                                v-for="option in gstRateFilterOptions"
-                                :key="`gst-${option.value}`"
-                                :value="option.value"
-                            >
-                                {{ option.label }}
-                            </option>
-                        </select>
-
-                        <select v-model="priceFilter" aria-label="Filter by price">
-                            <option value="">All Prices</option>
-                            <option value="missing">Price missing (needs rate)</option>
-                        </select>
-
-                        <select v-model="sampleFilter" aria-label="Filter sample products">
-                            <option value="">All Products</option>
+                        </select></label>
+                        <label><span>Category</span><select v-model="categoryFilter">
+                            <option value="">All</option>
+                            <option v-for="option in categoryFilterOptions" :key="`category-${option.value}`" :value="option.value">{{ option.label }}</option>
+                        </select></label>
+                        <label><span>Brand</span><select v-model="brandFilter">
+                            <option value="">All</option>
+                            <option v-for="option in brandFilterOptions" :key="`brand-${option.value}`" :value="option.value">{{ option.label }}</option>
+                        </select></label>
+                        <label><span>Unit</span><select v-model="unitFilter">
+                            <option value="">All</option>
+                            <option v-for="option in unitFilterOptions" :key="`unit-${option.value}`" :value="option.value">{{ option.label }}</option>
+                        </select></label>
+                        <label><span>GST rate</span><select v-model="gstRateFilter">
+                            <option value="">All</option>
+                            <option v-for="option in gstRateFilterOptions" :key="`gst-${option.value}`" :value="option.value">{{ option.label }}</option>
+                        </select></label>
+                        <label><span>Sample data</span><select v-model="sampleFilter">
+                            <option value="">All products</option>
                             <option value="sample">Sample products only</option>
-                        </select>
+                        </select></label>
+                        <label><span>Rows per page</span><select v-model="perPage">
+                            <option :value="10">10</option>
+                            <option :value="15">15</option>
+                            <option :value="25">25</option>
+                            <option :value="50">50</option>
+                        </select></label>
+                        <div class="bq-filter-actions"><button type="button" @click="clearFilters">Clear</button></div>
+                    </div>
 
-                        <button
-                            v-if="hasFilters"
-                            type="button"
-                            class="clear-filter"
-                            @click="clearFilters"
-                        >
-                            Clear
-                        </button>
+                    <div class="bq-chips">
+                        <button v-for="chip in chips" :key="chip.key" type="button" :class="{ active: activeChip === chip.key }" :aria-pressed="activeChip === chip.key" @click="quickFilter(chip.key)">{{ chip.label }}</button>
                     </div>
                 </div>
 
-                <div class="bulk-bar">
+                <div v-if="selectedIds.length" class="bulk-bar">
                     <div>
                         <strong>{{ selectedIds.length }}</strong>
                         selected
@@ -999,23 +902,6 @@ onMounted(() => {
                         >
                             Deactivate
                         </button>
-
-                        <select v-model="perPage">
-                            <option :value="10">10 / page</option>
-                            <option :value="15">15 / page</option>
-                            <option :value="25">25 / page</option>
-                            <option :value="50">50 / page</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="listing-information">
-                    <div>
-                        <strong>Product Master</strong>
-                        <span>
-                            Showing {{ pagination.from || 0 }} to {{ pagination.to || 0 }}
-                            of {{ pagination.total || 0 }} products
-                        </span>
                     </div>
                 </div>
 
@@ -1071,6 +957,7 @@ onMounted(() => {
                     :loading="loading"
                     :value-for="productValueFor"
                     selectable
+                    mobile-cards
                     :selected-ids="selectedIds"
                     @toggle-select-all="toggleSelectAll"
                     @toggle-row="toggleSelection"
@@ -1114,7 +1001,7 @@ onMounted(() => {
                             <RowActionMenu
                                 :open="openActionMenuId === product.id"
                                 :show-view="false"
-                                more-label="Actions"
+                                more-label="More"
                                 more-title="Product actions"
                                 @toggle="toggleActionMenu(product.id)"
                                 @close="closeActionMenu"
@@ -1165,6 +1052,13 @@ onMounted(() => {
                     >
                         Next
                     </button>
+                </div>
+
+                <div class="file-tools">
+                    <span class="showing">Showing {{ pagination.from || 0 }} to {{ pagination.to || 0 }} of {{ pagination.total || 0 }} products</span>
+                    <a class="secondary-action" href="/app/inventory/hsn-master">HSN/SAC Master</a>
+                    <button type="button" class="secondary-action" @click="openAllLabels">Print Labels</button>
+                    <button type="button" class="secondary-action" :disabled="exportProcessing" @click="exportProducts">{{ exportProcessing ? 'Exporting...' : 'Export' }}</button>
                 </div>
             </section>
         </div>
@@ -2112,4 +2006,10 @@ onMounted(() => {
         flex-wrap: wrap;
     }
 }
+
+.list-head { padding: 16px 20px 0; }
+.file-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid #edf1f5; }
+.file-tools .showing { margin-right: auto; color: #758197; font-size: 12px; }
+.file-tools a { text-decoration: none; }
+@media (max-width: 760px) { .list-head { padding: 12px 12px 0; } .file-tools { padding: 12px; } .listing-card :deep(.crud-table-wrap) { padding: 0 12px; } }
 </style>

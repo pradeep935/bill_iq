@@ -1742,3 +1742,97 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
     body.printing-labels > *:not(.label-print-root) { display: none !important; }
     body.printing-labels .label-print-root { position: static !important; display: block !important; background: #fff !important; padding: 0 !important; }
 }
+
+/* Shared look of list screens (cards, search, one-tap lists, tables that become cards on a phone). */
+.bq-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.bill-main .bq-card { display: grid; gap: 3px; justify-items: start; padding: 14px 16px; text-align: left; background: #fff; border: 1px solid #dfe6ef; border-left: 4px solid #2457d6; border-radius: 12px; cursor: pointer; }
+.bill-main .bq-card:hover { border-color: #2457d6; box-shadow: 0 6px 18px rgba(36, 87, 214, .12); }
+.bq-card span { color: #5f6d82; font-size: 12px; font-weight: 800; }
+.bq-card strong { color: #142139; font-size: 26px; font-weight: 900; line-height: 1.2; }
+.bq-card small { color: #758197; font-size: 12px; font-weight: 500; }
+.bill-main .bq-card.due { border-left-color: #d23f49; }
+.bq-card.due strong { color: #b02a34; }
+.bill-main .bq-card.draft { border-left-color: #f59e0b; }
+.bq-search { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Base look, so these lists match on every screen whatever the page's own styles are. */
+.bill-main .bq-search input, .bill-main .bq-filters input, .bill-main .bq-filters select { min-height: 38px; padding: 8px 12px; color: #344159; background: #fff; border: 1px solid #d8e0eb; border-radius: 8px; }
+.bill-main .bq-search button:not(.primary):not(.primary-action), .bill-main .bq-filter-actions button, .bill-main .bq-chips button:not(.active), .bill-main .bq-actions .bq-quick:not(.pay-now):not(.wa) { color: #344159; background: #fff; border: 1px solid #d8e0eb; border-radius: 8px; font-weight: 750; cursor: pointer; }
+.bill-main .bq-search button.primary, .bill-main .bq-search button.primary-action { color: #fff; background: #2457d6; border: 1px solid #2457d6; border-radius: 8px; font-weight: 800; cursor: pointer; }
+.bill-main .bq-chips button.active { border: 1px solid #142139; font-weight: 750; cursor: pointer; }
+.bill-main .bq-filter-actions button { min-height: 38px; padding: 8px 16px; }
+.bill-main .bq-search input { flex: 1; min-width: 220px; min-height: 44px; font-size: 14px; }
+.bill-main .bq-search button { min-height: 44px; padding: 9px 18px; }
+.bq-search b { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; color: #fff; background: #2457d6; border-radius: 999px; font-size: 11px; }
+.bq-chips { display: flex; gap: 8px; margin: 12px 0; padding-bottom: 2px; overflow-x: auto; }
+.bill-main .bq-chips button { flex: 0 0 auto; min-height: 36px; padding: 7px 16px; border-radius: 999px; font-size: 12px; }
+.bill-main .bq-chips button.active { color: #fff; background: #142139; border-color: #142139; }
+.bq-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 14px; padding: 14px; background: #f8fafc; border: 1px solid #e3e9f2; border-radius: 10px; }
+.bq-filters label { display: grid; gap: 5px; color: #667085; font-size: 11px; font-weight: 800; }
+.bill-main .bq-filters input, .bill-main .bq-filters select { width: 100%; min-width: 0; }
+.bq-filter-actions { display: flex; align-items: flex-end; gap: 8px; }
+.bill-main .bq-table td { font-size: 13px; vertical-align: middle; }
+.bill-main .bq-table .num { text-align: right; }
+.bq-table tbody tr:hover { background: #f8fbff; }
+.bill-main .bq-link { min-height: 0; padding: 0; color: #2457d6; background: none; border: 0; font-size: 13px; font-weight: 800; text-align: left; cursor: pointer; }
+.bill-main .bq-table td small { display: block; color: #7a869a; font-size: 11px; font-weight: 500; }
+.bill-main .bq-table td.bq-name { min-width: 180px; white-space: normal; }
+.bill-main .bq-table td.bq-actions { width: 1%; }
+.bq-actions .row-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.bill-main .bq-actions .bq-quick { display: inline-block; min-width: 84px; min-height: 38px; margin: 0; font-size: 12px; }
+.bill-main .bq-table .bq-badge { display: inline-block; min-width: 76px; padding: 5px 8px; text-align: center; color: #2457d6; background: #edf2ff; border-radius: 7px; font-size: 11px; font-weight: 800; }
+.bill-main .bq-table .bq-badge.ok { color: #168757; background: #eaf8f1; }
+.bill-main .bq-table .bq-badge.wait { color: #b02a34; background: #fdecee; }
+.bill-main .bq-table .bq-badge.draft { color: #b45309; background: #fff4e5; }
+.bill-main .bq-table .bq-badge.off { color: #667085; background: #eef2f7; }
+
+@media (max-width: 760px) {
+    .bq-table thead { display: none; }
+    .bq-table, .bq-table tbody, .bq-table tr { display: block; width: auto; }
+    .bq-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; margin-bottom: 10px; padding: 12px; border: 1px solid #e3e9f2; border-radius: 10px; }
+    .bill-main .bq-table td { display: block; width: auto; min-width: 0; padding: 2px 0; border: 0; white-space: normal; }
+    .bill-main .bq-table td.bq-name { grid-column: 1 / -1; min-width: 0; font-weight: 800; }
+    .bq-table td[data-label="Due"]::before { content: 'Due '; color: #8490a2; font-size: 11px; }
+    .bill-main .bq-table td.bq-actions, .bill-main .bq-table td.empty { grid-column: 1 / -1; width: auto; padding-top: 8px; }
+    /* Lists whose values need a name on a phone: label above value, two to a row. */
+    .bq-table.bq-labeled tr { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+    .bill-main .bq-table.bq-labeled td.num { text-align: left; }
+    .bq-table.bq-labeled td[data-label]:not(.bq-name)::before { content: attr(data-label); display: block; color: #8490a2; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .bill-main .bq-table.bq-labeled .bq-actions .row-actions { justify-content: flex-start; }
+}
+
+/* A form field with its name above it. */
+.bill-main label.bq-field { display: grid; gap: 5px; align-content: start; justify-items: stretch; min-width: 0; margin: 0; color: #667085; font-size: 11px; font-weight: 800; }
+.bill-main label.bq-field > input, .bill-main label.bq-field > select, .bill-main label.bq-field > textarea { width: 100%; min-width: 0; max-width: 100%; }
+
+@media (max-width: 760px) {
+    /* Compact header: menu and title, then search and quick actions, so the work starts near the top. */
+    body .bill-app .bill-main .bill-topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-bottom: 12px; }
+    body .bill-app .bill-main .bill-topbar-left { grid-column: 1; grid-row: 1; gap: 10px; min-width: 0; }
+    body .bill-app .bill-main .bill-topbar .bill-page-title span, body .bill-app .bill-main .bill-topbar .bill-page-title p { display: none; }
+    body .bill-app .bill-main .bill-topbar .bill-page-title h1 { margin: 0; font-size: 18px; white-space: normal; }
+    body .bill-app .bill-main .bill-user { grid-column: 2; grid-row: 1; align-self: center; padding: 4px; }
+    body .bill-app .bill-main .bill-user div { display: none; }
+    body .bill-app .bill-main .bill-saas-context, body .bill-app .bill-main .bill-global-search, body .bill-app .bill-main .bill-top-actions { grid-column: 1 / -1; }
+    body .bill-app .bill-main .bill-top-actions { display: flex; flex-wrap: nowrap; gap: 6px; }
+    body .bill-app .bill-main .bill-top-actions a, body .bill-app .bill-main .bill-top-actions button { flex: 1 1 0; justify-content: center; min-height: 40px; min-width: 0; padding: 6px; }
+    body .bill-app .bill-main .bill-top-actions .icon-only { flex: 0 0 44px; }
+    body .bill-app .bill-main .bill-top-actions .bill-nav-icon:not(:only-child) { display: none; }
+
+    /* Any list table as cards (see Support/mobileTables.js). */
+    body .bill-main table[data-cards], body .bill-main table[data-cards] > tbody, body .bill-main table[data-cards] > tfoot { display: block; width: 100% !important; min-width: 0 !important; }
+    body .bill-main table[data-cards] > thead { display: none; }
+    body .bill-main table[data-cards] > tbody > tr, body .bill-main table[data-cards] > tfoot > tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin-bottom: 10px; padding: 12px; border: 1px solid #e3e9f2; border-radius: 10px; }
+    body .bill-main table[data-cards] > * > tr > td, body .bill-main table[data-cards] > * > tr > th { display: block; position: static; width: auto !important; min-width: 0 !important; max-width: none !important; padding: 0; border: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; box-shadow: none; }
+    body .bill-main table[data-cards] > * > tr > td[colspan], body .bill-main table[data-cards] > * > tr > td[data-label=""], body .bill-main table[data-cards] > * > tr > td:first-child { grid-column: 1 / -1; }
+    body .bill-main table[data-cards] > * > tr > td[data-label]:not([data-label=""])::before { content: attr(data-label); display: block; color: #8490a2; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    body .bill-main table[data-cards] > * > tr > td input:not([type=checkbox]):not([type=radio]), body .bill-main table[data-cards] > * > tr > td select, body .bill-main table[data-cards] > * > tr > td textarea { width: 100%; min-width: 0; }
+}
+
+/* Tab names written in lower case in some screens read as titles. */
+.bill-main .tabs button, .bill-main [role="tab"], .bill-main [class*="-tabs"] button, .bill-main [class*="tab-list"] button { text-transform: capitalize; }
+.bill-main .bq-sub { display: block; color: #7a869a; font-size: 11px; font-weight: 500; }
+/* The button that saves the form stands out. */
+body .bill-app .bill-main button.bq-primary { color: #fff; background: #2457d6; border: 1px solid #2457d6; border-radius: 8px; font-weight: 800; cursor: pointer; }
+body .bill-app .bill-main button.bq-primary:disabled { opacity: .55; cursor: not-allowed; }
+/* Where every box in an entry row carries its own name, the separate heading row is not needed. */
+.bill-app .bill-main .line-head:has(~ .line-grid .bq-field) { display: none; }

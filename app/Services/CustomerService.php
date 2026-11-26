@@ -7,6 +7,7 @@ use App\Http\Controllers\AppController;
 use App\Models\Account;
 use App\Models\BusinessAccountSetting;
 use App\Models\Customer;
+use App\Models\JournalEntry;
 use App\Models\JournalVoucher;
 use App\Models\ReceiptVoucher;
 use App\Models\SalesReturnVoucher;
@@ -31,6 +32,50 @@ class CustomerService
         $perPage = min(max((int) ($filters['per_page'] ?? 15), 1), 100);
 
         return $this->query($filters)->paginate($perPage)->through(fn (Customer $customer) => $this->present($customer));
+    }
+
+    // Figures for the cards above the customer list; balances are the same ledger balances the rows show.
+    public function cards(): array
+    {
+        $businessId = AppController::businessId();
+        $owing = $this->owingBalances($businessId);
+        $customers = Customer::query()->where('business_id', $businessId);
+
+        return [
+            'total' => (clone $customers)->count(),
+            'new_this_month' => (clone $customers)->whereDate('created_at', '>=', now()->startOfMonth()->toDateString())->count(),
+            'month_start' => now()->startOfMonth()->toDateString(),
+            'to_collect' => round((float) $owing->sum(), 2),
+            'owing_count' => $owing->count(),
+        ];
+    }
+
+    // customer id => amount still to be collected (only customers who owe something).
+    private function owingBalances(int $businessId): \Illuminate\Support\Collection
+    {
+        $ids = Customer::query()->where('business_id', $businessId)->select('id');
+
+        if (!Schema::hasTable('journal_entries')) {
+            return Customer::query()->where('business_id', $businessId)->where('opening_balance', '>', 0)->pluck('opening_balance', 'id');
+        }
+
+        return $this->receivableEntries($businessId)
+            ->whereIn('journal_entries.customer_id', $ids)
+            ->groupBy('journal_entries.customer_id')
+            ->havingRaw('ROUND(SUM(journal_entries.debit_amount) - SUM(journal_entries.credit_amount), 2) > 0')
+            ->selectRaw('journal_entries.customer_id as id, SUM(journal_entries.debit_amount) - SUM(journal_entries.credit_amount) as balance')
+            ->pluck('balance', 'id');
+    }
+
+    // Journal lines that make up what customers owe, the same lines as Accounting > Ledgers.
+    private function receivableEntries(int $businessId): \Illuminate\Database\Query\Builder
+    {
+        $query = DB::table('journal_entries')
+            ->join('journal_vouchers', 'journal_vouchers.id', '=', 'journal_entries.journal_voucher_id')
+            ->where('journal_entries.business_id', $businessId)
+            ->whereIn('journal_vouchers.status', JournalVoucher::LEDGER_STATUSES);
+
+        return JournalEntry::withoutMoneyLines($query, $businessId);
     }
 
     public function create(array $data): Customer
@@ -241,12 +286,9 @@ class CustomerService
     public function ledger(Customer $customer, array $filters = []): array
     {
         $this->assertBusiness($customer);
-        $entries = DB::table('journal_entries')
-            ->join('journal_vouchers', 'journal_vouchers.id', '=', 'journal_entries.journal_voucher_id')
+        $entries = $this->receivableEntries($customer->business_id)
             ->leftJoin('branches', 'branches.id', '=', 'journal_entries.branch_id')
-            ->where('journal_entries.business_id', $customer->business_id)
             ->where('journal_entries.customer_id', $customer->id)
-            ->whereIn('journal_vouchers.status', ['posted', 'approved'])
             ->when(!empty($filters['date_from']), fn ($q) => $q->whereDate('journal_vouchers.voucher_date', '>=', $filters['date_from']))
             ->when(!empty($filters['date_to']), fn ($q) => $q->whereDate('journal_vouchers.voucher_date', '<=', $filters['date_to']))
             ->when(!empty($filters['branch_id']), fn ($q) => $q->where('journal_entries.branch_id', $filters['branch_id']))
@@ -637,6 +679,7 @@ class CustomerService
             ->where('business_id', $businessId)
             ->when(($filters['status'] ?? '') === 'deleted', fn (Builder $q) => $q->onlyTrashed())
             ->when(!empty($filters['status']) && ($filters['status'] ?? '') !== 'deleted', fn (Builder $q) => $q->where('status', $filters['status']))
+            ->when(($filters['balance'] ?? '') === 'due', fn (Builder $q) => $q->whereIn('id', $this->owingBalances($businessId)->keys()->all()))
             ->when(!empty($filters['type']), fn (Builder $q) => $q->where('customer_type', $filters['type']))
             ->when(!empty($filters['state_id']), fn (Builder $q) => $q->where('state_id', $filters['state_id']))
             ->when(!empty($filters['price_type']), fn (Builder $q) => $q->where('price_type', $filters['price_type']))
@@ -750,11 +793,8 @@ class CustomerService
             return (float) $customer->opening_balance;
         }
 
-        $row = DB::table('journal_entries')
-            ->join('journal_vouchers', 'journal_vouchers.id', '=', 'journal_entries.journal_voucher_id')
-            ->where('journal_entries.business_id', $customer->business_id)
+        $row = $this->receivableEntries($customer->business_id)
             ->where('journal_entries.customer_id', $customer->id)
-            ->whereIn('journal_vouchers.status', ['posted', 'approved'])
             ->selectRaw('SUM(journal_entries.debit_amount) as debit, SUM(journal_entries.credit_amount) as credit')
             ->first();
 

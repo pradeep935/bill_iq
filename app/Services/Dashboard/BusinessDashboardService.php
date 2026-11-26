@@ -322,7 +322,9 @@ class BusinessDashboardService
 
         return round((float) DB::table('journal_entries')
             ->join('accounts', 'accounts.id', '=', 'journal_entries.account_id')
+            ->join('journal_vouchers', 'journal_vouchers.id', '=', 'journal_entries.journal_voucher_id')
             ->where('journal_entries.business_id', $businessId)
+            ->whereIn('journal_vouchers.status', \App\Models\JournalVoucher::LEDGER_STATUSES)
             ->whereIn('accounts.account_type', $types)
             ->selectRaw('COALESCE(SUM(journal_entries.debit_amount - journal_entries.credit_amount), 0) as balance')
             ->value('balance'), 2);

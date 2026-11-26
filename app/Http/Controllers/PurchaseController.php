@@ -29,7 +29,17 @@ class PurchaseController extends Controller
         AppController::applyTenantScope($query, 'purchase_vouchers');
         $t = $query->selectRaw('COALESCE(SUM(taxable_amount),0) taxable, COALESCE(SUM(cgst_amount),0) cgst, COALESCE(SUM(sgst_amount),0) sgst, COALESCE(SUM(igst_amount),0) igst, COALESCE(SUM(cess_amount),0) cess')->first();
 
-        return response()->json(['summary' => [
+        // The figures at the top of the purchase list.
+        $own = fn () => AppController::applyTenantScope(PurchaseVoucher::query(), 'purchase_vouchers');
+        $posted = fn () => $own()->whereIn('status', ['confirmed', 'approved']);
+
+        return response()->json(['cards' => [
+            'today_total' => round((float) $posted()->whereDate('purchase_date', now()->toDateString())->sum('grand_total'), 2),
+            'today_count' => $posted()->whereDate('purchase_date', now()->toDateString())->count(),
+            'to_pay' => round((float) $posted()->where('balance_amount', '>', 0)->sum('balance_amount'), 2),
+            'to_pay_count' => $posted()->where('balance_amount', '>', 0)->count(),
+            'drafts' => $own()->where('status', 'draft')->count(),
+        ], 'summary' => [
             'taxable_purchases' => round((float) $t->taxable, 2), 'cgst' => round((float) $t->cgst, 2), 'sgst' => round((float) $t->sgst, 2), 'igst' => round((float) $t->igst, 2),
             'tax' => round((float) $t->cgst + (float) $t->sgst + (float) $t->igst + (float) $t->cess, 2),
         ]]);

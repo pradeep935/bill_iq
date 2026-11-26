@@ -136,9 +136,10 @@ export const pageHelp = {
     'sales-returns': h('Record goods returned by a customer and issue a credit note.', {
         steps: ['Create a new return and select the original invoice.', 'Enter the returned items and quantities.', 'Approve the return. Process a refund if needed and print the credit note.'],
     }),
-    'payment-reminders': h('Customers with pending payments, and reminders to them.', { steps: ['Review the pending bills.', 'Send the customer a reminder.', 'When payment arrives, record it with a Receipt voucher.'] }),
+    'payment-reminders': h('Customers with pending payments, and reminders to them.', { steps: ['Review the unpaid bills; click “Overdue only” for late ones.', 'Click “WhatsApp reminder” on a customer.', 'When payment arrives, record it with a Receipt voucher.'] }),
     customers: h('Your customers, their outstanding balances and history.', {
-        steps: ['Add a customer with “+ New Customer”.', 'Click a customer to see invoices, ledger and outstanding amount.', 'Use “Receive Payment” when money is received.'],
+        steps: ['Add a customer with “New Customer”.', 'Click a customer’s name to see invoices and details; use “New Bill” to bill them.', 'Click “To collect” to see who owes money; use More > Receive payment when it is received.'],
+        notes: ['“To collect” is the account balance (opening balance and adjustments included). Payment Reminders lists only unpaid bills, so its total can be smaller.'],
     }),
     'inventory-outward': h('Goods going out: dispatch of billed goods and entries without a bill.', {
         tabs: [['Sale Dispatch', 'Packing and delivery of billed goods; stock is not reduced again'], ['Manual Outward', 'Goods sent without a bill'], ['History', 'Past stock entries']],
@@ -151,12 +152,12 @@ export const pageHelp = {
     }),
 
     purchases: h('Bills for goods bought from suppliers.', {
-        steps: ['Click “New Purchase”, select the supplier, add items and click “Confirm & Post”.', 'For freight, fill in “Transport / Other Charges” and its GST %, if any.', 'Choose the payment: Unpaid, Paid in full or Partly paid. To pay later, click “Pay” on the bill.', 'To correct a bill: Actions > Edit, then “Save Changes”. The voucher number stays the same.', 'If your supplier uses BillIQ, click “From Supplier Bill” and paste the bill link.'],
+        steps: ['Click “New Purchase”, select the supplier, add items and click “Confirm & Post”.', 'For freight, fill in “Transport / Other Charges” and its GST %, if any.', 'Choose the payment: Unpaid, Paid in full or Partly paid. To pay later, click “Pay” on the bill.', 'To correct a bill: More > Edit, then “Save Changes”. The voucher number stays the same.', 'If your supplier uses BillIQ, click “From Supplier Bill” and paste the bill link.'],
         notes: ['Posting a bill adds stock. For goods already received through Stock Inward / GRN, make the bill from there (“Create Purchase Bill”) so that they are counted once.', 'Bills within your state carry CGST and SGST; bills from another state carry IGST.', 'Only an admin can edit a reversed or cancelled bill, or one with a payment voucher.', 'If a payment voucher is recorded, the supplier cannot be changed and the total cannot go below the amount paid.', 'If a purchase return exists, cancel or reverse the return before editing.', 'The earlier version of an edited bill is kept under Status > Reversed with -R1 after the number.'],
         faq: [['It says the bill is already entered again.', 'The same supplier bill exists under another voucher number. Edit that one.']],
     }),
     'supplier-bills': h('Get bills from suppliers who use BillIQ and add them to purchases without typing.', { steps: ['Open “Connections”, search the supplier by full mobile number or GSTIN and click “Send Request”. They must accept it once.', 'The supplier opens their sales invoice list and clicks More > “Send on BillIQ”.', 'The bill appears under “Received Bills”. Click “Add to Purchase”.', 'Match each item with your product, or add it as a new product.', 'Check the purchase form and click “Confirm & Post”. Stock changes only then.', 'Without a connection, paste the bill link the supplier sent on WhatsApp.'] }),
-    'purchase-returns': h('Return goods to a supplier.', { steps: ['Click “New Return” and select the purchase bill.', 'Enter the items and quantities being returned.', 'Click “Post”. Stock and the supplier balance are updated.'] }),
+    'purchase-returns': h('Return goods to a supplier.', { steps: ['Click “New Return” and select the purchase bill.', 'Enter the items and quantities being returned.', 'Click “Confirm & Post”. Stock and the supplier balance are updated.'] }),
     suppliers: h('The suppliers you buy from.', { steps: ['Click “New Supplier” and enter the name, mobile number, GSTIN and address.', 'You can edit, delete or restore a supplier.'] }),
     'inventory-inward': h('From requesting goods to receiving them in the warehouse (GRN).', {
         tabs: [['Overview', 'Summary'], ['Requisitions', 'Internal requests for goods'], ['Purchase Orders', 'Orders placed with suppliers'], ['Goods Receipts', 'Record goods that arrive'], ['Reports', 'Reports']],
@@ -172,12 +173,12 @@ export const pageHelp = {
         steps: ['Click “+ New Stock Operation” and choose the task.', 'Add the items, then Save Draft or Approve & Post.'],
     }),
     products: h('All products with their prices, GST and barcodes.', {
-        steps: ['Click “Add Product” to create a product.', 'To set rates, use Edit > Pricing and enter Cost Price, Selling Price and MRP.', 'For products bought as samples, tick Edit > Basic > “Purchased as sample”.', 'To print labels, tick the products and click “Print Labels”.'],
-        notes: ['The “Price missing” filter shows products without a selling price.'],
+        steps: ['Click “Add Product” to create a product.', 'To set rates, use Edit > Pricing and enter Cost Price, Selling Price and MRP.', 'For products bought as samples, tick Edit > Basic > “Purchased as sample”.', 'To print labels, tick the products and click “Print Labels” below the list.'],
+        notes: ['“Price missing” shows products without a selling price.'],
     }),
     'business-hsn-master': h('HSN/SAC codes and their GST rates.', { steps: ['Click “+ Add HSN/SAC” and pick from the reference list or create one manually.', 'Check the GST rate and save.'], notes: ['Confirm tax rates with your accountant (CA).'] }),
     'opening-stock': h('Record the stock you already had when you started using the app.', { steps: ['Create a “New Voucher” and select the branch and warehouse.', 'Enter products, quantities and cost.', 'Check the details and click “Post”.'], notes: ['A draft does not add stock. You must post it.'] }),
-    'inventory-current-stock': h('Current stock of every product.', { steps: ['Find a product using search or filters.', 'Use the row actions for the stock ledger, batch or serial details.', 'Export the list as CSV, Excel or PDF.'] }),
+    'inventory-current-stock': h('Current stock of every product.', { steps: ['Find a product using search, or tap “Low stock” or “Out of stock”.', 'Click “View” for details, or “More” for the stock ledger, batch or serial details.', 'Download the list as CSV, Excel or PDF below the table.'] }),
     'inventory-vouchers': h('Stock vouchers: adjustments, transfers and counts.', { steps: ['Click “+ New Stock Operation” and choose the voucher type.', 'Add the items and post.'] }),
     'inventory-batches': h('Goods tracked by batch number and expiry date.', {
         tabs: [['Overview', 'Summary'], ['Batches', 'All batches'], ['Batch Movements', 'Entry history of batches'], ['Expiry', 'Goods expiring soon'], ['Quarantine', 'Goods put on hold'], ['Reports', 'Reports']],
@@ -257,8 +258,8 @@ export const startGuide = h('The order in which to start using BillIQ.', {
     steps: ['Setup > Settings: business name, GSTIN, address, bank details and print format.', 'Setup > Branches, then Inventory > Warehouses / Bins: at least one of each.', 'Setup > Users & Roles: logins for your staff.', 'Inventory > Product Master: add the items with rate and GST %.', 'Inventory > Opening Stock: the stock you have today (remember to Post).', 'Add customers and suppliers.', 'Enter purchases in Purchase > Purchases.', 'Make bills from New Bill.', 'Record money received or paid with Receipt and Payment (Accounting > Vouchers).', 'Check the Business Dashboard daily and Business Reports every month.'],
     faq: [
         ['How do I make a bill?', 'Click “New Bill” at the top, add products, choose payment and click “Complete Sale”.'],
-        ['How do I correct a wrong bill?', 'Sales Invoices > More > Edit, or Purchases > Actions > Edit; then Save Changes.'],
-        ['How do I receive pending money?', 'Open the customer in Customers and use “Receive Payment”, or make a Receipt voucher.'],
+        ['How do I correct a wrong bill?', 'Sales Invoices > More > Edit, or Purchases > More > Edit; then Save Changes.'],
+        ['How do I receive pending money?', 'In Customers, use More > Receive payment on the customer, or make a Receipt voucher.'],
         ['How do I take back goods?', 'Sales Returns for goods from a customer; Purchase Returns for goods sent to a supplier.'],
         ['Where do I see who owes me money?', 'Business Dashboard > To Collect.'],
     ],

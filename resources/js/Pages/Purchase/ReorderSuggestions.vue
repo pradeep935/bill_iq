@@ -192,13 +192,13 @@ onMounted(async () => {
             </section>
 
             <section class="toolbar">
-                <input v-model="filters.search" placeholder="Search Product / SKU / Barcode" @keyup.enter="load(1)" />
-                <select v-model="filters.branch_id" @change="load(1)"><option value="">Branch</option><option v-for="branch in refs.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option></select>
-                <select v-model="filters.warehouse_id" @change="load(1)"><option value="">Warehouse</option><option v-for="warehouse in refs.warehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option></select>
-                <select v-model="filters.stock_status" @change="load(1)"><option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ status.label }}</option></select>
-                <select v-model="filters.supplier_id" @change="load(1)"><option value="">Supplier</option><option v-for="supplier in refs.suppliers" :key="supplier.id" :value="supplier.id">{{ supplierName(supplier) }}</option></select>
-                <select v-model="filters.category_id" @change="load(1)"><option value="">Category</option><option v-for="category in refs.categories" :key="category.id" :value="category.id">{{ category.name }}</option></select>
-                <select v-model="filters.per_page" @change="load(1)"><option v-for="option in perPageOptions" :key="option" :value="option">{{ option }} rows</option></select>
+                <input aria-label="Search" v-model="filters.search" placeholder="Search Product / SKU / Barcode" @keyup.enter="load(1)" />
+                <select aria-label="Branch" v-model="filters.branch_id" @change="load(1)"><option value="">Branch</option><option v-for="branch in refs.branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option></select>
+                <select aria-label="Warehouse" v-model="filters.warehouse_id" @change="load(1)"><option value="">Warehouse</option><option v-for="warehouse in refs.warehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option></select>
+                <select aria-label="Stock status" v-model="filters.stock_status" @change="load(1)"><option v-for="status in statusOptions" :key="status.value" :value="status.value">{{ status.label }}</option></select>
+                <select aria-label="Supplier" v-model="filters.supplier_id" @change="load(1)"><option value="">Supplier</option><option v-for="supplier in refs.suppliers" :key="supplier.id" :value="supplier.id">{{ supplierName(supplier) }}</option></select>
+                <select aria-label="Category" v-model="filters.category_id" @change="load(1)"><option value="">Category</option><option v-for="category in refs.categories" :key="category.id" :value="category.id">{{ category.name }}</option></select>
+                <select aria-label="Rows per page" v-model="filters.per_page" @change="load(1)"><option v-for="option in perPageOptions" :key="option" :value="option">{{ option }} rows</option></select>
                 <button @click="clearFilters">Clear Filters</button>
             </section>
 

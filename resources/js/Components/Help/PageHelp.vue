@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { guideTopics, helpFor, pageHelp, startGuide } from './pageHelp';
+import { howTo } from './howTo';
 
 const props = defineProps({
     page: { type: String, required: true },
@@ -13,15 +14,20 @@ const open = ref(false);
 const topic = ref(null);
 const search = ref('');
 const guideOf = (key) => (key === 'getting-started' ? startGuide : pageHelp[key]);
-const help = computed(() => (topic.value && topic.value !== 'all' ? guideOf(topic.value) : pageGuide.value));
-const heading = computed(() => (topic.value === 'all' ? 'All guides' : (guideTopics.find(([, key]) => key === topic.value)?.[0] || props.title)));
-const matches = computed(() => {
-    const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return guideTopics.filter(([name, key]) => {
-        const text = `${name} ${JSON.stringify(guideOf(key) || '')}`.toLowerCase();
-        return words.every((word) => text.includes(word));
-    });
+const exampleOf = (key) => howTo.find((item) => `how:${item.id}` === key);
+const example = computed(() => exampleOf(topic.value));
+const help = computed(() => (example.value ? null : (topic.value && topic.value !== 'all' ? guideOf(topic.value) : pageGuide.value)));
+const heading = computed(() => (topic.value === 'all' ? 'All guides' : (example.value?.title || guideTopics.find(([, key]) => key === topic.value)?.[0] || props.title)));
+// The examples offered on this screen. Sales Orders shares its page key with Sales Invoices.
+const here = computed(() => {
+    const key = topic.value || (pageHelp[`${props.page}|${props.title}`] ? `${props.page}|${props.title}` : props.page);
+    return howTo.filter((item) => item.pages.includes(key));
 });
+// One example, or this screen's examples, in the shape the template draws.
+const examples = computed(() => (example.value ? [example.value] : here.value));
+const wanted = (text) => search.value.trim().toLowerCase().split(/\s+/).filter(Boolean).every((word) => text.toLowerCase().includes(word));
+const matches = computed(() => guideTopics.filter(([name, key]) => wanted(`${name} ${JSON.stringify(guideOf(key) || '')}`)));
+const exampleMatches = computed(() => howTo.filter((item) => wanted(JSON.stringify(item))));
 const openHere = () => { topic.value = null; search.value = ''; open.value = true; };
 // Search within one screen's buttons.
 const find = ref('');
@@ -60,27 +66,56 @@ defineExpose({ show });
 
                 <template v-if="topic === 'all'">
                     <input v-model="search" class="ph-search" type="search" placeholder="Search help, e.g. return, GST, password" aria-label="Search help" />
+                    <template v-if="exampleMatches.length">
+                        <h3>How to do it (step by step)</h3>
+                        <div class="ph-examples">
+                            <button v-for="item in exampleMatches" :key="item.id" type="button" @click="topic = `how:${item.id}`">{{ item.title }} <span>›</span></button>
+                        </div>
+                    </template>
+                    <h3 v-if="matches.length">Screen guides</h3>
                     <div class="ph-topics">
                         <button v-for="[name, key] in matches" :key="key" type="button" @click="topic = key">{{ name }} <span>›</span></button>
                     </div>
-                    <p v-if="!matches.length">No guide found. Try one word, such as “bill” or “stock”.</p>
+                    <p v-if="!matches.length && !exampleMatches.length">No guide found. Try one word, such as “bill” or “stock”.</p>
                 </template>
 
-                <template v-else-if="help">
+                <template v-else>
+                    <template v-if="help">
                     <h3>{{ topic === 'getting-started' ? 'Start here' : 'What this page does' }}</h3>
                     <p>{{ help.what }}</p>
 
-                    <template v-if="help.tabs.length">
+                    <template v-if="help?.tabs.length">
                         <h3>Tabs on this page</h3>
                         <dl><template v-for="tab in help.tabs" :key="tab[0]"><dt>{{ tab[0] }}</dt><dd>{{ tab[1] }}</dd></template></dl>
                     </template>
 
-                    <template v-if="help.steps.length">
+                    <template v-if="help?.steps.length">
                         <h3>How to use it</h3>
                         <ol><li v-for="step in help.steps" :key="step">{{ step }}</li></ol>
                     </template>
 
-                    <template v-if="help.buttons.length">
+                    </template>
+
+                    <template v-if="examples.length">
+                        <h3 v-if="!example">How to do it (step by step)</h3>
+                        <component :is="example ? 'div' : 'details'" v-for="item in examples" :key="item.id" class="ph-example">
+                            <summary v-if="!example">{{ item.title }}</summary>
+                            <p v-if="item.intro" class="ph-intro">{{ item.intro }}</p>
+                            <div v-if="item.table" class="ph-table">
+                                <table>
+                                    <thead><tr><th v-for="cell in item.table.head" :key="cell">{{ cell }}</th></tr></thead>
+                                    <tbody><tr v-for="row in item.table.rows" :key="row[0]"><td v-for="(cell, index) in row" :key="index">{{ cell }}</td></tr></tbody>
+                                </table>
+                            </div>
+                            <ol v-if="item.steps"><li v-for="step in item.steps" :key="step">{{ step }}</li></ol>
+                            <div v-if="item.notes" class="ph-remember">
+                                <strong>Remember</strong>
+                                <ul><li v-for="note in item.notes" :key="note">{{ note }}</li></ul>
+                            </div>
+                        </component>
+                    </template>
+
+                    <template v-if="help?.buttons.length">
                         <h3>Every button on this screen</h3>
                         <input v-model="find" class="ph-search" type="search" placeholder="Find a button, e.g. print, edit, payment" aria-label="Find a button" />
                         <div v-if="!find && groups.length > 2" class="ph-jump">
@@ -99,12 +134,12 @@ defineExpose({ show });
                         </section>
                     </template>
 
-                    <template v-if="help.notes.length">
+                    <template v-if="help?.notes.length">
                         <h3>Please note</h3>
                         <ul><li v-for="note in help.notes" :key="note">{{ note }}</li></ul>
                     </template>
 
-                    <template v-if="help.faq.length">
+                    <template v-if="help?.faq.length">
                         <h3>Common questions</h3>
                         <details v-for="[question, answer] in help.faq" :key="question"><summary>{{ question }}</summary><p>{{ answer }}</p></details>
                     </template>
@@ -141,6 +176,18 @@ h4{margin:14px 0 6px;color:#2457d6;font-size:13px;font-weight:800}
 .ph-button strong{color:#142139;font-size:13px}
 .ph-button p{margin:3px 0 0;color:#475569;font-size:13px}
 .ph-button .ph-use{color:#1f6f43}
+.ph-examples{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ph-examples button{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:48px;padding:10px 12px;color:#142139;background:#f6f9ff;border:1px solid #d6e3ff;border-radius:10px;cursor:pointer;text-align:left;font-size:13px;font-weight:750}
+.ph-examples span{color:#2457d6}
+.ph-intro{margin:8px 0;color:#344159}
+.ph-example ol{margin-top:8px}
+.ph-example li{margin-bottom:4px}
+.ph-table{overflow-x:auto;margin:10px 0}
+.ph-table table{width:100%;min-width:480px;border-collapse:collapse;font-size:13px}
+.ph-table th,.ph-table td{padding:8px 10px;border:1px solid #dfe6ef;text-align:left;vertical-align:top}
+.ph-table th{background:#f8fafc;color:#142139}
+.ph-remember{margin-top:10px;padding:10px 12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:13px}
+@media(max-width:860px){.ph-examples{grid-template-columns:minmax(0,1fr)}}
 details{margin-bottom:8px;padding:10px 12px;border:1px solid #e3e9f2;border-radius:8px}
 summary{color:#142139;cursor:pointer;font-weight:700}
 details p{margin-top:6px;color:#475569;font-size:13px}

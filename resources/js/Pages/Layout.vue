@@ -238,6 +238,7 @@ const sections = [
     icon: 'shopping-bag',
     items: [
       { label: 'Purchases', page: 'purchases', href: routeUrl('app.purchase.bills', '/app/purchase/bills'), icon: 'shopping-bag' },
+      { label: 'Supplier Bills', page: 'supplier-bills', href: routeUrl('app.purchase.network', '/app/purchase/network'), icon: 'clipboard-list' },
       { label: 'Purchase Returns', page: 'purchase-returns', href: routeUrl('app.purchase.returns', '/app/purchase/returns'), icon: 'rotate-cw' },
       { label: 'Suppliers', page: 'suppliers', href: routeUrl('app.purchase.suppliers', '/app/purchase/suppliers'), icon: 'truck' },
       { label: 'Stock Inward / GRN', page: 'inventory-inward', href: routeUrl('app.purchase.grn', '/app/purchase/grn'), icon: 'package-plus' },

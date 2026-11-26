@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Http\Requests\OpeningStockReverseRequest;
 use App\Http\Requests\PurchaseVoucherRequest;
 use App\Models\PurchaseVoucher;
+use Illuminate\Support\Facades\DB;
+use App\Services\NetworkService;
+use App\Models\SalesVoucher;
 use Illuminate\Database\Eloquent\Builder;
 use App\Services\InventoryOrderService;
 use App\Services\PurchaseService;
@@ -288,7 +291,22 @@ class PurchaseController extends Controller
 
     public function store(PurchaseVoucherRequest $request)
     {
-        $voucher = $this->purchases->create($request->validated());
+        $data = $request->validated();
+        $source = array_filter($data['network_source'] ?? []);
+        unset($data['network_source']);
+
+        // A purchase made from a supplier's bill: access is checked again and the link saved with it, or nothing is.
+        $voucher = $source ? DB::transaction(function () use ($data, $source) {
+            $network = app(NetworkService::class);
+            $bill = $network->resolveSource($source);
+            // Locked so two saves of the same bill cannot both pass the duplicate check.
+            SalesVoucher::query()->whereKey($bill->id)->lockForUpdate()->first();
+            $network->assertNotEntered($bill, (int) $data['supplier_id']);
+            $voucher = $this->purchases->create($data);
+            $network->recordImport($bill, $voucher->id);
+
+            return $voucher;
+        }) : $this->purchases->create($data);
 
         return response()->json([
             'message' => 'Purchase saved successfully.',

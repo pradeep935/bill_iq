@@ -154,6 +154,7 @@ class PurchaseService
 
             $new = $this->create(array_merge($data, ['status' => $voucher->getOriginal('status') === 'confirmed' ? 'confirmed' : 'approved']), $number);
             $new->update(['created_by' => $createdBy]);
+            NetworkService::moveImport($voucher->id, $new->id);
 
             AuditLogger::record([
                 'module_name' => 'Purchase', 'record_id' => $new->id, 'action_type' => 'Update', 'business_id' => $businessId,
@@ -287,6 +288,7 @@ class PurchaseService
             $this->reverse($voucher, $remarks ?: 'Edited: reversed for correction');
             $copy = $this->duplicate($voucher->fresh());
             $copy->update(['supplier_invoice_number' => $supplierInvoice]);
+            NetworkService::moveImport($voucher->id, $copy->id);
 
             return $this->fresh($copy);
         });

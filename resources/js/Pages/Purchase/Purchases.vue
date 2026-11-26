@@ -6,6 +6,7 @@ import PurchaseApi from './PurchaseApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 import SearchSelect from '../../Components/Common/SearchSelect.vue';
 import PurchaseItemsGrid from './PurchaseItemsGrid.vue';
+import NetworkImport from './NetworkImport.vue';
 import { gstTypes, gstTypeForGstin } from '../../Components/Form/gstTypes';
 
 defineProps({ page: { type: String, default: 'purchases' }, title: { type: String, default: 'Purchases' } });
@@ -110,6 +111,7 @@ const reset = () => {
         id: null, branch_id: '', warehouse_id: '', supplier_id: '', supplier_invoice_number: '',
         purchase_date: today, supplier_invoice_date: '', due_date: '', purchase_type: 'credit',
         tax_type: 'intrastate', discount_type: '', discount_value: 0, other_charges: 0, other_charges_gst_rate: 0, paid_amount: 0, remarks: '', items: [],
+        network_source: null, supplier_total: null,
     });
     errors.value = {};
     paymentMode.value = 'unpaid';
@@ -270,6 +272,22 @@ const saveSupplierFromPurchase = async () => {
     }
 };
 
+// A supplier's bill (received on BillIQ or pasted as a link) fills the purchase form; the user still checks and saves it.
+const importing = ref(null);
+const openBillImport = (source = null) => { importing.value = { source }; };
+const useImportedBill = async (bill) => {
+    await loadReferences();
+    importing.value = null;
+    openPurchaseCreate();
+    Object.assign(form, {
+        supplier_id: bill.supplier_id, supplier_invoice_number: bill.supplier_invoice_number, supplier_invoice_date: bill.supplier_invoice_date,
+        purchase_date: bill.purchase_date, tax_type: bill.tax_type, other_charges: bill.other_charges, other_charges_gst_rate: bill.other_charges_gst_rate,
+        items: bill.items, network_source: bill.network_source, supplier_total: bill.supplier_total,
+    });
+    ratesIncludeTax.value = bill.items.every((item) => item.tax_inclusive);
+};
+const supplierTotalDiffers = computed(() => form.supplier_total != null && totals.value && Math.abs(Number(totals.value.grand_total) - Number(form.supplier_total)) >= 0.5);
+
 const addReturnedProduct = async () => {
     const params = new URLSearchParams(window.location.search);
     const productId = params.get('added_product_id');
@@ -363,7 +381,7 @@ const summaryEntries = computed(() => {
     const t = totals.value || {};
     const always = ['subtotal', 'cgst', 'sgst', 'igst', 'grand_total', 'balance_amount'];
     return [
-        { key: 'subtotal', label: ratesIncludeTax.value ? 'Subtotal (with tax)' : 'Subtotal', value: t.subtotal },
+        { key: 'subtotal', label: form.items.some((item) => item.tax_inclusive) ? 'Subtotal (with tax)' : 'Subtotal', value: t.subtotal },
         { key: 'item_discount', label: 'Item discount', value: t.items?.reduce((sum, item) => sum + Number(item.discount_amount), 0) },
         { key: 'discount_amount', label: 'Voucher discount', value: t.discount_amount },
         { key: 'other_charges', label: 'Transport / other charges', value: t.other_charges },
@@ -389,14 +407,17 @@ watch(() => totals.value?.grand_total, (grand) => {
     if (paymentMode.value === 'paid' && grand != null) form.paid_amount = Number(grand);
 });
 
-watch(ratesIncludeTax, (included) => form.items.forEach((item) => {
-    if (Boolean(item.tax_inclusive) === included) return;
-    // A rate still as filled in automatically follows the switch; a typed rate is left as typed.
-    if (item.suggested_cost != null && Number(item.purchase_rate) === rateFor(item.suggested_cost, item, !included)) {
-        item.purchase_rate = rateFor(item.suggested_cost, item, included);
-    }
-    item.tax_inclusive = included;
-}));
+const setRatesIncludeTax = (included) => {
+    ratesIncludeTax.value = included;
+    form.items.forEach((item) => {
+        if (Boolean(item.tax_inclusive) === included) return;
+        // A rate still as filled in automatically follows the switch; a typed rate is left as typed.
+        if (item.suggested_cost != null && Number(item.purchase_rate) === rateFor(item.suggested_cost, item, !included)) {
+            item.purchase_rate = rateFor(item.suggested_cost, item, included);
+        }
+        item.tax_inclusive = included;
+    });
+};
 const selectedSupplier = computed(() => (references.value.suppliers || []).find((s) => Number(s.id) === Number(form.supplier_id)) || null);
 // Picking a supplier sets the tax type from the two states; it can still be changed under "Tax type".
 const supplierPicked = () => {
@@ -411,7 +432,7 @@ const errorList = computed(() => Object.entries(errors.value).map(([field, messa
     return `${row ? `Item ${Number(row[1]) + 1}: ` : ''}${messages[0]}`;
 }));
 
-const payload = (status) => { const { voucher_number, ...rest } = form; return { ...rest, status, branch_id: form.branch_id || null, warehouse_id: form.warehouse_id || null }; };
+const payload = (status) => { const { voucher_number, supplier_total, ...rest } = form; return { ...rest, status, branch_id: form.branch_id || null, warehouse_id: form.warehouse_id || null }; };
 
 const savePurchase = async (status = 'draft') => {
     if (saving.value) return;
@@ -459,6 +480,7 @@ const editPurchase = (purchase) => {
         other_charges_gst_rate: purchase.other_charges_gst_rate || 0,
         paid_amount: purchase.paid_amount || 0,
         remarks: purchase.remarks || '',
+        network_source: null, supplier_total: null,
         items: (purchase.items || []).map((item) => ({ ...item, product_name: item.product, discount_type: item.discount_type || '', variants: [] })),
     });
     paymentMode.value = Number(purchase.paid_amount) <= 0 ? 'unpaid' : (purchase.payment_status === 'paid' ? 'paid' : 'partial');
@@ -511,6 +533,12 @@ onMounted(async () => {
     const query = new URLSearchParams(window.location.search);
     ['status', 'payment_status'].forEach((key) => { if (query.get(key)) filters[key] = query.get(key); });
     if (query.get('date') === 'today') filters.date_from = filters.date_to = new Date().toLocaleDateString('en-CA');
+    const billId = Number(query.get('network_bill'));
+    const billLink = query.get('network_link');
+    if (billId || billLink) {
+        openBillImport(billId ? { bill_id: billId } : { token: billLink });
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
     if (form.items.length || form.id) {
         showPurchaseDrawer.value = true;
     }
@@ -524,6 +552,7 @@ onMounted(async () => {
             <div class="bill-page-title"><span>PURCHASE MANAGEMENT</span><h1>Purchase Vouchers</h1><p>Draft purchases and post confirmed stock into the stock ledger.</p></div>
         </template>
         <div class="purchase-page">
+            <NetworkImport v-if="importing" :source="importing.source" :suppliers="references.suppliers" @close="importing = null" @ready="useImportedBill" />
             <div v-if="showPurchaseDrawer" class="drawer-backdrop" @click.self="closePurchaseDrawer">
                 <aside class="drawer-panel">
                     <div class="drawer-heading">
@@ -532,6 +561,9 @@ onMounted(async () => {
                     </div>
 
                     <p v-if="editingPosted && !viewOnly" class="edit-note">This purchase is already posted. Change anything you need and click <strong>Save Changes</strong> &mdash; stock and accounts are corrected automatically and the voucher number stays the same.</p>
+                    <p v-if="form.network_source && !viewOnly" :class="['edit-note', { 'amount-differs': supplierTotalDiffers }]">Filled from the supplier's bill of Rs. {{ formatMoney(form.supplier_total) }}.
+                        <template v-if="supplierTotalDiffers"><strong>This purchase totals Rs. {{ formatMoney(totals.grand_total) }}.</strong> Please check the items before saving.</template>
+                        <template v-else>Check it, then click <strong>Confirm &amp; Post</strong>.</template></p>
                     <div class="bill-head" :inert="viewOnly">
                         <div class="head-supplier">
                             <div class="supplier-picker">
@@ -550,7 +582,7 @@ onMounted(async () => {
                         <label>Tax Type<select v-model="form.tax_type"><option v-for="t in taxTypes" :key="t.value" :value="t.value">{{ t.value === 'intrastate' ? 'Same state (CGST + SGST)' : t.value === 'interstate' ? 'Other state (IGST)' : 'No tax (exempt)' }}</option></select></label>
                     </div>
 
-                    <PurchaseItemsGrid :inert="viewOnly" :items="form.items" :totals="totals" v-model:search="productSearch" v-model:tax-inclusive="ratesIncludeTax" :results="products" :searching="searchingProducts" :search-error="productSearchError" :search-complete="productSearchComplete" :readonly="viewOnly" @search="searchProducts" @pick="addProduct" @new-product="openProductMasterCreate" />
+                    <PurchaseItemsGrid :inert="viewOnly" :items="form.items" :totals="totals" v-model:search="productSearch" :tax-inclusive="ratesIncludeTax" @update:tax-inclusive="setRatesIncludeTax" :results="products" :searching="searchingProducts" :search-error="productSearchError" :search-complete="productSearchComplete" :readonly="viewOnly" @search="searchProducts" @pick="addProduct" @new-product="openProductMasterCreate" />
 
                     <div class="bill-bottom">
                         <div class="bill-extra" :inert="viewOnly">
@@ -628,6 +660,7 @@ onMounted(async () => {
                         <button type="button" class="ghost-action" @click="clearFilters">Clear</button>
                     </div>
                     <button type="button" class="primary" @click="openPurchaseCreate">New Purchase</button>
+                    <button type="button" class="secondary-action bill-import-btn" @click="openBillImport()">From Supplier Bill</button>
                 </div>
                 <div class="table-wrapper" :class="{ 'is-refreshing': loading }">
                     <table>
@@ -654,7 +687,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions,.modal-heading,.drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span,.modal-heading span,.drawer-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){width:220px;min-width:0}.toolbar :deep(.search-select-hint){display:none}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:72px;resize:vertical}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.secondary-action{color:#2457d6;background:#edf4ff;border-color:#cfe0ff}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.supplier-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.add-supplier-btn{height:38px;align-self:end;white-space:nowrap}.product-search{position:relative;z-index:1;margin:14px 0}.product-search-row{display:flex;gap:10px}.product-search-row input{flex:1;min-width:0}.product-search-row button{white-space:nowrap}.search-results{position:absolute;z-index:20;top:calc(100% + 6px);left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 8px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:11px 8px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.action-cell{width:1%;text-align:right}.action-cell .row-actions{justify-content:flex-end}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}.drawer-panel{width:min(1320px,calc(100vw - 24px))!important}.bill-head{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr));gap:12px;align-items:start}.bill-head label,.bill-extra label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.bill-head input,.bill-head select,.bill-extra input,.bill-extra select{width:100%;min-width:0}.head-supplier :deep(.search-select){display:block}.head-supplier :deep(.search-select-hint){display:none}.supplier-note{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 0;color:#758197;font-size:11px}.chip{padding:3px 9px;color:#168757;background:#eaf8f1;border-radius:999px;font-weight:800}.chip.due{color:#b02a34;background:#fdecee}.bill-bottom{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:18px;align-items:start}.bill-extra{display:grid;gap:10px}.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.more summary{cursor:pointer;color:#2457d6;font-size:12px;font-weight:800;margin:4px 0 10px}.bill-total{padding:14px 16px;background:#f8fafc;border:1px solid #e3e9f2;border-radius:10px}.bill-total p{margin:0 0 8px;color:#758197;font-size:12px}.bill-total dl{display:grid;grid-template-columns:1fr auto;gap:7px 16px;margin:0;font-size:13px}.bill-total dt{color:#475569}.bill-total dd{margin:0;text-align:right;font-weight:700}.bill-total .summary-total{padding-top:8px;border-top:1px solid #dfe6ef;color:#142139;font-size:18px;font-weight:800}@media(max-width:1100px){.bill-head{grid-template-columns:repeat(2,minmax(0,1fr))}.head-supplier{grid-column:1/-1}.bill-bottom{grid-template-columns:minmax(0,1fr)}}@media(max-width:600px){.bill-head,.pair{grid-template-columns:minmax(0,1fr)}}.edit-note{margin:0 0 12px;padding:10px 12px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px}.pay-now{display:block;min-height:26px;margin-top:6px;padding:3px 12px;font-size:11px}.filter-field{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.filter-group{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.ghost-action{color:#475569;background:#f8fafc;border-color:#dfe6ef}.toolbar > .primary{margin-left:auto;white-space:nowrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.due{color:#b42318;font-weight:800}.badge.pay{background:#fff4e5;color:#b54708}.badge.pay.paid{background:#eaf8f1;color:#168757}.badge.pay.partial{background:#edf2ff;color:#2457d6}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.is-loading tr:not(.loading-row){opacity:.38}.loading-row td{padding:14px 10px}.skeleton-line{display:block;width:100%;height:12px;border-radius:999px;background:linear-gradient(90deg,#eef3fb 25%,#f8fbff 38%,#eef3fb 63%);background-size:240% 100%;animation:shimmer 1.05s ease-in-out infinite}.skeleton-line.w-1{width:46%}.skeleton-line.w-2{width:64%}.skeleton-line.w-3{width:78%}.skeleton-line.w-4{width:92%}@keyframes shimmer{0%{background-position:120% 0}100%{background-position:-120% 0}}.drawer-backdrop{position:fixed;z-index:950;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.38)}.drawer-panel{width:min(1120px,calc(100vw - 28px));height:100vh;overflow:auto;padding:18px;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-24px 0 70px rgba(15,23,42,.2)}.drawer-heading{position:sticky;z-index:30;top:0;margin:-18px -18px 16px;padding:16px 18px;background:#fff;border-bottom:1px solid #edf1f5}.drawer-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.modal-panel{width:min(920px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.modal-heading{margin-bottom:14px}.modal-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.supplier-form-grid .wide{grid-column:span 2}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.product-search-row,.modal-heading,.drawer-heading{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}.filter-group{width:100%;align-items:stretch}.toolbar > .primary{width:100%;margin-left:0}.supplier-picker{grid-template-columns:1fr}.supplier-form-grid .wide{grid-column:auto}.drawer-panel{width:100vw}}
+.purchase-page{padding:4px 0 28px}.page-heading,.toolbar,.actions,.pagination,.row-actions,.modal-heading,.drawer-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.page-heading{margin-bottom:18px}.page-heading span,.modal-heading span,.drawer-heading span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}.page-heading h1{margin:0;color:#142139;font-weight:800}.page-heading p{margin:6px 0 0;color:#758197;font-size:13px}.panel{margin-bottom:18px;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.form-grid label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.form-grid :deep(.search-select){display:block}.toolbar :deep(.search-select){width:220px;min-width:0}.toolbar :deep(.search-select-hint){display:none}.required-mark{color:#dc2626;font-weight:900;margin-left:3px}input,select,textarea,button{min-height:38px;padding:8px 10px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}textarea{min-height:72px;resize:vertical}button{font-weight:750;cursor:pointer}.primary{color:#fff;background:#2457d6;border-color:#2457d6}.secondary-action{color:#2457d6;background:#edf4ff;border-color:#cfe0ff}.danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.supplier-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}.add-supplier-btn{height:38px;align-self:end;white-space:nowrap}.product-search{position:relative;z-index:1;margin:14px 0}.product-search-row{display:flex;gap:10px}.product-search-row input{flex:1;min-width:0}.product-search-row button{white-space:nowrap}.search-results{position:absolute;z-index:20;top:calc(100% + 6px);left:0;right:0;display:grid;max-height:220px;overflow:auto;background:#fff;border:1px solid #dce4ef;border-radius:9px;box-shadow:0 12px 30px rgba(15,34,66,.12)}.search-results button{display:grid;justify-items:start;border:0;border-bottom:1px solid #eef2f6;border-radius:0}.table-wrapper{overflow-x:auto}table{width:100%;border-collapse:collapse}th{padding:12px 8px;color:#69758a;background:#f8fafc;border-bottom:1px solid #e7ecf2;text-align:left;white-space:nowrap;font-size:10px;font-weight:800;text-transform:uppercase}td{padding:11px 8px;color:#27344c;border-bottom:1px solid #edf1f5;white-space:nowrap;font-size:12px}td input,td select{min-width:92px}td span,.search-results span{display:block;color:#7a869a;font-size:10px}.action-cell{width:1%;text-align:right}.action-cell .row-actions{justify-content:flex-end}.actions,.pagination{justify-content:flex-end;margin-top:12px}.toolbar{justify-content:space-between;margin-bottom:12px;flex-wrap:wrap}.drawer-panel{width:min(1320px,calc(100vw - 24px))!important}.bill-head{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr));gap:12px;align-items:start}.bill-head label,.bill-extra label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.bill-head input,.bill-head select,.bill-extra input,.bill-extra select{width:100%;min-width:0}.head-supplier :deep(.search-select){display:block}.head-supplier :deep(.search-select-hint){display:none}.supplier-note{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 0;color:#758197;font-size:11px}.chip{padding:3px 9px;color:#168757;background:#eaf8f1;border-radius:999px;font-weight:800}.chip.due{color:#b02a34;background:#fdecee}.bill-bottom{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:18px;align-items:start}.bill-extra{display:grid;gap:10px}.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.more summary{cursor:pointer;color:#2457d6;font-size:12px;font-weight:800;margin:4px 0 10px}.bill-total{padding:14px 16px;background:#f8fafc;border:1px solid #e3e9f2;border-radius:10px}.bill-total p{margin:0 0 8px;color:#758197;font-size:12px}.bill-total dl{display:grid;grid-template-columns:1fr auto;gap:7px 16px;margin:0;font-size:13px}.bill-total dt{color:#475569}.bill-total dd{margin:0;text-align:right;font-weight:700}.bill-total .summary-total{padding-top:8px;border-top:1px solid #dfe6ef;color:#142139;font-size:18px;font-weight:800}@media(max-width:1100px){.bill-head{grid-template-columns:repeat(2,minmax(0,1fr))}.head-supplier{grid-column:1/-1}.bill-bottom{grid-template-columns:minmax(0,1fr)}}@media(max-width:600px){.bill-head,.pair{grid-template-columns:minmax(0,1fr)}}.edit-note{margin:0 0 12px;padding:10px 12px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px}.edit-note.amount-differs{color:#92400e;background:#fffbeb;border-color:#fde68a}.pay-now{display:block;min-height:26px;margin-top:6px;padding:3px 12px;font-size:11px}.filter-field{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.filter-group{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.ghost-action{color:#475569;background:#f8fafc;border-color:#dfe6ef}.toolbar > .primary{margin-left:auto;white-space:nowrap}.badge{padding:5px 8px;border-radius:7px;background:#edf2ff;color:#2457d6;font-size:10px;font-weight:800;text-transform:capitalize}.due{color:#b42318;font-weight:800}.badge.pay{background:#fff4e5;color:#b54708}.badge.pay.paid{background:#eaf8f1;color:#168757}.badge.pay.partial{background:#edf2ff;color:#2457d6}.badge.approved,.badge.confirmed{color:#168757;background:#eaf8f1}.badge.cancelled,.badge.reversed{color:#d23f49;background:#fff3f4}.empty{padding:28px!important;color:#8490a2;text-align:center}.error-box{display:grid;gap:4px;margin-top:12px;padding:10px;color:#96333a;background:#fff3f4;border:1px solid #ffd4d8;border-radius:8px;font-size:11px}.is-loading tr:not(.loading-row){opacity:.38}.loading-row td{padding:14px 10px}.skeleton-line{display:block;width:100%;height:12px;border-radius:999px;background:linear-gradient(90deg,#eef3fb 25%,#f8fbff 38%,#eef3fb 63%);background-size:240% 100%;animation:shimmer 1.05s ease-in-out infinite}.skeleton-line.w-1{width:46%}.skeleton-line.w-2{width:64%}.skeleton-line.w-3{width:78%}.skeleton-line.w-4{width:92%}@keyframes shimmer{0%{background-position:120% 0}100%{background-position:-120% 0}}.drawer-backdrop{position:fixed;z-index:950;inset:0;display:flex;justify-content:flex-end;background:rgba(15,23,42,.38)}.drawer-panel{width:min(1120px,calc(100vw - 28px));height:100vh;overflow:auto;padding:18px;background:#fff;border-left:1px solid #dfe6ef;box-shadow:-24px 0 70px rgba(15,23,42,.2)}.drawer-heading{position:sticky;z-index:30;top:0;margin:-18px -18px 16px;padding:16px 18px;background:#fff;border-bottom:1px solid #edf1f5}.drawer-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.42)}.modal-panel{width:min(920px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:18px;background:#fff;border:1px solid #dfe6ef;border-radius:8px;box-shadow:0 24px 70px rgba(15,23,42,.22)}.modal-heading{margin-bottom:14px}.modal-heading h2{margin:2px 0 0;color:#142139;font-size:20px}.supplier-form-grid .wide{grid-column:span 2}@media(max-width:1000px){.form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.page-heading,.toolbar,.product-search-row,.modal-heading,.drawer-heading{align-items:stretch;flex-direction:column}.form-grid{grid-template-columns:1fr}.toolbar :deep(.search-select){min-width:0;width:100%}.filter-group{width:100%;align-items:stretch}.toolbar > .primary{width:100%;margin-left:0}.supplier-picker{grid-template-columns:1fr}.supplier-form-grid .wide{grid-column:auto}.drawer-panel{width:100vw}}
 /* Keep sticky purchase cells inside the table's own stacking context. */
 .drawer-panel .table-wrapper{isolation:isolate;z-index:0}
 

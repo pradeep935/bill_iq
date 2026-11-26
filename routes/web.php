@@ -25,6 +25,7 @@ use App\Http\Controllers\PaymentReminderController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PublicInvoiceController;
+use App\Http\Controllers\NetworkController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\ReportsController;
@@ -212,6 +213,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/invoices/{sale}/print', [SalesController::class, 'print'])->name('invoices.print');
             Route::get('/invoices/{sale}/pdf', [SalesController::class, 'pdf'])->name('invoices.pdf');
             Route::post('/invoices/{sale}/whatsapp', [SalesController::class, 'whatsappShare'])->name('invoices.whatsapp');
+            Route::get('/invoices/{sale}/network', [NetworkController::class, 'sendOptions'])->name('invoices.network.options');
+            Route::post('/invoices/{sale}/network', [NetworkController::class, 'send'])->name('invoices.network.send');
             Route::post('/invoices/{sale}/payments', [SalesController::class, 'addPayment'])->name('invoices.payments.store');
             Route::get('/returns', [SalesReturnController::class, 'index'])->name('returns');
             Route::get('/returns/create', [SalesReturnController::class, 'create'])->name('returns.create');
@@ -295,6 +298,15 @@ Route::middleware('auth')->group(function () {
             Route::post('/bills/{purchase}/cancel', [PurchaseController::class, 'cancel'])->name('bills.cancel');
             Route::post('/bills/{purchase}/revise', [PurchaseController::class, 'revise'])->name('bills.revise');
             Route::post('/bills/{purchase}/reverse', [PurchaseController::class, 'reverse'])->name('bills.reverse');
+
+            Route::get('/network', [NetworkController::class, 'index'])->name('network');
+            Route::get('/network/data', [NetworkController::class, 'data'])->name('network.data');
+            Route::get('/network/lookup', [NetworkController::class, 'lookup'])->middleware('throttle:20,1')->name('network.lookup');
+            Route::post('/network/connections', [NetworkController::class, 'connect'])->middleware('throttle:20,1')->name('network.connect');
+            Route::post('/network/connections/{connection}/{action}', [NetworkController::class, 'respond'])->whereNumber('connection')->whereIn('action', ['accept', 'reject', 'remove'])->name('network.respond');
+            Route::post('/network/preview', [NetworkController::class, 'preview'])->middleware('throttle:60,1')->name('network.preview');
+            Route::post('/network/prepare', [NetworkController::class, 'prepare'])->middleware('throttle:60,1')->name('network.prepare');
+            Route::post('/network/bills/{bill}/dismiss', [NetworkController::class, 'dismiss'])->whereNumber('bill')->name('network.dismiss');
 
             Route::get('/returns', [PurchaseReturnController::class, 'index'])->name('returns');
             Route::get('/returns/list', [PurchaseReturnController::class, 'list'])->name('returns.list');

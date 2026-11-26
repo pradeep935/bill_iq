@@ -312,7 +312,7 @@ class AppController extends Controller
             1 => null,
             2 => [
                 'dashboard', 'crm', 'pos', 'sales', 'sales-returns', 'customers', 'inventory-outward', 'inventory-reserved',
-                'purchases', 'purchase-returns', 'suppliers', 'inventory-inward', 'inventory-reorder', 'inventory-orders',
+                'purchases', 'supplier-bills', 'purchase-returns', 'suppliers', 'inventory-inward', 'inventory-reorder', 'inventory-orders',
                 'inventory', 'products', 'opening-stock', 'stock-summary', 'inventory-add', 'inventory-current-stock', 'inventory-vouchers',
                 'inventory-batches', 'inventory-serials', 'inventory-barcode-center', 'inventory-manufacturing',
                 'inventory-warehouses', 'inventory-bins', 'inventory-godown-balance', 'inventory-transfer',

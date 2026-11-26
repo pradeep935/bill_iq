@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 // Spreadsheet-like item entry: type in the last row, press Enter to pick, Enter again to move across the row.
 const props = defineProps({
@@ -27,6 +27,8 @@ const lineTax = (index) => {
     const row = line(index);
     return row ? Number(row.cgst_amount || 0) + Number(row.sgst_amount || 0) + Number(row.igst_amount || 0) + Number(row.cess_amount || 0) : null;
 };
+// A bill filled from a supplier can hold both kinds of rate; the switch then says so.
+const mixed = computed(() => props.items.some((item) => Boolean(item.tax_inclusive) !== Boolean(props.items[0]?.tax_inclusive)));
 const sum = (key) => props.items.reduce((total, item) => total + Number(item[key] || 0), 0);
 const totalOf = (getter) => props.items.reduce((total, item, index) => total + Number(getter(index) || 0), 0);
 
@@ -90,7 +92,8 @@ defineExpose({ focusSearch });
                         <th class="c-unit">Unit</th>
                         <th class="c-rate">
                             Rate <b class="req">*</b>
-                            <select :value="taxInclusive ? 'with' : 'without'" aria-label="Rates include tax or not" :disabled="readonly" @change="emit('update:taxInclusive', $event.target.value === 'with')">
+                            <select :value="mixed ? 'mixed' : (taxInclusive ? 'with' : 'without')" aria-label="Rates include tax or not" :disabled="readonly" @change="emit('update:taxInclusive', $event.target.value === 'with')">
+                                <option v-if="mixed" value="mixed" disabled>Mixed</option>
                                 <option value="without">Without tax</option>
                                 <option value="with">With tax</option>
                             </select>
@@ -113,7 +116,7 @@ defineExpose({ focusSearch });
                             <td class="c-num"><input v-model="item.quantity" data-cell="quantity" type="number" min="0" step="any" aria-label="Quantity" @keydown.enter="nextCell" /></td>
                             <td class="c-num"><input v-model="item.free_quantity" data-cell="free" type="number" min="0" step="any" aria-label="Free quantity" @keydown.enter="nextCell" /></td>
                             <td class="c-unit">{{ item.unit || '-' }}</td>
-                            <td class="c-rate"><input v-model="item.purchase_rate" data-cell="rate" type="number" min="0" step="any" aria-label="Purchase rate" @keydown.enter="nextCell" /></td>
+                            <td class="c-rate"><input v-model="item.purchase_rate" data-cell="rate" type="number" min="0" step="any" aria-label="Purchase rate" @keydown.enter="nextCell" /><small v-if="mixed" class="rate-kind">{{ item.tax_inclusive ? 'with tax' : 'without tax' }}</small></td>
                             <td class="c-disc">
                                 <div class="disc">
                                     <input v-model="item.discount_value" data-cell="discount" type="number" min="0" step="any" aria-label="Item discount" @input="item.discount_type ||= 'percentage'" @keydown.enter="nextCell" />
@@ -204,6 +207,7 @@ th.c-rate select{display:block;min-height:26px;margin-top:4px;padding:2px 4px;fo
 .c-money{width:96px;text-align:right;white-space:nowrap}
 th.c-money{text-align:right}
 .strong{font-weight:800}
+.rate-kind{display:block;color:#98a2b3;font-size:10px}
 .c-act{width:40px;text-align:center}
 .req{color:#dc2626}
 button.link{min-height:0;padding:0;color:#2457d6;background:none;border:0;font-size:11px;cursor:pointer}

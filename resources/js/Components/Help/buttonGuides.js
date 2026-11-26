@@ -120,17 +120,29 @@ export const buttonGuides = {
         ]],
     ],
     'staff-workspace': [
+        ['Top', [
+            ['Branch / Warehouse boxes', 'Choose the location if you have more than one.', 'To see figures of one place.'],
+            refresh,
+        ]],
+        ['Today’s cards', [
+            ['My Sales Today', 'Value and number of your own bills of today. Click to see them.', ''],
+            ['Money Collected Today', 'Receipts you entered today. Shown to admins.', ''],
+            ['Pending Work', 'Number of unfinished bills or counts.', 'Finish them in the list below.'],
+            ['Out of Stock', 'Products at zero or minus, and how many more are running low. Click to see them.', 'To inform the purchaser.'],
+        ]],
         ['What do you want to do?', [
             ['New Sale', 'Opens billing.', 'For every counter sale.'],
-            ['Other shortcut buttons', 'Open that screen, such as receipt, purchase, stock count or reports. Only the ones your role allows appear.', 'For daily work.'],
+            ['Money In', 'Opens a receipt entry.', 'When a customer pays. Admin only.'],
+            ['Money Out', 'Opens a payment entry.', 'When you pay a supplier. Admin only.'],
+            ['New Purchase', 'Opens a blank purchase.', 'When goods arrive with a bill. Admin only.'],
+            ['Add Expense', 'Opens Expenses.', 'For rent, tea, transport and the like. Admin only.'],
+            ['More buttons', 'Stock count, stock transfer, barcode, reports, masters and employees, as your role allows.', ''],
         ]],
-        ['Cards and lists', [
-            ['Branch / Warehouse boxes', 'Choose the location if you have more than one.', 'To see figures of one place.'],
-            ['Today’s Sales and other cards', 'Your figures; click to open the list.', ''],
-            ['My Pending Work > Open', 'Opens the pending draft or task.', 'To finish unfinished work.'],
-            ['Inventory Alerts', 'Products running short; click to open.', 'To inform the purchaser.'],
-            ['My Profile', 'Opens your profile.', ''],
-            refresh,
+        ['Lists', [
+            ['Pending work line (Finish)', 'Opens the unfinished bill or count.', 'Complete it the same day.'],
+            ['Stock to Order line', 'Opens that product’s stock. The most short products are first.', ''],
+            ['View all', 'Opens all out-of-stock products.', ''],
+            ['My Recent Work', 'Your latest entries; click a bill to open it.', ''],
         ]],
     ],
     onboarding: [['Buttons', [

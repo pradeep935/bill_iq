@@ -117,11 +117,20 @@ class StaffWorkspaceService
                 ->filter(fn ($row) => (float) $row->quantity_on_hand > 0 && (float) $row->reorder_level > 0 && (float) $row->quantity_on_hand <= (float) $row->reorder_level)
                 ->count();
             $cards[] = [
+                'key' => 'out_of_stock',
+                'label' => 'Out of Stock',
+                'value' => $this->stockRows($businessId, $context)->filter(fn ($row) => (float) $row->quantity_on_hand <= 0)->count(),
+                'subvalue' => 'zero or minus',
+                'href' => $routes['inventory.stock-summary']['url'] . '?stock_status=unavailable',
+                'empty' => 'Every product has stock.',
+            ];
+
+            $cards[] = [
                 'key' => 'low_stock',
                 'label' => 'Low Stock',
                 'value' => $lowStock,
                 'subvalue' => 'assigned location',
-                'href' => $routes['inventory.stock-summary']['url'] . '?status=low',
+                'href' => $routes['inventory.stock-summary']['url'] . '?stock_status=low',
                 'empty' => 'No inventory alerts for your assigned location.',
             ];
 
@@ -130,7 +139,7 @@ class StaffWorkspaceService
                 'label' => 'Pending Stock Counts',
                 'value' => $this->pendingStockCounts($businessId, $context, $user->id),
                 'subvalue' => 'open counts',
-                'href' => $routes['inventory.stock-counts.index']['url'] . '?status=pending&mine=1',
+                'href' => $routes['inventory.audit']['url'],
                 'empty' => 'No pending stock counts assigned to you.',
             ];
         }
@@ -142,7 +151,7 @@ class StaffWorkspaceService
                 'value' => $this->todayCollections($businessId, $context, $user->id),
                 'subvalue' => 'receipts recorded',
                 'format' => 'currency',
-                'href' => $routes['accounting.vouchers.index']['url'] . '?type=receipt&date=today&mine=1',
+                'href' => $routes['accounting.vouchers.index']['url'] . '?tab=receipt',
                 'empty' => 'No collections recorded today.',
             ];
         }
@@ -165,11 +174,11 @@ class StaffWorkspaceService
     {
         $actions = [
             ['key' => 'new_sale', 'label' => 'New Sale', 'href' => $routes['sales.create']['url'], 'enabled' => $permissions['sales.create']],
-            ['key' => 'receipt', 'label' => 'Receipt Entry', 'href' => $routes['accounting.vouchers.create']['url'] . '?type=receipt', 'enabled' => $permissions['vouchers.create']],
-            ['key' => 'payment', 'label' => 'Payment Voucher', 'href' => $routes['accounting.vouchers.create']['url'] . '?type=payment', 'enabled' => $permissions['vouchers.create']],
-            ['key' => 'expense', 'label' => 'Expense Voucher', 'href' => $routes['accounting.vouchers.create']['url'] . '?type=expense', 'enabled' => $permissions['vouchers.create']],
+            ['key' => 'receipt', 'label' => 'Receipt Entry', 'href' => $routes['accounting.vouchers.index']['url'] . '?tab=receipt', 'enabled' => $permissions['vouchers.create']],
+            ['key' => 'payment', 'label' => 'Payment Voucher', 'href' => $routes['accounting.vouchers.index']['url'] . '?tab=payment', 'enabled' => $permissions['vouchers.create']],
+            ['key' => 'expense', 'label' => 'Expense Voucher', 'href' => $routes['accounting.expenses']['url'], 'enabled' => $permissions['vouchers.create']],
             ['key' => 'new_purchase', 'label' => 'New Purchase', 'href' => $routes['purchases.create']['url'], 'enabled' => $permissions['purchases.create']],
-            ['key' => 'stock_count', 'label' => 'Stock Count', 'href' => $routes['inventory.stock-counts.create']['url'], 'enabled' => $permissions['inventory.stock-count.create']],
+            ['key' => 'stock_count', 'label' => 'Stock Count', 'href' => $routes['inventory.audit']['url'], 'enabled' => $permissions['inventory.stock-count.create']],
             ['key' => 'stock_transfer', 'label' => 'Stock Transfer', 'href' => $routes['inventory.transfers.index']['url'], 'enabled' => $permissions['inventory.transfer.view']],
             ['key' => 'barcode_scan', 'label' => 'Barcode Scan', 'href' => $routes['inventory.barcode-center']['url'], 'enabled' => $permissions['inventory.view']],
             ['key' => 'reports', 'label' => 'Reports', 'href' => $routes['reports.index']['url'], 'enabled' => $permissions['reports.view']],
@@ -199,7 +208,7 @@ class StaffWorkspaceService
                 ->get(['id', 'invoice_number', 'voucher_number', 'invoice_date', 'status', 'branch_id', 'warehouse_id']);
 
             foreach ($sales as $sale) {
-                $tasks->push($this->task('Draft sale needs completion', 'Sales', $sale->invoice_number ?: $sale->voucher_number, $sale->invoice_date, 'Pending', $routes['sales.index']['url'] . '?sale=' . $sale->id));
+                $tasks->push($this->task('Draft sale needs completion', 'Sales', $sale->invoice_number ?: $sale->voucher_number, $sale->invoice_date, 'Pending', $routes['sales.index']['url'] . '?edit=' . $sale->id));
             }
         }
 
@@ -218,7 +227,7 @@ class StaffWorkspaceService
                 ->get(['id', 'session_number', 'count_date', 'status', 'branch_id', 'warehouse_id']);
 
             foreach ($counts as $count) {
-                $tasks->push($this->task('Stock count pending', 'Inventory', $count->session_number, $count->count_date, 'In Progress', $routes['inventory.stock-counts.index']['url'] . '?session=' . $count->id, $this->locationLabel($context, $count->branch_id ?? null, $count->warehouse_id ?? null)));
+                $tasks->push($this->task('Stock count pending', 'Inventory', $count->session_number, $count->count_date, 'In Progress', $routes['inventory.audit']['url'], $this->locationLabel($context, $count->branch_id ?? null, $count->warehouse_id ?? null)));
             }
         }
 
@@ -293,6 +302,8 @@ class StaffWorkspaceService
 
         return $this->stockRows($businessId, $context)
             ->filter(fn ($row) => (float) $row->quantity_on_hand <= 0 || ((float) $row->reorder_level > 0 && (float) $row->quantity_on_hand <= (float) $row->reorder_level))
+            // The most short first.
+            ->sortBy(fn ($row) => (float) $row->quantity_on_hand)
             ->take(5)
             ->map(fn ($row) => [
                 'title' => (float) $row->quantity_on_hand <= 0 ? 'Out of stock' : 'Low stock',
@@ -352,6 +363,8 @@ class StaffWorkspaceService
             'inventory.transfers.index' => $this->routeInfo('app.warehouse.transfer'),
             'inventory.barcode-center' => $this->routeInfo('app.inventory.barcode-center'),
             'accounting.vouchers.index' => $this->routeInfo('app.accounting.vouchers'),
+            'accounting.expenses' => $this->routeInfo('app.accounting.expenses'),
+            'inventory.audit' => $this->routeInfo('app.warehouse.audit'),
             'accounting.vouchers.create' => $this->routeInfo('app.accounting.vouchers', ['action' => 'create']),
             'reports.index' => $this->routeInfo('app.reports.business'),
             'profile.edit' => $this->routeInfo(Route::has('profile.edit') ? 'profile.edit' : 'app.dashboard'),

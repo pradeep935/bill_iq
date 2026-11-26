@@ -26,6 +26,8 @@ class SalesService
     private StockService $stock;
     private CustomerService $customers;
 
+    private array $heldByEdit = [];
+
     public function __construct(SalesCalculationService $calculator, SalesInvoiceNumberService $numbers, StockService $stock, CustomerService $customers)
     {
         $this->calculator = $calculator;
@@ -62,7 +64,9 @@ class SalesService
             ->when(!empty($filters['payment_status']) && $filters['payment_status'] !== 'due', fn (Builder $q) => str_contains((string) $filters['payment_status'], ',') ? $q->whereIn('payment_status', explode(',', (string) $filters['payment_status'])) : $q->where('payment_status', $filters['payment_status']))
             ->when(($filters['status'] ?? '') === 'posted', fn (Builder $q) => $q->whereIn('status', ['approved', 'confirmed', 'posted', 'completed']))
             ->when(!empty($filters['status']) && $filters['status'] !== 'posted', fn (Builder $q) => $q->where('status', $filters['status']))
-            ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']));
+            ->when(!empty($filters['tax_type']), fn (Builder $q) => $q->where('tax_type', $filters['tax_type']))
+            // Earlier versions of edited invoices are listed only under "Reversed".
+            ->when(($filters['status'] ?? '') !== 'reversed', fn (Builder $q) => $q->where('voucher_number', 'not like', '%-R_%'));
 
         AppController::applyTenantScope($query, 'sales_vouchers');
 
@@ -75,17 +79,25 @@ class SalesService
             ->paginate($perPage);
     }
 
-    public function create(array $data): SalesVoucher
+    /**
+     * @param array|null $numbers Keep these voucher/invoice numbers (an edited invoice).
+     * @param float|null $creditAllowance Balance this invoice already had; the credit limit is checked only if it grows.
+     * @param float $settled Amount already received through receipt vouchers.
+     */
+    public function create(array $data, ?array $numbers = null, ?float $creditAllowance = null, float $settled = 0): SalesVoucher
     {
-        return DB::transaction(function () use ($data) {
+        return DB::transaction(function () use ($data, $numbers, $creditAllowance, $settled) {
             $businessId = AppController::businessId();
             $this->prepareCustomer($data);
             $this->prepareItemTaxModes($businessId, $data);
             $this->validateOwnership($businessId, $data);
             $totals = $this->calculator->calculateVoucherTotals($data);
             $this->calculator->validateSaleTotals($totals);
-            $this->validateCreditLimit($businessId, $data, $totals);
-            $numbers = $this->numbers->next($businessId, $data['branch_id'] ?? null);
+            $balance = round((float) $totals['balance_amount'] - $settled, 2);
+            if ($creditAllowance === null || $balance > $creditAllowance + 0.004) {
+                $this->validateCreditLimit($businessId, $data, array_merge($totals, ['balance_amount' => $balance]));
+            }
+            $numbers ??= $this->numbers->next($businessId, $data['branch_id'] ?? null);
             $status = $data['status'];
 
             $voucher = SalesVoucher::query()->create($this->voucherAttributes($businessId, $data, $totals, array_merge($numbers, [
@@ -117,7 +129,8 @@ class SalesService
         return DB::transaction(function () use ($voucher, $data) {
             $this->assertBusiness($voucher);
 
-            if (!in_array($voucher->status, ['draft', 'hold'], true)) {
+            // A cancelled invoice was never posted; the controller lets only an admin reopen it.
+            if (!in_array($voucher->status, ['draft', 'hold', 'cancelled'], true)) {
                 throw ValidationException::withMessages(['status' => 'Only draft or held sales can be edited.']);
             }
 
@@ -144,6 +157,132 @@ class SalesService
 
             return $this->fresh($voucher);
         });
+    }
+
+    /**
+     * Edit a posted (or reversed) invoice in one step, keeping its invoice number. The old posting is reversed, the old
+     * row is archived as "<no>-R<n>" and the corrected invoice is posted again. Any failure rolls everything back.
+     * Receipts, the share link and shared copies move to the corrected invoice.
+     */
+    public function updatePosted(SalesVoucher $voucher, array $data, bool $isAdmin): SalesVoucher
+    {
+        return DB::transaction(function () use ($voucher, $data, $isAdmin) {
+            $this->assertBusiness($voucher);
+            $voucher = SalesVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
+            $edits = app(VoucherEditService::class);
+            $wasPosted = in_array($voucher->status, ['confirmed', 'approved'], true);
+
+            if (!$wasPosted && $voucher->status !== 'reversed') {
+                throw ValidationException::withMessages(['status' => 'This invoice cannot be edited.']);
+            }
+            if (!$wasPosted) {
+                $edits->assertAdmin($isAdmin, 'Only an admin can edit a reversed invoice.');
+                $this->assertNotReplaced($voucher);
+            }
+            $edits->assertNotArchived($voucher->voucher_number);
+            if (!in_array($data['status'], ['confirmed', 'approved'], true)) {
+                throw ValidationException::withMessages(['status' => 'A posted invoice is saved as posted. Use Save Changes.']);
+            }
+            if (Schema::hasTable('sales_return_vouchers') && DB::table('sales_return_vouchers')->where('business_id', $voucher->business_id)->where('sales_voucher_id', $voucher->id)->whereNotIn('status', ['cancelled', 'reversed'])->exists()) {
+                throw ValidationException::withMessages(['status' => 'A sales return exists for this invoice. Cancel or reverse that return first, then edit the invoice.']);
+            }
+
+            $settled = $edits->settledAmount($voucher->business_id, SalesVoucher::class, $voucher->id);
+            if ($settled > 0) {
+                $edits->assertAdmin($isAdmin, 'A receipt is recorded against this invoice. Only an admin can edit it.');
+            }
+
+            $this->prepareCustomer($data);
+            $this->prepareItemTaxModes((int) $voucher->business_id, $data);
+            $totals = $this->calculator->calculateVoucherTotals($data);
+            if ($settled > 0) {
+                if ((int) ($data['customer_id'] ?? 0) !== (int) $voucher->customer_id) {
+                    throw ValidationException::withMessages(['customer_id' => 'Money has been received from this customer against the invoice, so the customer cannot be changed. Reverse the receipt first.']);
+                }
+                if ($data['sale_type'] !== 'credit') {
+                    throw ValidationException::withMessages(['sale_type' => 'Keep this invoice as Credit: a receipt is recorded against it.']);
+                }
+                $received = round((float) collect($data['payments'] ?? [])->sum('amount') + $settled, 2);
+                // Up to Rs 1 is a round-off difference (imported bills); it stays as the customer's advance in the ledger.
+                if ($received > (float) $totals['grand_total'] + VoucherEditService::ROUND_OFF_TOLERANCE) {
+                    throw ValidationException::withMessages(['payments' => 'Rs. ' . number_format($received, 2) . ' is received on this invoice, more than the new total of Rs. ' . number_format((float) $totals['grand_total'], 2) . '. Reverse the receipt first or correct the items.']);
+                }
+            }
+
+            $before = $voucher->replicate(['public_token']);
+            $oldItems = $voucher->items()->get();
+            $share = $voucher->only(['public_token', 'public_share_enabled', 'public_token_created_at']);
+            $numbers = $voucher->only(['voucher_number', 'invoice_number']);
+
+            if ($wasPosted) {
+                $this->reverse($voucher, 'Edited: ' . $numbers['invoice_number']);
+                $voucher->refresh();
+            }
+            $suffix = $edits->archiveSuffix(SalesVoucher::class, $voucher->business_id, 'voucher_number', $numbers['voucher_number']);
+            $voucher->forceFill([
+                'voucher_number' => $numbers['voucher_number'] . $suffix, 'invoice_number' => $numbers['invoice_number'] . $suffix,
+                'public_token' => null, 'public_share_enabled' => false,
+            ])->save();
+
+            $new = $this->create(array_merge($data, ['status' => 'draft']), $numbers, $wasPosted ? (float) $before->balance_amount : null, $settled);
+            $new->forceFill($share + ['created_by' => $before->created_by])->save();
+            // The goods left at their old cost; editing the bill must not change past profit.
+            foreach ($new->items as $item) {
+                $old = $oldItems->first(fn ($o) => $o->product_id === $item->product_id && $o->product_variant_id === $item->product_variant_id && $o->batch_id === $item->batch_id);
+                if ($old && $old->cost_rate !== null) {
+                    $item->update(['cost_rate' => $old->cost_rate]);
+                }
+            }
+            $edits->moveSaleReferences($voucher->id, $new->id);
+
+            // Quantities this invoice already holds may be saved again even if stock has since gone short.
+            $this->heldByEdit = $wasPosted ? $this->quantitiesByStockKey($before, $oldItems) : [];
+            try {
+                $new = $this->post($new->fresh(), $before->status === 'confirmed' ? 'confirmed' : 'approved');
+            } finally {
+                $this->heldByEdit = [];
+            }
+
+            if ($settled > 0) {
+                $edits->applySettlement($new, SalesVoucher::class, $voucher->id, $settled);
+            }
+
+            AuditLogger::record([
+                'module_name' => 'Sales', 'record_id' => $new->id, 'action_type' => 'Update', 'business_id' => $new->business_id,
+                'summary' => "Invoice {$numbers['invoice_number']} edited (previous version archived as {$voucher->invoice_number})",
+            ]);
+
+            return $this->fresh($new);
+        });
+    }
+
+    /** An invoice reversed the old way may already have a replacement; editing the original would bill twice. */
+    private function assertNotReplaced(SalesVoucher $voucher): void
+    {
+        $replacement = SalesVoucher::query()->where('business_id', $voucher->business_id)->where('id', '!=', $voucher->id)
+            ->whereNotIn('status', ['cancelled', 'reversed'])
+            ->where('remarks', 'like', '%Revised from ' . $voucher->invoice_number . '%')->get(['invoice_number', 'remarks'])
+            ->first(fn ($row) => (bool) preg_match('/Revised from ' . preg_quote($voucher->invoice_number, '/') . '(?=$|\s|\|)/', (string) $row->remarks));
+
+        if ($replacement) {
+            throw ValidationException::withMessages(['status' => "This invoice was already re-made as {$replacement->invoice_number}. Edit that invoice instead."]);
+        }
+    }
+
+    private function stockKey(SalesVoucher $voucher, $item): string
+    {
+        return implode(':', [$voucher->branch_id, $voucher->warehouse_id, $item->product_id, $item->product_variant_id]);
+    }
+
+    private function quantitiesByStockKey(SalesVoucher $voucher, $items): array
+    {
+        $totals = [];
+        foreach ($items as $item) {
+            $key = $this->stockKey($voucher, $item);
+            $totals[$key] = ($totals[$key] ?? 0) + (float) $item->quantity + (float) $item->free_quantity;
+        }
+
+        return $totals;
     }
 
     public function duplicate(SalesVoucher $voucher): SalesVoucher
@@ -187,6 +326,7 @@ class SalesService
             }
 
             $voucher->load(['items.product']);
+            $needed = $this->heldByEdit ? $this->quantitiesByStockKey($voucher, $voucher->items) : [];
 
             foreach ($voucher->items as $index => $item) {
                 if ($item->product->product_type === 'service' || $item->product->item_type === 'non_stock' || !(bool) ($item->product->track_inventory ?? true)) {
@@ -229,9 +369,14 @@ class SalesService
                     $item->update(['batch_allocations' => $allocations]);
                     continue;
                 }
-                $customerReserved = $this->customerReservedQuantity($voucher, $scope, true);
-                $this->stock->validateAvailableToSell($scope, max(0, $quantity - $customerReserved), null, true);
+                $key = $this->stockKey($voucher, $item);
+                $alreadyHeld = isset($this->heldByEdit[$key]) && $needed[$key] <= $this->heldByEdit[$key] + 0.0005;
+                if (!$alreadyHeld) {
+                    $customerReserved = $this->customerReservedQuantity($voucher, $scope, true);
+                    $this->stock->validateAvailableToSell($scope, max(0, $quantity - $customerReserved), null, true);
+                }
                 $this->stock->decreaseStock([
+                    'allow_shortfall' => $alreadyHeld,
                     'business_id' => $voucher->business_id,
                     'branch_id' => $voucher->branch_id,
                     'warehouse_id' => $voucher->warehouse_id,
@@ -532,6 +677,7 @@ class SalesService
                 ->join('payment_methods', 'payment_methods.id', '=', 'sales_payments.payment_method_id')
                 ->join('sales_vouchers', 'sales_vouchers.id', '=', 'sales_payments.sales_voucher_id')
                 ->where('sales_payments.business_id', $businessId)
+                ->whereNotIn('sales_vouchers.status', ['cancelled', 'reversed'])
                 ->when(AppController::branchId(), fn ($q) => $q->where('sales_vouchers.branch_id', AppController::branchId()))
                 ->selectRaw('payment_methods.name, SUM(sales_payments.amount) as amount')
                 ->groupBy('payment_methods.name')
@@ -600,7 +746,8 @@ class SalesService
             'place_of_supply_state_id' => $voucher->place_of_supply_state_id,
             'subtotal' => (float) $voucher->subtotal,
             'item_discount_amount' => (float) $voucher->item_discount_amount,
-            'voucher_discount_type' => $voucher->voucher_discount_type,
+            // Imported bills say "fixed" for a rupee discount.
+            'voucher_discount_type' => $voucher->voucher_discount_type === 'fixed' ? 'amount' : $voucher->voucher_discount_type,
             'voucher_discount_value' => (float) $voucher->voucher_discount_value,
             'voucher_discount_amount' => (float) $voucher->voucher_discount_amount,
             'taxable_amount' => (float) $voucher->taxable_amount,
@@ -618,6 +765,7 @@ class SalesService
             'payment_status' => $voucher->payment_status,
             'status' => $voucher->status,
             'salesperson' => optional($voucher->salesperson)->name,
+            'salesperson_id' => $voucher->salesperson_id,
             'created_by' => optional($voucher->creator)->name,
             'reference_number' => $voucher->reference_number,
             'remarks' => $voucher->remarks,
@@ -640,7 +788,7 @@ class SalesService
                     'free_quantity' => (float) $item->free_quantity,
                     'selling_rate' => (float) $item->selling_rate,
                     'mrp' => $item->mrp !== null ? (float) $item->mrp : null,
-                    'discount_type' => $item->discount_type,
+                    'discount_type' => $item->discount_type === 'fixed' ? 'amount' : $item->discount_type,
                     'discount_value' => (float) $item->discount_value,
                     'discount_amount' => (float) $item->discount_amount,
                     'taxable_amount' => (float) $item->taxable_amount,
@@ -648,6 +796,8 @@ class SalesService
                     'cess_rate' => (float) $item->cess_rate,
                     'line_total' => (float) $item->line_total,
                     'remarks' => $item->remarks,
+                    // Read from the saved amounts, so editing keeps the totals even if the product setting changed later.
+                    'tax_inclusive' => $this->savedAsTaxInclusive($item),
                 ];
                 if ($includeCost) {
                     $row['cost_rate'] = $item->cost_rate !== null ? (float) $item->cost_rate : null;
@@ -665,6 +815,14 @@ class SalesService
                 'notes' => $payment->notes,
             ])->values(),
         ];
+    }
+
+    private function savedAsTaxInclusive($item): bool
+    {
+        $net = round((float) $item->quantity * (float) $item->selling_rate, 2) - (float) $item->discount_amount;
+        $tax = (float) $item->cgst_amount + (float) $item->sgst_amount + (float) $item->igst_amount + (float) $item->cess_amount;
+
+        return $tax > 0 && abs($net - ((float) $item->taxable_amount + $tax)) <= 0.05;
     }
 
     private function prepareCustomer(array &$data): void

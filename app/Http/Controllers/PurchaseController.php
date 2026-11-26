@@ -317,9 +317,13 @@ class PurchaseController extends Controller
     public function update(PurchaseVoucherRequest $request, int $purchase)
     {
         $voucher = $this->voucher($purchase);
-        $voucher = $voucher->status === 'draft'
-            ? $this->purchases->update($voucher, $request->validated())
-            : $this->purchases->updatePosted($voucher, $request->validated());
+        $isAdmin = $request->user()->isAdmin() || $request->user()->isSuperAdmin();
+        if (in_array($voucher->status, ['draft', 'cancelled'], true)) {
+            app(\App\Services\VoucherEditService::class)->assertCancelledEditable($voucher->status, $isAdmin);
+            $voucher = $this->purchases->update($voucher, $request->validated());
+        } else {
+            $voucher = $this->purchases->updatePosted($voucher, $request->validated(), $isAdmin);
+        }
 
         return response()->json([
             'message' => 'Purchase updated successfully.',

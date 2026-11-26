@@ -116,7 +116,8 @@ class AdminWorkspaceService
             $this->metric('Unassigned Employees', $counts['unassigned_employees'], $routes['admin.employees.index']['url'], $permissions['employees.view'], $counts['unassigned_employees'] ? 'Attention Required' : 'Configured'),
             $this->metric('Employees Without Branch', $counts['employees_without_branch'], $routes['admin.employees.index']['url'], $permissions['employees.view'], $counts['employees_without_branch'] ? 'Attention Required' : 'Configured'),
             $this->metric('Employees Without Role', $counts['employees_without_role'], $routes['admin.employees.index']['url'], $permissions['employees.view'], $counts['employees_without_role'] ? 'Attention Required' : 'Configured'),
-            $this->metric('Employees Logged In Today', $this->usersQuery($businessId)->whereDate('last_login_at', now()->toDateString())->count(), $routes['admin.employees.index']['url'], $permissions['employees.view'], 'Active'),
+            // Shown only where logins are recorded.
+            ...(Schema::hasColumn('users', 'last_login_at') ? [$this->metric('Employees Logged In Today', $this->usersQuery($businessId)->whereDate('last_login_at', now()->toDateString())->count(), $routes['admin.employees.index']['url'], $permissions['employees.view'], 'Active')] : []),
         ];
     }
 

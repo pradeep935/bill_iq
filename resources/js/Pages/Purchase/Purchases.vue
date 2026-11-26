@@ -9,7 +9,10 @@ import PurchaseItemsGrid from './PurchaseItemsGrid.vue';
 import NetworkImport from './NetworkImport.vue';
 import { gstTypes, gstTypeForGstin } from '../../Components/Form/gstTypes';
 
-defineProps({ page: { type: String, default: 'purchases' }, title: { type: String, default: 'Purchases' } });
+const props = defineProps({ page: { type: String, default: 'purchases' }, title: { type: String, default: 'Purchases' }, role_id: { type: [Number, String], default: 3 } });
+// Reversed and cancelled bills can be edited by an admin; "-R1" rows are old versions kept for the record.
+const isAdmin = computed(() => [1, 2].includes(Number(props.role_id)));
+const canEditClosed = (purchase) => isAdmin.value && ['reversed', 'cancelled'].includes(purchase.status) && !/-R\d+$/.test(purchase.voucher_number || '');
 
 const today = new Date().toISOString().slice(0, 10);
 const purchases = ref([]);
@@ -45,6 +48,9 @@ const showSupplierModal = ref(false);
 const savingSupplier = ref(false);
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 const editingPosted = ref(false);
+const settledAmount = ref(0); // paid through payment vouchers
+const editingReversed = ref(false);
+const originalTotal = ref(0);
 const paymentMode = ref('unpaid');
 // One switch for the whole bill: are the typed rates inclusive of GST?
 const ratesIncludeTax = ref(false);
@@ -461,7 +467,8 @@ const savePurchase = async (status = 'draft') => {
 
 const editPurchase = (purchase) => {
     viewOnly.value = false;
-    editingPosted.value = !!purchase.status && purchase.status !== 'draft';
+    editingPosted.value = ['approved', 'confirmed', 'reversed'].includes(purchase.status);
+    settledAmount.value = editingPosted.value ? Number(purchase.settled_amount || 0) : 0;
     Object.assign(form, {
         id: purchase.id,
         voucher_number: purchase.voucher_number || '',
@@ -483,7 +490,10 @@ const editPurchase = (purchase) => {
         network_source: null, supplier_total: null,
         items: (purchase.items || []).map((item) => ({ ...item, product_name: item.product, discount_type: item.discount_type || '', variants: [] })),
     });
-    paymentMode.value = Number(purchase.paid_amount) <= 0 ? 'unpaid' : (purchase.payment_status === 'paid' ? 'paid' : 'partial');
+    editingReversed.value = purchase.status === 'reversed';
+    originalTotal.value = Number(purchase.grand_total || 0);
+    // With a payment voucher the paid amount is fixed; "Paid" would pay any increase in cash by itself.
+    paymentMode.value = settledAmount.value > 0 ? 'partial' : (Number(purchase.paid_amount) <= 0 ? 'unpaid' : (purchase.payment_status === 'paid' ? 'paid' : 'partial'));
     ratesIncludeTax.value = Boolean(purchase.items?.[0]?.tax_inclusive);
     showPurchaseDrawer.value = true;
 };
@@ -560,7 +570,7 @@ onMounted(async () => {
                         <button type="button" @click="closePurchaseDrawer">Close</button>
                     </div>
 
-                    <p v-if="editingPosted && !viewOnly" class="edit-note">This purchase is already posted. Change anything you need and click <strong>Save Changes</strong> &mdash; stock and accounts are corrected automatically and the voucher number stays the same.</p>
+                    <p v-if="editingPosted && !viewOnly" class="edit-note">{{ editingReversed ? 'This purchase was reversed.' : 'This purchase is already posted.' }} Change anything you need and click <strong>Save Changes</strong> &mdash; stock and accounts are corrected automatically and the voucher number stays the same.<template v-if="settledAmount > 0"> Rs. {{ formatMoney(settledAmount) }} is paid by payment voucher and stays on this bill; Paid Amount includes it.</template></p>
                     <p v-if="form.network_source && !viewOnly" :class="['edit-note', { 'amount-differs': supplierTotalDiffers }]">Filled from the supplier's bill of Rs. {{ formatMoney(form.supplier_total) }}.
                         <template v-if="supplierTotalDiffers"><strong>This purchase totals Rs. {{ formatMoney(totals.grand_total) }}.</strong> Please check the items before saving.</template>
                         <template v-else>Check it, then click <strong>Confirm &amp; Post</strong>.</template></p>
@@ -614,6 +624,7 @@ onMounted(async () => {
                             </dl>
                         </section>
                     </div>
+                    <p v-if="editingPosted && !viewOnly && totals && Math.abs(Number(totals.grand_total) - originalTotal) >= 0.01" class="edit-note amount-differs" role="status">Total will change from Rs. {{ formatMoney(originalTotal) }} to Rs. {{ formatMoney(totals.grand_total) }}. Check it before saving.</p>
                     <div v-if="errorList.length" class="error-box" role="alert"><span v-for="message in errorList" :key="message">{{ message }}</span></div>
                     <div class="actions purchase-footer"><button type="button" @click="closePurchaseDrawer">{{ viewOnly ? 'Close' : 'Cancel' }}</button><template v-if="!viewOnly"><button v-if="!editingPosted" :disabled="saving" @click="savePurchase('draft')">Save Draft</button><button class="primary" :disabled="saving" @click="savePurchase('approved')">{{ saving ? 'Saving...' : (editingPosted ? 'Save Changes' : 'Confirm & Post') }}</button></template></div>
                 </aside>
@@ -674,7 +685,7 @@ onMounted(async () => {
                             <tr v-for="purchase in purchases" :key="purchase.id">
                                 <td>{{ purchase.voucher_number }}</td><td>{{ formatDate(purchase.purchase_date) }}</td><td>{{ purchase.supplier }}</td><td v-if="showLocation">{{ purchase.branch || '-' }}</td><td v-if="showLocation">{{ purchase.warehouse || '-' }}</td><td>{{ purchase.supplier_invoice_number || '-' }}</td>
                                 <td>Rs. {{ formatMoney(purchase.grand_total) }}</td><td>Rs. {{ formatMoney(purchase.paid_amount) }}</td><td :class="{ due: Number(purchase.balance_amount) > 0 }">Rs. {{ formatMoney(purchase.balance_amount) }}</td><td><span class="badge pay" :class="purchase.payment_status">{{ purchase.payment_status }}</span><button v-if="['approved','confirmed'].includes(purchase.status) && Number(purchase.balance_amount) > 0" type="button" class="secondary-action pay-now" @click="recordPayment(purchase)">Pay</button></td><td><span class="badge" :class="purchase.status">{{ purchase.status }}</span></td><td v-if="showCreatedBy">{{ purchase.created_by || '-' }}</td>
-                                <td class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === purchase.id" :show-view="false" more-label="Actions" more-title="Purchase actions" @toggle="toggleActionMenu(purchase)" @close="closeActionMenu"><button type="button" @click="viewPurchase(purchase); closeActionMenu()">View</button><button v-if="['approved','confirmed'].includes(purchase.status) && Number(purchase.balance_amount) > 0" type="button" @click="recordPayment(purchase); closeActionMenu()">Record Payment</button><button v-if="purchase.status === 'draft'" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" @click="revisePurchase(purchase); closeActionMenu()">Edit</button><button v-if="purchase.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(PurchaseApi.duplicatePurchase, purchase); closeActionMenu()">Copy</button><button v-if="purchase.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" class="danger" @click="reversePurchase(purchase); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
+                                <td class="action-cell"><div class="row-actions"><RowActionMenu :open="openActionMenuId === purchase.id" :show-view="false" more-label="Actions" more-title="Purchase actions" @toggle="toggleActionMenu(purchase)" @close="closeActionMenu"><button type="button" @click="viewPurchase(purchase); closeActionMenu()">View</button><button v-if="['approved','confirmed'].includes(purchase.status) && Number(purchase.balance_amount) > 0" type="button" @click="recordPayment(purchase); closeActionMenu()">Record Payment</button><button v-if="purchase.status === 'draft'" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" @click="revisePurchase(purchase); closeActionMenu()">Edit</button><button v-if="canEditClosed(purchase)" type="button" @click="editPurchase(purchase); closeActionMenu()">Edit</button><button v-if="purchase.status === 'draft'" type="button" @click="simpleAction(PurchaseApi.approvePurchase, purchase, 'Post purchase?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(PurchaseApi.duplicatePurchase, purchase); closeActionMenu()">Copy</button><button v-if="purchase.status === 'draft'" type="button" class="danger" @click="simpleAction(PurchaseApi.cancelPurchase, purchase, 'Cancel draft?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(purchase.status)" type="button" class="danger" @click="reversePurchase(purchase); closeActionMenu()">Reverse</button></RowActionMenu></div></td>
                             </tr>
                             <tr v-if="!purchases.length && !loading"><td :colspan="columnCount" class="empty">No purchases found.</td></tr>
                         </tbody>

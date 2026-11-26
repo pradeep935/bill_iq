@@ -35,8 +35,11 @@ class SalesInvoiceNumberService
         $last = SalesVoucher::query()
             ->where('business_id', $businessId)
             ->where($column, 'like', $prefix . '%')
+            ->where($column, 'not like', $prefix . '%-R%') // archived edit versions
             ->lockForUpdate()
-            ->orderByDesc('id')
+            // Highest number, not newest row: editing an old invoice re-creates it under its old number.
+            ->orderByRaw("LENGTH($column) DESC")
+            ->orderByDesc($column)
             ->value($column);
         $next = $last ? ((int) substr($last, strlen($prefix)) + 1) : 1;
 

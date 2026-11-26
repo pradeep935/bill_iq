@@ -1,10 +1,7 @@
 <template>
   <Layout :page="page" :title="title">
     <template #topbar-title>
-      <div>
-        <h1>Staff Workspace</h1>
-        <p>Daily operations for your assigned branch, warehouse, and responsibilities.</p>
-      </div>
+      <div class="bill-page-title"><span>Home</span><h1>Staff Workspace</h1><p>Your daily work: billing, stock and pending tasks.</p></div>
     </template>
 
     <section class="staff-page">
@@ -26,6 +23,22 @@
         <strong>{{ context.branch_required ? 'Branch assignment needed' : 'Warehouse assignment needed' }}</strong>
         <span>{{ context.branch_required ? 'You are not assigned to a branch yet. Please contact your administrator.' : 'No warehouse has been assigned to your account.' }}</span>
       </div>
+
+      <section class="quick-actions">
+        <div class="section-heading">
+          <h3>What do you want to do?</h3>
+          <span>{{ quickActions.length }} available</span>
+        </div>
+        <div v-if="quickActions.length" class="action-grid">
+          <a v-for="action in quickActions" :key="action.key" :href="action.href" class="action-button">
+            <span>{{ action.label }}</span>
+          </a>
+        </div>
+        <div v-else class="empty-state">
+          <strong>No quick actions available</strong>
+          <span>Your account has view access only for the current workspace.</span>
+        </div>
+      </section>
 
       <section class="context-grid">
         <article class="context-card">
@@ -68,27 +81,11 @@
       </section>
 
       <section class="summary-grid">
-        <a v-for="card in summary" :key="card.key" class="summary-card" :href="card.href || '#'">
+        <a v-for="card in summary" :key="card.key" class="summary-card" :href="card.href || null">
           <span>{{ card.label }}</span>
           <strong>{{ formatValue(card) }}</strong>
           <small>{{ card.value === 0 ? card.empty : card.subvalue }}</small>
         </a>
-      </section>
-
-      <section class="quick-actions">
-        <div class="section-heading">
-          <h3>Quick Actions</h3>
-          <span>{{ quickActions.length }} available</span>
-        </div>
-        <div v-if="quickActions.length" class="action-grid">
-          <a v-for="action in quickActions" :key="action.key" :href="action.href" class="action-button">
-            <span>{{ action.label }}</span>
-          </a>
-        </div>
-        <div v-else class="empty-state">
-          <strong>No quick actions available</strong>
-          <span>Your account has view access only for the current workspace.</span>
-        </div>
       </section>
 
       <div class="workspace-grid">
@@ -136,7 +133,7 @@
             <span>{{ inventoryAlerts.length }} items</span>
           </div>
           <div v-if="inventoryAlerts.length" class="list-stack">
-            <a v-for="alert in inventoryAlerts" :key="`${alert.product}-${alert.status}`" :href="alert.href || '#'" class="list-item">
+            <a v-for="alert in inventoryAlerts" :key="`${alert.product}-${alert.status}`" :href="alert.href || null" class="list-item">
               <div>
                 <strong>{{ alert.product }}</strong>
                 <small>{{ alert.title }}</small>
@@ -156,7 +153,7 @@
             <span>{{ recentActivity.length }} logs</span>
           </div>
           <div v-if="recentActivity.length" class="list-stack">
-            <a v-for="activity in recentActivity" :key="`${activity.activity}-${activity.reference}-${activity.date}`" :href="activity.href || '#'" class="list-item">
+            <a v-for="activity in recentActivity" :key="`${activity.activity}-${activity.reference}-${activity.date}`" :href="activity.href || null" class="list-item">
               <div>
                 <strong>{{ activity.activity }}</strong>
                 <small>{{ activity.reference }} - {{ formatDate(activity.date) }}</small>
@@ -541,4 +538,15 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
+/* Rounded, tappable cards like the business dashboard */
+.context-card,.summary-card,.quick-actions,.panel,.notice-panel,.filter-row,.empty-state{border-radius:12px}
+.staff-page{padding:0 0 28px}
+.staff-hero{background:#2457d6}
+.action-button{min-height:64px;color:#142139;background:#f6f9ff;border:1px solid #d6e3ff;border-radius:10px;font-size:14px}
+.action-button:hover{border-color:#2457d6}
+.list-item div{display:grid;gap:2px}
+.summary-card strong{font-size:24px}
+.primary-button,.secondary-button,.status-pill,.list-item,.filter-row select{border-radius:8px}
 </style>
+

@@ -1,21 +1,35 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { helpFor } from './pageHelp';
+import { guideTopics, helpFor, pageHelp, startGuide } from './pageHelp';
 
 const props = defineProps({
     page: { type: String, required: true },
     title: { type: String, default: '' },
 });
 
-const help = computed(() => helpFor(props.page, props.title));
+const pageGuide = computed(() => helpFor(props.page, props.title));
 const open = ref(false);
-const show = () => { if (help.value) open.value = true; return Boolean(help.value); };
+// null = this page; 'all' = topic list; otherwise a topic key.
+const topic = ref(null);
+const search = ref('');
+const guideOf = (key) => (key === 'getting-started' ? startGuide : pageHelp[key]);
+const help = computed(() => (topic.value && topic.value !== 'all' ? guideOf(topic.value) : pageGuide.value));
+const heading = computed(() => (topic.value === 'all' ? 'All guides' : (guideTopics.find(([, key]) => key === topic.value)?.[0] || props.title)));
+const matches = computed(() => {
+    const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return guideTopics.filter(([name, key]) => {
+        const text = `${name} ${JSON.stringify(guideOf(key) || '')}`.toLowerCase();
+        return words.every((word) => text.includes(word));
+    });
+});
+const openHere = () => { topic.value = null; search.value = ''; open.value = true; };
+const show = () => { if (pageGuide.value) openHere(); return Boolean(pageGuide.value); };
 defineExpose({ show });
 </script>
 
 <template>
-    <div v-if="help" class="ph-bar">
-        <button type="button" class="ph-toggle" @click="open = true">
+    <div v-if="pageGuide" class="ph-bar">
+        <button type="button" class="ph-toggle" @click="openHere">
             <span class="ph-mark">?</span>
             <strong>How to use: {{ title }}</strong>
             <em>Open guide</em>
@@ -23,29 +37,47 @@ defineExpose({ show });
     </div>
 
     <Teleport to="body">
-        <div v-if="help && open" class="ph-backdrop" @click.self="open = false" @keydown.esc="open = false">
-            <aside class="ph-drawer" role="dialog" aria-modal="true" :aria-label="`${title} help`">
+        <div v-if="pageGuide && open" class="ph-backdrop" @click.self="open = false" @keydown.esc="open = false">
+            <aside class="ph-drawer" role="dialog" aria-modal="true" :aria-label="`${heading} help`">
                 <div class="ph-head">
-                    <div><span>HELP</span><h2>{{ title }}</h2></div>
-                    <button type="button" @click="open = false">Close</button>
+                    <div><span>HELP</span><h2>{{ heading }}</h2></div>
+                    <div class="ph-head-actions">
+                        <button v-if="topic !== 'all'" type="button" @click="topic = 'all'">All guides</button>
+                        <button type="button" @click="open = false">Close</button>
+                    </div>
                 </div>
 
-                <h3>What this page does</h3>
-                <p>{{ help.what }}</p>
-
-                <template v-if="help.tabs.length">
-                    <h3>Tabs on this page</h3>
-                    <dl><template v-for="tab in help.tabs" :key="tab[0]"><dt>{{ tab[0] }}</dt><dd>{{ tab[1] }}</dd></template></dl>
+                <template v-if="topic === 'all'">
+                    <input v-model="search" class="ph-search" type="search" placeholder="Search help, e.g. return, GST, password" aria-label="Search help" />
+                    <div class="ph-topics">
+                        <button v-for="[name, key] in matches" :key="key" type="button" @click="topic = key">{{ name }} <span>›</span></button>
+                    </div>
+                    <p v-if="!matches.length">No guide found. Try one word, such as “bill” or “stock”.</p>
                 </template>
 
-                <template v-if="help.steps.length">
-                    <h3>How to use it</h3>
-                    <ol><li v-for="step in help.steps" :key="step">{{ step }}</li></ol>
-                </template>
+                <template v-else-if="help">
+                    <h3>{{ topic === 'getting-started' ? 'Start here' : 'What this page does' }}</h3>
+                    <p>{{ help.what }}</p>
 
-                <template v-if="help.notes.length">
-                    <h3>Please note</h3>
-                    <ul><li v-for="note in help.notes" :key="note">{{ note }}</li></ul>
+                    <template v-if="help.tabs.length">
+                        <h3>Tabs on this page</h3>
+                        <dl><template v-for="tab in help.tabs" :key="tab[0]"><dt>{{ tab[0] }}</dt><dd>{{ tab[1] }}</dd></template></dl>
+                    </template>
+
+                    <template v-if="help.steps.length">
+                        <h3>How to use it</h3>
+                        <ol><li v-for="step in help.steps" :key="step">{{ step }}</li></ol>
+                    </template>
+
+                    <template v-if="help.notes.length">
+                        <h3>Please note</h3>
+                        <ul><li v-for="note in help.notes" :key="note">{{ note }}</li></ul>
+                    </template>
+
+                    <template v-if="help.faq.length">
+                        <h3>Common questions</h3>
+                        <details v-for="[question, answer] in help.faq" :key="question"><summary>{{ question }}</summary><p>{{ answer }}</p></details>
+                    </template>
                 </template>
             </aside>
         </div>
@@ -63,6 +95,14 @@ defineExpose({ show });
 .ph-head span{color:#2457d6;font-size:10px;font-weight:800;letter-spacing:1.2px}
 .ph-head h2{margin:0;color:#142139;font-size:20px;font-weight:800}
 .ph-head button{min-height:36px;padding:7px 14px;color:#344159;background:#fff;border:1px solid #d8e0eb;border-radius:8px;cursor:pointer;font-size:12px;font-weight:750}
+div.ph-head-actions{display:flex;gap:8px}
+.ph-search{width:100%;min-height:42px;margin-top:8px;padding:9px 12px;border:1px solid #d8e0eb;border-radius:8px;font-size:14px}
+.ph-topics{display:grid;margin-top:12px}
+.ph-topics button{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:8px 4px;color:#142139;background:#fff;border:0;border-bottom:1px solid #eef2f7;cursor:pointer;text-align:left;font-size:14px;font-weight:700}
+.ph-topics span{color:#2457d6}
+details{margin-bottom:8px;padding:10px 12px;border:1px solid #e3e9f2;border-radius:8px}
+summary{color:#142139;cursor:pointer;font-weight:700}
+details p{margin-top:6px;color:#475569;font-size:13px}
 h3{margin:18px 0 6px;color:#142139;font-size:13px;font-weight:800;text-transform:uppercase}
 p{margin:0}
 ol{margin:0;padding-left:20px;list-style:decimal}

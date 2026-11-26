@@ -289,7 +289,14 @@ class SalesController extends Controller
 
     public function update(SalesVoucherRequest $request, int $sale)
     {
-        $voucher = $this->sales->update($this->voucher($sale), $request->validated());
+        $voucher = $this->voucher($sale);
+        $isAdmin = $request->user()->isAdmin() || $request->user()->isSuperAdmin();
+        if (in_array($voucher->status, ['confirmed', 'approved', 'reversed'], true)) {
+            $voucher = $this->sales->updatePosted($voucher, $request->validated(), $isAdmin);
+        } else {
+            app(\App\Services\VoucherEditService::class)->assertCancelledEditable($voucher->status, $isAdmin);
+            $voucher = $this->sales->update($voucher, $request->validated());
+        }
 
         return response()->json(['message' => 'Sales invoice updated successfully.', 'sale' => $this->sales->present($voucher)]);
     }

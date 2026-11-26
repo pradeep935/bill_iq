@@ -462,6 +462,7 @@ class StaffWorkspaceService
 
         if (Schema::hasTable('sales_vouchers')) {
             $query->join('sales_vouchers', 'sales_vouchers.id', '=', 'sales_payments.sales_voucher_id');
+            $query->whereNotIn('sales_vouchers.status', ['cancelled', 'reversed']);
             $query->when($context['branch_required'] || $context['warehouse_required'], fn ($q) => $q->whereRaw('1 = 0'))
                 ->when($context['selected_branch_id'], fn ($q) => $q->where('sales_vouchers.branch_id', $context['selected_branch_id']))
                 ->when($context['selected_warehouse_id'], fn ($q) => $q->where('sales_vouchers.warehouse_id', $context['selected_warehouse_id']))

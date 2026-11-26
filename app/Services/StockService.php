@@ -176,7 +176,10 @@ class StockService
             $data['quantity_out'] = (float) ($data['quantity'] ?? $data['quantity_out'] ?? 0);
             $data['quantity_in'] = 0;
 
-            $this->validateAvailableStock($data, $data['quantity_out']);
+            // allow_shortfall: an edited invoice putting back the quantity it already held.
+            if (empty($data['allow_shortfall'])) {
+                $this->validateAvailableStock($data, $data['quantity_out']);
+            }
 
             return $this->createLedgerEntry($data);
         });

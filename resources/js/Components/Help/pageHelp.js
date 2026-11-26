@@ -1,15 +1,33 @@
 // Simple in-app help for every screen. Shown by PageHelp.vue (rendered once in Layout.vue).
 // Key = the Inertia "page" value. Where two screens share a page value, "page|Title" is used.
-// h(what the page does, tabs [[name, use]], steps, notes)
-const h = (what, { tabs = [], steps = [], notes = [] } = {}) => ({ what, tabs, steps, notes });
+// h(what the page does, tabs [[name, use]], steps, notes, faq [[question, answer]])
+const h = (what, { tabs = [], steps = [], notes = [], faq = [] } = {}) => ({ what, tabs, steps, notes, faq });
 
 export const pageHelp = {
     dashboard: h('A quick overview of your business: sales, purchases, stock and pending payments.', {
         steps: ['The top cards show money to collect, money to pay, and today’s sales and purchases. Click a card to see its list.', 'Use the large buttons for daily work: New Sale, New Purchase, Money In, Money Out and more.', 'Check “Pending Actions” every day and click a line to finish it.'],
     }),
-    'admin-workspace': h('Daily admin tasks and shortcuts in one place.', { steps: ['Click the card for the task you want to do.'] }),
-    'staff-workspace': h('Shortcuts for billing and other daily staff work.', { steps: ['Click the card for the task you want to do.'] }),
-    onboarding: h('A checklist for completing the setup of a new company.', { steps: ['Open each pending step in the list and complete it.'] }),
+    'admin-workspace': h('Business setup in one place: what is ready, what is pending and shortcuts to every admin task.', {
+        tabs: [['Overview', 'Branches, warehouses, products and masters'], ['Staff', 'Employee records and who is missing a login, branch or role'], ['Setup Steps', 'The checklist for starting daily billing'], ['Users', 'Add logins, choose Admin or Staff, activate or deactivate'], ['Settings', 'Business profile, logo, bank details and bill printing']],
+        steps: ['Open “Needs your attention” and click “Fix now” on each line.', 'Use the buttons under “What do you want to do?” for daily admin work.', 'Click any card under “Your setup” to open that list.', 'Click “Refresh” after adding something to update the counts.'],
+        notes: ['Items under “Optional” can be left empty.'],
+        faq: [
+            ['How do I give my staff a login?', 'Open the Users tab, click “+ Add User”, enter name, email, role and a password of at least 8 characters, and save. Share the email and password with them.'],
+            ['What is the difference between Admin and Staff?', 'Admin has full business access. Staff can do billing, work with customers and view stock.'],
+            ['A staff member forgot the password.', 'Users tab > Edit > enter a new password > Save.'],
+            ['Someone left the job.', 'Users tab > Deactivate. Their old bills stay in the records.'],
+            ['How do I change the name, GSTIN or logo on the bill?', 'Open the Settings tab, change the details and click “Save Settings”.'],
+        ],
+    }),
+    'staff-workspace': h('The daily work screen: billing and stock shortcuts, pending work and alerts for your branch.', {
+        steps: ['Click a button under “What do you want to do?”.', 'Finish the lines under “My Pending Work”.', 'Check “Inventory Alerts” for products running short.'],
+        notes: ['If it says branch or warehouse is not assigned, ask your admin.'],
+        faq: [['I cannot see a menu.', 'Your role does not include it. Ask your admin.']],
+    }),
+    onboarding: h('The setup checklist of a company. Finish the required steps once before daily billing.', {
+        steps: ['Start with the blue “Do this next” box.', 'Open each line under “To do” and complete it.', 'Click “Refresh” to see the new progress.'],
+        notes: ['“Optional” steps do not affect the progress percentage.', 'A step that is “Blocked” opens after the earlier step is finished.'],
+    }),
     'company-onboarding': h('Enter the starting details of your company.', { steps: ['Fill in the company details and save.'] }),
     profile: h('Your own login profile.', { steps: ['Update your details or password and save.'] }),
 
@@ -19,12 +37,14 @@ export const pageHelp = {
     }),
 
     pos: h('The billing counter screen (New Bill).', {
-        steps: ['Select the customer.', 'Type a product name or scan its barcode, then check the quantity.', 'Choose the payment: Cash, UPI, Card or Split (fully paid), Part Paid, or Unpaid.', 'Complete the sale and print the bill.'],
-        notes: ['Part Paid and Unpaid need a registered customer, not a walk-in customer.'],
+        steps: ['Select the customer, or leave Walk-in Customer. You can search by mobile number and add a new customer there.', 'Choose the bill type: B2C Retail, B2B Tax Invoice or Bill of Supply.', 'Type a product name or scan its barcode, then check quantity and rate.', 'Add a discount if needed.', 'Choose the payment: Cash, UPI, Card or Split (fully paid), Part Paid, or Unpaid.', 'Tick Print 80mm, Print A4 or Share WhatsApp if wanted, then click “Complete Sale”.'],
+        notes: ['Part Paid and Unpaid need a registered customer, not a walk-in customer.', 'B2B Tax Invoice needs the customer GSTIN.', '“Hold Bill” keeps a bill to finish later; open it again from “Held Bills”.', 'Keys: F1 new bill, F2 customer, F3 product search, F4 hold, F5 payment, F6 print.'],
+        faq: [['It says insufficient stock.', 'Enter the purchase bill or opening stock of that product first.'], ['I made a mistake in a completed bill.', 'Sales Invoices > Actions > Edit.']],
     }),
-    sales: h('The list of sales invoices already created.', {
-        steps: ['Use the filters at the top to narrow by date, customer or payment status.', 'Use Actions to view, print (A4 / 80mm), copy or reverse an invoice.'],
-        notes: ['Create a new bill from “New Bill” (POS).'],
+    sales: h('All sales invoices: view, print, correct and share them.', {
+        steps: ['Use the filters to narrow by date, customer, status or payment, then click Apply.', 'Use Actions to view, print (A4 / 80mm), copy, edit or reverse an invoice.', 'To correct a bill: Actions > Edit, change what is wrong and click “Save Changes”. The invoice number stays the same.', 'To send the bill to a customer who uses BillIQ: Actions > “Send on BillIQ”.'],
+        notes: ['Create a new bill from “New Bill” (POS).', 'Editing corrects stock and accounts automatically. The earlier version is kept under Status > Reversed with -R1 after the number.', 'Only an admin can edit a reversed or cancelled invoice, or one with a receipt voucher.', 'If a receipt is recorded, the customer cannot be changed and the total cannot go below the amount received.', 'If a sales return exists, cancel or reverse the return before editing.', 'Some older or imported bills total a little differently when recalculated. The screen warns you before saving.'],
+        faq: [['Difference between Edit and Reverse?', 'Edit corrects the same invoice. Reverse cancels its effect on stock and accounts.'], ['It says insufficient stock while editing.', 'You raised a quantity above the available stock. Add stock first or lower the quantity.']],
     }),
     'sales|Sales Orders': h('Quotations, sales orders and delivery challans (goods sent without a bill).', {
         tabs: [['Dashboard', 'Summary'], ['Quotations', 'Send rates to a customer and convert to an order later'], ['Sales Orders', 'Take an order; approving it reserves stock'], ['Challans', 'Send goods without a bill: sample, gift, self use'], ['Reports', 'Order reports']],
@@ -49,8 +69,9 @@ export const pageHelp = {
     }),
 
     purchases: h('Bills for goods bought from suppliers.', {
-        steps: ['Click “New Purchase”, select the supplier, add items and click “Confirm & Post”.', 'For freight, fill in “Transport / Other Charges” and its GST %, if any.', 'Choose the payment: Unpaid, Paid in full or Partly paid. To pay later, click “Pay” on the bill.', 'To correct a bill, use Actions > Edit, then “Save Changes”. The voucher number stays the same.'],
-        notes: ['Bills within your state carry CGST and SGST; bills from another state carry IGST.', 'A bill with a payment cannot be edited until that payment is reversed.'],
+        steps: ['Click “New Purchase”, select the supplier, add items and click “Confirm & Post”.', 'For freight, fill in “Transport / Other Charges” and its GST %, if any.', 'Choose the payment: Unpaid, Paid in full or Partly paid. To pay later, click “Pay” on the bill.', 'To correct a bill: Actions > Edit, then “Save Changes”. The voucher number stays the same.', 'If your supplier uses BillIQ, click “From Supplier Bill” and paste the bill link.'],
+        notes: ['Bills within your state carry CGST and SGST; bills from another state carry IGST.', 'Only an admin can edit a reversed or cancelled bill, or one with a payment voucher.', 'If a payment voucher is recorded, the supplier cannot be changed and the total cannot go below the amount paid.', 'If a purchase return exists, cancel or reverse the return before editing.', 'The earlier version of an edited bill is kept under Status > Reversed with -R1 after the number.'],
+        faq: [['It says the bill is already entered again.', 'The same supplier bill exists under another voucher number. Edit that one.']],
     }),
     'supplier-bills': h('Get bills from suppliers who use BillIQ and add them to purchases without typing.', { steps: ['Open “Connections”, search the supplier by full mobile number or GSTIN and click “Send Request”. They must accept it once.', 'The supplier opens their sales invoice and clicks Actions > “Send on BillIQ”.', 'The bill appears under “Received Bills”. Click “Add to Purchase”.', 'Match each item with your product, or add it as a new product.', 'Check the purchase form and click “Confirm & Post”. Stock changes only then.', 'Without a connection, paste the bill link the supplier sent on WhatsApp.'] }),
     'purchase-returns': h('Return goods to a supplier.', { steps: ['Click “New Return” and select the purchase bill.', 'Enter the items and quantities being returned.', 'Click “Post”. Stock and the supplier balance are updated.'] }),
@@ -136,9 +157,36 @@ export const pageHelp = {
         tabs: [['Employees', 'Employee list'], ['Attendance', 'Attendance entries'], ['Salary', 'Salary structures'], ['Payroll', 'Monthly salary processing'], ['Payslips', 'Salary slips'], ['Loans', 'Advances and loans'], ['Reports', 'Reports']],
         steps: ['Enter attendance.', 'Calculate payroll and approve it.', 'Post it and process the payment.'],
     }),
-    users: h('People who use the app and their access.', { steps: ['Click “+ Add User” and enter the name, email and role.'], notes: ['Give each user only the access they need.'] }),
+    users: h('People who can log in to this business and what they may do.', {
+        steps: ['Click “+ Add User” and enter the name, email, role and password.', 'Use Edit to change the name, role or password.', 'Use Deactivate to stop a login, Activate to allow it again.'],
+        notes: ['Admin has full business access. Staff can do billing, customers and stock view.', 'The owner login cannot be deactivated.', 'Give each user only the access they need.'],
+    }),
     saas: h('Your plan and subscription details.', { steps: ['View your plan and its status.'] }),
-    settings: h('Company settings, logo and bill details.', { steps: ['Change the details and save.'] }),
+    settings: h('Business details that appear on bills and reports, and how bills are printed.', {
+        steps: ['Fill in business name, GSTIN, state, phone, email and address.', 'Upload your logo if wanted.', 'Enter bank name, account number, IFSC and account holder to print them on the bill.', 'Write your Terms & Conditions.', 'Choose the default print: A4 or 80mm thermal, and tick the fields to show.', 'Click “Save Settings”.'],
+        notes: ['Save your mobile number or GSTIN so that suppliers and customers can find you in Supplier Bills.'],
+    }),
 };
+
+// Opened from "All guides": the first things a new user asks about.
+export const startGuide = h('The order in which to start using BillIQ.', {
+    steps: ['Setup > Settings: business name, GSTIN, address, bank details and print format.', 'Setup > Branches, then Warehouse > Warehouses / Bins: at least one of each.', 'Setup > Users & Roles: logins for your staff.', 'Inventory > Product Master: add the items with rate and GST %.', 'Inventory > Opening Stock: the stock you have today (remember to Post).', 'Add customers and suppliers.', 'Enter purchases in Purchase > Purchases.', 'Make bills from New Bill.', 'Record money received or paid with Receipt and Payment (Accounting > Vouchers).', 'Check the Business Dashboard daily and Business Reports every month.'],
+    faq: [
+        ['How do I make a bill?', 'Click “New Bill” at the top, add products, choose payment and click “Complete Sale”.'],
+        ['How do I correct a wrong bill?', 'Open Sales Invoices or Purchases, then Actions > Edit > Save Changes.'],
+        ['How do I receive pending money?', 'Open the customer in Customers and use “Receive Payment”, or make a Receipt voucher.'],
+        ['How do I take back goods?', 'Sales Returns for goods from a customer; Purchase Returns for goods sent to a supplier.'],
+        ['Where do I see who owes me money?', 'Business Dashboard > To Collect.'],
+    ],
+});
+
+export const guideTopics = [
+    ['Start here', 'getting-started'], ['Dashboard', 'dashboard'], ['Admin Workspace', 'admin-workspace'], ['Setup Checklist', 'onboarding'], ['Staff Workspace', 'staff-workspace'],
+    ['New Bill (POS)', 'pos'], ['Sales Invoices', 'sales'], ['Sales Returns', 'sales-returns'], ['Customers', 'customers'], ['Payment Reminders', 'payment-reminders'], ['Sales Orders and Challans', 'sales|Sales Orders'],
+    ['Purchases', 'purchases'], ['Supplier Bills', 'supplier-bills'], ['Purchase Returns', 'purchase-returns'], ['Suppliers', 'suppliers'],
+    ['Products', 'products'], ['Opening Stock', 'opening-stock'], ['Current Stock', 'inventory-current-stock'], ['Barcodes', 'inventory-barcode-center'], ['Warehouse Transfer', 'inventory-transfer'], ['Stock Adjustment', 'inventory-adjustment'], ['Kits (Manufacturing)', 'inventory-manufacturing'],
+    ['Vouchers (Money In / Out)', 'vouchers'], ['Ledgers', 'ledgers'], ['Expenses', 'expenses'], ['GST', 'gst'], ['Reports', 'reports'],
+    ['Users and Roles', 'users'], ['Settings and Printing', 'settings'], ['Masters', 'masters'], ['Branches', 'branches'], ['Employees', 'employees'], ['Payroll', 'payroll'],
+];
 
 export const helpFor = (page, title) => pageHelp[`${page}|${title}`] || pageHelp[page] || null;

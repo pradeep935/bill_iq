@@ -101,14 +101,14 @@
         </div>
 
         <div class="bill-top-actions" v-if="isSalesInvoicePage">
-          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.invoices.create', '/app/sales/invoices/create')" title="Create a new sales invoice">
+          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.pos', '/app/sales/pos')" title="Create a new sales invoice">
             <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
             <span class="top-label">New Invoice</span>
           </a>
         </div>
 
         <div class="bill-top-actions" v-else>
-          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.invoices.create', '/app/sales/invoices/create')" title="Create a new bill">
+          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.pos', '/app/sales/pos')" title="Create a new bill">
             <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
             <span class="top-label">New Bill</span>
           </a>

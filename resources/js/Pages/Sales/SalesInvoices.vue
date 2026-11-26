@@ -5,11 +5,11 @@ import Layout from '../Layout.vue';
 import SalesApi from './SalesApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 import SendOnBillIQ from './SendOnBillIQ.vue';
+import EditInvoice from './EditInvoice.vue';
 
-const props = defineProps({ page: { type: String, default: 'sales' }, title: { type: String, default: 'Sales Invoices' }, endpoints: { type: Object, default: () => ({}) } });
+const props = defineProps({ page: { type: String, default: 'sales' }, title: { type: String, default: 'Sales Invoices' }, endpoints: { type: Object, default: () => ({}) }, role_id: { type: [Number, String], default: 3 } });
 SalesApi.configure(props.endpoints);
 
-const today = new Date().toISOString().slice(0, 10);
 const query = () => new URLSearchParams(window.location.search);
 const sales = ref([]);
 // Columns that carry no information (same value on every row) are hidden so the money columns stay visible.
@@ -18,15 +18,14 @@ const showMobile = computed(() => (sales.value || []).some((row) => row.customer
 const showType = computed(() => new Set((sales.value || []).map((row) => row.invoice_type)).size > 1);
 const typeLabel = (value) => String(value || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const references = ref({ customers: [], branches: [], warehouses: [], payment_methods: [] });
-const products = ref([]);
-const productSearch = ref('');
 const loading = ref(false);
-const saving = ref(false);
-const savingAction = ref('');
 const openActionMenuId = ref(null);
 const viewingSale = ref(null);
 const sendingSale = ref(null);
-const errors = ref({});
+const editingSale = ref(null);
+// Reversed and cancelled invoices can be edited by an admin; "-R1" rows are old versions kept for the record.
+const isAdmin = computed(() => [1, 2].includes(Number(props.role_id)));
+const canEdit = (row) => !/-R\d+$/.test(row.voucher_number || '') && (['draft', 'hold', 'approved', 'confirmed'].includes(row.status) || (isAdmin.value && ['reversed', 'cancelled'].includes(row.status)));
 const reports = ref({});
 const pagination = ref({ current_page: 1, last_page: 1, total: 0, from: 0, to: 0 });
 const filters = reactive({
@@ -43,18 +42,6 @@ const filters = reactive({
     date_from: query().get('date_from') || '',
     date_to: query().get('date_to') || '',
 });
-const form = reactive({
-    id: null, branch_id: '', warehouse_id: '', customer_id: '', invoice_date: today, due_date: '',
-    sale_type: 'cash', invoice_type: 'tax_invoice', tax_type: 'intrastate', place_of_supply_state_id: '',
-    voucher_discount_type: '', voucher_discount_value: 0, shipping_amount: 0, other_charges: 0,
-    reference_number: '', salesperson_id: '', remarks: '', terms_and_conditions: '', items: [], payments: [],
-});
-
-const filteredWarehouses = computed(() => !form.branch_id ? references.value.warehouses || [] : (references.value.warehouses || []).filter((w) => Number(w.branch_id || 0) === Number(form.branch_id)));
-const selectedCustomer = computed(() => (references.value.customers || []).find((c) => Number(c.id) === Number(form.customer_id)));
-const priceType = computed(() => selectedCustomer.value?.price_type || 'retail');
-const defaultPayment = computed(() => (references.value.payment_methods || []).find((p) => p.type === 'cash') || (references.value.payment_methods || [])[0]);
-const isEditingDraft = computed(() => Boolean(form.id));
 const currentParams = () => Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '' && value !== null && value !== undefined));
 const syncUrl = (replace = false) => {
     const params = new URLSearchParams(currentParams());
@@ -75,33 +62,6 @@ const fromUrl = () => {
     loadReports();
 };
 
-const line = (item) => {
-    const qty = Number(item.quantity || 0);
-    const rate = Number(item.selling_rate || 0);
-    const gross = qty * rate;
-    const discount = item.discount_type === 'percentage' ? gross * Math.min(Number(item.discount_value || 0), 100) / 100 : Math.min(gross, Number(item.discount_value || 0));
-    const taxable = Math.max(0, gross - discount);
-    const tax = ['exempt', 'nil_rated'].includes(form.tax_type) || form.invoice_type === 'bill_of_supply' ? 0 : taxable * (Number(item.gst_rate || 0) + Number(item.cess_rate || 0)) / 100;
-    return { gross, discount, taxable, tax, total: taxable + tax };
-};
-
-const totals = computed(() => {
-    const base = form.items.reduce((sum, item) => {
-        const value = line(item);
-        sum.subtotal += value.gross; sum.item_discount += value.discount; sum.taxable += value.taxable; sum.tax += value.tax; return sum;
-    }, { subtotal: 0, item_discount: 0, taxable: 0, tax: 0 });
-    const voucherDiscount = form.voucher_discount_type === 'percentage' ? base.taxable * Math.min(Number(form.voucher_discount_value || 0), 100) / 100 : Math.min(base.taxable, Number(form.voucher_discount_value || 0));
-    const beforeRound = Math.max(0, base.taxable - voucherDiscount) + base.tax + Number(form.shipping_amount || 0) + Number(form.other_charges || 0);
-    const grand = Math.round(beforeRound);
-    const paid = form.payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-    return { ...base, voucherDiscount, roundOff: grand - beforeRound, grand, paid, balance: Math.max(0, grand - paid), change: Math.max(0, paid - grand) };
-});
-
-const reset = () => {
-    Object.assign(form, { id: null, branch_id: '', warehouse_id: '', customer_id: '', invoice_date: today, due_date: '', sale_type: 'cash', invoice_type: 'tax_invoice', tax_type: 'intrastate', place_of_supply_state_id: '', voucher_discount_type: '', voucher_discount_value: 0, shipping_amount: 0, other_charges: 0, reference_number: '', salesperson_id: '', remarks: '', terms_and_conditions: '', items: [], payments: [] });
-    errors.value = {};
-};
-
 const loadReferences = async () => { references.value = await SalesApi.references(); };
 const loadSales = async (page = 1) => {
     loading.value = true;
@@ -113,63 +73,17 @@ const loadSales = async (page = 1) => {
 };
 const loadReports = async () => { reports.value = await SalesApi.reports(filters); };
 
-const searchProducts = async () => {
-    if (productSearch.value.trim().length < 2) { products.value = []; return; }
-    products.value = await SalesApi.searchProducts(productSearch.value.trim(), { branch_id: form.branch_id, warehouse_id: form.warehouse_id, price_type: priceType.value });
+const editSale = async (row) => {
+    closeActionMenu();
+    try { editingSale.value = await SalesApi.getSale(row.id); } catch (error) { alert(error.response?.data?.message || 'Could not open this invoice.'); }
 };
-
-const addProduct = (product) => {
-    const existing = form.items.find((item) => item.product_id === product.id && !item.product_variant_id && !item.batch_id);
-    if (existing && (productSearch.value === product.barcode || productSearch.value === product.sku)) { existing.quantity = Number(existing.quantity || 0) + 1; products.value = []; productSearch.value = ''; return; }
-    const batch = (product.batches || []).find((b) => Number(b.available_stock || 0) > 0);
-    form.items.push({
-        product_id: product.id, product: product.name, sku: product.sku, barcode: product.barcode,
-        variants: product.variants || [], batches: product.batches || [], product_variant_id: '',
-        batch_id: batch?.id || '', unit_id: product.unit_id || '', available_stock: batch?.available_stock ?? product.available_stock,
-        quantity: 1, free_quantity: 0, selling_rate: product.selling_rate || 0, mrp: product.mrp || '',
-        discount_type: '', discount_value: 0, gst_rate: product.gst_rate || 0, cess_rate: product.cess_rate || 0,
-        tax_inclusive: product.tax_inclusive, batch_required: product.batch_required, remarks: '',
-    });
-    productSearch.value = ''; products.value = [];
-};
-
-const addPayment = () => {
-    if (!defaultPayment.value) return;
-    form.payments.push({ payment_method_id: defaultPayment.value.id, amount: totals.value.balance || totals.value.grand, reference_number: '', payment_date: today, notes: '' });
-};
-const removeItem = (index) => form.items.splice(index, 1);
-const removePayment = (index) => form.payments.splice(index, 1);
-const payload = (status) => ({ ...form, status, branch_id: form.branch_id || null, warehouse_id: form.warehouse_id || null, customer_id: form.customer_id || null, place_of_supply_state_id: form.place_of_supply_state_id || null });
-
-const saveSale = async (status = 'draft') => {
-    if (saving.value) return;
-    saving.value = true; savingAction.value = status; errors.value = {};
-    try {
-        const response = await SalesApi.saveSale(payload(status), form.id);
-        alert(response.message || 'Sale saved.');
-        if (['confirmed', 'approved'].includes(status)) printSale(response.sale);
-        reset(); await loadSales(); await loadReports();
-    } catch (error) {
-        if (error.response?.status === 422) { errors.value = error.response.data.errors || {}; alert(Object.values(errors.value)?.[0]?.[0] || 'Please check sale fields.'); return; }
-        alert(error.response?.data?.message || 'Could not save the sale. Please try again.');
-    } finally { saving.value = false; savingAction.value = ''; }
-};
-
-const editSale = (sale) => {
-    Object.assign(form, { ...sale, items: (sale.items || []).map((item) => ({ ...item, product: item.product, variants: [], batches: [] })), payments: sale.payments || [] });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+const saleSaved = async (response) => {
+    editingSale.value = null;
+    alert(response.message || 'Invoice saved.');
+    await loadSales(pagination.value.current_page || 1); await loadReports();
 };
 const simpleAction = async (fn, row, promptText) => { if (promptText && !window.confirm(promptText)) return; const response = await fn(row.id); alert(response.message || 'Done.'); await loadSales(pagination.value.current_page || 1); await loadReports(); };
 const reverseSale = async (row) => { const remarks = window.prompt('Reversal remarks'); if (!remarks) return; await simpleAction((id) => SalesApi.reverseSale(id, remarks), row); };
-const reviseSale = async (row) => {
-    if (!window.confirm('This posted invoice will be reversed (stock and accounts) and an editable draft copy will open. Post the draft again after changing items. Continue?')) return;
-    try {
-        const response = await SalesApi.reviseSale(row.id, 'Edited: reversed for correction');
-        alert(response.message || 'Invoice reversed.');
-        editSale(response.sale);
-        await loadSales(pagination.value.current_page || 1); await loadReports();
-    } catch (error) { alert(error.response?.data?.message || Object.values(error.response?.data?.errors || {})?.[0]?.[0] || 'Could not edit this invoice.'); }
-};
 const toggleActionMenu = (row) => { openActionMenuId.value = openActionMenuId.value === row.id ? null : row.id; };
 const closeActionMenu = () => { openActionMenuId.value = null; };
 const viewSale = (sale) => {
@@ -203,10 +117,7 @@ onUnmounted(() => { window.removeEventListener('popstate', fromUrl); window.remo
             <div class="bill-page-title"><span>SALES MANAGEMENT</span><h1>Sales Invoices</h1><p>Draft, hold and post GST invoices with stock ledger integration.</p></div>
         </template>
         <div class="sales-page">
-            <div v-if="isEditingDraft" class="edit-banner">
-                <strong>Editing {{ form.invoice_number || 'draft invoice' }}</strong>
-                <span>Changes can be saved while invoice status is draft or held. Posted invoices: use Edit to reverse and reopen as a draft.</span>
-            </div>
+            <EditInvoice v-if="editingSale" :sale="editingSale" :references="references" @close="editingSale = null" @saved="saleSaved" />
             <section class="metrics"><div><span>Outstanding</span><strong>{{ formatMoney(reports.outstanding) }}</strong></div><div><span>Cancelled</span><strong>{{ reports.cancelled || 0 }}</strong></div><div><span>Today Total</span><strong>{{ formatMoney(reports.today_total) }}</strong></div><div><span>Draft / Held</span><strong>{{ reports.draft_count || 0 }} / {{ reports.held_count || 0 }}</strong></div></section>
             <section class="panel">
                 <div class="toolbar">
@@ -220,7 +131,7 @@ onUnmounted(() => { window.removeEventListener('popstate', fromUrl); window.remo
                     <select v-model="filters.invoice_type"><option value="">All Types</option><option value="tax_invoice">Tax Invoice</option><option value="bill_of_supply">Bill of Supply</option><option value="retail_invoice">Retail Invoice</option></select>
                     <button class="primary" @click="applyFilters">Apply</button><button @click="clearFilters">Clear Filters</button><button @click="exportRows">Export</button>
                 </div>
-                <div class="table-wrapper" :class="{ 'is-refreshing': loading }"><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th v-if="showMobile">Mobile</th><th v-if="showLocation">Branch</th><th v-if="showLocation">Warehouse</th><th v-if="showType">Type</th><th>Total</th><th>Paid</th><th>Balance</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in sales" :key="row.id"><td>{{ row.invoice_number }}</td><td>{{ formatDate(row.invoice_date) }}</td><td>{{ row.customer }}</td><td v-if="showMobile">{{ row.customer_mobile || '-' }}</td><td v-if="showLocation">{{ row.branch || '-' }}</td><td v-if="showLocation">{{ row.warehouse || '-' }}</td><td v-if="showType">{{ typeLabel(row.invoice_type) }}</td><td>{{ formatMoney(row.grand_total) }}</td><td>{{ formatMoney(row.paid_amount) }}</td><td :class="{ due: Number(row.balance_amount) > 0 }">{{ formatMoney(row.balance_amount) }}</td><td><span class="badge pay" :class="row.payment_status">{{ row.payment_status }}</span></td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td><div class="row-actions"><RowActionMenu :open="openActionMenuId === row.id" :show-view="false" more-label="Actions" more-title="Invoice actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button type="button" @click="viewSale(row); closeActionMenu()">View</button><button type="button" @click="printSale(row); closeActionMenu()">Print A4</button><button type="button" @click="printSale(row, 'thermal'); closeActionMenu()">Print 80mm</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" @click="sendingSale = row; closeActionMenu()">Send on BillIQ</button><button v-if="['draft','hold'].includes(row.status)" type="button" @click="editSale(row); closeActionMenu()">Edit</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" @click="reviseSale(row); closeActionMenu()">Edit</button><button v-if="['draft','hold'].includes(row.status)" type="button" @click="simpleAction(SalesApi.approveSale,row,'Post invoice?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(SalesApi.duplicateSale,row); closeActionMenu()">Copy</button><button v-if="['draft','hold'].includes(row.status)" type="button" class="danger" @click="simpleAction(SalesApi.cancelSale,row,'Cancel invoice?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" class="danger" @click="reverseSale(row); closeActionMenu()">Reverse</button></RowActionMenu></div></td></tr><tr v-if="!sales.length && !loading"><td colspan="13" class="empty">No sales invoices found for the selected filters.</td></tr></tbody></table></div>
+                <div class="table-wrapper" :class="{ 'is-refreshing': loading }"><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th v-if="showMobile">Mobile</th><th v-if="showLocation">Branch</th><th v-if="showLocation">Warehouse</th><th v-if="showType">Type</th><th>Total</th><th>Paid</th><th>Balance</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in sales" :key="row.id"><td>{{ row.invoice_number }}</td><td>{{ formatDate(row.invoice_date) }}</td><td>{{ row.customer }}</td><td v-if="showMobile">{{ row.customer_mobile || '-' }}</td><td v-if="showLocation">{{ row.branch || '-' }}</td><td v-if="showLocation">{{ row.warehouse || '-' }}</td><td v-if="showType">{{ typeLabel(row.invoice_type) }}</td><td>{{ formatMoney(row.grand_total) }}</td><td>{{ formatMoney(row.paid_amount) }}</td><td :class="{ due: Number(row.balance_amount) > 0 }">{{ formatMoney(row.balance_amount) }}</td><td><span class="badge pay" :class="row.payment_status">{{ row.payment_status }}</span></td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td><div class="row-actions"><RowActionMenu :open="openActionMenuId === row.id" :show-view="false" more-label="Actions" more-title="Invoice actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button type="button" @click="viewSale(row); closeActionMenu()">View</button><button type="button" @click="printSale(row); closeActionMenu()">Print A4</button><button type="button" @click="printSale(row, 'thermal'); closeActionMenu()">Print 80mm</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" @click="sendingSale = row; closeActionMenu()">Send on BillIQ</button><button v-if="canEdit(row)" type="button" @click="editSale(row)">Edit</button><button v-if="['draft','hold'].includes(row.status)" type="button" @click="simpleAction(SalesApi.approveSale,row,'Post invoice?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(SalesApi.duplicateSale,row); closeActionMenu()">Copy</button><button v-if="['draft','hold'].includes(row.status)" type="button" class="danger" @click="simpleAction(SalesApi.cancelSale,row,'Cancel invoice?'); closeActionMenu()">Cancel</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" class="danger" @click="reverseSale(row); closeActionMenu()">Reverse</button></RowActionMenu></div></td></tr><tr v-if="!sales.length && !loading"><td colspan="13" class="empty">No sales invoices found for the selected filters.</td></tr></tbody></table></div>
                 <div class="pagination"><button :disabled="pagination.current_page <= 1 || loading" @click="loadSales(pagination.current_page - 1)">Previous</button><span>{{ loading ? 'Loading…' : `${pagination.from || 0}-${pagination.to || 0} of ${pagination.total || 0}` }}</span><button :disabled="pagination.current_page >= pagination.last_page || loading" @click="loadSales(pagination.current_page + 1)">Next</button></div>
             </section>
             <SendOnBillIQ v-if="sendingSale" :sale="sendingSale" @close="sendingSale = null" />

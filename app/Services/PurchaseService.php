@@ -96,7 +96,8 @@ class PurchaseService
         return DB::transaction(function () use ($voucher, $data) {
             $this->assertBusiness($voucher);
 
-            if ($voucher->status !== 'draft') {
+            // A cancelled purchase was never posted; the controller lets only an admin reopen it.
+            if (!in_array($voucher->status, ['draft', 'cancelled'], true)) {
                 throw ValidationException::withMessages(['status' => 'Only draft purchases can be edited.']);
             }
 
@@ -106,7 +107,8 @@ class PurchaseService
             $this->calculator->validatePurchaseTotals($totals);
             $status = $data['status'];
 
-            $voucher->update($this->voucherAttributes($businessId, $data, $totals));
+            // A cancelled bill that is saved again becomes a draft.
+            $voucher->update($this->voucherAttributes($businessId, $data, $totals, ['status' => 'draft']));
             $voucher->items()->delete();
             $this->syncItems($voucher, $totals['items']);
 
@@ -123,19 +125,24 @@ class PurchaseService
      * the old row is archived as "<no>-R<n>", and the corrected voucher is posted again under the SAME voucher number.
      * Any failure rolls everything back, so the original purchase is never left half-edited.
      */
-    public function updatePosted(PurchaseVoucher $voucher, array $data): PurchaseVoucher
+    public function updatePosted(PurchaseVoucher $voucher, array $data, bool $isAdmin = false): PurchaseVoucher
     {
-        return DB::transaction(function () use ($voucher, $data) {
+        return DB::transaction(function () use ($voucher, $data, $isAdmin) {
             $this->assertBusiness($voucher);
             $voucher = PurchaseVoucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
+            $edits = app(VoucherEditService::class);
+            $wasPosted = in_array($voucher->status, ['confirmed', 'approved'], true);
 
-            if (!in_array($voucher->status, ['confirmed', 'approved'], true)) {
+            if (!$wasPosted && $voucher->status !== 'reversed') {
                 throw ValidationException::withMessages(['status' => 'Only draft or posted purchases can be edited.']);
             }
-            // Money entered on the bill itself is re-posted with the edit. Separate payment vouchers and returns point
-            // at this exact row, so those must be reversed first.
-            if (Schema::hasTable('ledger_allocations') && round((float) DB::table('ledger_allocations')->where('business_id', $voucher->business_id)->where('reference_type', PurchaseVoucher::class)->where('reference_id', $voucher->id)->sum('allocated_amount'), 2) > 0) {
-                throw ValidationException::withMessages(['status' => 'A payment voucher is recorded against this bill. Reverse that payment first (Accounting > Vouchers), then edit the bill.']);
+            if (!$wasPosted) {
+                $edits->assertAdmin($isAdmin, 'Only an admin can edit a reversed purchase.');
+                $this->assertNotReplaced($voucher);
+            }
+            $edits->assertNotArchived($voucher->voucher_number);
+            if (!in_array($data['status'], ['confirmed', 'approved'], true)) {
+                throw ValidationException::withMessages(['status' => 'A posted purchase is saved as posted. Use Save Changes.']);
             }
             if (Schema::hasTable('purchase_return_vouchers') && DB::table('purchase_return_vouchers')->where('business_id', $voucher->business_id)->where('purchase_voucher_id', $voucher->id)->whereNotIn('status', ['cancelled', 'reversed'])->exists()) {
                 throw ValidationException::withMessages(['status' => 'A purchase return exists for this bill. Cancel or reverse that return first, then edit the bill.']);
@@ -143,18 +150,42 @@ class PurchaseService
 
             $businessId = (int) $voucher->business_id;
             $this->validateOwnership($businessId, $data);
-            $this->calculator->validatePurchaseTotals($this->calculator->calculateVoucherTotals($data));
+            $totals = $this->calculator->calculateVoucherTotals($data);
+
+            // Money paid through separate payment vouchers stays with the bill; only the rest is posted with it.
+            $settled = $edits->settledAmount($businessId, PurchaseVoucher::class, $voucher->id);
+            if ($settled > 0) {
+                $edits->assertAdmin($isAdmin, 'A payment voucher is recorded against this bill. Only an admin can edit it.');
+                if ((int) $data['supplier_id'] !== (int) $voucher->supplier_id) {
+                    throw ValidationException::withMessages(['supplier_id' => 'A payment to this supplier is recorded against the bill, so the supplier cannot be changed. Reverse the payment first.']);
+                }
+                if ($data['purchase_type'] !== 'credit') {
+                    throw ValidationException::withMessages(['purchase_type' => 'Keep this bill as Credit: a payment voucher is recorded against it.']);
+                }
+                if ($settled > (float) $totals['grand_total'] + VoucherEditService::ROUND_OFF_TOLERANCE) {
+                    throw ValidationException::withMessages(['paid_amount' => 'Rs. ' . number_format($settled, 2) . ' is already paid on this bill, more than the new total. Reverse the payment first or correct the items.']);
+                }
+                $data['paid_amount'] = round(max(0, min((float) ($data['paid_amount'] ?? 0), (float) $totals['grand_total']) - $settled), 2);
+                $totals = $this->calculator->calculateVoucherTotals($data);
+            }
+            $this->calculator->validatePurchaseTotals($totals);
 
             $number = $voucher->voucher_number;
             $createdBy = $voucher->created_by;
-            $revisions = PurchaseVoucher::query()->where('business_id', $businessId)->where('voucher_number', 'like', $number . '-R%')->count();
+            $status = $voucher->status === 'confirmed' ? 'confirmed' : 'approved';
 
-            $this->reverse($voucher, 'Edited: ' . $number);
-            $voucher->update(['voucher_number' => $number . '-R' . ($revisions + 1)]);
+            if ($wasPosted) {
+                $this->reverse($voucher, 'Edited: ' . $number);
+                $voucher->refresh();
+            }
+            $voucher->update(['voucher_number' => $number . $edits->archiveSuffix(PurchaseVoucher::class, $businessId, 'voucher_number', $number)]);
 
-            $new = $this->create(array_merge($data, ['status' => $voucher->getOriginal('status') === 'confirmed' ? 'confirmed' : 'approved']), $number);
+            $new = $this->create(array_merge($data, ['status' => $status]), $number);
             $new->update(['created_by' => $createdBy]);
             NetworkService::moveImport($voucher->id, $new->id);
+            if ($settled > 0) {
+                $edits->applySettlement($new, PurchaseVoucher::class, $voucher->id, $settled);
+            }
 
             AuditLogger::record([
                 'module_name' => 'Purchase', 'record_id' => $new->id, 'action_type' => 'Update', 'business_id' => $businessId,
@@ -163,6 +194,24 @@ class PurchaseService
 
             return $this->fresh($new);
         });
+    }
+
+    /** A reversed bill may already be entered again (Copy or the old edit); posting it too would count it twice. */
+    private function assertNotReplaced(PurchaseVoucher $voucher): void
+    {
+        $same = PurchaseVoucher::query()->where('business_id', $voucher->business_id)->where('id', '!=', $voucher->id)
+            ->where('supplier_id', $voucher->supplier_id)->whereNotIn('status', ['cancelled', 'reversed'])
+            ->where(function (Builder $q) use ($voucher) {
+                if (filled($voucher->supplier_invoice_number)) {
+                    $q->where('supplier_invoice_number', $voucher->supplier_invoice_number);
+                } else {
+                    $q->whereDate('purchase_date', $voucher->purchase_date)->where('grand_total', $voucher->grand_total);
+                }
+            })->value('voucher_number');
+
+        if ($same) {
+            throw ValidationException::withMessages(['status' => "This bill is already entered again as {$same}. Edit that purchase instead."]);
+        }
     }
 
     public function duplicate(PurchaseVoucher $voucher): PurchaseVoucher
@@ -432,7 +481,7 @@ class PurchaseService
             'purchase_type' => $voucher->purchase_type,
             'tax_type' => $voucher->tax_type,
             'subtotal' => (float) $voucher->subtotal,
-            'discount_type' => $voucher->discount_type,
+            'discount_type' => $voucher->discount_type === 'fixed' ? 'amount' : $voucher->discount_type,
             'discount_value' => (float) $voucher->discount_value,
             'discount_amount' => (float) $voucher->discount_amount,
             'taxable_amount' => (float) $voucher->taxable_amount,
@@ -448,6 +497,7 @@ class PurchaseService
             'other_charges_gst_rate' => (float) $voucher->other_charges_gst_rate,
             'payment_status' => $voucher->payment_status,
             'status' => $voucher->status,
+            'settled_amount' => app(VoucherEditService::class)->settledAmount((int) $voucher->business_id, PurchaseVoucher::class, $voucher->id),
             'created_by' => optional($voucher->creator)->name,
             'remarks' => $voucher->remarks,
             'items' => $voucher->items->map(fn ($item) => [
@@ -468,7 +518,7 @@ class PurchaseService
                 'tracking_type' => optional($item->product)->tracking_type ?: 'none',
                 'selling_price' => $item->selling_price !== null ? (float) $item->selling_price : null,
                 'mrp' => $item->mrp !== null ? (float) $item->mrp : null,
-                'discount_type' => $item->discount_type,
+                'discount_type' => $item->discount_type === 'fixed' ? 'amount' : $item->discount_type,
                 'discount_value' => (float) $item->discount_value,
                 'gst_rate' => (float) $item->gst_rate,
                 'cess_rate' => (float) $item->cess_rate,

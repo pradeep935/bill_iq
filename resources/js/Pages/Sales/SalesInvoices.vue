@@ -49,6 +49,40 @@ const syncUrl = (replace = false) => {
     window.history[replace ? 'replaceState' : 'pushState']({}, '', next);
 };
 const applyFilters = async () => { syncUrl(); await loadSales(1); await loadReports(); };
+// One tap for the lists people open most.
+const chips = [
+    { key: 'all', label: 'All bills', set: {} },
+    { key: 'today', label: 'Today', set: { date: 'today' } },
+    { key: 'due', label: 'To collect', set: { payment_status: 'due' } },
+    { key: 'draft', label: 'Draft', set: { status: 'draft' } },
+    { key: 'hold', label: 'On hold', set: { status: 'hold' } },
+    { key: 'reversed', label: 'Reversed', set: { status: 'reversed' } },
+];
+const showFilters = ref(false);
+const filterKeys = ['status', 'payment_status', 'date', 'date_from', 'date_to', 'invoice_type', 'tax_type', 'sale_type', 'branch_id', 'warehouse_id', 'customer_id'];
+const activeChip = computed(() => {
+    const used = Object.fromEntries(filterKeys.filter((key) => filters[key] !== '').map((key) => [key, String(filters[key])]));
+    return chips.find((chip) => JSON.stringify(chip.set) === JSON.stringify(used))?.key || null;
+});
+// Filters chosen in the panel (not one of the quick lists), counted on the button.
+const extraFilters = computed(() => (activeChip.value ? 0 : filterKeys.filter((key) => filters[key] !== '').length));
+// A link that sets other filters (such as from the dashboard) shows them.
+showFilters.value = extraFilters.value > 0;
+const quickFilter = async (key) => {
+    filterKeys.forEach((name) => { filters[name] = ''; });
+    Object.assign(filters, chips.find((chip) => chip.key === key)?.set || {});
+    await applyFilters();
+};
+const isPosted = (row) => ['approved', 'confirmed'].includes(row.status);
+const dueOf = (row) => (isPosted(row) ? Number(row.balance_amount || 0) : 0);
+// One badge says where the bill stands: its payment when posted, otherwise its state.
+const stateOf = (row) => {
+    if (isPosted(row)) {
+        return { paid: { label: 'Paid', tone: 'ok' }, partial: { label: 'Part paid', tone: 'part' }, unpaid: { label: 'Unpaid', tone: 'wait' } }[row.payment_status] || { label: row.payment_status, tone: 'part' };
+    }
+    if (row.status === 'reversed') return { label: /-R\d+$/.test(row.voucher_number || '') ? 'Old version' : 'Reversed', tone: 'off' };
+    return { draft: { label: 'Draft', tone: 'draft' }, hold: { label: 'On hold', tone: 'draft' }, cancelled: { label: 'Cancelled', tone: 'off' } }[row.status] || { label: row.status, tone: 'part' };
+};
 const clearFilters = async () => {
     Object.assign(filters, { search: '', status: '', payment_status: '', sale_type: '', invoice_type: '', tax_type: '', branch_id: '', warehouse_id: '', customer_id: '', date: '', date_from: '', date_to: '' });
     syncUrl();
@@ -123,24 +157,61 @@ onUnmounted(() => { window.removeEventListener('popstate', fromUrl); window.remo
 <template>
     <Layout :page="props.page" :title="props.title">
         <template #topbar-title>
-            <div class="bill-page-title"><span>SALES MANAGEMENT</span><h1>Sales Invoices</h1><p>Draft, hold and post GST invoices with stock ledger integration.</p></div>
+            <div class="bill-page-title"><span>SALES MANAGEMENT</span><h1>Sales Invoices</h1><p>All your sales bills: find, print, complete or correct them.</p></div>
         </template>
         <div class="sales-page">
             <EditInvoice v-if="editingSale" :sale="editingSale" :references="references" @close="editingSale = null" @saved="saleSaved" />
-            <section class="metrics"><div><span>Outstanding</span><strong>{{ formatMoney(reports.outstanding) }}</strong></div><div><span>Cancelled</span><strong>{{ reports.cancelled || 0 }}</strong></div><div><span>Today Total</span><strong>{{ formatMoney(reports.today_total) }}</strong></div><div><span>Draft / Held</span><strong>{{ reports.draft_count || 0 }} / {{ reports.held_count || 0 }}</strong></div></section>
+            <section class="si-cards" aria-label="Summary">
+                <button type="button" class="si-card sale" @click="quickFilter('today')">
+                    <span>Today’s Sales</span><strong>{{ formatMoney(reports.today_total) }}</strong>
+                    <small>{{ formatMoney(reports.today_paid) }} received · tap to see</small>
+                </button>
+                <button type="button" class="si-card due" @click="quickFilter('due')">
+                    <span>To Collect</span><strong>{{ formatMoney(reports.outstanding) }}</strong>
+                    <small>See unpaid bills</small>
+                </button>
+                <button type="button" class="si-card draft" @click="quickFilter('draft')">
+                    <span>Unfinished Bills</span><strong>{{ Number(reports.draft_count || 0) + Number(reports.held_count || 0) }}</strong>
+                    <small>{{ reports.draft_count || 0 }} draft · {{ reports.held_count || 0 }} on hold</small>
+                </button>
+            </section>
             <section class="panel">
-                <div class="toolbar">
-                    <input v-model="filters.search" placeholder="Search invoice, customer, mobile, GSTIN" @keyup.enter="applyFilters" />
-                    <input v-model="filters.date_from" type="date" />
-                    <input v-model="filters.date_to" type="date" />
-                    <select v-model="filters.branch_id"><option value="">All Branches</option><option v-for="b in references.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select>
-                    <select v-model="filters.warehouse_id"><option value="">All Warehouses</option><option v-for="w in references.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select>
-                    <select v-model="filters.status"><option value="">All Status</option><option value="draft">Draft</option><option value="hold">Held</option><option value="approved">Posted</option><option value="posted">All posted</option><option value="cancelled">Cancelled</option><option value="reversed">Reversed</option></select>
-                    <select v-model="filters.payment_status"><option value="">All Payments</option><option value="unpaid">Unpaid</option><option value="partial">Partial</option><option value="paid">Paid</option><option value="due">To collect (pending)</option><option value="unpaid,partial">Outstanding</option><option value="overpaid">Overpaid</option></select>
-                    <select v-model="filters.invoice_type"><option value="">All Types</option><option value="tax_invoice">Tax Invoice</option><option value="bill_of_supply">Bill of Supply</option><option value="retail_invoice">Retail Invoice</option></select>
-                    <button class="primary" @click="applyFilters">Apply</button><button @click="clearFilters">Clear Filters</button><button @click="exportRows">Export</button>
+                <form class="si-search" role="search" @submit.prevent="applyFilters">
+                    <input v-model="filters.search" type="search" aria-label="Search bills" placeholder="Search bill number, customer name, mobile or GSTIN" />
+                    <button type="submit" class="primary">Search</button>
+                    <button type="button" :aria-expanded="showFilters" @click="showFilters = !showFilters">Filters<b v-if="extraFilters">{{ extraFilters }}</b></button>
+                    <button type="button" title="Download this list" @click="exportRows">Export</button>
+                </form>
+                <div class="si-chips">
+                    <button v-for="chip in chips" :key="chip.key" type="button" :class="{ active: activeChip === chip.key }" :aria-pressed="activeChip === chip.key" @click="quickFilter(chip.key)">{{ chip.label }}</button>
                 </div>
-                <div class="table-wrapper" :class="{ 'is-refreshing': loading }"><table><thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th v-if="showMobile">Mobile</th><th v-if="showLocation">Branch</th><th v-if="showLocation">Warehouse</th><th v-if="showType">Type</th><th>Total</th><th>Paid</th><th>Balance</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in sales" :key="row.id"><td>{{ row.invoice_number }}</td><td>{{ formatDate(row.invoice_date) }}</td><td>{{ row.customer }}</td><td v-if="showMobile">{{ row.customer_mobile || '-' }}</td><td v-if="showLocation">{{ row.branch || '-' }}</td><td v-if="showLocation">{{ row.warehouse || '-' }}</td><td v-if="showType">{{ typeLabel(row.invoice_type) }}</td><td>{{ formatMoney(row.grand_total) }}</td><td>{{ formatMoney(row.paid_amount) }}</td><td :class="{ due: Number(row.balance_amount) > 0 }">{{ formatMoney(row.balance_amount) }}</td><td><span class="badge pay" :class="row.payment_status">{{ row.payment_status }}</span></td><td><span class="badge" :class="row.status">{{ row.status }}</span></td><td><div class="row-actions"><RowActionMenu :open="openActionMenuId === row.id" :show-view="false" more-label="Actions" more-title="Invoice actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button type="button" @click="viewSale(row); closeActionMenu()">View</button><button type="button" @click="printSale(row); closeActionMenu()">Print A4</button><button type="button" @click="printSale(row, 'thermal'); closeActionMenu()">Print 80mm</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" @click="sendingSale = row; closeActionMenu()">Send on BillIQ</button><button v-if="canEdit(row)" type="button" @click="editSale(row)">Edit</button><button v-if="['draft','hold'].includes(row.status)" type="button" @click="simpleAction(SalesApi.approveSale,row,'Post invoice?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(SalesApi.duplicateSale,row); closeActionMenu()">Copy</button><button v-if="['draft','hold'].includes(row.status)" type="button" class="danger" @click="simpleAction(SalesApi.cancelSale,row,'Cancel invoice?'); closeActionMenu()">Cancel</button><button v-if="isAdmin && ['approved','confirmed'].includes(row.status)" type="button" class="danger" @click="reverseSale(row); closeActionMenu()">Reverse</button></RowActionMenu></div></td></tr><tr v-if="!sales.length && !loading"><td colspan="13" class="empty">No sales invoices found for the selected filters.</td></tr></tbody></table></div>
+                <div v-if="showFilters" class="si-filters">
+                    <label>From date<input v-model="filters.date_from" type="date" /></label>
+                    <label>To date<input v-model="filters.date_to" type="date" /></label>
+                    <label>Bill status<select v-model="filters.status"><option value="">All</option><option value="draft">Draft</option><option value="hold">On hold</option><option value="approved">Posted</option><option value="posted">All posted</option><option value="cancelled">Cancelled</option><option value="reversed">Reversed</option></select></label>
+                    <label>Payment<select v-model="filters.payment_status"><option value="">All</option><option value="unpaid">Unpaid</option><option value="partial">Part paid</option><option value="paid">Paid</option><option value="due">To collect (pending)</option><option value="unpaid,partial">Outstanding</option><option value="overpaid">Overpaid</option></select></label>
+                    <label>Bill type<select v-model="filters.invoice_type"><option value="">All</option><option value="tax_invoice">Tax Invoice</option><option value="bill_of_supply">Bill of Supply</option><option value="retail_invoice">Retail Invoice</option></select></label>
+                    <label v-if="references.branches?.length > 1">Branch<select v-model="filters.branch_id"><option value="">All</option><option v-for="b in references.branches" :key="b.id" :value="b.id">{{ b.name }}</option></select></label>
+                    <label v-if="references.warehouses?.length > 1">Warehouse<select v-model="filters.warehouse_id"><option value="">All</option><option v-for="w in references.warehouses" :key="w.id" :value="w.id">{{ w.name }}</option></select></label>
+                    <div class="si-filter-actions"><button type="button" class="primary" @click="applyFilters">Apply</button><button type="button" @click="clearFilters">Clear Filters</button></div>
+                </div>
+                <div class="table-wrapper" :class="{ 'is-refreshing': loading }"><table class="si-table"><thead><tr><th>Bill no.</th><th>Date</th><th>Customer</th><th v-if="showMobile">Mobile</th><th v-if="showLocation">Branch</th><th v-if="showLocation">Warehouse</th><th v-if="showType">Type</th><th class="num">Amount</th><th class="num">Due</th><th>Status</th><th></th></tr></thead><tbody><tr v-for="row in sales" :key="row.id">
+                    <td data-label="Bill no."><button type="button" class="si-number" @click="viewSale(row)">{{ row.invoice_number }}</button></td>
+                    <td data-label="Date">{{ formatDate(row.invoice_date) }}</td>
+                    <td data-label="Customer" class="si-customer">{{ row.customer }}</td>
+                    <td v-if="showMobile" data-label="Mobile">{{ row.customer_mobile || '-' }}</td>
+                    <td v-if="showLocation" data-label="Branch">{{ row.branch || '-' }}</td>
+                    <td v-if="showLocation" data-label="Warehouse">{{ row.warehouse || '-' }}</td>
+                    <td v-if="showType" data-label="Type">{{ typeLabel(row.invoice_type) }}</td>
+                    <td data-label="Amount" class="num"><b>{{ formatMoney(row.grand_total) }}</b></td>
+                    <td data-label="Due" class="num" :class="{ due: dueOf(row) > 0 }">{{ dueOf(row) > 0 ? formatMoney(dueOf(row)) : '—' }}</td>
+                    <td data-label="Status"><span class="badge" :class="stateOf(row).tone">{{ stateOf(row).label }}</span></td>
+                    <td class="si-actions"><div class="row-actions">
+                        <button v-if="['draft','hold'].includes(row.status)" type="button" class="primary si-quick" @click="editSale(row)">Complete</button>
+                        <button v-else-if="['approved','confirmed'].includes(row.status)" type="button" class="si-quick" @click="printSale(row)">Print</button>
+                        <RowActionMenu :open="openActionMenuId === row.id" :show-view="false" more-label="More" more-title="Invoice actions" @toggle="toggleActionMenu(row)" @close="closeActionMenu"><button type="button" @click="viewSale(row); closeActionMenu()">View</button><button type="button" @click="printSale(row); closeActionMenu()">Print A4</button><button type="button" @click="printSale(row, 'thermal'); closeActionMenu()">Print 80mm</button><button v-if="['approved','confirmed'].includes(row.status)" type="button" @click="sendingSale = row; closeActionMenu()">Send on BillIQ</button><button v-if="canEdit(row)" type="button" @click="editSale(row)">Edit</button><button v-if="['draft','hold'].includes(row.status)" type="button" @click="simpleAction(SalesApi.approveSale,row,'Post invoice?'); closeActionMenu()">Post</button><button type="button" @click="simpleAction(SalesApi.duplicateSale,row); closeActionMenu()">Copy</button><button v-if="['draft','hold'].includes(row.status)" type="button" class="danger" @click="simpleAction(SalesApi.cancelSale,row,'Cancel invoice?'); closeActionMenu()">Cancel</button><button v-if="isAdmin && ['approved','confirmed'].includes(row.status)" type="button" class="danger" @click="reverseSale(row); closeActionMenu()">Reverse</button></RowActionMenu>
+                    </div></td>
+                </tr><tr v-if="!sales.length && !loading"><td colspan="11" class="empty">No bills found. <button v-if="activeChip !== 'all'" type="button" class="si-number" @click="clearFilters">Show all bills</button></td></tr></tbody></table></div>
                 <div class="pagination"><button :disabled="pagination.current_page <= 1 || loading" @click="loadSales(pagination.current_page - 1)">Previous</button><span>{{ loading ? 'Loading…' : `${pagination.from || 0}-${pagination.to || 0} of ${pagination.total || 0}` }}</span><button :disabled="pagination.current_page >= pagination.last_page || loading" @click="loadSales(pagination.current_page + 1)">Next</button></div>
             </section>
             <SendOnBillIQ v-if="sendingSale" :sale="sendingSale" @close="sendingSale = null" />
@@ -196,4 +267,35 @@ onUnmounted(() => { window.removeEventListener('popstate', fromUrl); window.remo
 .invoice-modal-full{grid-template-rows:auto auto minmax(0,1fr);width:100vw;height:100vh;background:#f3f6fa;border:0;border-radius:0}.invoice-modal-head{background:#fff!important;padding:10px 18px!important}.invoice-modal-title{min-width:0}.invoice-modal-title span{display:block}.invoice-modal-title h2{font-size:18px!important;line-height:1.1}.invoice-modal-title p{margin:3px 0 0;color:#69758a;font-size:12px;font-weight:750}.invoice-modal-actions button{min-height:34px;padding:7px 12px;border-radius:8px}.invoice-modal-actions .invoice-close{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.invoice-modal-summary-compact{display:grid;grid-template-columns:minmax(260px,1.8fr) repeat(3,minmax(140px,1fr));gap:8px;padding:8px 18px;background:#eef3f9;border-bottom:1px solid #dfe6ef}.invoice-modal-summary-compact>div{min-width:0;padding:8px 10px;background:#fff;border:1px solid #dfe6ef;border-radius:8px}.invoice-modal-summary-compact span{display:block;color:#69758a;font-size:9px;font-weight:850;text-transform:uppercase}.invoice-modal-summary-compact strong{display:block;margin-top:3px;color:#142139;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.invoice-modal-summary-compact small{display:block;margin-top:2px;color:#7a869a;font-size:10px;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.invoice-modal-summary-compact .badge{display:inline-flex;margin-top:1px}.invoice-preview-full{min-height:0;margin:0;overflow:hidden;background:#e8edf4;border:0;border-radius:0;box-shadow:none}.invoice-preview-full iframe{display:block;width:100%;height:100%;border:0;background:#fff}@media(max-width:900px){.invoice-modal-summary-compact{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 10px}}@media(max-width:700px){.invoice-modal-title h2{font-size:16px!important}.invoice-modal-summary-compact{grid-template-columns:1fr;padding:8px}.invoice-modal-actions{display:grid;grid-template-columns:1fr 1fr 1fr}.invoice-modal-actions button{width:100%;padding:8px 6px}.invoice-preview-full{min-height:0}}
 :global(body.invoice-preview-open){overflow:hidden}.invoice-modal-backdrop{display:flex!important;align-items:stretch!important;justify-content:center!important;padding:0!important;background:#eef3f9!important}.invoice-modal.invoice-modal-full{position:relative!important;display:flex!important;flex-direction:column!important;width:100vw!important;height:100dvh!important;max-height:100dvh!important;overflow:hidden!important;background:#f3f6fa!important}.invoice-modal-head{flex:0 0 auto}.invoice-modal-summary-compact{flex:0 0 auto}.invoice-preview-full{flex:1 1 auto!important;min-height:0!important;overflow:auto!important;-webkit-overflow-scrolling:touch!important;padding:18px!important}.invoice-preview-full iframe{display:block!important;width:min(100%,1120px)!important;min-height:calc(100dvh - 170px)!important;height:1280px!important;margin:0 auto!important;background:#fff!important;border:1px solid #d8e0eb!important;border-radius:8px!important;box-shadow:0 14px 34px rgba(15,23,42,.12)!important}@media(max-width:700px){.invoice-modal-actions{grid-template-columns:1fr 1fr auto}.invoice-preview-full{padding:8px!important}.invoice-preview-full iframe{width:100%!important;height:1180px!important;border-radius:0!important}}
 .invoice-floating-close{position:fixed;top:14px;right:18px;z-index:1305;min-height:36px;padding:8px 13px;color:#fff;background:#d23f49;border-color:#d23f49;box-shadow:0 12px 28px rgba(15,23,42,.22)}
+.si-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.si-card{display:grid;gap:3px;justify-items:start;padding:14px 16px;text-align:left;background:#fff;border:1px solid #dfe6ef;border-left:4px solid #2457d6;border-radius:12px;box-shadow:none}
+.si-card:hover{border-color:#2457d6;box-shadow:0 6px 18px rgba(36,87,214,.12)}
+.si-card span{color:#5f6d82;font-size:12px;font-weight:800}.si-card strong{color:#142139;font-size:26px;font-weight:900;line-height:1.2}.si-card small{color:#758197;font-size:12px;font-weight:500}
+.si-card.due{border-left-color:#d23f49}.si-card.due strong{color:#b02a34}.si-card.draft{border-left-color:#f59e0b}
+.si-search{display:flex;gap:10px;flex-wrap:wrap}.si-search input{flex:1;min-width:220px;min-height:44px;font-size:14px}.si-search button{min-height:44px;padding:9px 18px}
+.si-search b{display:inline-block;min-width:18px;margin-left:6px;padding:0 5px;color:#fff;background:#2457d6;border-radius:999px;font-size:11px}
+.si-chips{display:flex;gap:8px;margin:12px 0;overflow-x:auto;padding-bottom:2px}
+.si-chips button{flex:0 0 auto;padding:7px 16px;border-radius:999px;font-size:12px}
+.si-chips button.active{color:#fff;background:#142139;border-color:#142139}
+.si-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;padding:14px;background:#f8fafc;border:1px solid #e3e9f2;border-radius:10px}
+.si-filters label{display:grid;gap:5px;color:#667085;font-size:11px;font-weight:800}.si-filters input,.si-filters select{width:100%;min-width:0}
+.si-filter-actions{display:flex;align-items:flex-end;gap:8px}
+.si-table td{font-size:13px;vertical-align:middle}.si-table .num{text-align:right}
+.si-table tbody tr:hover{background:#f8fbff}
+.si-number{min-height:0;padding:0;color:#2457d6;background:none;border:0;font-size:13px;font-weight:800;text-align:left}
+.si-customer{white-space:normal;min-width:180px}
+.si-actions{width:1%}.si-actions .row-actions{justify-content:flex-end;gap:8px}.si-quick{min-width:84px}
+.si-table .badge{display:inline-block;min-width:76px;text-align:center;text-transform:none;font-size:11px}
+.si-table .badge.ok{color:#168757;background:#eaf8f1}.si-table .badge.wait{color:#b02a34;background:#fdecee}.si-table .badge.part{color:#2457d6;background:#edf2ff}.si-table .badge.draft{color:#b45309;background:#fff4e5}.si-table .badge.off{color:#667085;background:#eef2f7}
+@media(max-width:760px){
+.si-cards{grid-template-columns:minmax(0,1fr)}
+.si-table thead{display:none}
+.si-table,.si-table tbody,.si-table tr,.si-table td{display:block;width:auto}
+.si-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;margin-bottom:10px;padding:12px;border:1px solid #e3e9f2;border-radius:10px}
+.si-table td{padding:2px 0;border:0;white-space:normal;min-width:0}
+.si-table td.si-customer{grid-column:1/-1;min-width:0;font-weight:800}
+.si-table td[data-label="Due"]::before{content:'Due ';color:#8490a2;font-size:11px}
+.si-table td.si-actions{grid-column:1/-1;width:auto;padding-top:8px}
+.si-table td.empty{grid-column:1/-1}
+}
 </style>

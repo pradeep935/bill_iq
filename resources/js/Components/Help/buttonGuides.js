@@ -194,13 +194,25 @@ export const buttonGuides = {
         ['Keyboard', [['F1 to F6', 'F1 new bill, F2 customer, F3 search, F4 hold, F5 payment, F6 print.', 'To bill without the mouse.']]],
     ],
     sales: [
-        ['Filters', [
-            ['Search and dropdowns', 'Narrow by number, customer, date, branch, status, payment or type.', ''],
-            ['Apply', 'Shows the filtered invoices.', 'After choosing filters.'],
-            clear,
-            ['Export', 'Downloads the filtered invoices.', 'For your accountant.'],
+        ['Cards at the top', [
+            ['Today’s Sales', 'Value of today’s bills and money received. Click to list them.', ''],
+            ['To Collect', 'Money still due on posted bills. Click to list the unpaid bills.', 'For follow-up and reminders.'],
+            ['Unfinished Bills', 'Draft and held bills. Click to list the drafts.', 'Complete or cancel them daily.'],
         ]],
-        ['Actions on an invoice', [
+        ['Finding bills', [
+            ['Search', 'Finds by bill number, customer name, mobile or GSTIN.', ''],
+            ['All bills / Today / To collect / Draft / On hold / Reversed', 'Shows that list with one click.', ''],
+            ['Filters', 'Opens date, status, payment, type and location filters. The number on it shows how many are set.', 'For a particular period or type.'],
+            ['Apply / Clear Filters', 'Uses the filters, or removes them.', ''],
+            ['Export', 'Downloads the filtered bills.', 'For your accountant.'],
+        ]],
+        ['On each bill', [
+            ['Bill number', 'Shows the bill.', ''],
+            ['Complete', 'Opens a draft or held bill to finish it.', ''],
+            ['Print', 'Prints a posted bill on A4.', ''],
+            ['More', 'All other actions, listed below.', ''],
+        ]],
+        ['Actions under More', [
             ['View', 'Shows the invoice.', ''],
             ['Print A4 / Print 80mm', 'Prints on normal or receipt paper.', ''],
             ['Send on BillIQ', 'Sends the bill to a connected business.', 'If your customer also uses BillIQ.'],

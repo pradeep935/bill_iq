@@ -100,7 +100,7 @@ export const howTo = [
         intro: 'Edit the bill instead of making a second one.',
         steps: [
             'Open Sales Invoices (or Purchases) and find the bill.',
-            'Click Actions > Edit.',
+            'In Sales Invoices click More > Edit; in Purchases click Actions > Edit.',
             'Change what is wrong. If the screen warns that the total will change, check it.',
             'Click “Save Changes”. The bill number stays the same; stock and accounts are corrected.',
         ],
@@ -197,7 +197,7 @@ export const howTo = [
         pages: ['supplier-bills', 'purchases'],
         steps: [
             'Once: open Supplier Bills > Connections, search the supplier by full mobile or GSTIN and send a request. They accept it.',
-            'The supplier opens their invoice and clicks Actions > “Send on BillIQ”.',
+            'The supplier opens their invoice list and clicks More > “Send on BillIQ”.',
             'Open Received Bills and click “Add to Purchase”.',
             'Match each item with your product, or add it as new.',
             'Check the total and click “Confirm & Post”.',

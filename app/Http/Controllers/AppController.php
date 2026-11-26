@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
 use App\Services\CompanyAccessService;
+use App\Support\DepartmentRole;
 
 class AppController extends Controller
 {
@@ -296,6 +297,10 @@ class AppController extends Controller
 
     public static function roleHome(): string
     {
+        if (DepartmentRole::is(self::roleId())) {
+            return DepartmentRole::home(self::roleId());
+        }
+
         switch (self::roleId()) {
             case 1:
                 return '/app/admin/workspace';
@@ -323,6 +328,10 @@ class AppController extends Controller
             ],
             3 => ['staff-workspace', 'crm', 'pos', 'sales', 'customers', 'stock-summary', 'inventory-current-stock', 'inventory-reserved', 'stock-ledger', 'fixed-assets'],
         ];
+
+        foreach (DepartmentRole::ALL as $role) {
+            $allowedPages[$role] = DepartmentRole::pages($role);
+        }
 
         $roleAllowedPages = $allowedPages[self::roleId()] ?? null;
         return !is_array($roleAllowedPages) || in_array($page, $roleAllowedPages, true);

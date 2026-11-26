@@ -16,7 +16,7 @@ class CustomerRequest extends FormRequest
     {
         $user = $this->user();
 
-        return $user && ($user->isSuperAdmin() || $user->isAdmin());
+        return $user && ($user->isSuperAdmin() || $user->isAdmin() || (int) $user->role_id === \App\Support\DepartmentRole::SALES);
     }
 
     public function rules(): array

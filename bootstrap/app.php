@@ -13,6 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->web(append: [
+            \App\Http\Middleware\RestrictDepartmentRole::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
         ]);
     })

@@ -542,6 +542,9 @@ th {
 /* Rounded, tappable cards like the business dashboard */
 .context-card,.summary-card,.quick-actions,.panel,.notice-panel,.filter-row,.empty-state{border-radius:12px}
 .staff-page{padding:0 0 28px}
+/* Panels keep their natural height; stretched rows left a large empty box above the heading. */
+.panel{align-content:start}
+.workspace-grid{align-items:start}
 .staff-hero{background:#2457d6}
 .action-button{min-height:64px;color:#142139;background:#f6f9ff;border:1px solid #d6e3ff;border-radius:10px;font-size:14px}
 .action-button:hover{border-color:#2457d6}

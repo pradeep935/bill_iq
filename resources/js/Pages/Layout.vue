@@ -101,14 +101,14 @@
         </div>
 
         <div class="bill-top-actions" v-if="isSalesInvoicePage">
-          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.pos', '/app/sales/pos')" title="Create a new sales invoice">
+          <a v-if="canBill && permissions['sales.create'] !== false" :href="routeUrl('app.sales.pos', '/app/sales/pos')" title="Create a new sales invoice">
             <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
             <span class="top-label">New Invoice</span>
           </a>
         </div>
 
         <div class="bill-top-actions" v-else>
-          <a v-if="permissions['sales.create'] !== false" :href="routeUrl('app.sales.pos', '/app/sales/pos')" title="Create a new bill">
+          <a v-if="canBill && permissions['sales.create'] !== false" :href="routeUrl('app.sales.pos', '/app/sales/pos')" title="Create a new bill">
             <span class="bill-nav-icon" v-html="iconSvg('receipt')"></span>
             <span class="top-label">New Bill</span>
           </a>
@@ -139,7 +139,7 @@
       <PageHelp ref="pageHelpRef" :key="page + title" :page="page" :title="title" />
       <slot />
     </main>
-    <AssistantChat :page="page" />
+    <AssistantChat v-if="!departmentPages" :page="page" />
   </div>
 </template>
 
@@ -169,7 +169,12 @@ const permissions = computed(() => inertiaPage.props.permissions || {});
 const context = computed(() => inertiaPage.props.context || {});
 const currentBusiness = computed(() => context.value.business || { id: '', name: 'BillIQ' });
 const currentBranch = computed(() => context.value.branch || { id: '', name: 'Primary Branch' });
-const currentFinancialYear = computed(() => context.value.financial_year || { id: '', name: inertiaPage.props.app?.financial_year || 'Current' });
+const currentFinancialYear = computed(() => {
+  const year = context.value.financial_year;
+  // The staff page sends the year as plain text.
+  if (typeof year === 'string') return { id: '', name: year };
+  return year || { id: '', name: inertiaPage.props.app?.financial_year || 'Current' };
+});
 const businesses = computed(() => context.value.businesses?.length ? context.value.businesses : [currentBusiness.value]);
 const branches = computed(() => context.value.branches?.length ? context.value.branches : [currentBranch.value]);
 const financialYears = computed(() => context.value.financial_years?.length ? context.value.financial_years : [currentFinancialYear.value]);
@@ -181,12 +186,16 @@ const isSalesInvoicePage = computed(() => props.page === 'sales');
 const pageParents = { 'gst-imports': 'gst', 'company-onboarding': 'onboarding' };
 const navPage = computed(() => pageParents[props.page] || props.page);
 // Staff (role 3) only gets New Bill in the top bar; Voucher and Reports are not open to them.
-const canVoucher = computed(() => roleId.value !== 3 && permissions.value['accounting.create'] !== false);
-const canReports = computed(() => roleId.value !== 3 && permissions.value['reports.view'] !== false);
+const departmentPages = computed(() => inertiaPage.props.auth?.user?.pages || null);
+const canVoucher = computed(() => !departmentPages.value && roleId.value !== 3 && permissions.value['accounting.create'] !== false);
+const canBill = computed(() => !departmentPages.value || departmentPages.value.includes('pos'));
+const canReports = computed(() => !departmentPages.value && roleId.value !== 3 && permissions.value['reports.view'] !== false);
 
 const roleLabel = computed(() => {
   if (roleId.value === 1) return 'Super Admin';
   if (roleId.value === 3) return 'Staff';
+  if (roleId.value === 4) return 'Sales';
+  if (roleId.value === 5) return 'Purchase';
   return 'Business Owner';
 });
 
@@ -386,7 +395,7 @@ const visibleSections = computed(() => {
     }));
   }
 
-  const allowedPages = ['staff-workspace', 'pos', 'sales', 'customers', 'inventory-current-stock', 'inventory-reserved', 'stock-ledger'];
+  const allowedPages = departmentPages.value || ['staff-workspace', 'pos', 'sales', 'customers', 'inventory-current-stock', 'inventory-reserved', 'stock-ledger'];
   return sections
     .map((section) => ({
       ...section,

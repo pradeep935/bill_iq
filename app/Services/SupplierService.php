@@ -44,7 +44,7 @@ class SupplierService
             $data['created_by'] = Auth::id();
             $data['name'] = $data['supplier_name'];
             $data['phone'] = $data['phone'] ?? $data['mobile'];
-            $data['supplier_code'] = $data['supplier_code'] ?: $this->nextSupplierCode($businessId);
+            $data['supplier_code'] = ($data['supplier_code'] ?? null) ?: $this->nextSupplierCode($businessId);
             $data = $this->withGstType($data);
 
             return Supplier::query()->create($data)->fresh();

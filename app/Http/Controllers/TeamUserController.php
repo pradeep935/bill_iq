@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\CompanyAccessService;
+use App\Support\DepartmentRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -11,11 +12,13 @@ use Illuminate\Validation\Rule;
 
 /**
  * Lets a Company Admin (role 2) or Super Admin manage the login users of the CURRENT business:
- * add a user, change role (Admin / Staff), activate / deactivate, reset password.
+ * add a user, change role (Admin / Staff / Sales / Purchase), activate / deactivate, reset password.
  * Role 1 (Super Admin) can never be created or edited here.
  */
 class TeamUserController extends Controller
 {
+    private const ROLES = [2, 3, DepartmentRole::SALES, DepartmentRole::PURCHASE];
+
     private function actor(Request $request): User
     {
         $user = $request->user();
@@ -38,7 +41,7 @@ class TeamUserController extends Controller
             'name' => $u->name,
             'email' => $u->email,
             'role_id' => (int) $u->role_id,
-            'role' => (int) $u->role_id === 2 ? 'Admin' : 'Staff',
+            'role' => (int) $u->role_id === 2 ? 'Admin' : (DepartmentRole::label((int) $u->role_id) ?? 'Staff'),
             'is_active' => (bool) $u->is_active && ($u->status ?? 'active') === 'active',
             'is_owner' => ($access->access_role ?? '') === 'owner',
             'last_login_at' => optional($u->last_login_at ?? null)->toDateTimeString(),
@@ -64,7 +67,7 @@ class TeamUserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:8', 'max:100'],
-            'role_id' => ['required', Rule::in([2, 3])],
+            'role_id' => ['required', Rule::in(self::ROLES)],
         ], ['email.unique' => 'This email is already used by another user.']);
 
         $user = DB::transaction(function () use ($data, $businessId, $actor, $access) {
@@ -94,7 +97,7 @@ class TeamUserController extends Controller
 
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'role_id' => ['sometimes', Rule::in([2, 3])],
+            'role_id' => ['sometimes', Rule::in(self::ROLES)],
             'is_active' => ['sometimes', 'boolean'],
             'password' => ['nullable', 'string', 'min:8', 'max:100'],
         ]);

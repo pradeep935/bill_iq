@@ -9,7 +9,7 @@ class SalesVoucherRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() && in_array((int) $this->user()->role_id, [1, 2, 3], true);
+        return $this->user() && in_array((int) $this->user()->role_id, [1, 2, 3, \App\Support\DepartmentRole::SALES], true);
     }
 
     public function rules(): array

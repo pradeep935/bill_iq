@@ -282,7 +282,7 @@ class BusinessOnboardingService
             return $this->step('employees', 17, 'Employees', 'Add team members when your business has staff users.', 'team', false, 'skipped', 'Hidden because your user cannot manage employees.', 0, 'Manage Employees', null);
         }
 
-        $count = Schema::hasTable('users') ? DB::table('users')->where('tenant_id', $businessId)->where('role_id', 3)->where('status', 'active')->count() : 0;
+        $count = Schema::hasTable('users') ? DB::table('users')->where('tenant_id', $businessId)->whereIn('role_id', [3, 4, 5])->where('status', 'active')->count() : 0;
         return $this->step('employees', 17, 'Employees', 'Add team members when your business has staff users.', 'team', false, $count ? 'completed' : 'optional', $count ? $this->plural($count, 'active staff user') . ' configured.' : 'Optional for owner-only businesses.', $count, $count ? 'Manage Employees' : 'Add Employee', $routes['employees']['url']);
     }
 

@@ -209,6 +209,8 @@ class AuditLogger
             1 => 'Super Admin',
             2 => 'Business Admin',
             3 => 'User',
+            4 => 'Sales User',
+            5 => 'Purchase User',
             default => 'User',
         };
     }

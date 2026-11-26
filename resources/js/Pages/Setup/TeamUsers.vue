@@ -3,7 +3,7 @@
     <div class="tu-head">
       <div>
         <h2>Team Users</h2>
-        <p>People who can log in to this business. Admin = full access except SaaS; Staff = billing, customers and stock view.</p>
+        <p>People who can log in to this business. Admin = full access except SaaS; Staff = billing, customers and stock view; Sales and Purchase see only their own work.</p>
       </div>
       <button type="button" class="tu-primary" @click="openAdd">+ Add User</button>
     </div>
@@ -38,12 +38,15 @@
         <label>Role
           <select v-model.number="form.role_id" :disabled="form.locked">
             <option :value="3">Staff — billing, customers, stock view</option>
+            <option :value="4">Sales — only sales work</option>
+            <option :value="5">Purchase — only purchase work</option>
             <option :value="2">Admin — full business access</option>
           </select>
         </label>
         <label>{{ form.id ? 'New password (leave blank to keep)' : 'Password (min 8 characters)' }}
           <input v-model="form.password" type="text" minlength="8" :required="!form.id" autocomplete="new-password" />
         </label>
+        <p class="tu-hint">{{ roleHelp[form.role_id] }}</p>
         <p v-for="(e, k) in errors" :key="k" class="tu-err">{{ Array.isArray(e) ? e[0] : e }}</p>
         <div class="tu-modal-actions">
           <button type="button" @click="modal = false">Cancel</button>
@@ -59,6 +62,12 @@ import { onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
 
 const BASE = '/app/setup/team-users';
+const roleHelp = {
+  2: 'Opens everything of this business.',
+  3: 'Can open: New Bill, Sales Invoices, Customers and stock view.',
+  4: 'Can open: New Bill, Sales Invoices, Sales Returns, Customers, Payment Reminders, Sales Orders, Stock Outward, Reserved Stock and Current Stock. Cannot see purchases, accounts or reports.',
+  5: 'Can open: Purchases, Supplier Bills, Purchase Returns, Suppliers, Stock Inward, Reorder, Inventory Orders, Product Master and Current Stock. Cannot see sales, accounts or reports.',
+};
 const users = ref([]);
 const currentUserId = ref(null);
 const loading = ref(true);
@@ -121,6 +130,7 @@ onMounted(load);
 </script>
 
 <style scoped>
+.tu-hint{margin:0;padding:9px 12px;color:#1e3a8a;background:#eff6ff;border-radius:8px;font-size:12px;line-height:1.5}
 .tu { background: #fff; border: 1px solid #dfe6ef; border-radius: 8px; margin-top: 18px; padding: 18px; }
 .tu-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
 .tu-head h2 { margin: 0; font-size: 18px; color: #142139; }

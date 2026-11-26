@@ -11,7 +11,7 @@ class PurchaseReturnVoucherRequest extends FormRequest
     {
         $user = $this->user();
 
-        return $user && ($user->isSuperAdmin() || $user->isAdmin());
+        return $user && ($user->isSuperAdmin() || $user->isAdmin() || (int) $user->role_id === \App\Support\DepartmentRole::PURCHASE);
     }
 
     public function rules(): array

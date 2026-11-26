@@ -17,7 +17,7 @@ class StaffWorkspaceService
         $routes = $this->routes();
 
         return [
-            'context' => $context,
+            'context' => $context + $this->shellContext($businessId, $context),
             'summary' => $this->summary($user, $businessId, $context, $permissions, $routes),
             'quickActions' => $this->quickActions($permissions, $routes),
             'tasks' => $this->tasks($user, $businessId, $context, $permissions, $routes),
@@ -25,6 +25,21 @@ class StaffWorkspaceService
             'inventoryAlerts' => $this->inventoryAlerts($businessId, $context, $permissions, $routes),
             'permissions' => $permissions,
             'routes' => $routes,
+        ];
+    }
+
+    /**
+     * This page's "context" replaces the app-wide one that the sidebar reads, so it carries the business and branch
+     * names too. Only the user's assigned branch is named.
+     */
+    private function shellContext(int $businessId, array $context): array
+    {
+        $branches = collect($context['allowed_branches'] ?? []);
+        $branch = $branches->firstWhere('id', $context['selected_branch_id'] ?? null) ?: $branches->first();
+
+        return [
+            'business' => ['id' => $businessId, 'name' => DB::table('companies')->where('id', $businessId)->value('name') ?: 'BillIQ'],
+            'branch' => ['id' => $branch['id'] ?? null, 'name' => $branch['name'] ?? 'No branch assigned'],
         ];
     }
 

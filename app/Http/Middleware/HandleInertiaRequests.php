@@ -38,6 +38,8 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->name,
                     'email' => $user->email,
                     'role_id' => (int) ($user->role_id ?? 2),
+                    // Set only for department logins: the menu shows just these.
+                    'pages' => \App\Support\DepartmentRole::is($user->role_id) ? \App\Support\DepartmentRole::pages((int) $user->role_id) : null,
                     'is_active' => (bool) $user->is_active,
                 ] : null,
             ],

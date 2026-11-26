@@ -1,12 +1,15 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import axios from 'axios';
+import { usePage } from '@inertiajs/vue3';
 import Layout from '../Layout.vue';
 import { formatDate } from '../../Support/dateFormat.js';
 
 defineProps({ page: { type: String, default: 'supplier-bills' }, title: { type: String, default: 'Supplier Bills' } });
 
-const tab = ref(new URLSearchParams(window.location.search).get('tab') === 'connections' ? 'connections' : 'bills');
+// Only an admin decides which businesses are connected.
+const isAdmin = [1, 2].includes(Number(usePage().props.auth?.user?.role_id));
+const tab = ref(isAdmin && new URLSearchParams(window.location.search).get('tab') === 'connections' ? 'connections' : 'bills');
 const data = ref({ me: {}, connections: [], incoming: [] });
 const loading = ref(true);
 const error = ref('');
@@ -79,7 +82,7 @@ onMounted(load);
         <div class="net-page">
             <div class="net-tabs" role="tablist">
                 <button type="button" role="tab" :aria-selected="tab === 'bills'" :class="{ active: tab === 'bills' }" @click="tab = 'bills'">Received Bills <b v-if="newBills">{{ newBills }}</b></button>
-                <button type="button" role="tab" :aria-selected="tab === 'connections'" :class="{ active: tab === 'connections' }" @click="tab = 'connections'">Connections <b v-if="requests.length">{{ requests.length }}</b></button>
+                <button v-if="isAdmin" type="button" role="tab" :aria-selected="tab === 'connections'" :class="{ active: tab === 'connections' }" @click="tab = 'connections'">Connections <b v-if="requests.length">{{ requests.length }}</b></button>
             </div>
             <p v-if="notice" class="net-note ok" role="status">{{ notice }}</p>
             <p v-if="error" class="net-note bad" role="alert">{{ error }}</p>
@@ -96,6 +99,7 @@ onMounted(load);
                 <section class="panel">
                     <h2>Bills sent to you</h2>
                     <p v-if="loading" class="muted">Loading…</p>
+                    <p v-else-if="!data.incoming.length && !isAdmin" class="muted">No bills yet. Ask your supplier to open the sales invoice and click “Send on BillIQ”. Your admin manages the connections.</p>
                     <p v-else-if="!data.incoming.length" class="muted">No bills yet. Connect with your supplier under <button type="button" class="linkish" @click="tab = 'connections'">Connections</button>, then ask them to open the sales invoice and click “Send on BillIQ”.</p>
                     <div v-else class="table-wrapper">
                         <table>

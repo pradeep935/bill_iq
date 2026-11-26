@@ -232,7 +232,7 @@ class AdminWorkspaceService
             'users_without_roles' => $hasUserRole ? (clone $users)->whereNull('role_id')->count() : 0,
             'locked_users' => Schema::hasColumn('users', 'locked_until') ? (clone $users)->where('locked_until', '>', now())->count() : 0,
             'admin_users' => $hasUserRole ? (clone $users)->whereIn('role_id', [1, 2])->count() : 0,
-            'staff_users' => $hasUserRole ? (clone $users)->where('role_id', 3)->count() : 0,
+            'staff_users' => $hasUserRole ? (clone $users)->whereIn('role_id', [3, 4, 5])->count() : 0,
         ];
     }
 

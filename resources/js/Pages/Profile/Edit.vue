@@ -47,6 +47,8 @@ const roleLabel = computed(() => {
   const roleId = Number(user.value.role_id || 2);
   if (roleId === 1) return 'Super Admin';
   if (roleId === 3) return 'Staff';
+  if (roleId === 4) return 'Sales';
+  if (roleId === 5) return 'Purchase';
   return 'Business Owner';
 });
 </script>

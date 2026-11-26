@@ -6,8 +6,11 @@ import SalesApi from './SalesApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
 import { gstTypes, gstTypeForGstin } from '../../Components/Form/gstTypes';
 import SearchSelect from '../../Components/Common/SearchSelect.vue';
+import { usePage } from '@inertiajs/vue3';
 
 defineProps({ page: { type: String, default: 'customers' }, title: { type: String, default: 'Customers' } });
+// Receipt vouchers are accounting work, open to admins.
+const canReceive = computed(() => [1, 2].includes(Number(usePage().props.auth?.user?.role_id)));
 
 const customers = ref([]);
 const references = ref({ customer_types: [], price_types: [], states: [], cities: [], branches: [] });
@@ -296,7 +299,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
                                             <button type="button" @click="editCustomer(customer); closeActionMenu()">Edit</button>
                                             <button type="button" @click="viewLedger(customer); closeActionMenu()">Ledger</button>
                                             <button type="button" @click="viewOutstanding(customer); closeActionMenu()">Outstanding</button>
-                                            <button type="button" @click="receivePayment(customer); closeActionMenu()">Receive</button>
+                                            <button v-if="canReceive" type="button" @click="receivePayment(customer); closeActionMenu()">Receive</button>
                                             <button type="button" @click="createInvoice(customer); closeActionMenu()">Invoice</button>
                                             <button type="button" @click="createReturn(customer); closeActionMenu()">Return</button>
                                             <button type="button" @click="toggleStatus(customer); closeActionMenu()">{{ customer.status === 'active' ? 'Deactivate' : 'Activate' }}</button>
@@ -317,7 +320,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onEscape));
             <div v-if="detail" class="drawer-backdrop" @click="closeDetail"></div>
             <aside v-if="detail" class="detail-drawer" role="dialog" aria-label="Customer detail">
                 <div class="detail-head"><div><span>CUSTOMER DETAIL</span><h2>{{ detail.customer_name }}</h2><p>{{ detail.customer_code }} | {{ detail.mobile || 'no mobile' }} | {{ detail.gstin || 'no GSTIN' }}</p></div><button type="button" @click="closeDetail">Close</button></div>
-                <div class="drawer-actions"><button type="button" @click="createInvoice(detail)">New Invoice</button><button type="button" @click="receivePayment(detail)">Receive Payment</button><button type="button" @click="viewLedger(detail)">Ledger</button><button type="button" @click="viewOutstanding(detail)">Outstanding</button><button type="button" @click="editCustomer(detail)">Edit</button></div>
+                <div class="drawer-actions"><button type="button" @click="createInvoice(detail)">New Invoice</button><button v-if="canReceive" type="button" @click="receivePayment(detail)">Receive Payment</button><button type="button" @click="viewLedger(detail)">Ledger</button><button type="button" @click="viewOutstanding(detail)">Outstanding</button><button type="button" @click="editCustomer(detail)">Edit</button></div>
                 <div class="summary-grid"><span>CRM Status <b>{{ detail.crm_summary?.customer_status_label || '-' }}</b></span><span>Total Orders <b>{{ detail.crm_summary?.total_orders || 0 }}</b></span><span>Lifetime Sales <b>{{ formatMoney(detail.crm_summary?.lifetime_sales) }}</b></span><span>Average Order <b>{{ formatMoney(detail.crm_summary?.average_order_value) }}</b></span><span>Outstanding <b>{{ formatMoney(detail.current_outstanding) }}</b></span><span>Total Paid <b>{{ formatMoney(detail.crm_summary?.total_paid) }}</b></span><span>First Purchase <b>{{ formatDate(detail.crm_summary?.first_purchase_date) }}</b></span><span>Last Purchase <b>{{ formatDate(detail.crm_summary?.last_purchase_date) }}</b></span></div>
                 <h3 v-if="detail.recent_sales?.length" class="group-title">Recent invoices</h3>
                 <div v-if="detail.recent_sales?.length" class="table-wrapper"><table><thead><tr><th>Invoice</th><th>Date</th><th class="num">Total</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr v-for="row in detail.recent_sales" :key="row.id"><td>{{ row.invoice_number }}</td><td>{{ formatDate(row.invoice_date) }}</td><td class="num">{{ formatMoney(row.grand_total) }}</td><td>{{ row.payment_status }}</td><td>{{ row.status }}</td><td><div class="row-actions"><RowActionMenu :open="openActionMenuId === actionMenuKey('invoice', row.id)" :show-view="false" more-label="Actions" more-title="Invoice actions" @toggle="toggleActionMenu(actionMenuKey('invoice', row.id))" @close="closeActionMenu"><button type="button" @click="openInvoicePrint(row.id); closeActionMenu()">View</button><a :href="`/app/sales/invoices/${row.id}/print`" target="_blank" @click="closeActionMenu">Print</a></RowActionMenu></div></td></tr></tbody></table></div>

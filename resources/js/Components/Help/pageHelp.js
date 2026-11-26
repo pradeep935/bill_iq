@@ -13,7 +13,7 @@ export const pageHelp = {
         notes: ['Items under “Optional” can be left empty.'],
         faq: [
             ['How do I give my staff a login?', 'Open the Users tab, click “+ Add User”, enter name, email, role and a password of at least 8 characters, and save. Share the email and password with them.'],
-            ['What is the difference between Admin and Staff?', 'Admin has full business access. Staff can do billing, work with customers and view stock.'],
+            ['What is the difference between the roles?', 'Admin opens everything. Staff can do billing, work with customers and view stock. Sales opens only sales work. Purchase opens only purchase work.'],
             ['A staff member forgot the password.', 'Users tab > Edit > enter a new password > Save.'],
             ['Someone left the job.', 'Users tab > Deactivate. Their old bills stay in the records.'],
             ['How do I change the name, GSTIN or logo on the bill?', 'Open the Settings tab, change the details and click “Save Settings”.'],
@@ -159,7 +159,7 @@ export const pageHelp = {
     }),
     users: h('People who can log in to this business and what they may do.', {
         steps: ['Click “+ Add User” and enter the name, email, role and password.', 'Use Edit to change the name, role or password.', 'Use Deactivate to stop a login, Activate to allow it again.'],
-        notes: ['Admin has full business access. Staff can do billing, customers and stock view.', 'The owner login cannot be deactivated.', 'Give each user only the access they need.'],
+        notes: ['Admin: everything of this business.', 'Staff: New Bill, Sales Invoices, Customers and stock view.', 'Sales: only sales work (billing, invoices, returns, customers, sales orders, stock outward) and current stock.', 'Purchase: only purchase work (purchases, supplier bills, returns, suppliers, stock inward, orders, products) and current stock.', 'Sales and Purchase logins cannot see accounts, reports or settings, and cannot reverse a bill. Receipt and payment entries are made by an admin.', 'A changed role applies from the user’s next screen.', 'The owner login cannot be deactivated.', 'Give each user only the access they need.'],
     }),
     saas: h('Your plan and subscription details.', { steps: ['View your plan and its status.'] }),
     settings: h('Business details that appear on bills and reports, and how bills are printed.', {

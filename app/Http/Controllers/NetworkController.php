@@ -34,6 +34,7 @@ class NetworkController extends Controller
     public function lookup(Request $request)
     {
         $this->allow($request, 'purchases');
+        $this->adminOnly($request);
         $data = $request->validate(['q' => ['required', 'string', 'max:30']]);
 
         return response()->json(['businesses' => $this->network->lookup($data['q'])]);
@@ -42,6 +43,7 @@ class NetworkController extends Controller
     public function connect(Request $request)
     {
         $this->allow($request, 'purchases');
+        $this->adminOnly($request);
         $data = $request->validate(['q' => ['required', 'string', 'max:30'], 'business_id' => ['required', 'integer']]);
 
         return response()->json(['message' => $this->network->request((int) $data['business_id'], $data['q'])]);
@@ -50,6 +52,7 @@ class NetworkController extends Controller
     public function respond(Request $request, int $connection, string $action)
     {
         $this->allow($request, 'purchases');
+        $this->adminOnly($request);
 
         return response()->json(['message' => $this->network->respond($connection, $action)]);
     }
@@ -109,11 +112,17 @@ class NetworkController extends Controller
         return array_filter($data['source']);
     }
 
-    /** Sharing bills between businesses is for admins, like creating purchases. */
+    /** Deciding which business may share bills with this one stays with the admin. */
+    private function adminOnly(Request $request): void
+    {
+        abort_unless($request->user()->isSuperAdmin() || $request->user()->isAdmin(), 403);
+    }
+
+    /** Sharing bills is for admins and the department that handles those bills. */
     private function allow(Request $request, string $page): void
     {
         $user = $request->user();
-        abort_unless($user && ($user->isSuperAdmin() || $user->isAdmin()) && AppController::canOpen($page), 403);
+        abort_unless($user && ($user->isSuperAdmin() || $user->isAdmin() || \App\Support\DepartmentRole::is($user->role_id)) && AppController::canOpen($page), 403);
         abort_unless(NetworkService::ready(), 503, 'Run the database update (php artisan migrate) to use Supplier Bills.');
     }
 }

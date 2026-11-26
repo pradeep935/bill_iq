@@ -88,6 +88,10 @@ class UserController extends Controller
 
     private function homeForRole(int $roleId): string
     {
+        if (\App\Support\DepartmentRole::is($roleId)) {
+            return \App\Support\DepartmentRole::home($roleId);
+        }
+
         return match ($roleId) {
             1 => '/app/admin/workspace',
             3 => '/app/staff/workspace',

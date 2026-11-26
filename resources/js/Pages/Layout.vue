@@ -35,19 +35,16 @@
         </div>
       </div>
 
-      <nav class="bill-nav">
+      <nav ref="navRef" class="bill-nav">
         <div class="bill-nav-section" :key="activeSection.key">
           <span class="bill-nav-heading">{{ activeSection.label }}</span>
-          <a
-            v-for="item in activeNavItems"
-            :key="item.href"
-            :class="{ active: navPage === item.page }"
-            :href="normalizeUrl(item.href)"
-            :title="item.label"
-          >
-            <span class="bill-nav-icon" v-html="iconSvg(item.icon)"></span>
-            {{ item.label }}
-          </a>
+          <template v-for="(item, index) in activeNavItems" :key="item.href">
+            <span v-if="item.group && item.group !== activeNavItems[index - 1]?.group" class="bill-nav-group">{{ item.group }}</span>
+            <a :class="{ active: navPage === item.page }" :href="normalizeUrl(item.href)" :title="item.label">
+              <span class="bill-nav-icon" v-html="iconSvg(item.icon)"></span>
+              {{ item.label }}
+            </a>
+          </template>
         </div>
       </nav>
 
@@ -144,7 +141,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watchEffect } from 'vue';
+import { computed, nextTick, onMounted, ref, watchEffect } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import AssistantChat from '../Components/Assistant/AssistantChat.vue';
 import PageHelp from '../Components/Help/PageHelp.vue';
@@ -155,6 +152,9 @@ const props = defineProps({
 });
 
 const pageHelpRef = ref(null);
+const navRef = ref(null);
+// Long sections scroll: keep the open screen visible in the menu.
+onMounted(() => nextTick(() => navRef.value?.querySelector('a.active')?.scrollIntoView({ block: 'nearest' })));
 const menuOpen = ref(false);
 const moduleOpen = ref(false);
 const selectedSectionKey = ref('');
@@ -184,7 +184,8 @@ const selectedFinancialYearValue = ref(currentFinancialYear.value.id || currentF
 const isSalesInvoicePage = computed(() => props.page === 'sales');
 // Screens that are not menu items keep their parent menu item highlighted.
 const pageParents = { 'gst-imports': 'gst', 'company-onboarding': 'onboarding' };
-const navPage = computed(() => pageParents[props.page] || props.page);
+// Sales Orders shares the "sales" page key with the invoice list but has its own menu entry.
+const navPage = computed(() => (props.page === 'sales' && props.title === 'Sales Orders' ? 'sales-orders' : (pageParents[props.page] || props.page)));
 // Staff (role 3) only gets New Bill in the top bar; Voucher and Reports are not open to them.
 const departmentPages = computed(() => inertiaPage.props.auth?.user?.pages || null);
 const canVoucher = computed(() => !departmentPages.value && roleId.value !== 3 && permissions.value['accounting.create'] !== false);
@@ -207,10 +208,11 @@ const normalizeUrl = (url) => {
 };
 const routeUrl = (name, fallback) => normalizeUrl(dashboardRoutes.value?.[name]?.url || fallback);
 
+// Each section is one entry of the module picker; "group" is a sub-heading inside it. Daily work comes first.
 const sections = [
   {
     key: 'dashboard',
-    label: 'ADMIN',
+    label: 'HOME',
     icon: 'layout-dashboard',
     items: [
       { label: 'Business Dashboard', page: 'dashboard', href: routeUrl('business.dashboard', '/business-dashboard'), icon: 'layout-dashboard' },
@@ -220,25 +222,18 @@ const sections = [
     ],
   },
   {
-    key: 'crm',
-    label: 'CRM',
-    icon: 'users',
-    items: [
-      { label: 'Leads & Pipeline', page: 'crm', href: routeUrl('app.crm.index', '/app/crm'), icon: 'users' },
-    ],
-  },
-  {
     key: 'sales',
     label: 'SALES',
     icon: 'receipt',
     items: [
-      { label: 'POS Billing', page: 'pos', href: routeUrl('app.sales.pos', '/app/sales/pos'), icon: 'scan-barcode' },
-      { label: 'Sales Invoices', page: 'sales', href: routeUrl('app.sales.invoices', '/app/sales/invoices'), icon: 'receipt' },
-      { label: 'Sales Returns', page: 'sales-returns', href: routeUrl('app.sales.returns', '/app/sales/returns'), icon: 'rotate-cw' },
-      { label: 'Payment Reminders', page: 'payment-reminders', href: routeUrl('app.sales.payment-reminders', '/app/sales/payment-reminders'), icon: 'bell' },
-      { label: 'Customers', page: 'customers', href: routeUrl('app.sales.customers', '/app/sales/customers'), icon: 'users' },
-      { label: 'Stock Outward', page: 'inventory-outward', href: routeUrl('app.sales.stock-outward', '/app/sales/stock-outward'), icon: 'package-minus' },
-      { label: 'Reserved Stock', page: 'inventory-reserved', href: routeUrl('app.sales.reserved-stock', '/app/sales/reserved-stock'), icon: 'bookmark-check' },
+      { group: 'Billing', label: 'POS Billing', page: 'pos', href: routeUrl('app.sales.pos', '/app/sales/pos'), icon: 'scan-barcode' },
+      { group: 'Billing', label: 'Sales Invoices', page: 'sales', href: routeUrl('app.sales.invoices', '/app/sales/invoices'), icon: 'receipt' },
+      { group: 'Billing', label: 'Sales Returns', page: 'sales-returns', href: routeUrl('app.sales.returns', '/app/sales/returns'), icon: 'rotate-cw' },
+      { group: 'Orders', label: 'Sales Orders & Challans', page: 'sales-orders', access: 'sales', hideForStaff: true, href: routeUrl('app.sales.orders', '/app/sales/orders'), icon: 'clipboard-list' },
+      { group: 'Customers', label: 'Customers', page: 'customers', href: routeUrl('app.sales.customers', '/app/sales/customers'), icon: 'users' },
+      { group: 'Customers', label: 'Payment Reminders', page: 'payment-reminders', href: routeUrl('app.sales.payment-reminders', '/app/sales/payment-reminders'), icon: 'bell' },
+      { group: 'Goods Out', label: 'Stock Outward', page: 'inventory-outward', href: routeUrl('app.sales.stock-outward', '/app/sales/stock-outward'), icon: 'package-minus' },
+      { group: 'Goods Out', label: 'Reserved Stock', page: 'inventory-reserved', href: routeUrl('app.sales.reserved-stock', '/app/sales/reserved-stock'), icon: 'bookmark-check' },
     ],
   },
   {
@@ -246,13 +241,13 @@ const sections = [
     label: 'PURCHASE',
     icon: 'shopping-bag',
     items: [
-      { label: 'Purchases', page: 'purchases', href: routeUrl('app.purchase.bills', '/app/purchase/bills'), icon: 'shopping-bag' },
-      { label: 'Supplier Bills', page: 'supplier-bills', href: routeUrl('app.purchase.network', '/app/purchase/network'), icon: 'clipboard-list' },
-      { label: 'Purchase Returns', page: 'purchase-returns', href: routeUrl('app.purchase.returns', '/app/purchase/returns'), icon: 'rotate-cw' },
-      { label: 'Suppliers', page: 'suppliers', href: routeUrl('app.purchase.suppliers', '/app/purchase/suppliers'), icon: 'truck' },
-      { label: 'Stock Inward / GRN', page: 'inventory-inward', href: routeUrl('app.purchase.grn', '/app/purchase/grn'), icon: 'package-plus' },
-      { label: 'Reorder Suggestions', page: 'inventory-reorder', href: routeUrl('app.purchase.reorder', '/app/purchase/reorder'), icon: 'rotate-cw' },
-      { label: 'Inventory Orders', page: 'inventory-orders', href: routeUrl('app.purchase.orders', '/app/purchase/orders'), icon: 'clipboard-list' },
+      { group: 'Buying', label: 'Purchases', page: 'purchases', href: routeUrl('app.purchase.bills', '/app/purchase/bills'), icon: 'shopping-bag' },
+      { group: 'Buying', label: 'Supplier Bills', page: 'supplier-bills', href: routeUrl('app.purchase.network', '/app/purchase/network'), icon: 'clipboard-list' },
+      { group: 'Buying', label: 'Purchase Returns', page: 'purchase-returns', href: routeUrl('app.purchase.returns', '/app/purchase/returns'), icon: 'rotate-cw' },
+      { group: 'Buying', label: 'Suppliers', page: 'suppliers', href: routeUrl('app.purchase.suppliers', '/app/purchase/suppliers'), icon: 'truck' },
+      { group: 'Orders', label: 'Reorder Suggestions', page: 'inventory-reorder', href: routeUrl('app.purchase.reorder', '/app/purchase/reorder'), icon: 'rotate-cw' },
+      { group: 'Orders', label: 'Inventory Orders', page: 'inventory-orders', href: routeUrl('app.purchase.orders', '/app/purchase/orders'), icon: 'clipboard-list' },
+      { group: 'Orders', label: 'Stock Inward / GRN', page: 'inventory-inward', href: routeUrl('app.purchase.grn', '/app/purchase/grn'), icon: 'package-plus' },
     ],
   },
   {
@@ -260,31 +255,24 @@ const sections = [
     label: 'INVENTORY',
     icon: 'boxes',
     items: [
-      { label: 'Inventory Dashboard', page: 'inventory', href: routeUrl('app.inventory.dashboard', '/app/inventory'), icon: 'boxes' },
-      { label: 'Product Master', page: 'products', href: routeUrl('app.inventory.products', '/app/inventory/products'), icon: 'tag' },
-      { label: 'HSN/SAC Master', page: 'business-hsn-master', href: routeUrl('app.inventory.hsn-master', '/app/inventory/hsn-master'), icon: 'file-text' },
-      { label: 'Opening Stock', page: 'opening-stock', href: routeUrl('app.inventory.opening-stock', '/app/inventory/add'), icon: 'package-plus' },
-      { label: 'Current Stock', page: 'inventory-current-stock', href: routeUrl('app.inventory.current-stock', '/app/inventory/current-stock'), icon: 'warehouse' },
-      { label: 'Inventory Vouchers', page: 'inventory-vouchers', href: routeUrl('app.inventory.vouchers', '/app/inventory/vouchers'), icon: 'file-stack' },
-      { label: 'Batch & Expiry', page: 'inventory-batches', href: routeUrl('app.inventory.batches', '/app/inventory/batches'), icon: 'calendar-clock' },
-      { label: 'Serial Numbers', page: 'inventory-serials', href: routeUrl('app.inventory.serials', '/app/inventory/serials'), icon: 'list-ordered' },
-      { label: 'Barcode Center', page: 'inventory-barcode-center', href: routeUrl('app.inventory.barcode-center', '/app/inventory/barcode-center'), icon: 'barcode' },
-      { label: 'Manufacturing / BOM', page: 'inventory-manufacturing', href: routeUrl('app.inventory.manufacturing', '/app/inventory/manufacturing'), icon: 'factory' },
-    ],
-  },
-  {
-    key: 'warehouse',
-    label: 'WAREHOUSE',
-    icon: 'warehouse',
-    items: [
-      { label: 'Warehouses / Bins', page: 'inventory-warehouses', href: routeUrl('app.warehouse.warehouses', '/app/warehouse/warehouses'), icon: 'warehouse' },
-      { label: 'Bins / Racks', page: 'inventory-bins', href: routeUrl('app.warehouse.bins', '/app/warehouse/bins'), icon: 'layers' },
-      { label: 'Godown Balances', page: 'inventory-godown-balance', href: routeUrl('app.warehouse.godown-balances', '/app/warehouse/godown-balances'), icon: 'scale' },
-      { label: 'Stock Transfer', page: 'inventory-transfer', href: routeUrl('app.warehouse.transfer', '/app/warehouse/transfer'), icon: 'arrow-left-right' },
-      { label: 'Transfer Requests', page: 'inventory-transfer-requests', href: routeUrl('app.warehouse.transfer-requests', '/app/warehouse/transfer-requests'), icon: 'repeat' },
-      { label: 'Stock Adjustment', page: 'inventory-adjustment', href: routeUrl('app.warehouse.adjustment', '/app/warehouse/adjustment'), icon: 'sliders' },
-      { label: 'Physical Audit', page: 'inventory-audit', href: routeUrl('app.warehouse.audit', '/app/warehouse/audit'), icon: 'search-check' },
-      { label: 'Batch / Serial Allocation', page: 'inventory-allocation', href: routeUrl('app.warehouse.allocation', '/app/warehouse/allocation'), icon: 'git-branch' },
+      { group: 'Items', label: 'Product Master', page: 'products', href: routeUrl('app.inventory.products', '/app/inventory/products'), icon: 'tag' },
+      { group: 'Items', label: 'HSN/SAC Master', page: 'business-hsn-master', href: routeUrl('app.inventory.hsn-master', '/app/inventory/hsn-master'), icon: 'file-text' },
+      { group: 'Items', label: 'Barcode Center', page: 'inventory-barcode-center', href: routeUrl('app.inventory.barcode-center', '/app/inventory/barcode-center'), icon: 'barcode' },
+      { group: 'Stock', label: 'Current Stock', page: 'inventory-current-stock', href: routeUrl('app.inventory.current-stock', '/app/inventory/current-stock'), icon: 'warehouse' },
+      { group: 'Stock', label: 'Inventory Dashboard', page: 'inventory', href: routeUrl('app.inventory.dashboard', '/app/inventory'), icon: 'boxes' },
+      { group: 'Stock', label: 'Opening Stock', page: 'opening-stock', href: routeUrl('app.inventory.opening-stock', '/app/inventory/add'), icon: 'package-plus' },
+      { group: 'Stock', label: 'Stock Adjustment', page: 'inventory-adjustment', href: routeUrl('app.warehouse.adjustment', '/app/warehouse/adjustment'), icon: 'sliders' },
+      { group: 'Stock', label: 'Physical Audit', page: 'inventory-audit', href: routeUrl('app.warehouse.audit', '/app/warehouse/audit'), icon: 'search-check' },
+      { group: 'Stock', label: 'Inventory Vouchers', page: 'inventory-vouchers', href: routeUrl('app.inventory.vouchers', '/app/inventory/vouchers'), icon: 'file-stack' },
+      { group: 'Warehouse', label: 'Warehouses / Bins', page: 'inventory-warehouses', href: routeUrl('app.warehouse.warehouses', '/app/warehouse/warehouses'), icon: 'warehouse' },
+      { group: 'Warehouse', label: 'Stock Transfer', page: 'inventory-transfer', href: routeUrl('app.warehouse.transfer', '/app/warehouse/transfer'), icon: 'arrow-left-right' },
+      { group: 'Warehouse', label: 'Transfer Requests', page: 'inventory-transfer-requests', href: routeUrl('app.warehouse.transfer-requests', '/app/warehouse/transfer-requests'), icon: 'repeat' },
+      { group: 'Warehouse', label: 'Godown Balances', page: 'inventory-godown-balance', href: routeUrl('app.warehouse.godown-balances', '/app/warehouse/godown-balances'), icon: 'scale' },
+      { group: 'Warehouse', label: 'Bins / Racks', page: 'inventory-bins', href: routeUrl('app.warehouse.bins', '/app/warehouse/bins'), icon: 'layers' },
+      { group: 'Advanced', label: 'Batch & Expiry', page: 'inventory-batches', href: routeUrl('app.inventory.batches', '/app/inventory/batches'), icon: 'calendar-clock' },
+      { group: 'Advanced', label: 'Serial Numbers', page: 'inventory-serials', href: routeUrl('app.inventory.serials', '/app/inventory/serials'), icon: 'list-ordered' },
+      { group: 'Advanced', label: 'Batch / Serial Allocation', page: 'inventory-allocation', href: routeUrl('app.warehouse.allocation', '/app/warehouse/allocation'), icon: 'git-branch' },
+      { group: 'Advanced', label: 'Manufacturing / BOM', page: 'inventory-manufacturing', href: routeUrl('app.inventory.manufacturing', '/app/inventory/manufacturing'), icon: 'factory' },
     ],
   },
   {
@@ -292,15 +280,14 @@ const sections = [
     label: 'ACCOUNTING',
     icon: 'landmark',
     items: [
-      { label: 'Chart of Accounts', page: 'accounts', href: routeUrl('app.accounting.chart-of-accounts', '/app/accounting/chart-of-accounts'), icon: 'landmark' },
-      { label: 'Vouchers', page: 'vouchers', href: routeUrl('app.accounting.vouchers', '/app/accounting/vouchers'), icon: 'file-plus' },
-      { label: 'Ledgers', page: 'ledgers', href: routeUrl('app.accounting.ledgers', '/app/accounting/ledgers'), icon: 'book-open' },
-      { label: 'Expenses', page: 'expenses', href: routeUrl('app.accounting.expenses', '/app/accounting/expenses'), icon: 'wallet' },
-      { label: 'Fixed Assets', page: 'fixed-assets', href: routeUrl('app.fixed-assets.index', '/app/fixed-assets'), icon: 'boxes' },
-      { label: 'Payroll', page: 'payroll', href: routeUrl('app.payroll.index', '/app/payroll'), icon: 'id-card' },
-      { label: 'GST', page: 'gst', href: routeUrl('app.accounting.gst', '/app/accounting/gst'), icon: 'percent' },
-      { label: 'GST Returns', page: 'inventory-gst-returns', href: routeUrl('app.accounting.gst-returns', '/app/accounting/gst-returns'), icon: 'file-check' },
-      { label: 'Tally Integration', page: 'tally-integration', href: routeUrl('app.accounting.tally.index', '/app/accounting/tally'), icon: 'rotate-cw' },
+      { group: 'Daily', label: 'Vouchers', page: 'vouchers', href: routeUrl('app.accounting.vouchers', '/app/accounting/vouchers'), icon: 'file-plus' },
+      { group: 'Daily', label: 'Expenses', page: 'expenses', href: routeUrl('app.accounting.expenses', '/app/accounting/expenses'), icon: 'wallet' },
+      { group: 'Daily', label: 'Ledgers', page: 'ledgers', href: routeUrl('app.accounting.ledgers', '/app/accounting/ledgers'), icon: 'book-open' },
+      { group: 'GST', label: 'GST', page: 'gst', href: routeUrl('app.accounting.gst', '/app/accounting/gst'), icon: 'percent' },
+      { group: 'GST', label: 'GST Returns', page: 'inventory-gst-returns', href: routeUrl('app.accounting.gst-returns', '/app/accounting/gst-returns'), icon: 'file-check' },
+      { group: 'Advanced', label: 'Chart of Accounts', page: 'accounts', href: routeUrl('app.accounting.chart-of-accounts', '/app/accounting/chart-of-accounts'), icon: 'landmark' },
+      { group: 'Advanced', label: 'Fixed Assets', page: 'fixed-assets', href: routeUrl('app.fixed-assets.index', '/app/fixed-assets'), icon: 'boxes' },
+      { group: 'Advanced', label: 'Tally Integration', page: 'tally-integration', href: routeUrl('app.accounting.tally.index', '/app/accounting/tally'), icon: 'rotate-cw' },
     ],
   },
   {
@@ -313,7 +300,14 @@ const sections = [
       { label: 'Stock Ledger', page: 'stock-ledger', href: routeUrl('app.reports.stock-ledger', '/app/reports/stock-ledger'), icon: 'file-text' },
       { label: 'Stock Valuation', page: 'inventory-valuation', href: routeUrl('app.reports.stock-valuation', '/app/reports/stock-valuation'), icon: 'indian-rupee' },
       { label: 'Voucher Audit Trail', page: 'inventory-audit-trail', href: routeUrl('app.reports.audit-trail', '/app/reports/audit-trail'), icon: 'history' },
-      { label: 'Acceptance Matrix', page: 'acceptance', href: routeUrl('app.reports.acceptance', '/app/reports/acceptance'), icon: 'badge-check' },
+    ],
+  },
+  {
+    key: 'crm',
+    label: 'CRM',
+    icon: 'users',
+    items: [
+      { label: 'Leads & Pipeline', page: 'crm', href: routeUrl('app.crm.index', '/app/crm'), icon: 'users' },
     ],
   },
   {
@@ -321,13 +315,14 @@ const sections = [
     label: 'SETUP',
     icon: 'settings',
     items: [
-      { label: 'Masters', page: 'masters', href: routeUrl('app.setup.masters', '/app/setup/masters'), icon: 'settings' },
-      { label: 'Branches', page: 'branches', href: routeUrl('app.setup.branches', '/app/setup/branches'), icon: 'building-2' },
-      { label: 'Employees', page: 'employees', href: routeUrl('app.setup.employees', '/app/setup/employees'), icon: 'id-card' },
-      { label: 'Users & Roles', page: 'users', href: routeUrl('app.setup.users', '/app/setup/users'), icon: 'user-cog' },
-      { label: 'SaaS Admin', page: 'saas', href: routeUrl('app.setup.saas', '/app/setup/saas'), icon: 'cloud-cog', superAdminOnly: true },
-      { label: 'Acceptance Matrix', page: 'setup-acceptance', href: routeUrl('app.setup.acceptance', '/app/setup/acceptance'), icon: 'badge-check' },
-      { label: 'Settings', page: 'settings', href: routeUrl('app.setup.settings', '/app/setup/settings'), icon: 'settings' },
+      { group: 'Business', label: 'Settings', page: 'settings', href: routeUrl('app.setup.settings', '/app/setup/settings'), icon: 'settings' },
+      { group: 'Business', label: 'Branches', page: 'branches', href: routeUrl('app.setup.branches', '/app/setup/branches'), icon: 'building-2' },
+      { group: 'Business', label: 'Masters', page: 'masters', href: routeUrl('app.setup.masters', '/app/setup/masters'), icon: 'settings' },
+      { group: 'Team', label: 'Users & Roles', page: 'users', href: routeUrl('app.setup.users', '/app/setup/users'), icon: 'user-cog' },
+      { group: 'Team', label: 'Employees', page: 'employees', href: routeUrl('app.setup.employees', '/app/setup/employees'), icon: 'id-card' },
+      { group: 'Team', label: 'Payroll', page: 'payroll', href: routeUrl('app.payroll.index', '/app/payroll'), icon: 'id-card' },
+      { group: 'System', label: 'SaaS Admin', page: 'saas', href: routeUrl('app.setup.saas', '/app/setup/saas'), icon: 'cloud-cog', superAdminOnly: true },
+      { group: 'System', label: 'Acceptance Matrix', page: 'setup-acceptance', href: routeUrl('app.setup.acceptance', '/app/setup/acceptance'), icon: 'badge-check', superAdminOnly: true },
     ],
   },
 ];
@@ -400,7 +395,7 @@ const visibleSections = computed(() => {
     .map((section) => ({
       ...section,
       label: section.key === 'dashboard' ? 'WORKSPACE' : section.label,
-      items: section.items.filter((item) => allowedPages.includes(item.page)),
+      items: section.items.filter((item) => allowedPages.includes(item.access || item.page) && !(item.hideForStaff && !departmentPages.value)),
     }))
     .filter((section) => section.items.length);
 });

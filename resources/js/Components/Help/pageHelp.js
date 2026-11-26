@@ -170,7 +170,7 @@ export const pageHelp = {
 
 // Opened from "All guides": the first things a new user asks about.
 export const startGuide = h('The order in which to start using BillIQ.', {
-    steps: ['Setup > Settings: business name, GSTIN, address, bank details and print format.', 'Setup > Branches, then Warehouse > Warehouses / Bins: at least one of each.', 'Setup > Users & Roles: logins for your staff.', 'Inventory > Product Master: add the items with rate and GST %.', 'Inventory > Opening Stock: the stock you have today (remember to Post).', 'Add customers and suppliers.', 'Enter purchases in Purchase > Purchases.', 'Make bills from New Bill.', 'Record money received or paid with Receipt and Payment (Accounting > Vouchers).', 'Check the Business Dashboard daily and Business Reports every month.'],
+    steps: ['Setup > Settings: business name, GSTIN, address, bank details and print format.', 'Setup > Branches, then Inventory > Warehouses / Bins: at least one of each.', 'Setup > Users & Roles: logins for your staff.', 'Inventory > Product Master: add the items with rate and GST %.', 'Inventory > Opening Stock: the stock you have today (remember to Post).', 'Add customers and suppliers.', 'Enter purchases in Purchase > Purchases.', 'Make bills from New Bill.', 'Record money received or paid with Receipt and Payment (Accounting > Vouchers).', 'Check the Business Dashboard daily and Business Reports every month.'],
     faq: [
         ['How do I make a bill?', 'Click “New Bill” at the top, add products, choose payment and click “Complete Sale”.'],
         ['How do I correct a wrong bill?', 'Open Sales Invoices or Purchases, then Actions > Edit > Save Changes.'],

@@ -660,6 +660,15 @@ body:has(.bill-app) header:not(.bill-topbar):not(.crud-drawer-header):not(.produ
     text-transform: uppercase;
 }
 
+.bill-nav-group {
+    color: #6f87a8;
+    font-size: 11px;
+    font-weight: 800;
+    margin: 10px 12px 0;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,.07);
+}
+
 .bill-sidebar-footer {
     flex: 0 0 auto;
     padding-top: 14px;

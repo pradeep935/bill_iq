@@ -82,7 +82,16 @@ const saleSaved = async (response) => {
     alert(response.message || 'Invoice saved.');
     await loadSales(pagination.value.current_page || 1); await loadReports();
 };
-const simpleAction = async (fn, row, promptText) => { if (promptText && !window.confirm(promptText)) return; const response = await fn(row.id); alert(response.message || 'Done.'); await loadSales(pagination.value.current_page || 1); await loadReports(); };
+const simpleAction = async (fn, row, promptText) => {
+    if (promptText && !window.confirm(promptText)) return;
+    try {
+        const response = await fn(row.id);
+        alert(response.message || 'Done.');
+    } catch (error) {
+        alert(Object.values(error.response?.data?.errors || {})[0]?.[0] || error.response?.data?.message || 'Could not complete this action.');
+    }
+    await loadSales(pagination.value.current_page || 1); await loadReports();
+};
 const reverseSale = async (row) => { const remarks = window.prompt('Reversal remarks'); if (!remarks) return; await simpleAction((id) => SalesApi.reverseSale(id, remarks), row); };
 const toggleActionMenu = (row) => { openActionMenuId.value = openActionMenuId.value === row.id ? null : row.id; };
 const closeActionMenu = () => { openActionMenuId.value = null; };
@@ -107,7 +116,7 @@ const openSaleFromLink = async (id) => {
     if (!id) return;
     try { viewSale(await SalesApi.getSale(id)); } catch (error) { /* invoice not found or not allowed: stay on the list */ }
 };
-onMounted(async () => { const linkedSale = query().get('sale'); syncUrl(true); window.addEventListener('popstate', fromUrl); window.addEventListener('keydown', handlePreviewKeydown); await loadReferences(); await loadSales(); await openSaleFromLink(linkedSale); await loadReports(); });
+onMounted(async () => { const linkedSale = query().get('sale'); const editLink = Number(query().get('edit')); syncUrl(true); window.addEventListener('popstate', fromUrl); window.addEventListener('keydown', handlePreviewKeydown); await loadReferences(); await loadSales(); await openSaleFromLink(linkedSale); if (editLink) await editSale({ id: editLink }); await loadReports(); });
 onUnmounted(() => { window.removeEventListener('popstate', fromUrl); window.removeEventListener('keydown', handlePreviewKeydown); document.body.classList.remove('invoice-preview-open'); });
 </script>
 

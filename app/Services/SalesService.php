@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use App\Models\DeliveryChallan;
 
 class SalesService
 {
@@ -27,6 +28,7 @@ class SalesService
     private CustomerService $customers;
 
     private array $heldByEdit = [];
+    private bool $editing = false;
 
     public function __construct(SalesCalculationService $calculator, SalesInvoiceNumberService $numbers, StockService $stock, CustomerService $customers)
     {
@@ -215,7 +217,12 @@ class SalesService
             $numbers = $voucher->only(['voucher_number', 'invoice_number']);
 
             if ($wasPosted) {
-                $this->reverse($voucher, 'Edited: ' . $numbers['invoice_number']);
+                $this->editing = true;
+                try {
+                    $this->reverse($voucher, 'Edited: ' . $numbers['invoice_number']);
+                } finally {
+                    $this->editing = false;
+                }
                 $voucher->refresh();
             }
             $suffix = $edits->archiveSuffix(SalesVoucher::class, $voucher->business_id, 'voucher_number', $numbers['voucher_number']);
@@ -285,6 +292,43 @@ class SalesService
         return $totals;
     }
 
+    public function draftFromChallan(int $challanId): SalesVoucher
+    {
+        return DB::transaction(function () use ($challanId) {
+            $documents = app(StockDocumentService::class);
+            $challan = $documents->billable(DeliveryChallan::class, $challanId);
+            $challan->load(['items.product', 'items.orderItem', 'customer', 'warehouse']);
+
+            if ($challan->items->contains(fn ($item) => $item->serial_id)) {
+                throw ValidationException::withMessages(['document' => 'This challan has serial-numbered goods; bill them from POS Billing after checking the serials.']);
+            }
+
+            $customer = $challan->customer;
+            $walkIn = !$customer || $customer->customer_type === 'walk_in';
+            $branchState = DB::table('companies')->where('id', $challan->business_id)->value('state');
+            $stateId = $branchState ? DB::table('states')->where('name', $branchState)->value('id') : null;
+
+            $voucher = $this->create([
+                'branch_id' => $challan->branch_id ?: $challan->warehouse->branch_id, 'warehouse_id' => $challan->warehouse_id,
+                'customer_id' => $challan->customer_id, 'invoice_date' => now()->toDateString(),
+                'sale_type' => $walkIn ? 'cash' : 'credit', 'invoice_type' => $customer?->gstin ? 'tax_invoice' : 'retail_invoice',
+                'tax_type' => $stateId && $customer?->state_id && (int) $customer->state_id !== (int) $stateId ? 'interstate' : 'intrastate',
+                'status' => 'draft', 'remarks' => 'Delivery challan ' . $challan->challan_number,
+                'items' => $challan->items->map(fn ($item) => [
+                    'product_id' => $item->product_id, 'product_variant_id' => $item->product_variant_id, 'batch_id' => $item->batch_id,
+                    'quantity' => (float) $item->dispatch_quantity,
+                    'selling_rate' => (float) ($item->orderItem?->unit_price ?: $item->product->selling_price ?: $item->product->sale_price),
+                    'gst_rate' => (float) $item->product->gst_rate, 'cess_rate' => (float) $item->product->cess_rate,
+                    'tax_inclusive' => (bool) $item->product->tax_inclusive,
+                ])->all(),
+                'payments' => [],
+            ]);
+            $documents->attach($voucher, DeliveryChallan::class, $challan->id);
+
+            return $this->fresh($voucher);
+        });
+    }
+
     public function duplicate(SalesVoucher $voucher): SalesVoucher
     {
         return DB::transaction(function () use ($voucher) {
@@ -326,6 +370,10 @@ class SalesService
             }
 
             $voucher->load(['items.product']);
+            // Goods already sent on a challan come back first, then leave again on the bill.
+            $documents = app(StockDocumentService::class);
+            $documents->beforePosting($voucher);
+            $documents->release($voucher);
             $needed = $this->heldByEdit ? $this->quantitiesByStockKey($voucher, $voucher->items) : [];
 
             foreach ($voucher->items as $index => $item) {
@@ -487,6 +535,7 @@ class SalesService
             'cancelled_at' => now(),
             'cancellation_reason' => $reason,
         ]);
+        app(StockDocumentService::class)->unlink(\App\Models\DeliveryChallan::class, $voucher->id);
 
         return $this->fresh($voucher);
     }
@@ -508,6 +557,9 @@ class SalesService
                 app(AccountingPostingService::class)->reverseSourceJournals(SalesVoucher::class, $voucher->id, $remarks ?: 'Sales reversal');
             }
             $voucher->update(['status' => 'reversed']);
+            if (!$this->editing) {
+                app(StockDocumentService::class)->restore($voucher);
+            }
 
             return $this->fresh($voucher);
         });
@@ -1032,6 +1084,9 @@ class SalesService
             throw ValidationException::withMessages(['customer_id' => 'Walk-in customer cannot be used for credit sale.']);
         }
 
+        // Goods billed from a challan left stock already; posting checks them after they are taken back.
+        $fromChallan = $currentVoucherId && StockDocumentService::ready() && DeliveryChallan::query()->where('business_id', $businessId)->where('billed_voucher_id', $currentVoucherId)->exists();
+
         foreach ($data['items'] as $index => $item) {
             $product = Product::query()
                 ->with(['variantItems', 'batches'])
@@ -1067,7 +1122,7 @@ class SalesService
                 }
             }
 
-            if ($product->product_type !== 'service' && $product->item_type !== 'non_stock' && (bool) ($product->track_inventory ?? true) && in_array($data['status'], ['confirmed', 'approved'], true)) {
+            if ($product->product_type !== 'service' && $product->item_type !== 'non_stock' && (bool) ($product->track_inventory ?? true) && !$fromChallan && in_array($data['status'], ['confirmed', 'approved'], true)) {
                 $scope = [
                     'business_id' => $businessId,
                     'branch_id' => $data['branch_id'],

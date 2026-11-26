@@ -4,6 +4,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import axios from 'axios';
 import { normalizeAxiosError } from './Support/errorMessages';
 import { installAlertToast } from './Support/toast';
+import { installGoodsConfirm } from './Support/confirmGoods';
 
 import Header from '@/Components/Common/Header.vue';
 import Portlet from '@/Components/Common/Portlet.vue';
@@ -54,6 +55,7 @@ axios.interceptors.request.use((config) => {
   if (csrfToken) config.headers['X-CSRF-TOKEN'] = csrfToken;
   return config;
 });
+installGoodsConfirm(axios);
 axios.interceptors.response.use(
   (response) => response,
   normalizeAxiosError

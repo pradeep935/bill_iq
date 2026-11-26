@@ -306,6 +306,7 @@ class OrderManagementService
         return DB::transaction(function () use ($id, $status) {
             $challan = DeliveryChallan::query()->where('business_id', AppController::businessId())->with(['items', 'order.items'])->findOrFail($id);
             if ($this->stockPosted(DeliveryChallan::class, $challan->id)) return $challan;
+            app(StockDocumentService::class)->confirmDocumentNotBilled($challan);
             foreach ($challan->items as $item) {
                 if ($item->sales_order_item_id) {
                     $orderItem = $challan->order->items->firstWhere('id', $item->sales_order_item_id);
@@ -459,6 +460,7 @@ class OrderManagementService
         return DB::transaction(function () use ($id) {
             $grn = GoodsReceipt::query()->where('business_id', AppController::businessId())->with(['items', 'order.items'])->findOrFail($id);
             if ($this->stockPosted(GoodsReceipt::class, $grn->id)) return $grn;
+            app(StockDocumentService::class)->confirmDocumentNotBilled($grn);
             foreach ($grn->items as $item) {
                 $net = max(0, (float) $item->received_quantity - (float) $item->rejected_quantity - (float) $item->damaged_quantity);
                 if ($item->purchase_order_item_id && $grn->order) {

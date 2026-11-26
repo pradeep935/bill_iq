@@ -34,7 +34,6 @@ const selectedRow = ref(null);
 const drawerOpen = ref(false);
 const drawerLoading = ref(false);
 const drawerDispatch = ref(null);
-const barcodeScan = ref('');
 const openActionMenuId = ref(null);
 let timer = null;
 
@@ -247,12 +246,8 @@ const openDrawer = async (row) => {
 };
 // Manual outward (sample, gift, goods sent without a bill) is entered as a Delivery Challan.
 const createOutward = () => { window.location.href = '/app/sales/orders?tab=challans'; };
-const createReservation = () => { message.value = 'Reservations are created by approving sales orders, so available-to-sell is held without changing physical inventory.'; };
-const scanBarcode = () => {
-  if (!barcodeScan.value.trim()) return;
-  message.value = `Barcode ${barcodeScan.value.trim()} captured for warehouse picking.`;
-  barcodeScan.value = '';
-};
+// Stock is reserved by approving a sales order.
+const createReservation = () => { window.location.href = '/app/sales/orders?tab=sales-orders'; };
 
 watch(() => filterForm.search, debounceNavigate);
 watch(() => [filterForm.per_page, filterForm.date_from, filterForm.date_to, filterForm.branch_id, filterForm.warehouse_id, filterForm.customer_id, filterForm.sales_invoice, filterForm.order_number, filterForm.status, filterForm.expiry_status, filterForm.source_type, filterForm.delivery_status, filterForm.transporter, filterForm.vehicle_number, filterForm.reference_type, filterForm.sort, filterForm.direction], () => navigate({ page: 1 }));
@@ -270,7 +265,7 @@ watch(() => [filterForm.per_page, filterForm.date_from, filterForm.date_to, filt
 
     <div class="dispatch-page">
       <ActionToolbar>
-        <button v-if="reservedMode" type="button" title="Create reservations through sales order approval" @click="createReservation">New Reservation</button>
+        <button v-if="reservedMode" type="button" title="Stock is reserved when a sales order is approved" @click="createReservation">New Sales Order</button>
         <button v-else type="button" title="Send goods without a bill (sample, gift, self use) using a Delivery Challan" @click="createOutward">+ New Outward Entry</button>
         <button type="button" :title="reservedMode ? 'Print reserved stock report' : 'Print selected dispatch report'" @click="printDocument(reservedMode ? 'reservation' : 'dispatch')">Print</button>
         <button type="button" :title="reservedMode ? 'Export reservation data' : 'Export dispatch data'" :disabled="!permissions.export" @click="exportCsv">Export</button>
@@ -305,10 +300,6 @@ watch(() => [filterForm.per_page, filterForm.date_from, filterForm.date_to, filt
         </div>
         <p v-if="message" class="dispatch-message">{{ message }}</p>
         <p class="dispatch-rule">{{ stock_rule }}</p>
-        <div v-if="!reservedMode" class="barcode-row">
-          <input v-model="barcodeScan" placeholder="Scan barcode for picking" title="Barcode scanning for warehouse picking" @keyup.enter="scanBarcode" />
-          <button type="button" title="Capture scanned barcode" @click="scanBarcode">Scan</button>
-        </div>
         <DispatchTable :columns="tableColumns" :rows="currentRows" :empty-text="reservedMode ? 'No reserved stock records found for the selected filters.' : 'No dispatch records found for the selected filters.'" @open="openDrawer">
           <template #cell-total_quantity="{ value }">{{ qty(value) }}</template>
           <template #cell-reserved_quantity="{ value }">{{ qty(value) }}</template>
@@ -345,5 +336,5 @@ watch(() => [filterForm.per_page, filterForm.date_from, filterForm.date_to, filt
 </template>
 
 <style scoped>
-.dispatch-page{padding:4px 0 28px}.dispatch-tabs,.row-actions,.barcode-row,.dispatch-pagination{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.dispatch-tabs button,.row-actions button,.barcode-row button,.dispatch-pagination button,.outward-history button{min-height:34px;padding:7px 10px;border:1px solid #d8e0eb;border-radius:8px;background:#fff;color:#344159;font-size:12px;font-weight:850;cursor:pointer;text-transform:capitalize}.dispatch-tabs button.active{color:#fff;background:#142139;border-color:#142139}.row-actions .danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.dispatch-message{margin:0 0 10px;padding:10px;border:1px solid #cfe3ff;border-radius:8px;background:#eef6ff;color:#1d4f8f;font-size:12px;font-weight:850}.dispatch-rule{margin:0 0 12px;padding:10px;border:1px solid #e5eaf2;border-radius:8px;background:#f8fafc;color:#536174;font-size:12px;font-weight:750}.barcode-row{margin-bottom:12px}.barcode-row input{min-height:38px;min-width:280px;padding:8px 10px;border:1px solid #d8e0eb;border-radius:8px;font-size:12px}.dispatch-pagination{justify-content:flex-end;margin-top:12px}.outward-history{margin-top:14px}@media(max-width:720px){.barcode-row input{min-width:0;width:100%}.row-actions{flex-direction:column;align-items:stretch}.row-actions button{width:100%}}
+.dispatch-page{padding:4px 0 28px}.dispatch-tabs,.row-actions,.dispatch-tabs button,.row-actions button,.dispatch-tabs button.active{color:#fff;background:#142139;border-color:#142139}.row-actions .danger{color:#d23f49;background:#fff3f4;border-color:#ffd6da}.dispatch-message{margin:0 0 10px;padding:10px;border:1px solid #cfe3ff;border-radius:8px;background:#eef6ff;color:#1d4f8f;font-size:12px;font-weight:850}.dispatch-rule{margin:0 0 12px;padding:10px;border:1px solid #e5eaf2;border-radius:8px;background:#f8fafc;color:#536174;font-size:12px;font-weight:750}.dispatch-pagination{justify-content:flex-end;margin-top:12px}.outward-history{margin-top:14px}@media(max-width:720px){.row-actions{flex-direction:column;align-items:stretch}.row-actions button{width:100%}}
 </style>

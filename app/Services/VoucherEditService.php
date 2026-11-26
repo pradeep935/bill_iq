@@ -71,6 +71,7 @@ class VoucherEditService
     /** The share link is moved by the caller; these point at the invoice by id. */
     public function moveSaleReferences(int $from, int $to): void
     {
+        app(StockDocumentService::class)->move(\App\Models\DeliveryChallan::class, $from, $to);
         foreach (['document_share_logs', 'network_bills', 'network_imports'] as $table) {
             if (Schema::hasTable($table)) {
                 DB::table($table)->where('sales_voucher_id', $from)->update(['sales_voucher_id' => $to]);

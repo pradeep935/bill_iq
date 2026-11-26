@@ -280,6 +280,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/delivery-challans', [OrderManagementController::class, 'saveDeliveryChallan'])->name('delivery-challans.store');
             Route::put('/delivery-challans/{challan}', [OrderManagementController::class, 'saveDeliveryChallan'])->name('delivery-challans.update');
             Route::post('/delivery-challans/{challan}/dispatch', [OrderManagementController::class, 'dispatchChallan'])->name('delivery-challans.dispatch');
+            Route::post('/delivery-challans/{challan}/invoice', [SalesController::class, 'invoiceFromChallan'])->whereNumber('challan')->name('delivery-challans.invoice');
             Route::get('/stock-outward', [SalesController::class, 'stockOutward'])->name('stock-outward');
             Route::get('/reserved-stock', [SalesController::class, 'reservedStock'])->name('reserved-stock');
         });
@@ -289,6 +290,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/bills/list', [PurchaseController::class, 'list'])->name('bills.list');
             Route::get('/bills/reports', [PurchaseController::class, 'reports'])->name('bills.reports');
             Route::get('/bills/references', [PurchaseController::class, 'references'])->name('bills.references');
+            Route::get('/bills/from-receipt/{receipt}', [PurchaseController::class, 'fromReceipt'])->whereNumber('receipt')->name('bills.from-receipt');
             Route::get('/bills/products/search', [PurchaseController::class, 'searchProducts'])->name('bills.products.search');
             Route::post('/bills/preview-totals', [PurchaseController::class, 'previewTotals'])->name('bills.preview-totals');
             Route::post('/bills', [PurchaseController::class, 'store'])->name('bills.store');

@@ -1,3 +1,5 @@
+import { buttonGuides } from './buttonGuides.js';
+
 // Simple in-app help for every screen. Shown by PageHelp.vue (rendered once in Layout.vue).
 // Key = the Inertia "page" value. Where two screens share a page value, "page|Title" is used.
 // h(what the page does, tabs [[name, use]], steps, notes, faq [[question, answer]],
@@ -128,8 +130,8 @@ export const pageHelp = {
     }),
     'sales|Sales Orders': h('Quotations, sales orders and delivery challans (goods sent without a bill).', {
         tabs: [['Dashboard', 'Summary'], ['Quotations', 'Send rates to a customer and convert to an order later'], ['Sales Orders', 'Take an order; approving it reserves stock'], ['Challans', 'Send goods without a bill: sample, gift, self use'], ['Reports', 'Order reports']],
-        steps: ['For a challan, fill in the party, date, warehouse, reason, items and quantities.', 'Click “Save & Reduce Stock”.'],
-        notes: ['“Save Draft” does not reduce stock.'],
+        steps: ['For a challan, fill in the party, date, warehouse, reason, items and quantities.', 'Click “Save & Reduce Stock”.', 'To charge for those goods, click “Create Bill” on the challan, check the rates in the draft invoice and post it. The stock is not reduced again.'],
+        notes: ['“Save Draft” does not reduce stock.', 'Always bill challan goods with “Create Bill”. If you bill the same goods separately, the app warns you.', 'For goods given away, write “Sample”, “Gift” or “Self use” in the reason; the app then does not expect a bill.', 'Reversing the bill leaves the goods out of stock (they are with the customer) and lets you bill the challan again.'],
     }),
     'sales-returns': h('Record goods returned by a customer and issue a credit note.', {
         steps: ['Create a new return and select the original invoice.', 'Enter the returned items and quantities.', 'Approve the return. Process a refund if needed and print the credit note.'],
@@ -141,7 +143,7 @@ export const pageHelp = {
     'inventory-outward': h('Goods going out: dispatch of billed goods and entries without a bill.', {
         tabs: [['Sale Dispatch', 'Packing and delivery of billed goods; stock is not reduced again'], ['Manual Outward', 'Goods sent without a bill'], ['History', 'Past stock entries']],
         steps: ['To send goods without a bill, click “+ New Outward Entry”.', 'Select the party, date, warehouse and reason (Free sample / Gift / Self use).', 'Add the items and quantities, then click “Save & Reduce Stock”.'],
-        notes: ['Do not enter goods here if a sales bill already exists for them.', 'For self use, create a customer named “Self Use”.'],
+        notes: ['Do not enter goods here if a sales bill already exists for them; the app warns you.', 'To bill goods sent from here, use Sales Orders & Challans > Challans > “Create Bill”.', 'For self use, create a customer named “Self Use” and choose the reason “Self use”.'],
     }),
     'inventory-reserved': h('Stock held back for orders.', {
         tabs: [['Active', 'Stock currently reserved'], ['Expiring', 'Reservations about to expire'], ['Consumed', 'Reserved stock that has been used'], ['Released', 'Reservations that were cancelled'], ['Ledger', 'Full history']],
@@ -150,7 +152,7 @@ export const pageHelp = {
 
     purchases: h('Bills for goods bought from suppliers.', {
         steps: ['Click “New Purchase”, select the supplier, add items and click “Confirm & Post”.', 'For freight, fill in “Transport / Other Charges” and its GST %, if any.', 'Choose the payment: Unpaid, Paid in full or Partly paid. To pay later, click “Pay” on the bill.', 'To correct a bill: Actions > Edit, then “Save Changes”. The voucher number stays the same.', 'If your supplier uses BillIQ, click “From Supplier Bill” and paste the bill link.'],
-        notes: ['Bills within your state carry CGST and SGST; bills from another state carry IGST.', 'Only an admin can edit a reversed or cancelled bill, or one with a payment voucher.', 'If a payment voucher is recorded, the supplier cannot be changed and the total cannot go below the amount paid.', 'If a purchase return exists, cancel or reverse the return before editing.', 'The earlier version of an edited bill is kept under Status > Reversed with -R1 after the number.'],
+        notes: ['Posting a bill adds stock. For goods already received through Stock Inward / GRN, make the bill from there (“Create Purchase Bill”) so that they are counted once.', 'Bills within your state carry CGST and SGST; bills from another state carry IGST.', 'Only an admin can edit a reversed or cancelled bill, or one with a payment voucher.', 'If a payment voucher is recorded, the supplier cannot be changed and the total cannot go below the amount paid.', 'If a purchase return exists, cancel or reverse the return before editing.', 'The earlier version of an edited bill is kept under Status > Reversed with -R1 after the number.'],
         faq: [['It says the bill is already entered again.', 'The same supplier bill exists under another voucher number. Edit that one.']],
     }),
     'supplier-bills': h('Get bills from suppliers who use BillIQ and add them to purchases without typing.', { steps: ['Open “Connections”, search the supplier by full mobile number or GSTIN and click “Send Request”. They must accept it once.', 'The supplier opens their sales invoice and clicks Actions > “Send on BillIQ”.', 'The bill appears under “Received Bills”. Click “Add to Purchase”.', 'Match each item with your product, or add it as a new product.', 'Check the purchase form and click “Confirm & Post”. Stock changes only then.', 'Without a connection, paste the bill link the supplier sent on WhatsApp.'] }),
@@ -158,10 +160,12 @@ export const pageHelp = {
     suppliers: h('The suppliers you buy from.', { steps: ['Click “New Supplier” and enter the name, mobile number, GSTIN and address.', 'You can edit, delete or restore a supplier.'] }),
     'inventory-inward': h('From requesting goods to receiving them in the warehouse (GRN).', {
         tabs: [['Overview', 'Summary'], ['Requisitions', 'Internal requests for goods'], ['Purchase Orders', 'Orders placed with suppliers'], ['Goods Receipts', 'Record goods that arrive'], ['Reports', 'Reports']],
-        steps: ['Create a purchase order and confirm it.', 'When goods arrive, enter the quantities under “Receive Goods / GRN”.', 'Create the purchase bill from it if required.'],
+        steps: ['Create a purchase order and confirm it.', 'When goods arrive, enter the quantities under “Receive Goods / GRN”. This adds the stock.', 'When the supplier’s bill comes, click “Create Purchase Bill” on that receipt, check the rates and post. The stock is not counted again, and the amount payable to the supplier is recorded.'],
+        notes: ['Always bill received goods with “Create Purchase Bill”. If you type the same goods as a new purchase, the app warns you.', 'If you do not use goods receipts, simply enter the supplier bill in Purchases; that adds the stock by itself.', 'If the bill quantity differs from the received quantity, the app asks first; stock then follows the bill.', 'Reversing the bill keeps the received goods in stock and lets you bill the receipt again.'],
+        faq: [['The app says these items were already received.', 'Press Cancel and use “Create Purchase Bill” on that receipt. Press OK only if these are other goods.']],
     }),
     'inventory-reorder': h('Products that are low on stock and need to be ordered again.', { steps: ['Select products from the list.', 'Create a purchase order or requisition for them.'] }),
-    'inventory-orders': h('Purchase orders for inventory.', { steps: ['Click “+ Create Inventory Order” and add the supplier and items.', 'Submit / approve it, then “Mark Ordered”.', 'When goods arrive, click “Receive Goods”.'] }),
+    'inventory-orders': h('Purchase orders for inventory.', { steps: ['Click “+ Create Inventory Order” and add the supplier and items.', 'Submit / approve it, then “Mark Ordered”.', 'When goods arrive, click “Receive Goods”. This adds the stock. Bill them with “Create Purchase Bill” on the goods receipt.'] }),
 
     inventory: h('Control panel for stock movements, adjustments and transfers.', {
         tabs: [['Overview', 'Summary'], ['Movement History', 'Every stock entry'], ['Adjustments', 'Increase or decrease stock'], ['Transfers', 'Move stock between warehouses'], ['Stock Counts', 'Count stock and compare'], ['Locations', 'Storage locations'], ['Reasons', 'Reasons for adjustments'], ['Reports', 'Stock reports']],
@@ -261,12 +265,18 @@ export const startGuide = h('The order in which to start using BillIQ.', {
 });
 
 export const guideTopics = [
-    ['Start here', 'getting-started'], ['Dashboard', 'dashboard'], ['Admin Workspace', 'admin-workspace'], ['Setup Checklist', 'onboarding'], ['Staff Workspace', 'staff-workspace'],
-    ['New Bill (POS)', 'pos'], ['Sales Invoices', 'sales'], ['Sales Returns', 'sales-returns'], ['Customers', 'customers'], ['Payment Reminders', 'payment-reminders'], ['Sales Orders and Challans', 'sales|Sales Orders'],
-    ['Purchases', 'purchases'], ['Supplier Bills', 'supplier-bills'], ['Purchase Returns', 'purchase-returns'], ['Suppliers', 'suppliers'],
-    ['Products', 'products'], ['Opening Stock', 'opening-stock'], ['Current Stock', 'inventory-current-stock'], ['Barcodes', 'inventory-barcode-center'], ['Warehouse Transfer', 'inventory-transfer'], ['Stock Adjustment', 'inventory-adjustment'], ['Kits (Manufacturing)', 'inventory-manufacturing'],
-    ['Vouchers (Money In / Out)', 'vouchers'], ['Ledgers', 'ledgers'], ['Expenses', 'expenses'], ['GST', 'gst'], ['Reports', 'reports'],
-    ['Users and Roles', 'users'], ['Settings and Printing', 'settings'], ['Masters', 'masters'], ['Branches', 'branches'], ['Employees', 'employees'], ['Payroll', 'payroll'],
+    ['Start here', 'getting-started'], ['Business Dashboard', 'dashboard'], ['Admin Workspace', 'admin-workspace'], ['Setup Checklist', 'onboarding'], ['Staff Workspace', 'staff-workspace'], ['CRM', 'crm'],
+    ['New Bill (POS)', 'pos'], ['Sales Invoices', 'sales'], ['Sales Returns', 'sales-returns'], ['Sales Orders and Challans', 'sales|Sales Orders'], ['Customers', 'customers'], ['Payment Reminders', 'payment-reminders'], ['Stock Outward', 'inventory-outward'], ['Reserved Stock', 'inventory-reserved'],
+    ['Purchases', 'purchases'], ['Supplier Bills', 'supplier-bills'], ['Purchase Returns', 'purchase-returns'], ['Suppliers', 'suppliers'], ['Reorder Suggestions', 'inventory-reorder'], ['Inventory Orders', 'inventory-orders'], ['Stock Inward / GRN', 'inventory-inward'],
+    ['Product Master', 'products'], ['HSN/SAC Master', 'business-hsn-master'], ['Barcode Center', 'inventory-barcode-center'], ['Current Stock', 'inventory-current-stock'], ['Inventory Dashboard', 'inventory'], ['Opening Stock', 'opening-stock'], ['Stock Adjustment', 'inventory-adjustment'], ['Physical Audit', 'inventory-audit'], ['Inventory Vouchers', 'inventory-vouchers'],
+    ['Warehouses / Bins', 'inventory-warehouses'], ['Stock Transfer', 'inventory-transfer'], ['Transfer Requests', 'inventory-transfer-requests'], ['Godown Balances', 'inventory-godown-balance'], ['Bins / Racks', 'inventory-bins'], ['Batch & Expiry', 'inventory-batches'], ['Serial Numbers', 'inventory-serials'], ['Batch / Serial Allocation', 'inventory-allocation'], ['Manufacturing / BOM (Kits)', 'inventory-manufacturing'],
+    ['Vouchers (Money In / Out)', 'vouchers'], ['Expenses', 'expenses'], ['Ledgers', 'ledgers'], ['GST', 'gst'], ['GST Returns', 'inventory-gst-returns'], ['GST Imports', 'gst-imports'], ['Chart of Accounts', 'accounts'], ['Fixed Assets', 'fixed-assets'], ['Tally Integration', 'tally-integration'],
+    ['Business Reports', 'reports'], ['Inventory Reports', 'inventory-reports'], ['Stock Ledger', 'stock-ledger'], ['Stock Valuation', 'inventory-valuation'], ['Voucher Audit Trail', 'inventory-audit-trail'],
+    ['Settings and Printing', 'settings'], ['Branches', 'branches'], ['Masters', 'masters'], ['Users and Roles', 'users'], ['Employees', 'employees'], ['Payroll', 'payroll'], ['SaaS Admin', 'saas'], ['Acceptance Matrix', 'setup-acceptance'], ['Company Onboarding', 'company-onboarding'], ['Your Profile', 'profile'],
 ];
+
+for (const [key, groups] of Object.entries(buttonGuides)) {
+    if (pageHelp[key] && groups) pageHelp[key] = { ...pageHelp[key], buttons: groups };
+}
 
 export const helpFor = (page, title) => pageHelp[`${page}|${title}`] || pageHelp[page] || null;

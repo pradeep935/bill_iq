@@ -375,7 +375,8 @@ class CustomerService
     public function importCsv(UploadedFile $file): array
     {
         $handle = fopen($file->getRealPath(), 'r');
-        $header = fgetcsv($handle) ?: [];
+        // Excel writes an invisible mark before the first column name.
+        $header = array_map(fn ($name) => trim(str_replace("\xEF\xBB\xBF", '', (string) $name)), fgetcsv($handle) ?: []);
         $created = 0;
         $errors = [];
         $rowNumber = 1;
@@ -389,6 +390,12 @@ class CustomerService
             }
 
             try {
+                // A blank cell means "not given", so the usual default applies.
+                $data = array_filter(array_map(fn ($value) => trim((string) $value), $data), fn ($value) => $value !== '');
+                if (!$data) {
+                    continue;
+                }
+
                 DB::transaction(function () use ($data, &$created) {
                     $payload = [
                         'customer_code' => $data['customer_code'] ?? null,
@@ -421,7 +428,10 @@ class CustomerService
                     $created++;
                 });
             } catch (\Throwable $exception) {
-                $errors[] = ['row' => $rowNumber, 'error' => $exception instanceof ValidationException ? collect($exception->errors())->flatten()->first() : $exception->getMessage()];
+                if (!$exception instanceof ValidationException) {
+                    report($exception);
+                }
+                $errors[] = ['row' => $rowNumber, 'error' => $exception instanceof ValidationException ? collect($exception->errors())->flatten()->first() : 'This row has a value that could not be saved. Check numbers, dates and the type columns.'];
             }
         }
 

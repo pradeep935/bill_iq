@@ -280,6 +280,15 @@ class SalesController extends Controller
         return response()->json($this->sales->scanProduct($data['barcode'], $request->only(['branch_id', 'warehouse_id', 'price_type'])));
     }
 
+    /** A draft invoice for goods already sent on a delivery challan. */
+    public function invoiceFromChallan(int $challan)
+    {
+        abort_unless(AppController::canOpen('sales'), 403);
+        $voucher = $this->sales->draftFromChallan($challan);
+
+        return response()->json(['message' => 'Draft invoice made. Check the rates, then post it.', 'sale' => $this->sales->present($voucher)], 201);
+    }
+
     public function store(SalesVoucherRequest $request)
     {
         $voucher = $this->sales->create($request->validated());

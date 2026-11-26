@@ -156,7 +156,9 @@ const importCustomers = async (event) => {
     importing.value = true;
     try {
         const response = await SalesApi.importCustomers(file);
-        notify(`${response.message} Created: ${response.created || 0}`);
+        const failed = response.errors || [];
+        const first = failed.slice(0, 3).map((row) => `Row ${row.row}: ${row.error}`).join(' ');
+        notify(`${response.message} Created: ${response.created || 0}${failed.length ? `, skipped: ${failed.length}. ${first}` : ''}`, failed.length ? 'error' : undefined);
         await loadCustomers(1);
     } catch (error) {
         notify(error.response?.data?.message || 'Customer import failed. Please check the file.', 'error');
@@ -175,7 +177,7 @@ const toggleActionMenu = (target) => {
     openActionMenuId.value = openActionMenuId.value === id ? null : id;
 };
 const closeActionMenu = () => { openActionMenuId.value = null; };
-const createInvoice = (customer) => { window.location.href = `/app/sales/invoices/create?customer_id=${customer.id}`; };
+const createInvoice = (customer) => { window.location.href = `/app/sales/pos?customer_id=${customer.id}`; };
 const createReturn = (customer) => { window.location.href = `/app/sales/returns/create?customer_id=${customer.id}`; };
 const receivePayment = (customer) => { window.location.href = `/app/accounting/vouchers?type=receipt&customer_id=${customer.id}`; };
 const openInvoicePrint = (id) => { window.open(`/app/sales/invoices/${id}/print`, '_blank', 'noopener'); };

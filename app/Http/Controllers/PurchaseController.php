@@ -289,6 +289,14 @@ class PurchaseController extends Controller
         return response()->json($this->purchases->searchProducts(trim((string) $request->query('q'))));
     }
 
+    /** The purchase form filled from a goods receipt. Nothing is saved until the bill is. */
+    public function fromReceipt(int $receipt)
+    {
+        abort_unless(AppController::canOpen('purchases'), 403);
+
+        return response()->json($this->purchases->formFromReceipt($receipt));
+    }
+
     public function store(PurchaseVoucherRequest $request)
     {
         $data = $request->validated();

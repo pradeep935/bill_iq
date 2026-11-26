@@ -16,11 +16,14 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use App\Models\GoodsReceipt;
 
 class PurchaseService
 {
     private PurchaseCalculationService $calculator;
     private StockService $stock;
+
+    private bool $editing = false;
 
     public function __construct(PurchaseCalculationService $calculator, StockService $stock)
     {
@@ -58,9 +61,10 @@ class PurchaseService
             ->paginate($perPage);
     }
 
-    public function create(array $data, ?string $voucherNumber = null): PurchaseVoucher
+    /** @param int|null $replacing The bill this one is the edited version of. */
+    public function create(array $data, ?string $voucherNumber = null, ?int $replacing = null): PurchaseVoucher
     {
-        return DB::transaction(function () use ($data, $voucherNumber) {
+        return DB::transaction(function () use ($data, $voucherNumber, $replacing) {
             $businessId = AppController::businessId();
             $this->validateOwnership($businessId, $data);
             $totals = $this->calculator->calculateVoucherTotals($data);
@@ -74,6 +78,12 @@ class PurchaseService
             ]));
 
             $this->syncItems($voucher, $totals['items']);
+
+            if ($replacing) {
+                app(StockDocumentService::class)->move(GoodsReceipt::class, $replacing, $voucher->id);
+            } elseif (!empty($data['goods_receipt_id'])) {
+                app(StockDocumentService::class)->attach($voucher, GoodsReceipt::class, (int) $data['goods_receipt_id']);
+            }
 
             if (in_array($status, ['confirmed', 'approved'], true)) {
                 $this->post($voucher, $status);
@@ -175,12 +185,18 @@ class PurchaseService
             $status = $voucher->status === 'confirmed' ? 'confirmed' : 'approved';
 
             if ($wasPosted) {
-                $this->reverse($voucher, 'Edited: ' . $number);
+                // An edit keeps the bill's goods receipt; it is not given back in between.
+                $this->editing = true;
+                try {
+                    $this->reverse($voucher, 'Edited: ' . $number);
+                } finally {
+                    $this->editing = false;
+                }
                 $voucher->refresh();
             }
             $voucher->update(['voucher_number' => $number . $edits->archiveSuffix(PurchaseVoucher::class, $businessId, 'voucher_number', $number)]);
 
-            $new = $this->create(array_merge($data, ['status' => $status]), $number);
+            $new = $this->create(array_merge($data, ['status' => $status]), $number, $voucher->id);
             $new->update(['created_by' => $createdBy]);
             NetworkService::moveImport($voucher->id, $new->id);
             if ($settled > 0) {
@@ -212,6 +228,50 @@ class PurchaseService
         if ($same) {
             throw ValidationException::withMessages(['status' => "This bill is already entered again as {$same}. Edit that purchase instead."]);
         }
+    }
+
+    public function formFromReceipt(int $receiptId): array
+    {
+        $receipt = DB::transaction(fn () => app(StockDocumentService::class)->billable(GoodsReceipt::class, $receiptId));
+        $receipt->load(['items.product', 'items.orderItem', 'supplier']);
+        $state = $this->businessStateId((int) $receipt->business_id);
+
+        $items = $receipt->items->map(function ($item) {
+            $accepted = max(0, round((float) $item->received_quantity - (float) $item->rejected_quantity - (float) $item->damaged_quantity, 3));
+            $product = $item->product;
+            if ($accepted <= 0 || !$product) {
+                return null;
+            }
+
+            return [
+                'product_id' => $product->id, 'product_name' => $product->name, 'sku' => $product->sku,
+                'unit' => $product->getRawOriginal('unit'), 'unit_id' => $product->unit_id,
+                'tracking_type' => $product->tracking_type ?: 'none', 'batch_required' => (bool) $product->batch_required, 'expiry_required' => (bool) $product->expiry_required,
+                'product_variant_id' => $item->product_variant_id ?: '', 'batch_id' => $item->batch_id ?: '', 'variants' => [],
+                'quantity' => $accepted, 'free_quantity' => 0,
+                'purchase_rate' => (float) ($item->orderItem?->purchase_rate ?: $item->unit_cost ?: $product->cost_price ?: $product->purchase_price),
+                'tax_inclusive' => false, 'discount_type' => '', 'discount_value' => 0,
+                'gst_rate' => (float) $product->gst_rate, 'cess_rate' => (float) $product->cess_rate,
+                'selling_price' => (float) ($product->selling_price ?: $product->sale_price), 'mrp' => (float) $product->mrp > 0 ? (float) $product->mrp : '',
+                'batch_number' => (string) $item->batch_number,
+                'manufacturing_date' => $item->manufacturing_date ? substr((string) $item->manufacturing_date, 0, 10) : '',
+                'expiry_date' => $item->expiry_date ? substr((string) $item->expiry_date, 0, 10) : '',
+                'warehouse_location' => (string) $item->warehouse_location, 'remarks' => '',
+            ];
+        })->filter()->values();
+
+        if ($items->isEmpty()) {
+            throw ValidationException::withMessages(['document' => 'No accepted quantity on this goods receipt.']);
+        }
+
+        return [
+            'goods_receipt_id' => $receipt->id, 'grn_number' => $receipt->grn_number,
+            'supplier_id' => $receipt->supplier_id, 'branch_id' => $receipt->branch_id, 'warehouse_id' => $receipt->warehouse_id,
+            'supplier_invoice_number' => (string) $receipt->supplier_invoice_number,
+            'purchase_date' => $receipt->receipt_date->format('Y-m-d'),
+            'tax_type' => $state && $receipt->supplier?->state_id && (int) $receipt->supplier->state_id !== $state ? 'interstate' : 'intrastate',
+            'items' => $items,
+        ];
     }
 
     public function duplicate(PurchaseVoucher $voucher): PurchaseVoucher
@@ -249,6 +309,8 @@ class PurchaseService
             }
 
             $voucher->load(['items.product']);
+            $documents = app(StockDocumentService::class);
+            $documents->beforePosting($voucher);
 
             foreach ($voucher->items as $item) {
                 $batchId = $this->batchIdForItem($voucher, $item);
@@ -285,6 +347,9 @@ class PurchaseService
                 ]);
             }
 
+            // After the bill's own entry, so batch stock is never short in between.
+            $documents->release($voucher);
+
             $voucher->update([
                 'status' => $status === 'confirmed' ? 'confirmed' : 'approved',
                 'approved_by' => Auth::id(),
@@ -308,6 +373,7 @@ class PurchaseService
         }
 
         $voucher->update(['status' => 'cancelled']);
+        app(StockDocumentService::class)->unlink(GoodsReceipt::class, $voucher->id);
 
         return $this->fresh($voucher);
     }
@@ -324,6 +390,9 @@ class PurchaseService
             $this->stock->reverseTransaction(PurchaseVoucher::class, $voucher->id, $remarks ?: 'Purchase reversal');
             if (\Illuminate\Support\Facades\Schema::hasTable('journal_vouchers')) app(AccountingPostingService::class)->reverseSourceJournals(PurchaseVoucher::class, $voucher->id, $remarks ?: 'Purchase reversal');
             $voucher->update(['status' => 'reversed']);
+            if (!$this->editing) {
+                app(StockDocumentService::class)->restore($voucher);
+            }
 
             return $this->fresh($voucher);
         });

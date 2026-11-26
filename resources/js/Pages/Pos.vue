@@ -47,6 +47,8 @@ const postSaleActions = reactive({
     printThermal: false,
     whatsapp: false,
 });
+// A new item is added in Product Master; the bill in this tab is kept.
+const canAddProduct = computed(() => [1, 2].includes(Number(props.role_id)));
 const canChangeCounterScope = computed(() => Number(props.role_id || 0) === 1);
 let customerLookupTimer = null;
 let toastTimer = null;
@@ -317,7 +319,10 @@ const validatePaymentBeforeSave = (status) => {
 const loadReferences = async () => {
     references.value = await SalesApi.references();
     ensureDefaultCounterScope();
-    form.customer_id = customers.value.find((customer) => customer.customer_type === 'walk_in')?.id || customers.value[0]?.id || '';
+    // Opened from a customer's "New Invoice": start the bill for that customer.
+    const asked = Number(new URLSearchParams(window.location.search).get('customer_id'));
+    form.customer_id = customers.value.find((customer) => Number(customer.id) === asked)?.id
+        || customers.value.find((customer) => customer.customer_type === 'walk_in')?.id || customers.value[0]?.id || '';
     setPaymentMode('cash');
 };
 
@@ -1007,7 +1012,7 @@ onUnmounted(() => {
                             <SerialAssignment v-if="item.serial_required" v-model="item.serials" :quantity="Number(item.quantity) + Number(item.free_quantity || 0)" :scope="{ product_id: item.product_id, branch_id: form.branch_id, warehouse_id: form.warehouse_id, product_variant_id: item.product_variant_id || null, batch_id: item.batch_id || null }" purpose="sale" @error="showToast($event, 'error')" />
                         </template>
                         <template #footer>
-	                            <button type="button" class="pos-manual-product-button" @click="showToast('Manual product entry is available through product search for now.', 'info')">+ Add Manual Product</button>
+	                            <a v-if="canAddProduct" class="pos-manual-product-button" href="/app/inventory/products?action=create" target="_blank" rel="noopener" title="Opens in a new tab, so this bill stays here">+ New Product</a>
 	                            <span class="pos-table-items">{{ form.items.length }} Items</span>
 	                            <button type="button" class="pos-clear-cart-button" :disabled="!hasCartItems" @click="form.items = []; syncPaymentAmount()">Clear Cart</button>
 	                        </template>
@@ -1124,6 +1129,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+a.pos-manual-product-button{display:inline-flex;align-items:center;text-decoration:none}
 .pos-saas-page {
     display: grid;
     gap: 12px;

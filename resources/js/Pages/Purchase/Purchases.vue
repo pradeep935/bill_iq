@@ -1,6 +1,7 @@
 <script setup>
 import { formatDate } from '../../Support/dateFormat.js';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import axios from 'axios';
 import Layout from '../Layout.vue';
 import PurchaseApi from './PurchaseApi';
 import RowActionMenu from '../../Components/Common/RowActionMenu.vue';
@@ -114,6 +115,7 @@ const filteredSupplierCities = computed(() => {
 
 const reset = () => {
     Object.assign(form, {
+        goods_receipt_id: null,
         id: null, branch_id: '', warehouse_id: '', supplier_id: '', supplier_invoice_number: '',
         purchase_date: today, supplier_invoice_date: '', due_date: '', purchase_type: 'credit',
         tax_type: 'intrastate', discount_type: '', discount_value: 0, other_charges: 0, other_charges_gst_rate: 0, paid_amount: 0, remarks: '', items: [],
@@ -293,6 +295,20 @@ const useImportedBill = async (bill) => {
     ratesIncludeTax.value = bill.items.every((item) => item.tax_inclusive);
 };
 const supplierTotalDiffers = computed(() => form.supplier_total != null && totals.value && Math.abs(Number(totals.value.grand_total) - Number(form.supplier_total)) >= 0.5);
+
+const receiptNumber = ref(''); // goods receipt this bill is made from
+const openReceiptBill = async (id) => {
+    try {
+        const { data } = await axios.get(`/app/purchase/bills/from-receipt/${id}`);
+        openPurchaseCreate();
+        const { grn_number: number, ...fields } = data;
+        Object.assign(form, fields);
+        receiptNumber.value = number;
+        ratesIncludeTax.value = false;
+    } catch (error) {
+        window.alert(Object.values(error.response?.data?.errors || {})[0]?.[0] || error.response?.data?.message || 'Could not open this goods receipt.');
+    }
+};
 
 const addReturnedProduct = async () => {
     const params = new URLSearchParams(window.location.search);
@@ -487,7 +503,7 @@ const editPurchase = (purchase) => {
         other_charges_gst_rate: purchase.other_charges_gst_rate || 0,
         paid_amount: purchase.paid_amount || 0,
         remarks: purchase.remarks || '',
-        network_source: null, supplier_total: null,
+        network_source: null, supplier_total: null, goods_receipt_id: null,
         items: (purchase.items || []).map((item) => ({ ...item, product_name: item.product, discount_type: item.discount_type || '', variants: [] })),
     });
     editingReversed.value = purchase.status === 'reversed';
@@ -500,8 +516,12 @@ const editPurchase = (purchase) => {
 
 const simpleAction = async (fn, purchase, promptText) => {
     if (promptText && !window.confirm(promptText)) return;
-    const response = await fn(purchase.id);
-    alert(response.message || 'Done.');
+    try {
+        const response = await fn(purchase.id);
+        alert(response.message || 'Done.');
+    } catch (error) {
+        alert(Object.values(error.response?.data?.errors || {})[0]?.[0] || error.response?.data?.message || 'Could not complete this action.');
+    }
     await loadPurchases(pagination.value.current_page || 1);
 };
 
@@ -545,6 +565,10 @@ onMounted(async () => {
     if (query.get('date') === 'today') filters.date_from = filters.date_to = new Date().toLocaleDateString('en-CA');
     const billId = Number(query.get('network_bill'));
     const billLink = query.get('network_link');
+    if (Number(query.get('receipt'))) {
+        await openReceiptBill(Number(query.get('receipt')));
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
     if (billId || billLink) {
         openBillImport(billId ? { bill_id: billId } : { token: billLink });
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -571,6 +595,7 @@ onMounted(async () => {
                     </div>
 
                     <p v-if="editingPosted && !viewOnly" class="edit-note">{{ editingReversed ? 'This purchase was reversed.' : 'This purchase is already posted.' }} Change anything you need and click <strong>Save Changes</strong> &mdash; stock and accounts are corrected automatically and the voucher number stays the same.<template v-if="settledAmount > 0"> Rs. {{ formatMoney(settledAmount) }} is paid by payment voucher and stays on this bill; Paid Amount includes it.</template></p>
+                    <p v-if="form.goods_receipt_id && !viewOnly" class="edit-note">Made from goods receipt {{ receiptNumber }}. Its stock is already added; posting this bill counts the same goods only once. Check the rates, then click <strong>Confirm &amp; Post</strong>.</p>
                     <p v-if="form.network_source && !viewOnly" :class="['edit-note', { 'amount-differs': supplierTotalDiffers }]">Filled from the supplier's bill of Rs. {{ formatMoney(form.supplier_total) }}.
                         <template v-if="supplierTotalDiffers"><strong>This purchase totals Rs. {{ formatMoney(totals.grand_total) }}.</strong> Please check the items before saving.</template>
                         <template v-else>Check it, then click <strong>Confirm &amp; Post</strong>.</template></p>

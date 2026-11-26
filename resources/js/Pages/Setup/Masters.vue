@@ -60,7 +60,6 @@
             <option value="inactive">Inactive</option>
           </select>
           <button type="button" class="primary-add" @click="openDrawer()">+ Add {{ current.singular }}</button>
-          <button v-if="activeTab === 'hsn'" type="button" class="secondary-action" @click="notify('HSN/SAC import will be available soon.', 'success')">Import HSN/SAC</button>
         </div>
       </div>
 

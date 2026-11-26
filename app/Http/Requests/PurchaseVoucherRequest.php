@@ -33,6 +33,7 @@ class PurchaseVoucherRequest extends FormRequest
             'other_charges_gst_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'status' => ['required', Rule::in(['draft', 'confirmed', 'approved'])],
             'remarks' => ['nullable', 'string', 'max:2000'],
+            'goods_receipt_id' => ['nullable', 'integer'],
             'network_source' => ['nullable', 'array'],
             'network_source.bill_id' => ['nullable', 'integer'],
             'network_source.token' => ['nullable', 'string', 'max:2000'],
